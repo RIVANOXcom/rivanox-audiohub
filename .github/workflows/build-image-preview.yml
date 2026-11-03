@@ -35,18 +35,26 @@ jobs:
         env:
           AUDIOHUB_BUILD_ACCEPT_PREVIEW: YES
         run: ./build-image.sh
-      - name: Create checksums
+      - name: Stage and verify unverified image outside root-owned builder directory
         run: |
           set -euo pipefail
-          cd .pi-gen-build/pi-gen/deploy
-          find . -maxdepth 1 -type f -name '*.img.xz' -print0 | xargs -0 -r sha256sum > SHA256SUMS.txt
+          mkdir -p dist
+          sudo cp .pi-gen-build/pi-gen/deploy/*.img.xz dist/
+          sudo chown -R "$(id -u):$(id -g)" dist
+          cd dist
+          shopt -s nullglob
+          images=( *.img.xz )
+          test "${#images[@]}" -eq 1
+          sha256sum -- "${images[@]}" > SHA256SUMS.txt
+          sha256sum -c SHA256SUMS.txt
+          xz --test -- "${images[@]}"
           test -s SHA256SUMS.txt
       - name: Upload short-lived unverified artifact
         uses: actions/upload-artifact@v4
         with:
           name: AUDIOHUB-ALPHA-UNVERIFIED-DO-NOT-DISTRIBUTE
           path: |
-            .pi-gen-build/pi-gen/deploy/*.img.xz
-            .pi-gen-build/pi-gen/deploy/SHA256SUMS.txt
+            dist/*.img.xz
+            dist/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 7
