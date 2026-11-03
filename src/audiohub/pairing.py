@@ -31,6 +31,8 @@ class PairingAgent(dbus.service.Object):
         mgr.RequestDefaultAgent(PATH)
         obj = dbus.Interface(bus.get_object("org.bluez", "/"), "org.freedesktop.DBus.ObjectManager")
         self.manager = obj
+        # Rebooting a previously paired device must not reopen guest pairing.
+        self.initial_pairing_allowed = self.paired_count() == 0
         managed = obj.GetManagedObjects()
         adapters = [path for path, attrs in managed.items() if "org.bluez.Adapter1" in attrs]
         if not adapters:
@@ -54,7 +56,8 @@ class PairingAgent(dbus.service.Object):
         )
 
     def allowed(self):
-        return time.monotonic() < self.deadline and self.paired_count() < PAIRING_LIMIT
+        return (self.initial_pairing_allowed and time.monotonic() < self.deadline
+                and self.paired_count() < PAIRING_LIMIT)
 
     def refresh(self):
         value = dbus.Boolean(self.allowed())
