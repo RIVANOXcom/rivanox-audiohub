@@ -1,6 +1,8 @@
 name: Build unverified Pi 4 image
 on:
   workflow_dispatch:
+  push:
+    branches: [audiohub-preview-build]
 permissions:
   contents: read
 jobs:
