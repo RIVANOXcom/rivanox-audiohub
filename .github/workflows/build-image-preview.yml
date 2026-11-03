@@ -5,6 +5,9 @@ on:
     branches: [audiohub-preview-build]
 permissions:
   contents: read
+concurrency:
+  group: audiohub-preview-image
+  cancel-in-progress: true
 jobs:
   build:
     runs-on: ubuntu-24.04
@@ -18,7 +21,13 @@ jobs:
       - name: Install Pi image toolchain
         run: |
           sudo apt-get update
-          sudo apt-get install -y coreutils quilt parted qemu-user-static debootstrap zerofree zip dosfstools e2fsprogs libcap2-bin grep rsync xz-utils file git curl bc gpg pigz xxd arch-test bmap-tools kmod openssl
+          sudo apt-get install -y coreutils quilt parted qemu-user-binfmt debootstrap zerofree zip dosfstools e2fsprogs libcap2-bin grep rsync xz-utils file git curl bc gpg pigz xxd arch-test bmap-tools kmod openssl
+      - name: Verify ARM64 emulation prerequisites
+        run: |
+          command -v qemu-aarch64
+          command -v arch-test
+          cat /proc/sys/fs/binfmt_misc/status
+          df -h /
       - name: Run source tests before experimental image build
         run: python3 -m unittest discover -s tests -v
       - name: Build preview (NOT a release)

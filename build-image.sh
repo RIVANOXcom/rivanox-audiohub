@@ -13,7 +13,7 @@ fi
 if [[ "$(uname -s)" != "Linux" ]]; then
   echo "Linux build system required." >&2; exit 2
 fi
-for command in git python3 debootstrap qemu-aarch64-static parted xz; do
+for command in git python3 debootstrap qemu-aarch64 parted xz; do
   if ! command -v "$command" >/dev/null; then
     echo "Missing required tool: $command" >&2; exit 2
   fi
