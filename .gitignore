@@ -1,0 +1,10 @@
+.pi-gen-build/
+dist/
+__pycache__/
+*.pyc
+.env
+*.log
+*.img
+*.img.xz
+*.zip
+.DS_Store

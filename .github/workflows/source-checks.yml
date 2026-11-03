@@ -1,0 +1,36 @@
+name: Source checks
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  documentation-and-safety:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check mandatory project policies
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s README.md
+          test -s LICENSE
+          test -s THIRD_PARTY_NOTICES.md
+          test -s SECURITY.md
+          test -s docs/STATUS.md
+          test -s docs/RELEASE-POLICY.md
+          test -s .github/FUNDING.yml
+          grep -q "GNU AFFERO GENERAL PUBLIC LICENSE" LICENSE
+          grep -q "No verified ready-to-flash" docs/STATUS.md
+          if grep -RInE "AudioHub-Setup-2026|password[[:space:]]*=[[:space:]]*['\"][A-Za-z0-9]{6,}['\"]" --include='*.py' --include='*.sh' .; then
+            echo "Unsafe shared provisioning secret detected" >&2
+            exit 1
+          fi
+      - name: Check any checked-in Python or JS sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -d src ]; then python3 -m compileall -q src; fi
+          if [ -d tests ]; then python3 -m unittest discover -s tests -v; fi
+          if [ -f web/app.js ]; then node --check web/app.js; fi

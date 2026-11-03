@@ -1,0 +1,14 @@
+# Publishing is blocked until reviewed image-building code and physical test evidence exist.
+name: Publish verified Pi image
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  not-yet-releasable:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Safety gate
+        run: |
+          echo "::error::No hardware-verified Pi image is available. Do not create a release."
+          exit 1

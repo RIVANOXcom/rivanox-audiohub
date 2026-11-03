@@ -1,0 +1,17 @@
+# Third-party software and compliance
+
+This repository publishes RIVANOX-authored orchestration and UI code under AGPL-3.0-only. A produced Raspberry Pi OS image additionally contains multiple independently licensed third-party components. **The RIVANOX license does not change their terms.**
+
+| Component | Purpose | Source / license verification |
+| --- | --- | --- |
+| Raspberry Pi OS / Debian | Operating system | https://www.raspberrypi.com/software/ ; Debian package copyright files |
+| Raspberry Pi pi-gen | Image builder | https://github.com/RPi-Distro/pi-gen |
+| PipeWire | Audio routing and filter-chain | https://pipewire.pages.freedesktop.org/pipewire/ |
+| WirePlumber | Session policy | https://pipewire.pages.freedesktop.org/wireplumber/ |
+| BlueZ | Bluetooth stack | https://www.bluez.org/ |
+| Scream | Optional network-audio receiver | https://github.com/duncanthrax/scream — MS-PL for the referenced upstream project |
+| Flask and Python libraries | Local web control | Installed package metadata and associated licenses |
+
+Before publishing binaries, archive exact dependency versions, redistributable source and applicable license/notice files. Retain upstream attribution; do not claim copyright over those components. Do not bundle streaming-service trademarks or copyrighted media. Spotify and similar services are independent; compatibility statements must not imply endorsement.
+
+The exact composition and legal obligations of a future image must be audited on the artifact actually shipped, not inferred from this provisional list.
