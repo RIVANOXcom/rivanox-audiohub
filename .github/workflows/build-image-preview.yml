@@ -1,0 +1,40 @@
+name: Build unverified Pi 4 image
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 340
+    steps:
+      - uses: actions/checkout@v4
+      - name: Free limited hosted-runner disk
+        run: |
+          sudo rm -rf /usr/local/lib/android /opt/hostedtoolcache/CodeQL /usr/share/dotnet || true
+          df -h /
+      - name: Install Pi image toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y coreutils quilt parted qemu-user-static debootstrap zerofree zip dosfstools e2fsprogs libcap2-bin grep rsync xz-utils file git curl bc gpg pigz xxd arch-test bmap-tools kmod openssl
+      - name: Run source tests before experimental image build
+        run: python3 -m unittest discover -s tests -v
+      - name: Build preview (NOT a release)
+        env:
+          AUDIOHUB_BUILD_ACCEPT_PREVIEW: YES
+        run: ./build-image.sh
+      - name: Create checksums
+        run: |
+          set -euo pipefail
+          cd .pi-gen-build/pi-gen/deploy
+          find . -maxdepth 1 -type f -name '*.img.xz' -print0 | xargs -0 -r sha256sum > SHA256SUMS.txt
+          test -s SHA256SUMS.txt
+      - name: Upload short-lived unverified artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AUDIOHUB-ALPHA-UNVERIFIED-DO-NOT-DISTRIBUTE
+          path: |
+            .pi-gen-build/pi-gen/deploy/*.img.xz
+            .pi-gen-build/pi-gen/deploy/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 7

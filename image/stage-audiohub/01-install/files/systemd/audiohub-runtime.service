@@ -1,0 +1,15 @@
+[Unit]
+Description=AudioHub headless PipeWire mixer routing supervisor
+Wants=pipewire.service wireplumber.service pipewire-pulse.service
+After=pipewire.service wireplumber.service
+
+[Service]
+Type=simple
+Environment=PYTHONPATH=/opt/audiohub/src
+ExecStart=/usr/bin/python3 -m audiohub.runtime
+Restart=always
+RestartSec=5
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=default.target

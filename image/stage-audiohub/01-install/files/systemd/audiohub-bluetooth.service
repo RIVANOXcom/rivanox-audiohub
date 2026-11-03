@@ -1,0 +1,15 @@
+[Unit]
+Description=AudioHub headless Bluetooth pairing agent (alpha)
+After=bluetooth.service
+Requires=bluetooth.service
+
+[Service]
+Type=simple
+Environment=PYTHONPATH=/opt/audiohub/src
+ExecStart=/usr/bin/python3 -m audiohub.pairing
+Restart=always
+RestartSec=5
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=multi-user.target
