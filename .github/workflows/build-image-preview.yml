@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   build:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 340
     steps:
       - uses: actions/checkout@v4
@@ -22,11 +22,12 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y coreutils quilt parted qemu-user-binfmt debootstrap zerofree zip dosfstools e2fsprogs libcap2-bin grep rsync xz-utils file git curl bc gpg pigz xxd arch-test bmap-tools kmod openssl
-      - name: Verify ARM64 emulation prerequisites
+      - name: Verify native ARM64 builder prerequisites
         run: |
+          test "$(uname -m)" = "aarch64"
           command -v qemu-aarch64
           command -v arch-test
-          cat /proc/sys/fs/binfmt_misc/status
+          uname -a
           df -h /
       - name: Run source tests before experimental image build
         run: python3 -m unittest discover -s tests -v
