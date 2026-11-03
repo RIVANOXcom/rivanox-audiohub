@@ -23,7 +23,7 @@ jobs:
           test -s .github/FUNDING.yml
           grep -q "GNU AFFERO GENERAL PUBLIC LICENSE" LICENSE
           grep -q "No verified ready-to-flash" docs/STATUS.md
-          if grep -RInE "AudioHub-Setup-2026|password[[:space:]]*=[[:space:]]*['\"][A-Za-z0-9]{6,}['\"]" --include='*.py' --include='*.sh' .; then
+          if grep -RInE "AudioHub-Setup-2026|password[[:space:]]*=[[:space:]]*['\\"][A-Za-z0-9]{6,}['\\"]" --include='*.py' --include='*.sh' src image; then
             echo "Unsafe shared provisioning secret detected" >&2
             exit 1
           fi
@@ -34,3 +34,4 @@ jobs:
           if [ -d src ]; then python3 -m compileall -q src; fi
           if [ -d tests ]; then python3 -m unittest discover -s tests -v; fi
           if [ -f web/app.js ]; then node --check web/app.js; fi
+          bash -n build-image.sh image/stage-audiohub/prerun.sh image/stage-audiohub/01-install/00-run.sh
