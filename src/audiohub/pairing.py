@@ -88,7 +88,7 @@ class PairingAgent(dbus.service.Object):
         if not self.allowed():
             raise Rejected("Pairing is closed")
 
-    @dbus.service.method("org.bluez.Agent1", in_signature="os", out_signature="")
+    @dbus.service.method("org.bluez.Agent1", in_signature="o", out_signature="s")
     def RequestPinCode(self, device):
         raise Rejected("PIN entry unsupported")
 
