@@ -12,6 +12,7 @@
     tablet: { volume: 50, mute: false, bass: 0, mid: 0, treble: 0 }
   };
   let words = {};
+  let deviceHealth = null;
   const byId = id => document.getElementById(id);
   const tr = key => words[key] || key;
   const selectedLanguage = () => {
@@ -79,10 +80,29 @@
       target.append(card);
     }
   }
+  function renderHardwareStatus() {
+    const node = document.querySelector('[data-t="speakerState"]');
+    if (!node) return;
+    node.textContent = (deviceHealth && deviceHealth.fresh)
+      ? tr(deviceHealth.usb_connected ? "speakerConnected" : "speakerDisconnected")
+      : tr("speakerState");
+  }
+  async function readDeviceStatus() {
+    try {
+      const response = await fetch("./api/status", {cache: "no-store"});
+      if (!response.ok) throw new Error("Status unavailable");
+      const json = await response.json();
+      deviceHealth = json && typeof json === "object" ? json : null;
+    } catch (_) {
+      deviceHealth = null;
+    }
+    renderHardwareStatus();
+  }
   function translate() {
     document.querySelectorAll("[data-t]").forEach(node => { node.textContent = tr(node.dataset.t); });
     byId("master").setAttribute("aria-label", tr("master"));
     drawChannels();
+    renderHardwareStatus();
   }
   async function setLanguage(language) {
     if (!LANGUAGES.includes(language)) language = "en";
@@ -109,4 +129,6 @@
     byId("master-value").textContent = state.master + "%";
   });
   setLanguage(selectedLanguage());
+  readDeviceStatus();
+  setInterval(readDeviceStatus, 5000);
 })();

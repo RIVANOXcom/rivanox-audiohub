@@ -1,0 +1,15 @@
+[Unit]
+Description=AudioHub read-only local status and language UI (ALPHA)
+After=network.target
+
+[Service]
+Type=simple
+Environment=PYTHONPATH=/opt/audiohub/src
+Environment=AUDIOHUB_WEBROOT=/opt/audiohub/web
+ExecStart=/usr/bin/python3 -m audiohub.webserver
+Restart=always
+RestartSec=5
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=default.target

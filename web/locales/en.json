@@ -32,5 +32,7 @@
   "ready": "Ready",
   "disconnected": "Disconnected",
   "security": "Secure onboarding is being developed",
-  "copyright": "Open-source audio mixing for Raspberry Pi."
+  "copyright": "Open-source audio mixing for Raspberry Pi.",
+  "speakerConnected": "USB speakers detected",
+  "speakerDisconnected": "USB speakers not detected"
 }
