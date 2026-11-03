@@ -10,7 +10,8 @@ Workstream owner: PAPA project `PJ2611-0001:R001`. The source-of-truth for produ
 - [x] Five-language browser UI prototype with translation tests.
 - [x] Pinned `pi-gen` ARM64 development-image build.
 - [x] First `.img.xz` produced in native ARM64 CI (run 41730586400).
-- [ ] Artifact checksum, integrity test and upload verified (new preview run pending).
+- [x] Unverified image checksum, XZ integrity test and temporary GitHub Actions artifact upload proven ([run 41732307538](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/41732307538)); this is **not** a public stable Release.
+- [x] Five-language read-only health UI and image integration added in source, CI-tested (hardware not yet verified).
 - [ ] Image contents audited against release security policy.
 
 ## M1 — Minimum useful Bluetooth-to-USB appliance

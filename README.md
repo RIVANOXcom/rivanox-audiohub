@@ -69,7 +69,9 @@ The release will include `AudioHub-Pi4.img.xz`, `SHA256SUMS.txt`, and release no
 - Reproducible dependencies, dependency attribution and verified releases
 - Secure provisioning, diagnostic visibility and long-term reliability
 
-See [status](./docs/STATUS.md), [architecture](./docs/ARCHITECTURE.md) and [release policy](./docs/RELEASE-POLICY.md) for what is and is not implemented.
+See [status](./docs/STATUS.md), [architecture](./docs/ARCHITECTURE.md), [project baseline](./docs/PROJECT-BASELINE.md), [decision log](./docs/DECISION-LOG.md), [hardware acceptance](./docs/RELEASE-ACCEPTANCE.md) and [release policy](./docs/RELEASE-POLICY.md) for what is and is not implemented.
+
+**Workbench project:** `PJ2611-0001:R001` — product requirements, engineering evidence, and review state are tracked in RIVANOX Project Control. Native GitHub sync is planned but not yet available.
 
 ## Open source, commercial alternatives and third-party software
 

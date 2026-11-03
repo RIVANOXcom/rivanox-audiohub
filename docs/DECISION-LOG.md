@@ -27,6 +27,12 @@ These decisions capture user-confirmed requirements and current engineering arch
 - A subsequent isolated preview-build workflow stages the image in a writable `dist/` directory and checks SHA256/XZ integrity. Its outcome must be checked before marking artifact delivery complete.
 - USB output detection, virtual PipeWire EQ config and Bluetooth runtime routines currently have test coverage at the software level, not proven stable hardware routing.
 
+### 2026-11-03 correction and new evidence
+
+- Native ARM64 build [41732307538](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/41732307538) **succeeded** (source SHA `230caaa9afd639718eb4025b4013808e3a4a8a30`). Image staged in writable `dist/`, checksum and XZ test passed, short-lived unverified archive uploaded (artifact `13276489484`, 605,057,166 bytes). This supersedes the earlier pending-checksum observation for that isolated CI branch, but does not establish successful Pi hardware playback.
+- Main source SHA `45b2bd9563931b3a1f6d0b98c0b10387cdf48387` adds a five-language, local read-only status web service to the image stage; source checks passed in [run 41733288370](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/41733288370).
+- Preview branch merge SHA `51a6b0d3824e0c9cee0188a23ee27fc947c2dd8f` includes the current main software plus working ARM64 image stage; follow-up build [41733550118](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/41733550118) must be evaluated separately.
+
 ## Change control
 
 Link future decisions to Workbench requirement IDs, source commit SHA, GitHub issues, CI run IDs and specific hardware results. Record superseding decisions explicitly. Do not imply that GH issue closure automatically updates Workbench.
