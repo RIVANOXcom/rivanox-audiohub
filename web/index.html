@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#10192b">
+  <meta name="description" content="AudioHub – multilingual audio mixer for Raspberry Pi, powered by RIVANOX">
+  <title>AudioHub · RIVANOX</title>
+  <link rel="stylesheet" href="./styles.css">
+  <script src="./app.js" defer></script>
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <div class="brand"><div class="logo" aria-hidden="true">♫</div><div><strong>AudioHub</strong><small data-t="powered">Powered by RIVANOX</small></div></div>
+      <label class="language"><span data-t="language">Language</span><select id="language" aria-label="Language">
+        <option value="en">English</option><option value="de">Deutsch</option><option value="es">Español</option><option value="fr">Français</option><option value="it">Italiano</option>
+      </select></label>
+    </header>
+    <main>
+      <div class="intro"><p class="eyebrow" data-t="preview">Development preview</p><h1 data-t="tagline">All your audio. One place.</h1></div>
+      <div class="warning" role="status" data-t="previewNotice">These controls demonstrate the user interface; they are not connected to live audio yet.</div>
+      <section class="device">
+        <div class="device-icon" aria-hidden="true">◉</div>
+        <div><strong data-t="speaker">USB speakers</strong><p data-t="speakerState">Hardware detection pending</p></div>
+      </section>
+      <h2 data-t="channel">Channel</h2>
+      <div id="channels" class="grid"></div>
+      <section class="device master"><div><h2 data-t="master">Master output</h2><input id="master" type="range" min="0" max="100" value="70" aria-label="Master output"></div><output id="master-value" for="master">70%</output></section>
+      <section class="extra"><h2 data-t="connection">Connections</h2><div class="grid small"><div class="tile"><strong data-t="bluetooth">Bluetooth pairing</strong><p data-t="security">Secure onboarding is being developed</p></div><div class="tile"><strong data-t="wifi">Wi-Fi</strong><p data-t="notAvailable">Not available in this build</p></div><div class="tile"><strong data-t="radio">Internet radio</strong><p data-t="notAvailable">Not available in this build</p></div></div></section>
+    </main>
+    <footer><span data-t="copyright">Open-source audio mixing for Raspberry Pi.</span><nav><a href="https://github.com/RIVANOXcom/rivanox-audiohub" data-t="source" rel="noopener noreferrer">Source code</a><a href="https://ko-fi.com/RIVANOX" data-t="support" rel="noopener noreferrer">Support the project</a><a href="https://rivanox.com" rel="noopener noreferrer">RIVANOX.com</a></nav></footer>
+  </div>
+</body>
+</html>
