@@ -32,5 +32,7 @@
   "ready": "Bereit",
   "disconnected": "Nicht verbunden",
   "security": "Sichere Ersteinrichtung in Entwicklung",
-  "copyright": "Open-Source-Audiomixer für Raspberry Pi."
+  "copyright": "Open-Source-Audiomixer für Raspberry Pi.",
+  "speakerConnected": "USB-Lautsprecher erkannt",
+  "speakerDisconnected": "USB-Lautsprecher nicht erkannt"
 }

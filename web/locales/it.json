@@ -32,5 +32,7 @@
   "ready": "Pronto",
   "disconnected": "Disconnesso",
   "security": "Configurazione sicura in sviluppo",
-  "copyright": "Mixer audio open source per Raspberry Pi."
+  "copyright": "Mixer audio open source per Raspberry Pi.",
+  "speakerConnected": "Altoparlanti USB rilevati",
+  "speakerDisconnected": "Altoparlanti USB non rilevati"
 }

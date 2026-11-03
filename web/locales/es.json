@@ -32,5 +32,7 @@
   "ready": "Listo",
   "disconnected": "Desconectado",
   "security": "Configuración segura en desarrollo",
-  "copyright": "Mezclador de audio libre para Raspberry Pi."
+  "copyright": "Mezclador de audio libre para Raspberry Pi.",
+  "speakerConnected": "Altavoces USB detectados",
+  "speakerDisconnected": "Altavoces USB no detectados"
 }

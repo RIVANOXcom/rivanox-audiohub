@@ -30,6 +30,9 @@ cp -a "$ROOT/image/stage-audiohub" "$WORK/pi-gen/"
 rm -rf "$WORK/pi-gen/stage-audiohub/01-install/files/src"
 install -d "$WORK/pi-gen/stage-audiohub/01-install/files/src"
 cp -a "$ROOT/src/audiohub" "$WORK/pi-gen/stage-audiohub/01-install/files/src/"
+rm -rf "$WORK/pi-gen/stage-audiohub/01-install/files/web"
+install -d "$WORK/pi-gen/stage-audiohub/01-install/files/web"
+cp -a "$ROOT/web/." "$WORK/pi-gen/stage-audiohub/01-install/files/web/"
 touch "$WORK/pi-gen/stage2/SKIP_IMAGES"
 cat > "$WORK/pi-gen/config" <<'CONFIG'
 IMG_NAME='AudioHub-Pi4-UNVERIFIED'

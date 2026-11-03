@@ -18,7 +18,7 @@ from .mixer import CHANNELS, defaults, patch_settings, volume_commands
 CONFIG = Path.home() / ".config" / "audiohub"
 SETTINGS = CONFIG / "settings.json"
 ASSIGNMENTS = CONFIG / "device-channels.json"
-STATE = Path.home() / ".local" / "state" / "audiohub" / "runtime-status.json"
+STATE = Path(os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")) / "audiohub" / "runtime-status.json"
 
 
 def run(*args, timeout=8):
@@ -70,6 +70,7 @@ class Supervisor:
             atomic_json(ASSIGNMENTS, self.assignments)
 
     def _route(self, sources, sinks):
+        """Maintain only routes to existing virtual sinks; restart changed streams."""
         self._assign(sources)
         desired = {}
         for source in sources:
@@ -77,8 +78,8 @@ class Supervisor:
             target = "audiohub." + channel if channel else None
             if target in sinks:
                 desired[source["address"]] = (source["name"], target)
-        for addr, process in list(self.loopbacks.items()):
-            if addr in desired and process.poll() is None:
+        for addr, (previous_source, previous_target, process) in list(self.loopbacks.items()):
+            if desired.get(addr) == (previous_source, previous_target) and process.poll() is None:
                 continue
             if process.poll() is None:
                 process.terminate()
@@ -92,12 +93,13 @@ class Supervisor:
             if addr in self.loopbacks:
                 continue
             try:
-                self.loopbacks[addr] = subprocess.Popen(
+                process = subprocess.Popen(
                     ["pw-loopback", "--name", "audiohub-" + target,
                      "--capture", source, "--playback", target],
                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
                 )
+                self.loopbacks[addr] = (source, target, process)
             except OSError as exc:
                 print("Bluetooth routing failed:", exc, flush=True)
 
@@ -114,7 +116,8 @@ class Supervisor:
             self.last_default = None
         sources = bluetooth_sources(nodes)
         sinks = virtual_sinks(nodes)
-        self._route(sources, sinks)
+        # Disconnect managed input loopbacks when the USB speaker disappears.
+        self._route(sources, sinks if output_id is not None else {})
         try:
             state = patch_settings(defaults(), read_json(SETTINGS, self.settings))
             self.settings = state
@@ -129,7 +132,7 @@ class Supervisor:
             "usb_output": bool(output),
             "virtual_channels": [c for c in CHANNELS if "audiohub." + c in sinks],
             "bluetooth_source_count": len(sources),
-            "active_routes": len(self.loopbacks),
+            "active_routes": sum(1 for _, _, proc in self.loopbacks.values() if proc.poll() is None),
             "updated_at": int(time.time()),
         })
 
