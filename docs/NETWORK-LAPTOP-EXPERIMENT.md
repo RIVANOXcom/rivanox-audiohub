@@ -26,7 +26,7 @@ For an isolated developer setup, after separately configuring PipeWire with the 
      --prefill-packets 3 --diagnostics
    ```
 
-   Replace these **documentation-only example addresses** with the actual local test values. The program refuses to bind without the explicit unsafe-test flag, rejects public senders/bind IPs, and checks for both `audiohub.laptop` and an eligible USB sink before opening the UDP socket.
+   Replace these **documentation-only example addresses** with the actual local test values. The program refuses to bind without the explicit unsafe-test flag, accepts only specific RFC1918 or IPv4 loopback host addresses for both sender and local bind, and checks for both `audiohub.laptop` and an eligible USB sink before opening the UDP socket. **Wildcard `0.0.0.0`, public, multicast, link-local (`169.254.0.0/16`) and other special-purpose address ranges are rejected even with the unsafe opt-in.** The chosen Pi bind IP must exist on the intended local interface; IP filtering alone is not sender authentication.
 3. Stop the manual process after the test. Do not configure a port forward, automatic systemd startup, public bind, remote access, or network-wide discovery.
 
 No passwords, device identities or sender addresses are written to a status file by this prototype. It does not control the web UI and has no unattended setup path.
