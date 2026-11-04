@@ -27,6 +27,14 @@ jobs:
             echo "Unsafe shared provisioning secret detected" >&2
             exit 1
           fi
+      - name: Install pinned Ed25519 test dependency in isolated venv
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m venv "$RUNNER_TEMP/audiohub-owner-test-venv"
+          "$RUNNER_TEMP/audiohub-owner-test-venv/bin/python" -m pip install --disable-pip-version-check -r tests/requirements-owner-crypto.txt
+          "$RUNNER_TEMP/audiohub-owner-test-venv/bin/python" -c "from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey"
+          echo "$RUNNER_TEMP/audiohub-owner-test-venv/bin" >> "$GITHUB_PATH"
       - name: Check any checked-in Python or JS sources
         shell: bash
         run: |
