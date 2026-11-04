@@ -75,7 +75,13 @@ def inspect(root: Path) -> dict[str, bool]:
             )
         except OSError:
             checks[name + "_service"] = False
-        checks[name + "_enabled"] = enabled.is_symlink() and enabled.resolve().is_file()
+        # Absolute symlinks refer to the target image root, not the CI host.
+        if enabled.is_symlink():
+            link = os.readlink(enabled)
+            target = (root / link.lstrip("/")) if os.path.isabs(link) else (enabled.parent / link)
+            checks[name + "_enabled"] = target.is_file()
+        else:
+            checks[name + "_enabled"] = False
     checks["user_linger_enabled"] = (root / "var/lib/systemd/linger/audiohub").is_file()
     checks["ssh_not_autostarted"] = not any(
         (root / path).exists() or (root / path).is_symlink()
