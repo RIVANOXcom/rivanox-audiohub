@@ -15,6 +15,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from .runtime import STATE, read_json
+from .status_bind import select_bind_address
 
 WEBROOT = Path(os.environ.get("AUDIOHUB_WEBROOT", "/opt/audiohub/web"))
 ALLOWED = {
@@ -52,12 +53,16 @@ def public_status(status, *, now=None):
     channels = status.get("virtual_channels")
     if not isinstance(channels, list):
         channels = []
+    valid_channels = {"music", "laptop", "tablet"}
     return {
         "fresh": True,
         "usb_connected": status.get("usb_output") is True,
         "active_routes": _small_nonnegative(status.get("active_routes"), 3),
         "bluetooth_sources": _small_nonnegative(status.get("bluetooth_source_count"), 2),
-        "virtual_channel_count": len(set(ch for ch in channels if ch in ("music", "laptop", "tablet"))),
+        # Read JSON is untrusted: reject list/dict values before set().
+        "virtual_channel_count": len(set(
+            ch for ch in channels if isinstance(ch, str) and ch in valid_channels
+        )),
     }
 
 
@@ -104,9 +109,10 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
-    # Local LAN prototype, deliberately unauthenticated read-only API only.
-    # No WAN / port-forwarding deployment is supported.
-    server = ThreadingHTTPServer(("0.0.0.0", 8765), Handler)
+    # No owner-claim mechanism exists yet: keep unauthenticated alpha status
+    # local to the Pi unless an engineer explicitly opts into a specific
+    # private IPv4 interface for an isolated manual development test.
+    server = ThreadingHTTPServer((select_bind_address(), 8765), Handler)
     server.daemon_threads = True
     server.serve_forever(poll_interval=0.5)
 
