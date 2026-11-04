@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from audiohub.runtime import STATE, Supervisor
+from audiohub.runtime import STATE, Supervisor, sanitize_assignments
 
 
 class FakeProcess:
@@ -66,6 +66,53 @@ class RecoveryTests(unittest.TestCase):
         s._route(self.source("bluez_input.first"), {})
         self.assertTrue(proc.terminated)
         self.assertEqual(s.loopbacks, {})
+
+
+    def test_corrupted_stored_assignments_are_sanitized(self):
+        corrupted = {
+            "AA:BB:CC:DD:EE:01": ["music"],
+            "AA:BB:CC:DD:EE:02": {"channel": "tablet"},
+            "AA:BB:CC:DD:EE:03": "unknown",
+            "aa:bb:cc:dd:ee:04": "music",
+            "AA:BB:CC:DD:EE:05": "tablet",
+            "not-an-address": "tablet",
+        }
+        self.assertEqual(sanitize_assignments(corrupted), {
+            "AA:BB:CC:DD:EE:04": "music",
+            "AA:BB:CC:DD:EE:05": "tablet",
+        })
+        self.assertEqual(sanitize_assignments(["not a mapping"]), {})
+
+    def test_duplicate_devices_cannot_claim_same_channel(self):
+        conflicting = {
+            "AA:BB:CC:DD:EE:01": "music",
+            "AA:BB:CC:DD:EE:02": "music",
+            "AA:BB:CC:DD:EE:03": "tablet",
+            "aa:bb:cc:dd:ee:03": "music",
+        }
+        self.assertEqual(sanitize_assignments(conflicting), {
+            "AA:BB:CC:DD:EE:01": "music",
+            "AA:BB:CC:DD:EE:03": "tablet",
+        })
+
+    @mock.patch("audiohub.runtime.atomic_json")
+    def test_runtime_recovers_and_persists_only_a_new_valid_assignment(self, atomic):
+        supervisor = self.supervisor()
+        supervisor.assignments = {
+            "AA:BB:CC:DD:EE:01": ["music"],  # unhashable corrupted state
+            "invalid": "music",
+        }
+        supervisor._assign([{"address": "AA:BB:CC:DD:EE:07", "name": "source"}])
+        self.assertEqual(supervisor.assignments, {"AA:BB:CC:DD:EE:07": "music"})
+        atomic.assert_called_once()
+
+    @mock.patch("audiohub.runtime.atomic_json")
+    def test_bad_source_does_not_persist_over_corrupted_file(self, atomic):
+        supervisor = self.supervisor()
+        supervisor.assignments = {"broken": ["music"]}
+        supervisor._assign([{"address": "untrusted-input", "name": "source"}, {}])
+        self.assertEqual(supervisor.assignments, {})
+        atomic.assert_not_called()
 
 
 if __name__ == "__main__":
