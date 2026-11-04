@@ -11,9 +11,11 @@ import ipaddress
 import os
 import socket
 import subprocess
+import sys
 import time
 
 from .discovery import choose_usb_output, pipewire_nodes, virtual_sinks
+from .network_buffer import PcmPacketBuffer, ReceiverCounters
 
 TARGET = "audiohub.laptop"
 PORT = 4010
@@ -108,44 +110,89 @@ def close_player(process):
             process.wait(timeout=2)
 
 
-def serve(sender_ip, bind_ip, port):
-    """Experimental single-sender receiver; no default image service is installed."""
+def serve(sender_ip, bind_ip, port, *, prefill_packets=1, diagnostics=False):
+    """Manually gated receiver with finite PCM backlog and opt-in counters.
+
+    This does not reconstruct missing/reordered UDP packets or authenticate
+    the claimed sender. Keep the listener off in normal product operation.
+    """
     check_audio_target()
+    backlog = PcmPacketBuffer(prefill=prefill_packets)
+    counters = ReceiverCounters()
     player = None
     retry_after = 0.0
     last_written_at = None
     next_health_check = 0.0
+    next_report_at = None
+
+    def stop_player():
+        nonlocal player, last_written_at
+        if player is not None:
+            close_player(player)
+            counters.player_stopped += 1
+        player = None
+        last_written_at = None
+        backlog.clear()  # Never replay stale audio across player/USB loss.
+
+    def report(now=None, *, final=False):
+        nonlocal next_report_at
+        if not diagnostics:
+            return
+        if not final and now < next_report_at:
+            return
+        counters.backlog_dropped = backlog.dropped_oldest
+        print("audiohub.network " + counters.json_line(), file=sys.stderr, flush=True)
+        if not final:
+            next_report_at = now + 60.0
+
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp:
-        udp.settimeout(1.0)
+        udp.settimeout(0.02)
         udp.bind((bind_ip, port))
         try:
             while True:
                 now = time.monotonic()
+                if next_report_at is None:
+                    next_report_at = now + 60.0
+                report(now)
                 if player is not None:
                     if last_written_at is not None and now - last_written_at >= IDLE_SECONDS:
-                        close_player(player)
-                        player = None
+                        counters.idle_shutdown += 1
+                        stop_player()
                     elif now >= next_health_check:
                         next_health_check = now + HEALTH_CHECK_SECONDS
                         try:
                             check_audio_target()
                         except RuntimeError:
-                            # Never keep playing if the chosen USB or laptop sink vanishes.
-                            close_player(player)
-                            player = None
+                            counters.output_lost += 1
+                            stop_player()
                             retry_after = now + 2.0
+
                 try:
                     packet, peer = udp.recvfrom(2048)
                 except socket.timeout:
+                    packet = None
+                    peer = None
+
+                if packet is not None:
+                    counters.datagrams += 1
+                    if not isinstance(peer, tuple) or not peer or peer[0] != sender_ip:
+                        counters.foreign_sender += 1
+                        continue
+                    pcm = parse_scream_packet(packet)
+                    if pcm is None:
+                        counters.invalid_format += 1
+                        continue
+                    counters.accepted += 1
+                    if player is not None and player.poll() is not None:
+                        stop_player()
+                    backlog.append(pcm)
+
+                ready = backlog.peek()
+                if ready is None:
                     continue
-                pcm = accepted_pcm(packet, peer, sender_ip)
-                if pcm is None:
-                    continue
-                if player is not None and player.poll() is not None:
-                    close_player(player)
-                    player = None
                 if player is None:
                     if time.monotonic() < retry_after:
+                        backlog.clear()
                         continue
                     retry_after = time.monotonic() + 2.0
                     try:
@@ -159,28 +206,31 @@ def serve(sender_ip, bind_ip, port):
                             raise RuntimeError("Audio output pipe unavailable")
                         os.set_blocking(player.stdin.fileno(), False)
                         next_health_check = now + HEALTH_CHECK_SECONDS
+                        counters.player_started += 1
                     except (OSError, RuntimeError):
-                        close_player(player)
-                        player = None
+                        stop_player()
                         continue
                 try:
-                    # One PCM packet fits within PIPE_BUF on Linux. Never block
-                    # indefinitely waiting for a failed/stalled audio process.
-                    written = os.write(player.stdin.fileno(), pcm)
+                    # One PCM packet fits within PIPE_BUF on Linux. Preserve
+                    # whole packet boundaries; backpressure retains up to 16.
+                    written = os.write(player.stdin.fileno(), ready)
                 except BlockingIOError:
-                    # A full buffer causes a packet drop, not an unbounded queue.
+                    counters.write_blocked += 1
                     continue
                 except OSError:
-                    close_player(player)
-                    player = None
+                    counters.write_failed += 1
+                    stop_player()
                     continue
-                if written != len(pcm):
-                    close_player(player)
-                    player = None
+                if written != len(ready):
+                    # Partial PCM frames are not replayed after output failure.
+                    counters.write_failed += 1
+                    stop_player()
                 else:
+                    backlog.consume()
                     last_written_at = now
         finally:
-            close_player(player)
+            stop_player()
+            report(final=True)
 
 
 def main(argv=None):
@@ -190,12 +240,17 @@ def main(argv=None):
     parser.add_argument("--port", type=int, default=PORT)
     parser.add_argument("--unsafe-lan-test", action="store_true",
                         help="Opt in to unauthenticated, trusted-LAN test only")
+    parser.add_argument("--prefill-packets", type=int, default=1,
+                        help="Require 1-16 received PCM packets before starting playback")
+    parser.add_argument("--diagnostics", action="store_true",
+                        help="Write aggregate counters to stderr every 60 s and on shutdown")
     args = parser.parse_args(argv)
     try:
         sender, bind, port = validate_options(
             args.sender_ip, args.bind_ip, args.port, args.unsafe_lan_test
         )
-        serve(sender, bind, port)
+        serve(sender, bind, port,
+              prefill_packets=args.prefill_packets, diagnostics=args.diagnostics)
     except (OSError, RuntimeError, ValueError) as exc:
         parser.exit(2, "AudioHub experimental receiver unavailable: " + str(exc) + "\n")
 
