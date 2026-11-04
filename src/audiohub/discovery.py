@@ -5,6 +5,9 @@ from __future__ import annotations
 import json
 import re
 
+_BLUETOOTH_ADDRESS = re.compile(r"(?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}\Z")
+_BLUETOOTH_NODE_ADDRESS = re.compile(r"^bluez_input\.((?:[0-9A-Fa-f]{2}_){5}[0-9A-Fa-f]{2})(?:\.|$)")
+
 
 def pipewire_nodes(raw):
     try:
@@ -17,7 +20,14 @@ def pipewire_nodes(raw):
 
 
 def props(node):
-    return (node.get("info") or {}).get("props") or {}
+    """Ignore unexpected PipeWire metadata shapes instead of breaking polling."""
+    if not isinstance(node, dict):
+        return {}
+    info = node.get("info")
+    if not isinstance(info, dict):
+        return {}
+    properties = info.get("props")
+    return properties if isinstance(properties, dict) else {}
 
 
 def choose_usb_output(nodes):
@@ -50,9 +60,15 @@ def bluetooth_sources(nodes):
             continue
         address = value.get("api.bluez5.address") or value.get("device.address")
         if not address:
-            match = re.search(r"bluez_input\.([0-9A-Fa-f_]{17})", name)
-            address = match.group(1).replace("_", ":") if match else name
-        sources.append({"name": name, "address": str(address).upper(), "id": item.get("id")})
+            match = _BLUETOOTH_NODE_ADDRESS.match(name)
+            if match is None:
+                continue
+            address = match.group(1).replace("_", ":")
+        address = str(address).upper()
+        # Never persist an unverified node name as a Bluetooth device address.
+        if _BLUETOOTH_ADDRESS.fullmatch(address) is None:
+            continue
+        sources.append({"name": name, "address": address, "id": item.get("id")})
     return sources
 
 
