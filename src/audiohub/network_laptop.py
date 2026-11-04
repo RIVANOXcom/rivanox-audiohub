@@ -50,8 +50,9 @@ def validate_options(sender_ip, bind_ip, port, enabled):
     if (sender.is_multicast or sender.is_unspecified or sender.is_reserved
             or not (sender.is_private or sender.is_loopback)):
         raise ValueError("Sender must be a specific private or loopback IPv4 address")
-    if bind.is_multicast or bind.is_reserved:
-        raise ValueError("Cannot bind to multicast or reserved addresses")
+    if (bind.is_multicast or bind.is_reserved
+            or not (bind.is_private or bind.is_loopback or bind.is_unspecified)):
+        raise ValueError("Bind only to a private, loopback or explicit all-interface IPv4 address")
     return str(sender), str(bind), port
 
 
