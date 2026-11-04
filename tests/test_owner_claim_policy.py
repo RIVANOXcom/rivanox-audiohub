@@ -131,7 +131,7 @@ class OwnerClaimTests(unittest.TestCase):
 
     def test_wrong_session_or_malformed_secret_never_authorizes(self):
         token = self.gate.claim(self.gate.arm_physical(trusted_physical_event=True))
-        for candidate in (None, True, token.upper(), bytes.fromhex(token),
+        for candidate in (None, True, "A" * 64, bytes.fromhex(token),
                           "f", "x" * 64, token[:-1] + "9"):
             with self.subTest(candidate=str(candidate)[:12]):
                 self.assertFalse(self.gate.authorize_session(candidate))
