@@ -7,6 +7,7 @@ onboarding or supplies a trusted factory-state/physical-presence check.
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import os
 from pathlib import Path
@@ -56,6 +57,7 @@ class OwnerRecordStore:
 
     @staticmethod
     def _read_record(directory_fd):
+        """Return (structural condition, verified-format fingerprint or None)."""
         try:
             fd = os.open(
                 RECORD_NAME,
@@ -63,20 +65,20 @@ class OwnerRecordStore:
                 dir_fd=directory_fd,
             )
         except FileNotFoundError:
-            return "missing_untrusted"
+            return "missing_untrusted", None
         try:
             info = os.fstat(fd)
             if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid()
                     or stat.S_IMODE(info.st_mode) != 0o600 or info.st_nlink != 1
                     or info.st_size > MAX_RECORD_BYTES):
-                return "invalid"
+                return "invalid", None
             raw = os.read(fd, MAX_RECORD_BYTES + 1)
             if len(raw) > MAX_RECORD_BYTES:
-                return "invalid"
+                return "invalid", None
             try:
                 record = json.loads(raw.decode("utf-8"), object_pairs_hook=_unique_object)
             except (UnicodeError, ValueError, TypeError):
-                return "invalid"
+                return "invalid", None
             if (type(record) is not dict or set(record) != {
                 "schema_version", "state", "owner_key_sha256"
             } or type(record["schema_version"]) is not int
@@ -84,30 +86,47 @@ class OwnerRecordStore:
                     or record["state"] != "claimed"
                     or type(record["owner_key_sha256"]) is not str
                     or not _DIGEST.fullmatch(record["owner_key_sha256"])):
-                return "invalid"
-            return "record_present_unverified"
+                return "invalid", None
+            return "record_present_unverified", record["owner_key_sha256"]
+        finally:
+            os.close(fd)
+
+    def _inspect_record(self):
+        """Read through protected directory and file handles, deny on any error."""
+        try:
+            fd = self._open_directory()
+        except (OSError, OwnerStoreError):
+            return "invalid", None
+        try:
+            return self._read_record(fd)
+        except (OSError, ValueError):
+            return "invalid", None
         finally:
             os.close(fd)
 
     def inspect(self):
-        """Returns structural result only; never a claim of authenticated owner."""
-        try:
-            fd = self._open_directory()
-        except (OSError, OwnerStoreError):
-            condition = "invalid"
-        else:
-            try:
-                condition = self._read_record(fd)
-            except (OSError, ValueError):
-                condition = "invalid"
-            finally:
-                os.close(fd)
+        """Structural result only; presence never authenticates the owner."""
+        condition, _ = self._inspect_record()
         return {
             "record_condition": condition,
             "durable_owner_verified": False,
             "network_onboarding_enabled": False,
             "release_ready": False,
         }
+
+    def matches_public_key(self, public_key):
+        """Compare a candidate Ed25519 key fingerprint with a protected record.
+
+        This does NOT verify a signature or authorize a request. The caller
+        must independently verify proof of private-key possession.
+        """
+        if type(public_key) is not bytes or len(public_key) != 32:
+            return False
+        condition, fingerprint = self._inspect_record()
+        if condition != "record_present_unverified" or fingerprint is None:
+            return False
+        candidate = hashlib.sha256(public_key).hexdigest()
+        return hmac.compare_digest(fingerprint, candidate)
 
     def seal(self, public_key, *, trusted_physical_approval=False,
              trusted_factory_unowned=False):
