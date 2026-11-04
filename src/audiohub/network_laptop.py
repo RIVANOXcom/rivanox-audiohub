@@ -19,6 +19,8 @@ TARGET = "audiohub.laptop"
 PORT = 4010
 MAX_PCM = 1152
 HEADER_SIZE = 5
+HEALTH_CHECK_SECONDS = 3.0
+IDLE_SECONDS = 5.0
 
 
 def parse_scream_packet(packet):
@@ -111,11 +113,27 @@ def serve(sender_ip, bind_ip, port):
     check_audio_target()
     player = None
     retry_after = 0.0
+    last_written_at = None
+    next_health_check = 0.0
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp:
         udp.settimeout(1.0)
         udp.bind((bind_ip, port))
         try:
             while True:
+                now = time.monotonic()
+                if player is not None:
+                    if last_written_at is not None and now - last_written_at >= IDLE_SECONDS:
+                        close_player(player)
+                        player = None
+                    elif now >= next_health_check:
+                        next_health_check = now + HEALTH_CHECK_SECONDS
+                        try:
+                            check_audio_target()
+                        except RuntimeError:
+                            # Never keep playing if the chosen USB or laptop sink vanishes.
+                            close_player(player)
+                            player = None
+                            retry_after = now + 2.0
                 try:
                     packet, peer = udp.recvfrom(2048)
                 except socket.timeout:
@@ -140,6 +158,7 @@ def serve(sender_ip, bind_ip, port):
                         if player.stdin is None:
                             raise RuntimeError("Audio output pipe unavailable")
                         os.set_blocking(player.stdin.fileno(), False)
+                        next_health_check = now + HEALTH_CHECK_SECONDS
                     except (OSError, RuntimeError):
                         close_player(player)
                         player = None
@@ -158,6 +177,8 @@ def serve(sender_ip, bind_ip, port):
                 if written != len(pcm):
                     close_player(player)
                     player = None
+                else:
+                    last_written_at = now
         finally:
             close_player(player)
 
