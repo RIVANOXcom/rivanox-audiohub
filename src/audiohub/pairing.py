@@ -12,6 +12,8 @@ import dbus.service
 from dbus.mainloop.glib import DBusGMainLoop
 from gi.repository import GLib
 
+from .pairing_policy import PENDING_TTL_SECONDS, may_trust_pair, valid_pending
+
 PATH = "/org/rivanox/audiohub/agent"
 BOOT_WINDOW = 600
 PAIRING_LIMIT = 2
@@ -33,6 +35,7 @@ class PairingAgent(dbus.service.Object):
         self.manager = obj
         # Rebooting a previously paired device must not reopen guest pairing.
         self.initial_pairing_allowed = self.paired_count() == 0
+        self.pending = {}
         managed = obj.GetManagedObjects()
         adapters = [path for path, attrs in managed.items() if "org.bluez.Adapter1" in attrs]
         if not adapters:
@@ -65,11 +68,33 @@ class PairingAgent(dbus.service.Object):
         self.adapter.Set("org.bluez.Adapter1", "Discoverable", value)
         return True
 
+    def _prune_pending(self):
+        now = time.monotonic()
+        self.pending = {path: expires for path, expires in self.pending.items()
+                        if valid_pending(now, expires)}
+
+    def _authorize_candidate(self, device):
+        if not self.allowed():
+            raise Rejected("Pairing is closed")
+        self._prune_pending()
+        path = str(device)
+        if path not in self.pending and len(self.pending) >= PAIRING_LIMIT:
+            raise Rejected("Concurrent pairing slots exhausted")
+        self.pending[path] = time.monotonic() + PENDING_TTL_SECONDS
+
     def changed(self, interface, change, invalidated, path=None):
-        if interface == "org.bluez.Device1" and change.get("Paired") and path:
-            device = dbus.Interface(self.bus.get_object("org.bluez", path), "org.freedesktop.DBus.Properties")
-            device.Set("org.bluez.Device1", "Trusted", dbus.Boolean(True))
+        if interface != "org.bluez.Device1" or not bool(change.get("Paired", False)) or not path:
+            return
+        self._prune_pending()
+        candidate = str(path) in self.pending
+        if not may_trust_pair(self.initial_pairing_allowed, time.monotonic(),
+                              self.deadline, self.paired_count(), candidate):
             self.refresh()
+            return
+        self.pending.pop(str(path), None)
+        device = dbus.Interface(self.bus.get_object("org.bluez", path), "org.freedesktop.DBus.Properties")
+        device.Set("org.bluez.Device1", "Trusted", dbus.Boolean(True))
+        self.refresh()
 
     @dbus.service.method("org.bluez.Agent1", in_signature="", out_signature="")
     def Release(self):
@@ -77,19 +102,18 @@ class PairingAgent(dbus.service.Object):
 
     @dbus.service.method("org.bluez.Agent1", in_signature="o", out_signature="")
     def RequestAuthorization(self, device):
-        if not self.allowed():
-            raise Rejected("Pairing is closed")
+        self._authorize_candidate(device)
 
     @dbus.service.method("org.bluez.Agent1", in_signature="os", out_signature="")
     def AuthorizeService(self, device, uuid):
         p = dbus.Interface(self.bus.get_object("org.bluez", device), "org.freedesktop.DBus.Properties")
-        if not p.Get("org.bluez.Device1", "Trusted") and not self.allowed():
-            raise Rejected("Untrusted device")
+        self._prune_pending()
+        if not p.Get("org.bluez.Device1", "Trusted") and str(device) not in self.pending:
+            raise Rejected("Untrusted or unapproved device")
 
     @dbus.service.method("org.bluez.Agent1", in_signature="ou", out_signature="")
     def RequestConfirmation(self, device, passkey):
-        if not self.allowed():
-            raise Rejected("Pairing is closed")
+        self._authorize_candidate(device)
 
     @dbus.service.method("org.bluez.Agent1", in_signature="o", out_signature="s")
     def RequestPinCode(self, device):
@@ -101,7 +125,7 @@ class PairingAgent(dbus.service.Object):
 
     @dbus.service.method("org.bluez.Agent1", in_signature="", out_signature="")
     def Cancel(self):
-        pass
+        self.pending.clear()
 
 
 def main():

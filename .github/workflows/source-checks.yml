@@ -1,7 +1,7 @@
 name: Source checks
 on:
   push:
-    branches: [main]
+    branches: [main, wd-papa-5b2e6939-bluetooth-guard]
   pull_request:
 permissions:
   contents: read
