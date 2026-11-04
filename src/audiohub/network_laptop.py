@@ -23,6 +23,18 @@ MAX_PCM = 1152
 HEADER_SIZE = 5
 HEALTH_CHECK_SECONDS = 3.0
 IDLE_SECONDS = 5.0
+# Only explicit local IPv4 host addresses are allowed for manual opt-in tests.
+# ipaddress.is_private alone also includes link-local/special ranges.
+TEST_NETS = tuple(ipaddress.IPv4Network(net) for net in (
+    "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8"
+))
+
+
+def _specific_test_ip(ip):
+    return any(ip in net for net in TEST_NETS) and not (
+        ip.is_unspecified or ip.is_multicast or ip.is_reserved
+    )
+
 
 
 def parse_scream_packet(packet):
@@ -51,12 +63,10 @@ def validate_options(sender_ip, bind_ip, port, enabled):
         bind = ipaddress.IPv4Address(bind_ip)
     except ipaddress.AddressValueError as exc:
         raise ValueError("IPv4 addresses are required") from exc
-    if (sender.is_multicast or sender.is_unspecified or sender.is_reserved
-            or not (sender.is_private or sender.is_loopback)):
-        raise ValueError("Sender must be a specific private or loopback IPv4 address")
-    if (bind.is_multicast or bind.is_reserved
-            or not (bind.is_private or bind.is_loopback or bind.is_unspecified)):
-        raise ValueError("Bind only to a private, loopback or explicit all-interface IPv4 address")
+    if not _specific_test_ip(sender):
+        raise ValueError("Sender must be a specific RFC1918 or loopback IPv4 host")
+    if not _specific_test_ip(bind):
+        raise ValueError("Bind must be a specific RFC1918 or loopback IPv4 interface")
     return str(sender), str(bind), port
 
 
