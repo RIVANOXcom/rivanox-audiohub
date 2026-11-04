@@ -164,6 +164,18 @@ class OwnerClaimTests(unittest.TestCase):
         self.assertFalse(broken.status()["volatile_claim_completed"])
         self.assertFalse(broken.authorize_session(proof))
 
+    def test_repeating_entropy_cannot_reuse_claim_proof_as_session(self):
+        repeated = OwnerClaimPolicy(
+            trusted_factory_unowned=True, clock=self.clock,
+            random_bytes=lambda n: b"r" * n,
+        )
+        proof = repeated.arm_physical(trusted_physical_event=True)
+        with self.assertRaisesRegex(RuntimeError, "entropy"):
+            repeated.claim(proof)
+        self.assertFalse(repeated.status()["volatile_claim_completed"])
+        self.assertFalse(repeated.authorize_session(proof))
+        self.assertFalse(repeated.status()["network_onboarding_enabled"])
+
     def test_owner_model_is_not_wired_into_network_or_automatic_services(self):
         web = (ROOT / "src/audiohub/webserver.py").read_text()
         pairing = (ROOT / "src/audiohub/pairing.py").read_text()
