@@ -13,6 +13,7 @@
   };
   let words = {};
   let deviceHealth = null;
+  let localeRevision = 0;
   const byId = id => document.getElementById(id);
   const tr = key => words[key] || key;
   const selectedLanguage = () => {
@@ -63,6 +64,7 @@
       const updateMute = () => {
         mute.textContent = tr(state[channel].mute ? "unmute" : "mute");
         mute.setAttribute("aria-pressed", String(state[channel].mute));
+        mute.setAttribute("aria-label", tr(state[channel].mute ? "unmute" : "mute") + ": " + tr(channel));
       };
       mute.addEventListener("click", () => {
         state[channel].mute = !state[channel].mute;
@@ -101,26 +103,44 @@
   function translate() {
     document.querySelectorAll("[data-t]").forEach(node => { node.textContent = tr(node.dataset.t); });
     byId("master").setAttribute("aria-label", tr("master"));
+    byId("language").setAttribute("aria-label", tr("language"));
     drawChannels();
     renderHardwareStatus();
   }
+  async function loadLocale(language) {
+    const response = await fetch("./locales/" + language + ".json", {cache: "no-cache"});
+    if (!response.ok) throw new Error("Locale unavailable");
+    const data = await response.json();
+    if (!data || typeof data !== "object" || Array.isArray(data)) {
+      throw new Error("Invalid locale");
+    }
+    return data;
+  }
   async function setLanguage(language) {
-    if (!LANGUAGES.includes(language)) language = "en";
+    const revision = ++localeRevision;
+    let chosen = LANGUAGES.includes(language) ? language : "en";
     let data;
     try {
-      const response = await fetch("./locales/" + language + ".json", {cache: "no-cache"});
-      if (!response.ok) throw new Error("Locale unavailable");
-      data = await response.json();
+      data = await loadLocale(chosen);
     } catch (_) {
-      if (language !== "en") return setLanguage("en");
-      words = { tagline: "All your audio. One place." };
-      translate();
-      return;
+      // Ignore responses/errors from superseded requests. Never reset a newer choice.
+      if (revision !== localeRevision) return;
+      if (chosen !== "en") {
+        chosen = "en";
+        try {
+          data = await loadLocale(chosen);
+        } catch (_) {
+          data = { tagline: "All your audio. One place." };
+        }
+      } else {
+        data = { tagline: "All your audio. One place." };
+      }
     }
+    if (revision !== localeRevision) return;
     words = data;
-    document.documentElement.lang = language;
-    byId("language").value = language;
-    try { localStorage.setItem("audiohub.locale", language); } catch (_) {}
+    document.documentElement.lang = chosen;
+    byId("language").value = chosen;
+    try { localStorage.setItem("audiohub.locale", chosen); } catch (_) {}
     translate();
   }
   byId("language").addEventListener("change", event => setLanguage(event.target.value));
