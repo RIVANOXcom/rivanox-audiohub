@@ -113,6 +113,31 @@ def pipewire_filter_config(settings):
     return "\n".join(blocks) + "\n"
 
 
+def mix_gain_budget(settings):
+    """Return a conservative amplitude attenuation for all three inputs.
+
+    The estimate assumes every unmuted input may be simultaneously at full
+    scale. It accounts for the sum of positive EQ band gains per channel, but
+    is not a true look-ahead limiter or a substitute for measured peak tests.
+    """
+    settings = patch_settings(defaults(), settings)
+    worst_case = math.fsum(
+        (control["volume"] / 100) * 10 ** (
+            sum(max(0, control[band]) for band in EQ_BANDS) / 20
+        )
+        for channel in CHANNELS
+        for control in (settings[channel],)
+        if not control["mute"]
+    )
+    return min(1.0, 1.0 / worst_case) if worst_case > 0 else 1.0
+
+
+def effective_master_gain(settings):
+    """Constrain the requested master level to the conservative mix budget."""
+    settings = patch_settings(defaults(), settings)
+    return (settings["master"] / 100) * mix_gain_budget(settings)
+
+
 def volume_commands(settings, sink_ids, output_id=None):
     """Return argv lists; commands are *not* executed here."""
     settings = patch_settings(defaults(), settings)
@@ -124,5 +149,5 @@ def volume_commands(settings, sink_ids, output_id=None):
         commands.append(["wpctl", "set-volume", node_id, str(settings[channel]["volume"] / 100)])
         commands.append(["wpctl", "set-mute", node_id, "1" if settings[channel]["mute"] else "0"])
     if output_id is not None:
-        commands.append(["wpctl", "set-volume", str(int(output_id)), str(settings["master"] / 100)])
+        commands.append(["wpctl", "set-volume", str(int(output_id)), str(effective_master_gain(settings))])
     return commands
