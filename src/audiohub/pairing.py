@@ -83,7 +83,7 @@ class PairingAgent(dbus.service.Object):
         self.pending[path] = time.monotonic() + PENDING_TTL_SECONDS
 
     def changed(self, interface, change, invalidated, path=None):
-        if interface != "org.bluez.Device1" or change.get("Paired") is not True or not path:
+        if interface != "org.bluez.Device1" or not bool(change.get("Paired", False)) or not path:
             return
         self._prune_pending()
         candidate = str(path) in self.pending
