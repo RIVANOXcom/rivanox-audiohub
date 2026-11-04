@@ -5,8 +5,8 @@ from __future__ import annotations
 import json
 import re
 
-_BLUETOOTH_ADDRESS = re.compile(r"(?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}\\Z")
-_BLUETOOTH_NODE_ADDRESS = re.compile(r"^bluez_input\\.((?:[0-9A-Fa-f]{2}_){5}[0-9A-Fa-f]{2})(?:\\.|$)")
+_BLUETOOTH_ADDRESS = re.compile(r"(?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}\Z")
+_BLUETOOTH_NODE_ADDRESS = re.compile(r"^bluez_input\.((?:[0-9A-Fa-f]{2}_){5}[0-9A-Fa-f]{2})(?:\.|$)")
 
 
 def pipewire_nodes(raw):
