@@ -47,6 +47,7 @@ class OwnerPossessionChallenge:
         self._random_bytes = secrets.token_bytes if random_bytes is None else random_bytes
         self._lock = threading.Lock()
         self._pending = None
+        self._last_nonce = None
 
     @staticmethod
     def _fingerprint(public_key):
@@ -71,8 +72,11 @@ class OwnerPossessionChallenge:
             if digest is None or not self._store.matches_public_key(public_key):
                 raise ProofDenied("Proof not permitted")
             nonce = self._random_bytes(NONCE_BYTES)
-            if type(nonce) is not bytes or len(nonce) != NONCE_BYTES:
+            if (type(nonce) is not bytes or len(nonce) != NONCE_BYTES
+                    or (self._last_nonce is not None
+                        and hmac.compare_digest(nonce, self._last_nonce))):
                 raise ProofDenied("Proof not permitted")
+            self._last_nonce = nonce
             message = DOMAIN + digest + nonce
             self._pending = (digest, message, now + CHALLENGE_TTL_SECONDS,
                              MAX_PROOF_FAILURES)
