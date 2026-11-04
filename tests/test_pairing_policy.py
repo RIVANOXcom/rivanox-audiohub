@@ -38,6 +38,8 @@ class PairingPolicyTests(unittest.TestCase):
         agent = (ROOT / "src/audiohub/pairing.py").read_text()
         ast.parse(agent)
         self.assertIn("candidate = str(path) in self.pending", agent)
+        self.assertIn('not bool(change.get("Paired", False))', agent)
+        self.assertNotIn('change.get("Paired") is not True', agent)
         self.assertIn("may_trust_pair(", agent)
         self.assertIn('self.pending.pop(str(path), None)', agent)
         self.assertIn("self._authorize_candidate(device)", agent)
