@@ -138,5 +138,48 @@ class NetworkLaptopTests(unittest.TestCase):
         close_player.assert_called_once_with(process)
 
 
+    @mock.patch("audiohub.network_laptop.check_audio_target")
+    @mock.patch("audiohub.network_laptop.close_player")
+    @mock.patch("audiohub.network_laptop.os.write", return_value=4)
+    @mock.patch("audiohub.network_laptop.os.set_blocking")
+    @mock.patch("audiohub.network_laptop.subprocess.Popen")
+    @mock.patch("audiohub.network_laptop.time.monotonic", side_effect=[100.0, 100.0, 100.0, 106.0])
+    @mock.patch("audiohub.network_laptop.socket.socket")
+    def test_idle_sender_releases_player(
+        self, sock, clock, popen, set_blocking, write, close_player, check_target
+    ):
+        receiver = sock.return_value.__enter__.return_value
+        receiver.recvfrom.side_effect = [(packet(), ("192.168.1.10", 4010)), KeyboardInterrupt()]
+        process = popen.return_value
+        process.stdin.fileno.return_value = 42
+        process.poll.return_value = None
+        with self.assertRaises(KeyboardInterrupt):
+            laptop.serve("192.168.1.10", "127.0.0.1", 4010)
+        close_player.assert_any_call(process)
+        self.assertEqual(write.call_count, 1)
+
+    @mock.patch("audiohub.network_laptop.check_audio_target",
+                side_effect=[None, None, RuntimeError("USB removed")])
+    @mock.patch("audiohub.network_laptop.close_player")
+    @mock.patch("audiohub.network_laptop.os.write", return_value=4)
+    @mock.patch("audiohub.network_laptop.os.set_blocking")
+    @mock.patch("audiohub.network_laptop.subprocess.Popen")
+    @mock.patch("audiohub.network_laptop.time.monotonic", side_effect=[100.0, 100.0, 100.0, 104.0])
+    @mock.patch("audiohub.network_laptop.socket.socket")
+    def test_usb_disappearance_stops_playback(
+        self, sock, clock, popen, set_blocking, write, close_player, check_target
+    ):
+        receiver = sock.return_value.__enter__.return_value
+        receiver.recvfrom.side_effect = [(packet(), ("192.168.1.10", 4010)), KeyboardInterrupt()]
+        process = popen.return_value
+        process.stdin.fileno.return_value = 42
+        process.poll.return_value = None
+        with self.assertRaises(KeyboardInterrupt):
+            laptop.serve("192.168.1.10", "127.0.0.1", 4010)
+        self.assertEqual(check_target.call_count, 3)
+        close_player.assert_any_call(process)
+        self.assertEqual(write.call_count, 1)
+
+
 if __name__ == "__main__":
     unittest.main()
