@@ -33,7 +33,7 @@ No passwords, device identities or sender addresses are written to a status file
 ## Source checks and known limitations
 
 - Tests validate legacy Scream framing and exact stereo PCM handoff, reject non-target senders and unsupported formats, and mock PipeWire presence/absence and the targeted `pw-cat` launch.
-- Valid frames are sent to the unprivileged `pw-cat` process using nonblocking, bounded writes. A stalled pipe drops frames rather than accumulating an unlimited queue. On broken pipes, the player can restart after a brief backoff.
+- Valid frames are sent to the unprivileged `pw-cat` process using nonblocking, bounded writes. A stalled pipe drops frames rather than accumulating an unlimited queue. On broken pipes, the player can restart after a brief backoff. A five-second sender idle interval closes the child playback process, and a three-second periodic PipeWire/USB inspection closes the player if the intended sink or recognized USB output disappears. These are source-level safeguards, **not** verified physical reconnect or device isolation.
 - This does **not** implement a true jitter buffer, packet-loss concealment, trusted sender authentication, guaranteed stream identity, reconnect metrics, rate adaptation, real-time clock drift correction, or live mixer status. The UDP protocol has no packet sequence numbers or retransmission. Consequently latency, dropouts, and simultaneous source performance are still unverified.
 - The receiver is not installed as a systemd service and is never started by the image installer. It cannot by itself satisfy the flash-and-boot usability target or secure phone-based onboarding.
 
