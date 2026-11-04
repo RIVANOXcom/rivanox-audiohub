@@ -108,11 +108,16 @@ class OwnerClaimPolicy:
             # Generate the session BEFORE consuming the one-use proof. If the
             # entropy source fails, the claim remains closed to outsiders.
             session = self._secret()
+            session_digest = self._digest(session)
+            if hmac.compare_digest(session_digest, self._pending_digest):
+                # A broken/repeating entropy source must never issue a session
+                # identical to the out-of-band one-time claim proof.
+                raise RuntimeError("Independent secure session entropy unavailable")
             self._pending_digest = None
             self._remaining_attempts = 0
             self._deadline = 0.0
             self._claimed = True
-            self._session_digest = self._digest(session)
+            self._session_digest = session_digest
             self._session_deadline = now + SESSION_TTL_SECONDS
             return session
 
