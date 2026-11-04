@@ -1,0 +1,2 @@
+# Test-only Ed25519 verifier dependency. Not part of any Pi image.
+cryptography==46.0.4
