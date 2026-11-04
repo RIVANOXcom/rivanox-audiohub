@@ -24,4 +24,9 @@ systemctl enable bluetooth.service
 systemctl enable audiohub-bluetooth.service
 install -d -o audiohub -g audiohub -m700 /home/audiohub/.config
 PYTHONPATH=/opt/audiohub/src runuser -u audiohub -- python3 -m audiohub.eq_setup
+# The appliance is headless; no interactive login or sudo access is needed.
+# pi-gen requires an initial password but it must not remain usable in a
+# redistributed image. Apply this after one-time user-owned EQ generation.
+passwd -l audiohub
+gpasswd -d audiohub sudo
 CHROOT
