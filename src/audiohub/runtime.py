@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import time
 from pathlib import Path
@@ -19,6 +20,7 @@ CONFIG = Path.home() / ".config" / "audiohub"
 SETTINGS = CONFIG / "settings.json"
 ASSIGNMENTS = CONFIG / "device-channels.json"
 STATE = Path(os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")) / "audiohub" / "runtime-status.json"
+_MAC_ADDRESS = re.compile(r"(?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}\Z")
 
 
 def run(*args, timeout=8):
@@ -45,19 +47,49 @@ def atomic_json(path, data):
     temporary.replace(path)
 
 
+def sanitize_assignments(payload):
+    """Keep only unique, well-formed Bluetooth-to-channel assignments.
+
+    Never write back discarded entries here: a corrupted file is treated as
+    untrusted input, and recovery must not silently overwrite its evidence.
+    """
+    if not isinstance(payload, dict):
+        return {}
+    cleaned = {}
+    used_channels = set()
+    for address in sorted(payload, key=str):
+        channel = payload[address]
+        if (not isinstance(address, str)
+                or not isinstance(channel, str)
+                or channel not in ("music", "tablet")
+                or _MAC_ADDRESS.fullmatch(address) is None):
+            continue
+        normalized = address.upper()
+        if normalized in cleaned or channel in used_channels:
+            continue
+        cleaned[normalized] = channel
+        used_channels.add(channel)
+    return cleaned
+
+
 class Supervisor:
     def __init__(self):
         CONFIG.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.settings = patch_settings(defaults(), read_json(SETTINGS, {}))
-        self.assignments = read_json(ASSIGNMENTS, {})
+        self.assignments = sanitize_assignments(read_json(ASSIGNMENTS, {}))
         self.loopbacks = {}
         self.last_default = None
 
     def _assign(self, sources):
+        # Recover even if state was corrupted after initialization.
+        self.assignments = sanitize_assignments(self.assignments)
         assigned = set(self.assignments.values())
         changed = False
         for source in sources:
-            address = source["address"]
+            address = source.get("address")
+            if not isinstance(address, str) or _MAC_ADDRESS.fullmatch(address) is None:
+                continue
+            address = address.upper()
             if address in self.assignments:
                 continue
             for channel in ("music", "tablet"):
