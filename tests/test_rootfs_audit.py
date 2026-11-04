@@ -46,6 +46,22 @@ class RootfsAuditTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             self.assertTrue(all(audit.inspect(self.root(tmp)).values()))
 
+    def test_absolute_systemd_symlink_resolves_inside_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            link = root / audit.SERVICES["bluetooth"][1]
+            link.unlink()
+            link.symlink_to("/" + audit.SERVICES["bluetooth"][0])
+            self.assertTrue(audit.inspect(root)["bluetooth_enabled"])
+
+    def test_broken_absolute_symlink_is_blocker(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            link = root / audit.SERVICES["bluetooth"][1]
+            link.unlink()
+            link.symlink_to("/etc/systemd/system/nonexistent.service")
+            self.assertFalse(audit.inspect(root)["bluetooth_enabled"])
+
     def test_missing_eq_fails_closed_and_writes_report(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = self.root(tmp)
