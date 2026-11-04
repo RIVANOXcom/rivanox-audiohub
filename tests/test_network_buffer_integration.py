@@ -50,6 +50,7 @@ class NetworkBufferIntegrationTests(unittest.TestCase):
                 KeyboardInterrupt(),
             ]
             popen.return_value.stdin.fileno.return_value = 42
+            popen.return_value.poll.return_value = None
             with self.assertRaises(KeyboardInterrupt):
                 network_laptop.serve("192.168.1.10", "127.0.0.1", 4010)
             self.assertEqual(writer.call_count, 2)
