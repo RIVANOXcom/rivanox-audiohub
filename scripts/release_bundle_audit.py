@@ -17,7 +17,10 @@ import re
 import stat
 import sys
 
-PREVIEW_SCHEMA = "rivanox-audiohub-preview-bundle/1"
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from scripts.verify_package_inventory import verify as verify_package_inventory
+
+PREVIEW_SCHEMA = "rivanox-audiohub-preview-bundle/2"
 REPORT_SCHEMA = "rivanox-audiohub-release-preflight/1"
 IMAGE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*-UNVERIFIED\.img\.xz\Z")
 SHA40 = re.compile(r"[a-f0-9]{40}\Z")
@@ -59,7 +62,7 @@ def inspect(directory: Path, *, expected_source_sha=None, verify_xz=True):
     if len(images) != 1 or IMAGE.fullmatch(images[0].name) is None:
         raise ValueError("Exactly one UNVERIFIED Pi image required")
     image = images[0]
-    required = {image.name, "SHA256SUMS.txt", "PREVIEW-MANIFEST.json"}
+    required = {image.name, "SHA256SUMS.txt", "PREVIEW-MANIFEST.json", "ROOTFS-PACKAGES.json"}
     if {p.name for p in children} != required or len(children) != 3:
         raise ValueError("Unexpected, missing or extra files in preview ZIP")
     _regular(image, max_bytes=MAX_IMAGE_BYTES)
@@ -67,6 +70,7 @@ def inspect(directory: Path, *, expected_source_sha=None, verify_xz=True):
     manifest_file = directory / "PREVIEW-MANIFEST.json"
     _regular(checksum_file, max_bytes=MAX_META_BYTES)
     _regular(manifest_file, max_bytes=MAX_META_BYTES)
+    inventory_proof = verify_package_inventory(directory / "ROOTFS-PACKAGES.json")
     if expected_source_sha is not None and (
         type(expected_source_sha) is not str or SHA40.fullmatch(expected_source_sha) is None
     ):
@@ -77,6 +81,8 @@ def inspect(directory: Path, *, expected_source_sha=None, verify_xz=True):
         raise ValueError("Malformed preview provenance") from exc
     if type(meta) is not dict or meta.get("schema") != PREVIEW_SCHEMA:
         raise ValueError("Wrong provenance format")
+    if meta.get("package_inventory") != {"file": "ROOTFS-PACKAGES.json", **inventory_proof}:
+        raise ValueError("Installed package inventory provenance mismatch")
     if meta.get("image") != image.name or (
         type(meta.get("image_bytes")) is not int
         or meta["image_bytes"] != image.stat().st_size
@@ -138,6 +144,9 @@ def inspect(directory: Path, *, expected_source_sha=None, verify_xz=True):
         "actions_run_id": run_id,
         "image_sha256": digest,
         "image": image.name,
+        "package_inventory_sha256": inventory_proof["package_inventory_sha256"],
+        "installed_packages": inventory_proof["installed_packages"],
+        "copyright_files_missing": inventory_proof["copyright_files_missing"],
         "missing_human_gates": list(MISSING_GATES),
     }
 
