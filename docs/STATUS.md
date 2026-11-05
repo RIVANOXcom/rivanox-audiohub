@@ -1,6 +1,6 @@
 # Development status
 
-**Status:** Alpha / pre-release. No verified ready-to-flash Pi 4 image has been published.
+**Status:** Alpha / pre-release. Native ARM64 test-only SD images have been built and uploaded to GitHub Actions (latest prior-to-renaming run 42057278883; 159 tests, 48 rootfs checks). **No real Pi4/Edifier playback, ownership security or product-ready Release has been verified.**
 
 ## Goals
 
