@@ -1,12 +1,18 @@
 """Read-only web API and deployment safety tests."""
+import json
 import os
 import sys
+import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
-from audiohub.webserver import ALLOWED, PUBLIC_FIELDS, public_status
+from audiohub.webserver import (ALLOWED, PUBLIC_FIELDS, Handler,
+                                STATIC_MAX_BYTES, STATUS_MAX_BYTES,
+                                _bounded_regular_bytes, public_status,
+                                read_public_status)
 
 
 class WebStatusTests(unittest.TestCase):
@@ -55,6 +61,148 @@ class WebStatusTests(unittest.TestCase):
         self.assertIn('cp -a "$ROOT/web/."', builder)
         self.assertIn("files/web/.", installer)
         self.assertIn("audiohub-status-web.service", installer)
+
+
+class ReadonlyWebFileBoundaryTests(unittest.TestCase):
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.root = Path(temp.name) / "www"
+        self.root.mkdir()
+        self.status = Path(temp.name) / "runtime-status.json"
+        self.ok_asset = self.root / "app.js"
+        self.ok_asset.write_bytes(b"// local prototype")
+
+    def _request(self, path):
+        """Exercise actual GET dispatch without binding a network port."""
+        handler = object.__new__(Handler)
+        handler.path = path
+        result = []
+        handler.respond = lambda code, data, mime: result.append((code, data, mime))
+        with patch("audiohub.webserver.WEBROOT", self.root), patch(
+            "audiohub.webserver.STATE", self.status
+        ):
+            Handler.do_GET(handler)
+        self.assertEqual(len(result), 1)
+        return result[0]
+
+    def test_local_allowlisted_asset_is_served_exactly(self):
+        status, content, mime = self._request("/app.js")
+        self.assertEqual(status, 200)
+        self.assertEqual(content, b"// local prototype")
+        self.assertIn("javascript", mime)
+
+    def test_path_traversal_never_reads_host_file(self):
+        secret = self.root.parent / "private.txt"
+        secret.write_text("LOCAL-PRIVATE-MATERIAL")
+        for route in ("/../private.txt", "/%2e%2e/private.txt",
+                      "/locales/../../private.txt", "/.git/config"):
+            code, body, _ = self._request(route)
+            self.assertEqual(code, 404)
+            self.assertNotIn(b"PRIVATE", body)
+
+    def test_static_leaf_symlink_never_reads_private_file(self):
+        hidden = self.root.parent / "private.txt"
+        hidden.write_text("PRIVATE DEVICE CREDENTIAL")
+        self.ok_asset.unlink()
+        self.ok_asset.symlink_to(hidden)
+        code, body, _ = self._request("/app.js")
+        self.assertEqual(code, 503)
+        self.assertNotIn(b"PRIVATE", body)
+
+    def test_static_intermediate_directory_symlink_is_refused(self):
+        private = self.root.parent / "private"
+        private.mkdir()
+        (private / "en.json").write_text("PRIVATE")
+        (self.root / "locales").symlink_to(private, target_is_directory=True)
+        code, body, _ = self._request("/locales/en.json")
+        self.assertEqual(code, 503)
+        self.assertNotIn(b"PRIVATE", body)
+
+    def test_webroot_symlink_is_refused(self):
+        real = self.root.parent / "real"
+        real.mkdir()
+        (real / "app.js").write_text("hidden")
+        with patch("audiohub.webserver.WEBROOT", self.root.parent / "linked"):
+            (self.root.parent / "linked").symlink_to(real, target_is_directory=True)
+            handler = object.__new__(Handler)
+            handler.path = "/app.js"
+            result = []
+            handler.respond = lambda status, body, mime: result.append((status, body))
+            Handler.do_GET(handler)
+        self.assertEqual(result[0][0], 503)
+
+    def test_non_regular_fifo_does_not_block_or_serve(self):
+        if not hasattr(os, "mkfifo"):
+            self.skipTest("Linux-only FIFO")
+        self.ok_asset.unlink()
+        os.mkfifo(self.ok_asset)
+        code, _, _ = self._request("/app.js")
+        self.assertEqual(code, 503)
+
+    def test_oversized_asset_is_refused(self):
+        self.ok_asset.write_bytes(b"a" * (STATIC_MAX_BYTES + 1))
+        code, _, _ = self._request("/app.js")
+        self.assertEqual(code, 503)
+
+    def test_empty_asset_is_refused(self):
+        self.ok_asset.write_bytes(b"")
+        code, _, _ = self._request("/app.js")
+        self.assertEqual(code, 503)
+
+    def test_bounded_reader_rejects_relative_and_parent_paths(self):
+        self.assertIsNone(_bounded_regular_bytes(Path("app.js"), STATIC_MAX_BYTES))
+        self.assertIsNone(_bounded_regular_bytes(self.root / ".." / "app.js",
+                                                 STATIC_MAX_BYTES))
+        self.assertIsNone(_bounded_regular_bytes(self.ok_asset, 0))
+        self.assertIsNone(_bounded_regular_bytes(self.ok_asset, True))
+
+    def test_valid_status_has_only_public_counts(self):
+        self.status.write_text(json.dumps({
+            "updated_at": 123, "usb_output": True, "active_routes": 2,
+            "bluetooth_source_count": 1, "virtual_channels": ["music"],
+            "mac": "A1:B2:C3:D4:E5:F6", "password": "NEVER-LEAK"
+        }))
+        result = read_public_status(path=self.status, now=124)
+        self.assertEqual(set(result), PUBLIC_FIELDS)
+        self.assertEqual(result["active_routes"], 2)
+        self.assertTrue(result["usb_connected"])
+        self.assertNotIn("NEVER-LEAK", str(result))
+        self.assertNotIn("A1:B2", str(result))
+
+    def test_get_status_dispatch_redacts_secrets(self):
+        self.status.write_text(json.dumps({
+            "updated_at": int(__import__("time").time()),
+            "usb_output": True, "active_routes": 1,
+            "bluetooth_source_count": 1, "ssid": "PRIVATE-SSID",
+            "password": "PRIVATE-PASSWORD"
+        }))
+        code, body, _ = self._request("/api/status")
+        self.assertEqual(code, 200)
+        self.assertEqual(set(json.loads(body)), PUBLIC_FIELDS)
+        self.assertNotIn(b"PRIVATE", body)
+
+    def test_status_symlink_or_bad_json_is_stale(self):
+        protected = self.root.parent / "secret"
+        protected.write_text('{"updated_at":123,"usb_output":true,"password":"private"}')
+        self.status.symlink_to(protected)
+        self.assertFalse(read_public_status(path=self.status, now=124)["fresh"])
+        self.status.unlink()
+        self.status.write_text("{malformed")
+        self.assertFalse(read_public_status(path=self.status, now=124)["fresh"])
+
+    def test_status_too_large_is_stale(self):
+        self.status.write_bytes(b"x" * (STATUS_MAX_BYTES + 1))
+        data = read_public_status(path=self.status, now=124)
+        self.assertFalse(data["fresh"])
+        self.assertEqual(data["active_routes"], 0)
+
+    def test_status_nonregular_is_stale(self):
+        self.status.mkdir()
+        self.assertFalse(read_public_status(path=self.status)["fresh"])
+
+    def test_missing_status_is_stale(self):
+        self.assertFalse(read_public_status(path=self.status)["fresh"])
 
 
 if __name__ == "__main__":
