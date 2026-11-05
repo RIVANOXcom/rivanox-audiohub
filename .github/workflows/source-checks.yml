@@ -27,6 +27,12 @@ jobs:
             echo "Unsafe shared provisioning secret detected" >&2
             exit 1
           fi
+      - name: Review-only Model C licensing safety guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/license_transition_audit.py
+
       - name: Check any checked-in Python or JS sources
         shell: bash
         run: |
