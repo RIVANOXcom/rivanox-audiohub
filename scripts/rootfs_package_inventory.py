@@ -14,6 +14,7 @@ import json
 import os
 from pathlib import Path
 import re
+import stat
 import sys
 
 SCHEMA = "rivanox-audiohub-rootfs-package-inventory/1"
@@ -43,19 +44,66 @@ def _paragraphs(contents: str):
 
 
 def _copyright_hash(root: Path, name: str):
-    directory = root / "usr/share/doc" / name
-    file = directory / "copyright"
-    # Do not follow arbitrary links out of an image onto the CI host.
-    if directory.is_symlink() or file.is_symlink() or not file.is_file():
+    """Hash real copyright data, including one safe Debian doc-dir alias.
+
+    Debian packages may link /usr/share/doc/<binary-package> to the doc
+    directory of their common source package. Follow *at most one* direct
+    sibling name, with directory-fd relative opens and O_NOFOLLOW at both
+    the directory and copyright file. Never follow absolute, nested,
+    parent-relative, chained or out-of-rootfs links onto the CI host.
+    Missing/untrusted notices remain null and require legal review.
+    """
+    docs = root / "usr/share/doc"
+    # Guard ancestors of the trusted pi-gen rootfs document directory.
+    if any((root / rel).is_symlink() for rel in
+           ("usr", "usr/share", "usr/share/doc")):
         return None
-    size = file.stat().st_size
-    if size <= 0 or size > MAX_COPYRIGHT_BYTES:
-        return None
-    checksum = hashlib.sha256()
-    with file.open("rb") as handle:
-        for block in iter(lambda: handle.read(65536), b""):
+    directory_fd = None
+    package_fd = None
+    copyright_fd = None
+    flags = os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW
+    try:
+        directory_fd = os.open(docs, flags | os.O_DIRECTORY)
+        entry = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+        if stat.S_ISLNK(entry.st_mode):
+            alias = os.readlink(name, dir_fd=directory_fd)
+            # Debian shared documentation may be exactly one package-name
+            # sibling, never an absolute path or a traversal or chain.
+            if alias == name or PACKAGE.fullmatch(alias) is None:
+                return None
+            package_name = alias
+        elif stat.S_ISDIR(entry.st_mode):
+            package_name = name
+        else:
+            return None
+        package_fd = os.open(
+            package_name, flags | os.O_DIRECTORY, dir_fd=directory_fd
+        )
+        copyright_fd = os.open(
+            "copyright", flags, dir_fd=package_fd
+        )
+        st = os.fstat(copyright_fd)
+        if not stat.S_ISREG(st.st_mode) or not 0 < st.st_size <= MAX_COPYRIGHT_BYTES:
+            return None
+        checksum = hashlib.sha256()
+        bytes_read = 0
+        while True:
+            block = os.read(copyright_fd, 65536)
+            if not block:
+                break
+            bytes_read += len(block)
+            if bytes_read > MAX_COPYRIGHT_BYTES:
+                return None
             checksum.update(block)
-    return checksum.hexdigest()
+        if bytes_read != st.st_size:
+            return None
+        return checksum.hexdigest()
+    except OSError:
+        return None
+    finally:
+        for fd in (copyright_fd, package_fd, directory_fd):
+            if fd is not None:
+                os.close(fd)
 
 
 def inventory(root: Path) -> dict:
