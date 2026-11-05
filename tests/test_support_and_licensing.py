@@ -47,7 +47,7 @@ class DistributionPolicyTests(unittest.TestCase):
         self.assertIn("does **not**", licensing)
         self.assertIn("cannot unilaterally retroactively", licensing)
         self.assertIn("RIVANOX cannot sublicense upstream", licensing)
-        self.assertIn("commercial alternative", licensing)
+        self.assertIn("commercial alternative licensing", licensing.lower())
         self.assertIn("Ko-fi", readme)
 
     def test_public_release_workflow_still_fail_closed(self):
