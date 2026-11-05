@@ -142,6 +142,8 @@ def atomic_json(path, data):
             name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
             | os.O_CLOEXEC, 0o600, dir_fd=dirfd
         )
+        # A restrictive process umask must not leave an unreadable state file.
+        os.fchmod(tmpfd, 0o600)
         with os.fdopen(tmpfd, "wb") as stream:
             tmpfd = None
             stream.write(raw)
