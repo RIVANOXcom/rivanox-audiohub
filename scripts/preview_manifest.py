@@ -33,7 +33,8 @@ def manifest(directory: Path, source_sha: str, run_id: str, build_script: Path):
     image = images[0]
     if IMAGE.fullmatch(image.name) is None or image.stat().st_size == 0:
         raise ValueError("Unexpected or empty image name")
-    digest = hashlib.file_digest(image.open("rb"), "sha256").hexdigest()
+    with image.open("rb") as handle:
+        digest = hashlib.file_digest(handle, "sha256").hexdigest()
     checksum = (directory / "SHA256SUMS.txt")
     if checksum.is_symlink() or not checksum.is_file():
         raise ValueError("Missing checksum file")
