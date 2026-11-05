@@ -51,6 +51,8 @@ class RootfsAuditTests(unittest.TestCase):
             '"--target=" + target',
             "target = lan_target()",
             "if lan_target() != target:",
+            "check_audio_target(target)",
+            "player_command(target)",
             "validate_options(sender_ip, bind_ip, port, unsafe_lan_test)",
             'parser.add_argument("--unsafe-lan-test", action="store_true"',
             '"10.0.0.0/8"',
