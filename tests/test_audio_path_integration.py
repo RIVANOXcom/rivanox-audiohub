@@ -181,13 +181,14 @@ class AudioPathTests(unittest.TestCase):
 
     @mock.patch("audiohub.runtime.subprocess.Popen")
     def test_source_node_change_reconnects_without_old_target(self, launch):
-        launch.side_effect = [Process(), Process()]
+        first, second = Process(), Process()
+        launch.side_effect = [first, second]
         s = self.supervisor()
         s._route([self.src()], {"audiohub.music": 21}, now=0)
         changed = {"address": PHONE, "name": "bluez_input.AA_BB_CC_DD_EE_FF.1"}
         s._route([changed], {"audiohub.music": 21}, now=1)
         self.assertEqual(launch.call_count, 2)
-        self.assertTrue(launch.side_effect[0].terminated)
+        self.assertTrue(first.terminated)
 
     def test_invalid_stored_assignments_do_not_grant_extra_channels(self):
         s = self.supervisor(assignments={
