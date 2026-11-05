@@ -25,5 +25,17 @@ class ImageBuildContractTests(unittest.TestCase):
         self.assertIn("No hardware-verified Pi image",workflow)
         self.assertIn("exit 1",workflow)
 
+    def test_rootfs_license_inventory_is_exported_from_real_final_stage(self):
+        image_builder = (ROOT / "build-image.sh").read_text()
+        exporter = (ROOT / "scripts/export_rootfs_inventory.py").read_text()
+        workflow = (ROOT / ".github/workflows/build-image-preview.yml").read_text()
+        self.assertIn('scripts/export_rootfs_inventory.py', image_builder)
+        self.assertIn('--pi-gen-root "$WORK/pi-gen"', image_builder)
+        self.assertIn('ROOTFS-PACKAGES.json', exporter)
+        self.assertIn('stage-audiohub', exporter)
+        self.assertIn('dist/ROOTFS-PACKAGES.json', workflow)
+        self.assertIn('scripts/release_bundle_audit.py', workflow)
+        self.assertNotIn("gh release create", workflow)
+
 if __name__ == "__main__":
     unittest.main()
