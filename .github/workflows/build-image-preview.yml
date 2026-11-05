@@ -50,10 +50,10 @@ jobs:
           xz --test -- "${images[@]}"
           test -s SHA256SUMS.txt
           cd ..
-          python3 scripts/preview_manifest.py \\
-            --directory dist \\
-            --source-sha "$GITHUB_SHA" \\
-            --run-id "$GITHUB_RUN_ID" \\
+          python3 scripts/preview_manifest.py \
+            --directory dist \
+            --source-sha "$GITHUB_SHA" \
+            --run-id "$GITHUB_RUN_ID" \
             --build-script build-image.sh
           test -s dist/PREVIEW-MANIFEST.json
       - name: Upload temporary unverified Pi 4 image artifact
