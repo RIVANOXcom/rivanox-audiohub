@@ -82,7 +82,15 @@ class LinkEvidenceTests(unittest.TestCase):
         ])
         self.assertTrue(found["eq_output_to_usb_direct_link"]["music"])
         self.assertEqual(found["links_inspected"], 1)
-        self.assertEqual(found["malformed_links"], 5)
+        self.assertEqual(found["malformed_links"], 4)
+
+    def test_two_stereo_port_links_share_one_valid_node_edge(self):
+        # A normal stereo connection can have two distinct PipeWire Port
+        # links between the same source and sink Node IDs.
+        report = summarize_links(graph() + [link(31, 10), link(31, 10)])
+        self.assertTrue(report["eq_output_to_usb_direct_link"]["music"])
+        self.assertEqual(report["links_inspected"], 1)
+        self.assertEqual(report["malformed_links"], 0)
 
     def test_raw_secrets_are_not_reported(self):
         raw = json.dumps(graph() + [link(31, 10), {
