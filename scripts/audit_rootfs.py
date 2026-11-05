@@ -40,7 +40,7 @@ def inspect(root: Path) -> dict[str, bool]:
         return {"rootfs_exists": False}
     checks: dict[str, bool] = {}
     source = root / "opt/audiohub/src/audiohub"
-    for name in ("__init__.py", "runtime.py", "pairing.py", "mixer.py", "webserver.py", "status_bind.py", "firstboot_diag.py", "network_laptop.py", "network_buffer.py"):
+    for name in ("__init__.py", "runtime.py", "pairing.py", "mixer.py", "webserver.py", "status_bind.py", "firstboot_diag.py", "network_laptop.py", "network_buffer.py", "input_profiles.py"):
         checks["source_" + name] = (source / name).is_file()
     # Build-time guard: the alpha status UI is unauthenticated, so the
     # installed image must never bind to all interfaces by default.
@@ -195,6 +195,31 @@ def inspect(root: Path) -> dict[str, bool]:
         )
     except OSError:
         checks["laptop_receiver_not_autostarted"] = False
+    # User-defined display names must remain an offline user-only model until
+    # authenticated owner provisioning exists. A public status/POST API would
+    # leak local preferences or allow remote network-triggered mutations.
+    try:
+        profiles = (source / "input_profiles.py").read_text()
+        js = (root / "opt/audiohub/web/app.js").read_text()
+        webserver = (source / "webserver.py").read_text()
+        checks["editable_names_offline_no_public_api"] = all(
+            required in profiles for required in (
+                'SLOTS = ("music", "laptop", "tablet")',
+                "MAX_NAME_CHARS = 32",
+                "O_NOFOLLOW",
+                "fcntl.flock",
+            )
+        ) and all(
+            required in js for required in (
+                "audiohub.preview.input-labels.v1",
+                "localStorage.setItem",
+                "nameInput.addEventListener",
+            )
+        ) and 'def do_POST(self):' in webserver and (
+            "Read-only preview" in webserver
+        ) and "input_profiles" not in webserver
+    except OSError:
+        checks["editable_names_offline_no_public_api"] = False
     for name in ("index.html", "app.js", "styles.css"):
         checks["web_" + name] = (root / "opt/audiohub/web" / name).is_file()
     base_keys = None
