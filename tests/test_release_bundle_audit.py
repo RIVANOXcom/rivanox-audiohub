@@ -10,6 +10,8 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from scripts.release_bundle_audit import inspect, REPORT_SCHEMA, MISSING_GATES
+from scripts.rootfs_package_inventory import write_inventory
+from scripts.verify_package_inventory import verify as verify_inventory
 
 
 class ReleaseBundlePreflightTests(unittest.TestCase):
@@ -25,12 +27,23 @@ class ReleaseBundlePreflightTests(unittest.TestCase):
         self.image.write_bytes(lzma.compress(b"offline sample, not a real pi image"))
         self.meta_path = self.dist / "PREVIEW-MANIFEST.json"
         self.checksum_path = self.dist / "SHA256SUMS.txt"
+        self.make_inventory()
         self.write_manifest()
+
+    def make_inventory(self):
+        rootfs = self.dist / "_temp-rootfs"
+        db = rootfs / "var/lib/dpkg/status"
+        db.parent.mkdir(parents=True, exist_ok=True)
+        db.write_text("Package: bluez\\nStatus: install ok installed\\nVersion: 1.0\\nArchitecture: arm64\\n")
+        write_inventory(rootfs, self.dist / "ROOTFS-PACKAGES.json")
+        import shutil
+        shutil.rmtree(rootfs)
 
     def write_manifest(self):
         digest = hashlib.sha256(self.image.read_bytes()).hexdigest()
         self.meta = {
-            "schema": "rivanox-audiohub-preview-bundle/1",
+            "schema": "rivanox-audiohub-preview-bundle/2",
+            "package_inventory": {"file": "ROOTFS-PACKAGES.json", **verify_inventory(self.dist / "ROOTFS-PACKAGES.json")},
             "image": self.image.name,
             "image_bytes": self.image.stat().st_size,
             "image_sha256": digest,
@@ -56,6 +69,7 @@ class ReleaseBundlePreflightTests(unittest.TestCase):
         self.assertFalse(result["hardware_verified"])
         self.assertEqual(result["source_sha"], self.SHA)
         self.assertEqual(result["image_sha256"], self.meta["image_sha256"])
+        self.assertEqual(result["installed_packages"], 1)
         self.assertEqual(result["missing_human_gates"], list(MISSING_GATES))
 
     def test_rejects_changed_source_ref(self):
@@ -84,6 +98,40 @@ class ReleaseBundlePreflightTests(unittest.TestCase):
     def test_image_tampering_rejected_even_if_manifest_is_unchanged(self):
         self.image.write_bytes(lzma.compress(b"changed after checksum"))
         with self.assertRaisesRegex(ValueError, "Image identity/size|Image checksum"):
+            self.audit()
+
+    def test_rejects_replaced_package_inventory(self):
+        path = self.dist / "ROOTFS-PACKAGES.json"
+        data = json.loads(path.read_text())
+        data["packages"][0]["version"] = "2.0"
+        path.write_text(json.dumps(data))
+        with self.assertRaisesRegex(ValueError, "provenance"):
+            self.audit()
+
+    def test_rejects_leaked_credentials_in_package_inventory(self):
+        path = self.dist / "ROOTFS-PACKAGES.json"
+        data = json.loads(path.read_text())
+        data["wifi_password"] = "secret"
+        path.write_text(json.dumps(data))
+        with self.assertRaisesRegex(ValueError, "Unrecognized"):
+            self.audit()
+
+    def test_rejects_forged_legal_signoff(self):
+        path = self.dist / "ROOTFS-PACKAGES.json"
+        data = json.loads(path.read_text())
+        data["legal_review_approved"] = True
+        path.write_text(json.dumps(data))
+        with self.assertRaisesRegex(ValueError, "forged legal approval"):
+            self.audit()
+
+    def test_rejects_symlinked_package_inventory(self):
+        path = self.dist / "ROOTFS-PACKAGES.json"
+        outside = self.dist.parent / (self.dist.name + "-pkg.json")
+        outside.write_bytes(path.read_bytes())
+        self.addCleanup(outside.unlink)
+        path.unlink()
+        path.symlink_to(outside)
+        with self.assertRaisesRegex(ValueError, "link"):
             self.audit()
 
     def test_checksum_file_with_extra_lines_rejected(self):
