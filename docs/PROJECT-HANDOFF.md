@@ -151,3 +151,12 @@ execution has not been observed.
 **Release-go rule:** source CI is insufficient; image CI is insufficient;
 only human-authorized real Pi hardware, owner security, compliance,
 reproducible build provenance and release approval may close the gates.
+
+
+## 2026-11-05 continuation: real PipeWire link observability (Draft PR #30)
+
+Newest isolated stacked **DRAFT**: [PR #30](https://github.com/RIVANOXcom/rivanox-audiohub/pull/30), branch `wd-papa-5b2e6939-live-pipewire-graph-validation-20261105`, parent **PR #29 exact SHA `8077d39d624a5dabc797ca6f6977e6017272a004`**. PR #29 was inspected first and already implements dynamic source-to-slot routing (198 source tests / verified native ARM64 artifact #13441980660), so that work was **not** reimplemented or overwritten. `main` and all peer PRs remain unchanged.
+
+This next step imports previously separate read-only hardware topology preflight PR #13, adds `src/audiohub/audio_graph.py` to inspect actual PipeWire Link `info.output-node-id` / `info.input-node-id` relationships and report observed direct `audiohub.<slot>.output`→selected USB sink links; stereo port links are deduplicated by node-pair. The runtime periodically inspects its existing `pw-dump` snapshot; first-boot FAT report stores only **numeric** counts `pipewire_links_inspected` (0..8192) and `eq_usb_direct_links` (0..3) with no node identifiers or personal data. No sound, pairing, source access, LAN service or owner authentication changes. Negative graph/privacy/real-image-rootfs checks added, and `docs/PIPEWIRE-LINK-OBSERVABILITY.md` describes evidence limitations. Direct-link absence does NOT prove no sound because PipeWire may insert intermediate adapter nodes.
+
+**At next chat:** Look up PR #30 exact head SHA, latest source checks and native ARM64 run. Confirm full test count, 100% rootfs security checks, `sha256sum -c`, `xz --test`, manifest and uploaded temporary artifact **before** claiming a new SD image. Do not reuse artifact #13441980660 as if it includes these new link diagnostics. Update this paragraph with final CI IDs once confirmed. Existing gaps: hardware Pi4+Edifier/BT/3-way test, authenticated owner+phone Wi-Fi, real source enrollment, trustworthy Windows transport, main active ruleset (still empty), legal/official release.
