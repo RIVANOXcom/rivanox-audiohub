@@ -61,6 +61,7 @@ def export(pi_gen_root: Path) -> dict:
     if not source.is_file() or not stat.S_ISREG(source.stat().st_mode):
         raise ValueError("Rootfs inventory not a regular file")
     proof = verify(source)
+    triage = analyze(source.parents[4], source)
 
     target = deploy / FILENAME
     if target.exists() or target.is_symlink():
@@ -95,6 +96,7 @@ def export(pi_gen_root: Path) -> dict:
         "installed_packages": proof["installed_packages"],
         "copyright_files_missing": proof["copyright_files_missing"],
         "unresolved_copyright_packages": missing,
+        "copyright_triage": triage,
         "third_party_license_review_approved": False,
         "public_release_approved": False,
     }
