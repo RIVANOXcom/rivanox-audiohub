@@ -80,13 +80,13 @@ def inspect(root: Path) -> dict:
         raise ValueError("Existing AGPL LICENSE unexpectedly altered")
     draft = proposal.read_text(encoding="utf-8")
     required_proposal = (
-        "NOT EFFECTIVE", "LEGAl",  # LEGAl tested by case-folded comparison
+        "NOT EFFECTIVE", "legal",
         "non-commercial", "prior written", "AGPL", "third-party",
         "not", "commercial", "private", "human",
     )
     if not all(x.lower() in draft.lower() for x in required_proposal):
         raise ValueError("Model C proposal missing essential consumer or historical safeguards")
-    if ("model C" not in readme.read_text(encoding="utf-8").lower()
+    if ("model c" not in readme.read_text(encoding="utf-8").lower()
             or "AGPL-3.0-only" not in policy.read_text(encoding="utf-8")
             or "NOT EFFECTIVE" not in policy.read_text(encoding="utf-8")):
         raise ValueError("User-facing licensing transition disclosures missing")
