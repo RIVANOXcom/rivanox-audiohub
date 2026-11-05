@@ -63,7 +63,7 @@ def inspect(directory: Path, *, expected_source_sha=None, verify_xz=True):
         raise ValueError("Exactly one UNVERIFIED Pi image required")
     image = images[0]
     required = {image.name, "SHA256SUMS.txt", "PREVIEW-MANIFEST.json", "ROOTFS-PACKAGES.json"}
-    if {p.name for p in children} != required or len(children) != 3:
+    if {p.name for p in children} != required or len(children) != 4:
         raise ValueError("Unexpected, missing or extra files in preview ZIP")
     _regular(image, max_bytes=MAX_IMAGE_BYTES)
     checksum_file = directory / "SHA256SUMS.txt"
