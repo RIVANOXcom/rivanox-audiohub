@@ -61,8 +61,13 @@ On a trusted engineering workstation with the ZIP already unpacked:
 ```sh
 python3 scripts/release_bundle_audit.py \
   --directory /path/to/extracted-zip \
-  --expected-source-sha 8ab26da637604723e4c29f114cc93a478e0d02f0
+  --expected-source-sha <exact-40-character-source-commit-from-this-four-file-zip>
 ```
+
+Use the **SHA from the same new four-file bundle's manifest** above;
+prior Draft PR #30 three-file artifacts use a different legacy schema and
+cannot pass the current v2/four-file auditor. Replace the placeholder with
+the exact reviewed source commit; the placeholder is not literal shell input.
 
 This prints JSON about integrity and unresolved gates. It **does not**
 upload files, open network sockets, install devices, change permissions,
@@ -166,3 +171,18 @@ Existing temporary image artifacts and the public `main` branch
 remain AGPL. The [Model C document](../LICENSE-C-DRAFT.md) is **not an
 operative agreement** and no commercial customer pricing is set.
 The official image publisher stays blocked.
+
+## Failed ARM64 package inventory export and guarded fix (2026-11-05)
+
+[Native run #42092547313](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42092547313)
+**FAILED** after 55/55 real rootfs checks; its inventory generator printed
+689 installed packages, 631 copyright hashes and 58 unresolved paths, but
+`deploy/ROOTFS-PACKAGES.json` was not produced, so the Actions archive
+was not uploaded. The new `scripts/export_rootfs_inventory.py` is a
+fail-closed bridge from final pi-gen stage work rootfs into deploy,
+including stage uniqueness, symlink and schema/digest validation and an
+explicit unresolved package-name list for legal triage. Its own tests do
+**not** constitute an actual new image. A fresh successful native ARM64
+run and **human legal review** are required before describing an image
+bundle as available. The Model C source-available license is still only a
+proposed future policy, not an operative switch.
