@@ -99,8 +99,21 @@ def check_audio_target():
     nodes = pipewire_nodes(result.stdout)
     if TARGET not in virtual_sinks(nodes):
         raise RuntimeError("Laptop virtual sink unavailable")
-    if choose_usb_output(nodes) is None:
+    output = choose_usb_output(nodes)
+    if output is None:
         raise RuntimeError("USB audio output unavailable")
+    # AudioHub's EQ filters ultimately play to the system default.
+    # Before opening the manual UDP test socket, reassert only the
+    # currently recognized USB sink; never silently fall back to HDMI.
+    try:
+        selected = subprocess.run(
+            ["wpctl", "set-default", str(output["id"])],
+            capture_output=True, text=True, timeout=5, check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise RuntimeError("USB output routing not ready") from exc
+    if selected.returncode != 0:
+        raise RuntimeError("USB output routing not ready")
 
 
 def close_player(process):
