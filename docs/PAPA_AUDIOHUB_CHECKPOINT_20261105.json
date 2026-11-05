@@ -75,14 +75,20 @@
       "base": "wd-papa-20261105-runtime-state-atomic-security",
       "head": "wd-papa-20261105-supervisor-error-route-cleanup",
       "verified_head_sha": null
+    },
+    {
+      "number": 46,
+      "base": "wd-papa-20261105-supervisor-error-route-cleanup",
+      "head": "wd-papa-20261105-bluetooth-trust-authorization-gate",
+      "verified_head_sha": null
     }
   ],
   "last_native_verified": {
-    "run_id": 42111542474,
-    "source_sha": "9e92d95a539a6a8e54a2b433b0a6d9bcaf4fa975",
+    "run_id": 42121261961,
+    "source_sha": "7ef7a107199a0b6cbf69f1c0b7d047b1feac5bf1",
     "conclusion": "success",
-    "python_tests": 375,
-    "rootfs_checks_passed": 57,
+    "python_tests": 408,
+    "rootfs_checks_passed": 59,
     "installed_packages": 689,
     "architecture_counts": {
       "arm64": 538,
@@ -95,9 +101,9 @@
       "doc_alias_target_link": 8,
       "copyright_file_missing": 1
     },
-    "artifact_id": 13454668013,
+    "artifact_id": 13459367136,
     "artifact_unverified": true,
-    "artifact_expiry": "2026-12-05T21:27:00Z",
+    "artifact_expiry": "2026-12-05T22:32:25Z",
     "public_release_ready": false
   },
   "open_issues": [
@@ -136,12 +142,11 @@
     "do not silently merge stacked draft PRs"
   ],
   "last_source_rights_ci_verified": {
-    "run_id": 42108997052,
-    "commit_sha": "469dbb913deedfcb65c857bcee3903f40fe149cf",
+    "run_id": 42124595480,
+    "commit_sha": "f194b7740670c8549599844f5947edb4b1353bb4",
     "outcome": "success",
-    "python_tests": 354,
-    "source_rights_ledger_file_count": 79,
-    "production_arm64_build_not_rerun_for_docs_only": true
+    "python_tests": 434,
+    "source_rights_ledger_file_count": 79
   },
   "latest_legacy_security_change": {
     "pr": 43,
@@ -178,7 +183,7 @@
   "next_supervisor_failclosed_change": {
     "pr": 45,
     "prior_defect": "Supervisor.serve silently caught poll errors while previously started pw-loopback children could continue routing audio",
-    "status": "DRAFT, exact-head source and native ARM64 CI not yet verified",
+    "status": "SOURCE and native ARM64 PASS at PR45 exact SHA 7ef7a107199a0b6cbf69f1c0b7d047b1feac5bf1; 59 actual rootfs checks",
     "managed_routes_stopped_on_failure": true,
     "retry_state_cleared_after_error": true,
     "cleanup_failure_escalates_to_systemd": true,
@@ -188,5 +193,26 @@
     "public_release_authorized": false,
     "model_c_effective": false,
     "hardware_audio_accepted": false
+  },
+  "next_bluetooth_agent_trust_security_change": {
+    "pr": 46,
+    "prior_defect": "Unsolicited paired BlueZ signal could elevate device to Trusted with no preceding explicit authorization",
+    "status": "initial code exact SHA source CI SUCCESS, native final branch not yet verified",
+    "original_code_commit": "f194b7740670c8549599844f5947edb4b1353bb4",
+    "source_ci": {
+      "run_id": 42124595480,
+      "python_tests": 434,
+      "outcome": "success"
+    },
+    "initial_native_run_id": 42124587921,
+    "authorization_ttl_seconds": 45,
+    "max_simultaneous_authorizations": 2,
+    "bluez_paired_property_verified": true,
+    "bluez_signal_sender_filtered": true,
+    "expected_rootfs_guard_count": 60,
+    "authenticated_owner_claiming_complete": false,
+    "hardware_acceptance": false,
+    "model_c_effective": false,
+    "public_release_authorized": false
   }
 }

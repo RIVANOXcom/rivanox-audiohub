@@ -338,3 +338,9 @@ Update canonical `docs/PAPA_CANONICAL_RESUME_20261105.md`, GitHub
 PR45 and Workbench after precise HEAD source CI and native ARM64 run.
 No release, merge, Model C effective license, upstream vendor license
 clearance or physical audio acceptance is implied.
+
+## 2026-11-05 PR45 native PASS and PR46 Bluetooth one-use trust guard
+
+[PR45 native ARM64 run #42121261961](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42121261961) **SUCCESS**, exact SHA `7ef7a107199a0b6cbf69f1c0b7d047b1feac5bf1`, source 408 tests, **59/59 real rootfs guards**, temp UNVERIFIED 4-file archive #13459367136, 689 packages, 680 copyright hashes, nine paths unresolved. No public release.
+
+Follow-up [Draft PR #46](https://github.com/RIVANOXcom/rivanox-audiohub/pull/46) hardens the previous Bluetooth agent auto-trust behavior, which accepted arbitrary `Device1 Paired` signal events without prior agent authorization. Exact initial code SHA `f194b7740670c8549599844f5947edb4b1353bb4` has **434 Python tests SUCCESS** via source run #42124595480. A DBus callback-authorized, 45-second, max-two, single-use pending-device policy, exact BlueZ sender origin and actual paired property now gate Trusted; trusted devices still reconnect, unknown untrusted services are denied. New actual Pi-rootfs guard should bring 59 -> 60, **ONLY IF** native build passes. Read canonical section M for risks, evidence and next-chat actions. No owner claiming or production security approval.

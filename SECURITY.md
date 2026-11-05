@@ -68,3 +68,16 @@ Cleanup failures are escalated instead of silently ignored; the
 service cgroup stopped on restart. Source and native ARM64 validation
 must be checked at exact CI SHAs. This does not prove the audio
 amplifier/mixer hardware route is safe or secure owner enrollment.
+
+## Bluetooth automatic trust is limited to recent agent authorization
+
+Legacy pairing initially accepted an arbitrary BlueZ `Device1.Paired` event
+as grounds to mark that device `Trusted`, even without a preceding explicit
+audiohub agent RequestAuthorization callback. [Draft PR #46](https://github.com/RIVANOXcom/rivanox-audiohub/pull/46)
+requires matching in-memory one-use authorizations (45 seconds; at most two),
+true current BlueZ Paired property and BlueZ-origin signal filtering before
+grading trust. Existing trusted devices can reconnect after the discovery
+window; untrusted clients cannot authorize services solely from open
+discovery. Agent Release clears pending requests. The temporary firstboot
+window is **not ownership verification**. Native Pi/BlueZ hardware tests,
+secure owner claiming and legal release signoff remain OPEN.

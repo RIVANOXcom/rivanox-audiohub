@@ -179,3 +179,16 @@ shutdown to systemd; runtime unit explicitly sets
 tests and a static service test added; new native image guard target is
 59 real checks. Verify actual source CI and native image success, and
 document exact final SHA. No confirmed real Pi4/Edifier audio test.
+
+## 2026-11-05: BlueZ one-use trust authorization gate
+
+Draft [PR #46](https://github.com/RIVANOXcom/rivanox-audiohub/pull/46)
+fixes historical auto-Trusted behavior for unsolicited paired property
+signals and insufficiently gated untrusted services. Only a previously
+authorized BlueZ agent device path within 45 seconds and initial unowned
+boot window may become newly trusted, after reading true actual Paired
+status from BlueZ. Ten pure policy tests + twelve real callback tests,
+four rootfs checks added; initial exact code source CI #42124595480
+SUCCESS **434/434 tests**. New native image guard count target **60**
+requires a confirmed native ARM64 run on exact final SHA. Human owner
+claiming and physical pairing acceptance remain separate P0 work.

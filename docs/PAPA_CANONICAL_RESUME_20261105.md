@@ -148,9 +148,9 @@ bash -n build-image.sh
 ```text
 PAPA / RIVANOX AUDIOHUB WEITER — CANONICAL RESUME
 Read first:
-https://github.com/RIVANOXcom/rivanox-audiohub/blob/wd-papa-20261105-readonly-web-file-hardening/docs/PAPA_CANONICAL_RESUME_20261105.md
+https://github.com/RIVANOXcom/rivanox-audiohub/blob/wd-papa-20261105-bluetooth-trust-authorization-gate/docs/PAPA_CANONICAL_RESUME_20261105.md
 Project PAPA Workbench: PJ2611-0001:R001.
-Verify LIVE repo, PR #43 / #42 stacked heads, exact code and image CI, and issue status before any changes.
+Verify LIVE repo, PR #46/#45/#44 stacked heads, exact source and ARM64 CI, and open issues before changing anything.
 The public main and historical source remain AGPL-3.0-only; Model C
 personal-free/commercial-paid is a future NOT-EFFECTIVE draft.
 Continue evidence-backed engineering and code/license verification
@@ -270,6 +270,21 @@ new private development repo not verified, nine third-party
 copyright paths (including raspberrypi-net-mods) still need legal
 review, and Pi4 + Edifier audible/hardware acceptance is open.
 
+
+
+## M. 2026-11-05 follow-up: BlueZ automatic trust authorization gate (Draft PR #46)
+
+**Parent [PR #45](https://github.com/RIVANOXcom/rivanox-audiohub/pull/45) COMPLETED CI:** exact SHA \`7ef7a107199a0b6cbf69f1c0b7d047b1feac5bf1\`, source [#42121266631](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42121266631) **SUCCESS 408/408**, native ARM64 [#42121261961](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42121261961) **SUCCESS 59/59** actual rootfs checks. Four-file preview [artifact #13459367136](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42121261961/artifacts/13459367136), **UNVERIFIED, DO NOT DISTRIBUTE**, expires **2026-12-05T22:32:25Z**. 689 installed packages / 680 copyright file hashes / 9 unresolved notice paths; public_release_ready=false. These are CI observations, not Pi4 speaker, ownership or legal acceptance.
+
+**New DRAFT [PR #46](https://github.com/RIVANOXcom/rivanox-audiohub/pull/46)** on \`wd-papa-20261105-bluetooth-trust-authorization-gate\` (base PR45 branch), original audited implementation SHA \`f194b7740670c8549599844f5947edb4b1353bb4\`. On that SHA [source CI #42124595480](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42124595480) **SUCCESS 434/434 Python tests**, 79 existing source files included in pending-human-review rights ledger, all future Model C rights approvals FALSE. Note: the handoff document update itself changes PR46 HEAD and requires checking the NEW exact source CI. Native image [#42124587921](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42124587921) was running for the prior code SHA when documented; later commits can cancel and restart due per-branch concurrency. **Never state native PR46 success until the exact final run is checked.**
+
+**Real legacy security defect:** BlueZ \`PairingAgent.changed()\` used to set \`org.bluez.Device1.Trusted=True\` whenever *any* \`Paired\` property change was observed; a previous RequestAuthorization or RequestConfirmation was **not checked**. \`AuthorizeService\` also accepted an untrusted client merely because boot-time discovery was temporarily open. These are unsafe even though initial pairing was limited to 600 seconds and two devices.
+
+**Change:** an in-memory, per-device, one-use pending authorization is recorded only after real BlueZ agent callbacks. Requests require a strict local BlueZ path, expire after 45 seconds or the remaining boot-time window, and max 2 simultaneous requests. Actual \`org.bluez\` signal origin and real Device1.Paired state are checked before granting Trusted; a newly paired device must have an unexpired matching authorization. Unsolicited or stale signals consume no trust. New untrusted services require an authorized pending device; previously trusted devices can still reconnect normally after boot window. Errors reading BlueZ pairing counts deny new pairing rather than reopen discoverability. Agent Release discards pending authorization and closes discovery. **No MAC/peer identities are exported into logs or image artifacts.**
+
+**Validation:** \`tests/test_pairing_static.py\` now runs the production pure authorization helper and genuine agent methods with DBus registration decorators substituted by local stubs (Raspberry Pi-only dbus/GLib unavailable in generic source CI); additional tests cover unsolicited trust, expiry, wrong paths, bus spoofing, missing Paired property, device limit, untrusted services, previously trusted reconnects and Release. \`scripts/audit_rootfs.py\` adds guard \`bluetooth_trust_requires_agent_authorization\` plus four negative/positive rootfs tests in \`tests/test_rootfs_audit.py\`. Image guard count should rise from **59 to 60** after native verification. This is a **bounded legacy AGPL security hardening**, NOT a cryptographic owner-claiming mechanism or new Model C commercial-only feature.
+
+**Unresolved gates unchanged:** Public main and historical AGPL rights unchanged, future Model C NOT EFFECTIVE, private new product repo not verified (issue #37), source ownership/legal review issue #32, Raspberry Pi OS third-party notices issue #40 (particularly raspberrypi-net-mods), and physical Pi4/Edifier approval issue #2 OPEN. No public Release, merge, history rewrite or owner provisioning claim. The latest source CI and native run must be rechecked live before next development.
 
 **END OF HANDOFF.** If a live run/PR contradicts this document, treat
 the live GitHub evidence as authoritative, reconcile and update this file.
