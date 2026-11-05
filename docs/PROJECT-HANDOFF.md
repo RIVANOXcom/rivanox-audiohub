@@ -301,3 +301,21 @@ change `main/LICENSE`, publish a stable image, merge unrelated PRs,
 or claim legal/physical hardware acceptance.
 
 **2026-11-05 verified source security CI:** follow-up [Draft PR #43](https://github.com/RIVANOXcom/rivanox-audiohub/pull/43), commit `d4fb934ad4ed15cac20a79799d475b2956b94769`, [source run #42111311812](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42111311812) **SUCCESS, 375 Python tests**. Corresponding independent native ARM64 run #42111297565 was submitted and must be checked at that exact SHA before asserting build/test ZIP success. The canonical resume and machine-readable snapshot now list Draft PR #43. Never conflate source CI and Pi-native image validation.
+
+## 2026-11-05 PR #43 native success and PR #44 runtime state hardening
+
+Exact PR #43 SHA `9e92d95a539a6a8e54a2b433b0a6d9bcaf4fa975` source 375/375,
+native ARM64 run [42111542474](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42111542474) **SUCCESS**, 57/57 rootfs security checks,
+temporary non-release artifact #13454668013; 689 packages / 680 hashes / 9 open
+notice paths, legal clearance false, Pi hardware acceptance false.
+
+New stacked [Draft PR #44](https://github.com/RIVANOXcom/rivanox-audiohub/pull/44)
+hardens existing `runtime.py` private state read/write: replaces predictable
+fixed `.tmp` writes and unbounded, symlink-following JSON reads with user-owned
+private directory-FD operations, per-path-component nofollow, bounded 32KiB
+regular JSON reads and randomized O_EXCL 0600 fsynced atomic updates. Adds
+17 adverse local runtime and 3 image-rootfs regression tests plus a new
+rootfs security check; previous count 57, expected 58 only after real
+native run. Exact source/native CI for #44 not yet established at this
+documentation checkpoint. Existing AGPL rights unchanged; Model C
+remains NOT EFFECTIVE pending issue #37 and human legal review.
