@@ -210,3 +210,51 @@ convert `legal_review_approved=false` into true.
 
 Future Model C licensing remains **NOT EFFECTIVE**; no public stable
 release, historical commit rewriting or publication authorization.
+
+## 2026-11-05 exact native 9-path classification and identity hardening
+
+Follow-up [native ARM64 run 42105112961](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42105112961)
+finished **SUCCESS** on PR #39 exact source
+\`065506961fad34448e75f513d39db684f65c7cd7\`.
+It passed **324 Python tests and 55/55 actual rootfs checks**, generated
+a new checksum/XZ and manifest-verified unverified four-file ZIP
+[artifact #13452656211](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42105112961/artifacts/13452656211)
+(expiring 2026-12-05), and classified the same nine null copyrights:
+
+- **Eight** unresolved packages are \`doc_alias_target_link\`:
+  \`binutils-aarch64-linux-gnu\`, \`libctf0\`, \`libgprofng0\`,
+  \`libpython3.13\`, \`linux-headers-rpi-2712\`,
+  \`linux-headers-rpi-v8\`, \`linux-image-rpi-2712\`,
+  \`linux-image-rpi-v8\`.
+- **One** is \`copyright_file_missing\` at its expected path:
+  \`raspberrypi-net-mods\`. Upstream rights require separate verification,
+  particularly since the project has an outstanding request to add
+  explicit license/copyright files.
+
+All **49** one-hop shared-documentation aliases passed the bounded
+\`Source\`-identity and direct \`Depends\` metadata *observations*.
+This is stronger than file existence alone, but does not constitute
+an exhaustive legal or redistribution-rights audit.
+
+### Next isolated legacy-AGPL engineering defense
+
+The previous triage verifier checked that each inventory package *name*
+appeared in the actual installed dpkg status. A forged same-name
+\`version\` or wrong architecture could have evaded that check.
+The new \`scripts/rootfs_copyright_triage.py\` now matches the **exact
+set of installed package (name, architecture) pairs and their versions**,
+and permits legitimately coinstalled multi-architecture packages.
+Any missing/extra item, duplicate same-architecture record, mismatched
+version or malformed metadata is rejected. A read-only diagnostic
+traces bounded same-directory package-name symlink chains **without
+following the target or treating them as licensed**; each step receives
+a best-effort \`Source\`/\`Depends\` metadata classification. Malformed,
+cyclic, unsafe or out-of-root links are never taken as evidence of
+compliance.
+
+New fields \`dpkg_name_version_architecture_reconciled\` and
+\`architecture_counts\` are *technical* observations in CI logs only.
+The archive still contains just the unverified image, checksums,
+preview manifest and original rootfs inventory. **No new copyright
+permissions, Model C effective license or public Release are inferred.**
+The changes require exact-head source CI and fresh native ARM64 evidence.

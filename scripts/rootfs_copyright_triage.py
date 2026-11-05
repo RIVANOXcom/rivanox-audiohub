@@ -17,7 +17,7 @@ import re
 import stat
 
 from scripts.rootfs_package_inventory import (
-    PACKAGE, MAX_STATUS_BYTES, _paragraphs, _copyright_hash,
+    PACKAGE, VERSION, ARCH, MAX_STATUS_BYTES, _paragraphs, _copyright_hash,
 )
 from scripts.verify_package_inventory import verify
 
@@ -63,7 +63,7 @@ def _depends_on(item: dict, target: str) -> bool:
     return re.search(pattern, depends) is not None
 
 
-def _metadata(status: Path) -> dict[str, dict]:
+def _metadata(status: Path) -> dict[tuple[str, str], dict]:
     if status.is_symlink() or not status.is_file():
         raise ValueError("Rootfs dpkg status is unsafe")
     if not 0 < status.stat().st_size <= MAX_STATUS_BYTES:
@@ -73,9 +73,15 @@ def _metadata(status: Path) -> dict[str, dict]:
         if item.get("Status") != "install ok installed":
             continue
         name = item.get("Package", "")
-        if not PACKAGE.fullmatch(name) or name in data:
-            raise ValueError("Invalid duplicate package in rootfs status")
-        data[name] = item
+        arch = item.get("Architecture", "")
+        version = item.get("Version", "")
+        if (not PACKAGE.fullmatch(name) or not ARCH.fullmatch(arch)
+                or not VERSION.fullmatch(version)):
+            raise ValueError("Invalid rootfs dpkg package identity")
+        key = (name, arch)
+        if key in data:
+            raise ValueError("Duplicate package/architecture in rootfs status")
+        data[key] = item
     return data
 
 
@@ -121,6 +127,61 @@ def _reason_for_undocumented(docs: Path, name: str) -> str:
     return "copyright_hash_unresolved"
 
 
+
+def _link_chain_evidence(docs: Path, name: str, arch: str, status: dict) -> dict:
+    """Inspect only bounded, package-named sibling links; never follow them.
+
+    A trace is evidence for human review, not permission to resolve a
+    multi-hop copyright notice or an assertion of Debian Policy compliance.
+    """
+    chain = [name]
+    policy = []
+    current = name
+    termination = "too_many_links"
+    for _ in range(5):
+        path = docs / current
+        metadata = _lstat(path)
+        if metadata is None:
+            termination = "target_missing"
+            break
+        if stat.S_ISDIR(metadata.st_mode):
+            termination = "target_directory"
+            break
+        if not stat.S_ISLNK(metadata.st_mode):
+            termination = "not_a_directory"
+            break
+        next_package = os.readlink(path)
+        if PACKAGE.fullmatch(next_package) is None:
+            termination = "unsafe_link_target"
+            break
+        if next_package in chain:
+            termination = "cyclic_links"
+            break
+        a = status.get((current, arch)) or status.get((current, "all"))
+        b = status.get((next_package, arch)) or status.get((next_package, "all"))
+        source_a = _source_package(a) if a is not None else None
+        source_b = _source_package(b) if b is not None else None
+        if source_a is None or source_b is None:
+            relation = "source_metadata_unavailable"
+        elif source_a != source_b:
+            relation = "source_mismatch"
+        elif not _depends_on(a, next_package):
+            relation = "direct_dependency_not_verified"
+        else:
+            relation = "same_source_and_direct_dependency_declared"
+        policy.append(relation)
+        chain.append(next_package)
+        current = next_package
+    return {
+        "package": name,
+        "architecture": arch,
+        "named_hops": chain,
+        "hop_metadata_checks": policy,
+        "termination": termination,
+        "legal_clearance": False,
+    }
+
+
 def analyze(rootfs: Path, inventory_path: Path) -> dict:
     rootfs = Path(rootfs)
     inventory_path = Path(inventory_path)
@@ -131,16 +192,24 @@ def analyze(rootfs: Path, inventory_path: Path) -> dict:
     proof = verify(inventory_path)
     inventory = json.loads(inventory_path.read_text(encoding="utf-8"))
     status = _metadata(rootfs / "var/lib/dpkg/status")
+    recorded = {(p["name"], p["architecture"]) for p in inventory["packages"]}
+    if recorded != set(status):
+        raise ValueError("Inventory differs from installed dpkg package identities")
+    for item in inventory["packages"]:
+        key = (item["name"], item["architecture"])
+        if item["version"] != status[key]["Version"]:
+            raise ValueError("Inventory package version differs from real rootfs")
     docs = rootfs / "usr/share/doc"
     valid_tree = not any((rootfs / p).is_symlink() for p in (
         "usr", "usr/share", "usr/share/doc"
     ))
     unresolved = []
     alias_info = []
+    unresolved_link_chains = []
     for item in inventory["packages"]:
         name = item["name"]
-        if name not in status:
-            raise ValueError("Inventory package missing in actual rootfs")
+        arch = item["architecture"]
+        source_record = status[(name, arch)]
         # Ensure package hash was computed from these actual rootfs bytes,
         # not merely a syntactically valid but stale or forged digest.
         if _copyright_hash(rootfs, name) != item["copyright_sha256"]:
@@ -154,6 +223,10 @@ def analyze(rootfs: Path, inventory_path: Path) -> dict:
             if reason not in REASONS:
                 raise ValueError("Unrecognized copyright issue code")
             unresolved.append({"package": name, "reason": reason})
+            if reason == "doc_alias_target_link":
+                unresolved_link_chains.append(
+                    _link_chain_evidence(docs, name, arch, status)
+                )
             continue
         directory = docs / name
         st = _lstat(directory)
@@ -162,16 +235,20 @@ def analyze(rootfs: Path, inventory_path: Path) -> dict:
         target = os.readlink(directory)
         if PACKAGE.fullmatch(target) is None:
             raise ValueError("Unsafe alias reported as verified copyright")
-        if target not in status:
+        # Prefer exact architecture; Architecture: all is also valid
+        # for Debian shared documentation. Never silently select a
+        # different-architecture installed source package.
+        target_record = status.get((target, arch)) or status.get((target, "all"))
+        if target_record is None:
             relationship = "source_metadata_unavailable"
         else:
-            source_a = _source_package(status[name])
-            source_b = _source_package(status[target])
+            source_a = _source_package(source_record)
+            source_b = _source_package(target_record)
             if source_a is None or source_b is None:
                 relationship = "source_metadata_unavailable"
             elif source_a != source_b:
                 relationship = "source_mismatch"
-            elif not _depends_on(status[name], target):
+            elif not _depends_on(source_record, target):
                 relationship = "direct_dependency_not_verified"
             else:
                 relationship = "same_source_and_direct_dependency_declared"
@@ -185,9 +262,14 @@ def analyze(rootfs: Path, inventory_path: Path) -> dict:
         "schema": "rivanox-audiohub-rootfs-copyright-triage/1",
         "inventory_sha256": proof["package_inventory_sha256"],
         "installed_packages": proof["installed_packages"],
+        "dpkg_name_version_architecture_reconciled": True,
+        "architecture_counts": dict(sorted(Counter(
+            item["architecture"] for item in inventory["packages"]
+        ).items())),
         "unresolved_count": len(unresolved),
         "unresolved": unresolved,
         "unresolved_reason_counts": {k: counts[k] for k in sorted(counts)},
+        "unresolved_link_chains": unresolved_link_chains,
         "documented_directory_aliases": alias_info,
         "alias_relationship_counts": {k: alias_counts[k] for k in ALIAS_METADATA},
         "all_third_party_licenses_checked": False,
