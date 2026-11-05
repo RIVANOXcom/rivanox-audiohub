@@ -1,5 +1,7 @@
 # RIVANOX AudioHub – authoritative developer handoff
 
+> **2026-11-05 latest canonical recovery:** [PAPA_AUDIOHUB_CANONICAL_RESUME_20261105.md](PAPA_CANONICAL_RESUME_20261105.md) and [machine-readable snapshot](PAPA_AUDIOHUB_CHECKPOINT_20261105.json) supersede older PR/#29-centered instructions below. Read the canonical file **FIRST**, verify all live GitHub PR HEADs/CI, then consult this historical incremental log. Current follow-up Draft PR #42 remains isolated from public AGPL `main`; future Model C is **NOT EFFECTIVE**.
+
 **Last synchronized:** 2026-11-05, project `PJ2611-0001:R001`,
 MissionPilot WD_JOB `PAPA-5B2E6939`.
 **Read this file first when a chat breaks.** Then open
