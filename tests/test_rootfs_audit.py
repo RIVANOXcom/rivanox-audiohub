@@ -41,6 +41,16 @@ class RootfsAuditTests(unittest.TestCase):
             "return min(1.0, 1.0 / worst_case)",
             "str(effective_master_gain(settings))",
         )))
+        # Minimum installed runtime private-state read/write safety markers.
+        runtime_path = root / "opt/audiohub/src/audiohub/runtime.py"
+        runtime_path.write_text(runtime_path.read_text() + "\\n".join((
+            "MAX_RUNTIME_JSON_BYTES = 32 * 1024",
+            "def _private_parent_fd(path, *, create=False):",
+            "os.O_NOFOLLOW", "os.O_NONBLOCK",
+            "os.O_EXCL", "secrets.token_hex(12)",
+            "stat.S_ISREG", "os.replace(name, path.name",
+            "os.fsync(dirfd)",
+        )))
         audio_runtime = root / "opt/audiohub/src/audiohub/runtime.py"
         audio_runtime.write_text(audio_runtime.read_text() +
             '\\neffective_master_gain(self.settings)\\n"effective_master_percent"\\n'
@@ -209,6 +219,34 @@ class RootfsAuditTests(unittest.TestCase):
             checks = audit.inspect(root)
             self.assertTrue(checks["web_static_files_nofollow_regular_bounded"])
             self.assertTrue(checks["status_static_and_state_files_nofollow_bounded"])
+
+
+    def test_missing_private_runtime_atomic_guard_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            runtime = root / "opt/audiohub/src/audiohub/runtime.py"
+            runtime.write_text(runtime.read_text().replace(
+                "secrets.token_hex(12)", "predictable-name"
+            ))
+            checks = audit.inspect(root)
+            self.assertFalse(checks["runtime_private_state_nofollow_atomic"])
+
+    def test_predictable_runtime_temp_path_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            runtime = root / "opt/audiohub/src/audiohub/runtime.py"
+            runtime.write_text(runtime.read_text() +
+                               '\npath.with_suffix(".tmp")\n')
+            self.assertFalse(audit.inspect(root)[
+                "runtime_private_state_nofollow_atomic"
+            ])
+
+    def test_normal_private_runtime_atomic_guards_pass_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            self.assertTrue(audit.inspect(root)[
+                "runtime_private_state_nofollow_atomic"
+            ])
 
     def test_unchecked_status_web_listener_prevents_image_export(self):
         with tempfile.TemporaryDirectory() as tmp:
