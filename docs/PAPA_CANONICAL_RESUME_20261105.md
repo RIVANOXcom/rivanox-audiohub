@@ -148,9 +148,9 @@ bash -n build-image.sh
 ```text
 PAPA / RIVANOX AUDIOHUB WEITER — CANONICAL RESUME
 Read first:
-https://github.com/RIVANOXcom/rivanox-audiohub/blob/wd-papa-20261105-canonical-resume-source-rights/docs/PAPA_CANONICAL_RESUME_20261105.md
+https://github.com/RIVANOXcom/rivanox-audiohub/blob/wd-papa-20261105-readonly-web-file-hardening/docs/PAPA_CANONICAL_RESUME_20261105.md
 Project PAPA Workbench: PJ2611-0001:R001.
-Verify LIVE repo, current PR HEADs/CI and issue status before any changes.
+Verify LIVE repo, PR #43 / #42 stacked heads, exact code and image CI, and issue status before any changes.
 The public main and historical source remain AGPL-3.0-only; Model C
 personal-free/commercial-paid is a future NOT-EFFECTIVE draft.
 Continue evidence-backed engineering and code/license verification
@@ -195,7 +195,7 @@ webserver source to include nofollow/bounded status controls.
 `tests/test_web_status.py` and `tests/test_rootfs_audit.py` contain
 15 + 6 new adversarial/security tests.
 
-**Validation status:** use LIVE GitHub Actions for this child branch.
+**Verification:** [Draft PR #43](https://github.com/RIVANOXcom/rivanox-audiohub/pull/43), exact code SHA `d4fb934ad4ed15cac20a79799d475b2956b94769` [source CI #42111311812](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42111311812) **SUCCESS, 375/375 Python tests**, including 15 live-GET-dispatch/file and 6 rootfs safety tests. Native ARM64 run [#42111297565](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42111297565) started for that exact SHA; verify final result, web safety guard count, archive and release NO-GO before claiming native success. **Validation status:** use LIVE GitHub Actions for this child branch.
 No earlier PR #41/#42 source/native run proves the new code works.
 Explicitly distinguish source regression CI from native ARM64 Pi
 image build, which remains UNVERIFIED without real sound and secure
