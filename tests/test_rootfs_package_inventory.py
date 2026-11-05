@@ -131,7 +131,7 @@ class RootfsPackageInventoryTests(unittest.TestCase):
         self._share_doc_directory()
         result = inventory(self.root)
         expected = hashlib.sha256(
-            b"Copyright 2026 Sample; License: MIT\\n"
+            b"Copyright 2026 Sample; License: MIT\n"
         ).hexdigest()
         self.assertEqual(result["summary"]["copyright_files_missing"], 0)
         self.assertEqual(result["summary"]["copyright_files_available"], 2)
