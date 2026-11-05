@@ -43,5 +43,11 @@
   "sourceHint2": "Ingresso LAN di prova manuale · disattivato per impostazione predefinita",
   "sourceHint3": "Secondo ingresso Bluetooth · compatibilità hardware non verificata",
   "invalidInputName": "Scegli un nome unico (1–32 caratteri, senza controlli o tag HTML).",
-  "previewNamesOnly": "Salvato solo in questo browser. L’instradamento del dispositivo non cambia."
+  "previewNamesOnly": "Salvato solo in questo browser. L’instradamento del dispositivo non cambia.",
+  "sustainabilityEyebrow": "Sviluppo open source indipendente",
+  "sustainabilityTitle": "Aiuta AudioHub a migliorare",
+  "sustainabilityDescription": "Il tuo sostegno volontario contribuisce ai test hardware Raspberry Pi, alla sicurezza, all'accessibilità e alla manutenzione.",
+  "sustainabilityDisclosure": "Le donazioni sono facoltative. AudioHub rimane disponibile con AGPL-3.0; una donazione non acquista una licenza commerciale né assistenza prioritaria.",
+  "sustainabilityDonate": "Sostieni su Ko-fi",
+  "sustainabilityCommercial": "Informazioni sulle licenze commerciali"
 }
