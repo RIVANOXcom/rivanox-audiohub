@@ -207,3 +207,23 @@ version and owner signature before any effective switch. A user's
 choice of business policy is not a fake proof of legal clearance.
 Resume by verifying new Draft PR exact source CI, then keeping
 human checkpoints open in Workbench AH-008 #3274 and GitHub Issue #32.
+
+## 2026-11-05 next step: real image inventory export fix and private Model C boundary
+
+Owner asks continued code/dependency review and development consistent with
+prospective Model C commercial restrictions. Public `main` remains AGPL;
+DO NOT add new commercial-only product features there and do not make a
+public PR claiming Model C already operative. GitHub integration lacks an
+operator action to create a new GitHub repository / set Private visibility.
+Owner must create a separate empty PRIVATE repository with scoped app access;
+see `docs/licensing/MODEL-C-PRIVATE-DEVELOPMENT.md`. Do not attempt to
+hide history or unilaterally relicense third-party dependencies.
+
+The prior inventory-enabled native ARM64 run #42092547313 built a valid
+55/55 audited rootfs (689 dpkg, 631 hashed notices, 58 unresolved) but
+**FAILED at deploy/ROOTFS-PACKAGES.json missing**. In isolated next PR,
+`scripts/export_rootfs_inventory.py` validates the inventory generated
+in pi-gen `work/<build-id>/stage-audiohub/rootfs` and copies verified,
+unique, non-symlinked metadata into deploy; adversarial unit tests protect
+against stale stages and fake approval. Native ARM64 build and artifact
+must be verified at the final exact SHA before claiming success.

@@ -124,3 +124,18 @@ AI-authorship and imported code. **P0 LEGAL-C-02:** actual binary and
 corresponding source/third-party legal clearance. **P0 LEGAL-C-03:**
 qualified contract review, final explicit owner LICENSE/tag approval.
 No blanket relicense, no auto-release, no permissions change.
+
+## 2026-11-05 additional compliance finding and fix scope
+
+**[P0 Build]** Previous native ARM64 inventory bundle from PR34
+[run #42092547313](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42092547313)
+failed at `sudo cp .../deploy/ROOTFS-PACKAGES.json` because build-image.sh
+never copied the rootfs-generated file into deploy. Actual rootfs generator
+observed 689 packages, 631 copyright hashes and 58 nulls (not legally
+classified). Isolated stacked fix `scripts/export_rootfs_inventory.py`
+aims to export the unique final-stage real-rootfs file and verify SHA
+before staging. **P0 legal**: investigate the 58 missing notice paths,
+all combined GPL/copyleft/firmware sources and original-code provenance;
+do not infer lawful redistribution from checksum presence. Future proprietary
+feature development requires a separate PRIVATE repo after rights mapping;
+connected GitHub app cannot create/set repo visibility, owner action required.
