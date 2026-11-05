@@ -108,6 +108,41 @@ def inspect(root: Path) -> dict[str, bool]:
         checks["status_web_uses_guarded_bind"] = False
         checks["status_service_no_unsafe_lan_opt_in"] = False
         checks["status_static_and_state_files_nofollow_bounded"] = False
+    # BlueZ's PropertiesChanged signal is not a license to mark arbitrary
+    # neighbors as Trusted. Ensure the installed agent requires a short-lived
+    # explicit authorization callback, verifies real BlueZ paired state and
+    # rejects unauthenticated services outside that authorization.
+    try:
+        pairing_source = (source / "pairing.py").read_text()
+        checks["bluetooth_trust_requires_agent_authorization"] = all(
+            marker in pairing_source for marker in (
+                "AUTHORIZATION_TTL = 45",
+                "def authorized_pairing_signal(",
+                "def authorize_pending(self, device):",
+                "self.pending_authorizations.pop(path, None)",
+                'bus_name="org.bluez"',
+                'device.Get("org.bluez.Device1", "Paired")',
+                "if not self.allowed() or not (",
+                'raise Rejected("Untrusted device")',
+            )
+        ) and "self.authorize_pending(device)" in pairing_source
+    except OSError:
+        checks["bluetooth_trust_requires_agent_authorization"] = False
+    # PairableTimeout=0 / DiscoverableTimeout=0 mean unlimited in BlueZ.
+    # The first-boot listener may not reopen a fresh window on restart.
+    try:
+        pairing_source = (source / "pairing.py").read_text()
+        checks["bluetooth_pairable_discoverable_timers_bounded"] = all(
+            token in pairing_source for token in (
+                "self.deadline = float(BOOT_WINDOW)",
+                'self.adapter.Set("org.bluez.Adapter1", "PairableTimeout", dbus.UInt32(BOOT_WINDOW))',
+                'self.adapter.Set("org.bluez.Adapter1", "DiscoverableTimeout", dbus.UInt32(BOOT_WINDOW))',
+                'self.adapter.Set("org.bluez.Adapter1", "Pairable", dbus.Boolean(False))',
+                'self.adapter.Set("org.bluez.Adapter1", "Discoverable", dbus.Boolean(False))',
+            )
+        ) and 'DiscoverableTimeout", dbus.UInt32(0)' not in pairing_source
+    except OSError:
+        checks["bluetooth_pairable_discoverable_timers_bounded"] = False
     # Offline-only debug output is written by a strictly sandboxed root
     # service; never include network enrollment secrets in the image or report.
     diag_unit_path = root / "etc/systemd/system/audiohub-firstboot-diag.service"

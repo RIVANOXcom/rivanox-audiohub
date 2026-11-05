@@ -37,6 +37,10 @@ These decisions capture user-confirmed requirements and current engineering arch
 
 | ADR-027 | Unexpected audio supervisor errors must not leave managed PipeWire child routes running. | Draft [PR #45](https://github.com/RIVANOXcom/rivanox-audiohub/pull/45), exact native acceptance pending | Stop all managed children, clear retry state and propagate cleanup failures for systemd control-group termination; retain privacy and no owner/Model C release claims. |
 
+| ADR-028 | Require explicit one-use, expiring BlueZ agent authorization and actual Paired property before elevating an untrusted Bluetooth device to Trusted. | Draft [PR #46](https://github.com/RIVANOXcom/rivanox-audiohub/pull/46); source 434 tests passed on audited code SHA; native ARM64 must verify final branch | An unsolicited PropertiesChanged event and open firstboot discovery do not constitute identity proof. A 45-second pending callback, origin-filtered signal, real BlueZ Paired check, and denied untrusted services reduce exposure but **do not replace physical owner claiming**. Preserve effective AGPL grants and all license/release gates. |
+
+| ADR-029 | Bounded BlueZ Pairable/Discoverable timeouts and boot-relative authorization windows are mandatory for the legacy headless pairing service. | Draft [PR #46](https://github.com/RIVANOXcom/rivanox-audiohub/pull/46), 441 source tests PASS at code SHA; native ARM64 and device validation required | Official BlueZ semantics: zero timeout means infinite. Both Adapter1 expiry values set to 600 seconds, adapter closed before initial authorization, monotonic deadline counted from system boot rather than agent restart. Still not cryptographic owner claiming. |
+
 ## Engineering observations (not product acceptance)
 
 - Source-level tests and policy checks have succeeded on GitHub Actions.
