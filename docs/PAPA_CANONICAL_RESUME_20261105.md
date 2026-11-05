@@ -39,7 +39,9 @@ The following are **open DRAFT stacked PRs**; do not merge to main without expli
 | [#38](https://github.com/RIVANOXcom/rivanox-audiohub/pull/38) | #36 -> `wd-papa-20261105-rootfs-copyright-links` | `d0645965ae98082c3c3bdf5568938857df18c658` | Safe one-hop Debian shared-doc directory resolution, improved 631 -> 680 hashes |
 | [#39](https://github.com/RIVANOXcom/rivanox-audiohub/pull/39) | #38 -> `wd-papa-20261105-copyright-triage-and-doc-alias-policy` | `065506961fad34448e75f513d39db684f65c7cd7` | Classified the 9 outstanding paths; matched dpkg Source and Depends for 49 resolved links |
 | [#41](https://github.com/RIVANOXcom/rivanox-audiohub/pull/41) | #39 -> `wd-papa-20261105-dpkg-identity-reconciliation` | `5eae1104469a1585db8368e1bef00b5de204fb68` | Exact installed name/arch/version reconciliation, bounded multihop notice trace and 12 more adversarial tests |
-| New source-rights/handoff PR | #41 -> `wd-papa-20261105-canonical-resume-source-rights` | **Resolve branch HEAD live; this document is updated in the PR itself** | File-by-file rights ledger and this canonical recovery handoff |
+| [#42](https://github.com/RIVANOXcom/rivanox-audiohub/pull/42) | #41 -> `wd-papa-20261105-canonical-resume-source-rights` | **Resolve branch HEAD live; this document is updated in the PR itself** | File-by-file rights ledger and this canonical recovery handoff |
+
+**Latest source-rights/handoff CI (historical exact SHA):** [GitHub Actions run 42108997052](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42108997052) **SUCCESS** at `469dbb913deedfcb65c857bcee3903f40fe149cf`, **354 Python tests** including the 79-file rights-ledger and handoff regression checks; no new native image test is claimed for documentation-only PR #42. Any subsequent commit needs its own fresh CI run.
 
 **Do not mix branches.** PRs #35/#36/#38/#39/#41 use parent-branch bases intentionally; the current checkpoint PR must target the #41 branch rather than `main`.
 
@@ -102,11 +104,13 @@ Legal drafting on [PR #35](https://github.com/RIVANOXcom/rivanox-audiohub/pull/3
 
 ## G. Next tasks in strict practical order
 
+**P0 — legal source rights:** [Issue #32](https://github.com/RIVANOXcom/rivanox-audiohub/issues/32) tracks Model C rightsholder, source-origin, AI/contributor rights, counsel-reviewed terms and explicit effective-version owner acceptance. Draft legal terms are NOT a license switch.
+
 **P0 — owner action / separate future proprietary development:** [Issue #37](https://github.com/RIVANOXcom/rivanox-audiohub/issues/37): owner must create an **empty PRIVATE** repo, verify scope of connected app and authorize access. Do **not** use a public fork, assume the new repo exists or grant admin access without authorization. When verified, do a reviewed rights-only import, then write genuinely new Model C product code there.
 
 **P0 — shipping rights:** [Issue #40](https://github.com/RIVANOXcom/rivanox-audiohub/issues/40): get explicit license and exact source/notice for `raspberrypi-net-mods`, review eight multi-hop notice rights, exact binary package version notices, kernel/firmware/copyleft obligations, any Scream code similarities, AI/contributor/employment rights. This is not solvable by deleting AGPL history.
 
-**P0 — real hardware and secure ownership:** physically test Pi4+Edifier audible audio, Bluetooth pairing, multi-input routing and EQ, USB unplug/recovery, local UI and owner authentication. No existing source-only or CI test proves those.
+**P0 — real hardware and secure ownership:** [Issue #2](https://github.com/RIVANOXcom/rivanox-audiohub/issues/2) tracks real Pi4/Edifier R600USB device acceptance; physically test Pi4+Edifier audible audio, Bluetooth pairing, multi-input routing and EQ, USB unplug/recovery, local UI and owner authentication. No existing source-only or CI test proves those.
 
 **P1 — preserve public legacy and build evidence:** ensure parent PRs and this checkpoint remain DRAFT, inspect CI and artifacts at exact SHAs, update English source docs/decision log as findings become concrete, keep `publish-image.yml` hard-failed and README/FUNDING truthful. Address actual new CI defects, not imagined ones.
 
