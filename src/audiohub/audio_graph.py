@@ -85,7 +85,9 @@ def summarize_links(raw):
             continue
         edge = (output_id, input_id)
         if edge in seen_links:
-            bad += 1
+            # Stereo L/R links legitimately share source and destination
+            # *node* IDs while their port IDs differ. We aggregate a
+            # single node-level edge; it is not malformed or a second path.
             continue
         seen_links.add(edge)
         count += 1
