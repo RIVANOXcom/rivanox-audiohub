@@ -120,6 +120,76 @@ class RootfsPackageInventoryTests(unittest.TestCase):
         self.assertNotIn("compliant", json.dumps(result))
         self.assertFalse(result["legal_review_approved"])
 
+    def _share_doc_directory(self, target="pipewire"):
+        doc = self.root / "usr/share/doc/bluez"
+        if doc.exists() or doc.is_symlink():
+            doc.unlink()
+        doc.symlink_to(target, target_is_directory=True)
+        return doc
+
+    def test_shared_doc_directory_one_sibling_link_is_hashed(self):
+        self._share_doc_directory()
+        result = inventory(self.root)
+        expected = hashlib.sha256(
+            b"Copyright 2026 Sample; License: MIT\\n"
+        ).hexdigest()
+        self.assertEqual(result["summary"]["copyright_files_missing"], 0)
+        self.assertEqual(result["summary"]["copyright_files_available"], 2)
+        self.assertEqual(result["packages"][0]["copyright_sha256"], expected)
+
+    def test_absolute_doc_directory_alias_is_never_followed(self):
+        self._share_doc_directory("/etc")
+        self.assertIsNone(inventory(self.root)["packages"][0]["copyright_sha256"])
+
+    def test_parent_traversal_alias_is_never_followed(self):
+        self._share_doc_directory("../pipewire")
+        self.assertIsNone(inventory(self.root)["packages"][0]["copyright_sha256"])
+
+    def test_nested_directory_alias_is_never_followed(self):
+        self._share_doc_directory("pipewire/other")
+        self.assertIsNone(inventory(self.root)["packages"][0]["copyright_sha256"])
+
+    def test_second_hop_directory_symlink_is_never_followed(self):
+        (self.root / "usr/share/doc/common-docs").symlink_to(
+            "pipewire", target_is_directory=True
+        )
+        self._share_doc_directory("common-docs")
+        self.assertIsNone(inventory(self.root)["packages"][0]["copyright_sha256"])
+
+    def test_self_referential_doc_alias_is_refused(self):
+        self._share_doc_directory("bluez")
+        self.assertIsNone(inventory(self.root)["packages"][0]["copyright_sha256"])
+
+    def test_shared_doc_target_must_be_real_directory(self):
+        target = self.root / "usr/share/doc/not-a-directory"
+        target.write_text("PRIVATE MATERIAL")
+        self._share_doc_directory("not-a-directory")
+        self.assertIsNone(inventory(self.root)["packages"][0]["copyright_sha256"])
+
+    def test_shared_doc_target_copyright_file_must_not_be_symlink(self):
+        target = self.root / "usr/share/doc/shared"
+        target.mkdir()
+        (target / "copyright").symlink_to(
+            "../pipewire/copyright"
+        )
+        self._share_doc_directory("shared")
+        self.assertIsNone(inventory(self.root)["packages"][0]["copyright_sha256"])
+
+    def test_shared_doc_copyright_disallows_oversized_file(self):
+        target = self.root / "usr/share/doc/shared"
+        target.mkdir()
+        (target / "copyright").write_bytes(b"x" * (4 * 1024 * 1024 + 1))
+        self._share_doc_directory("shared")
+        self.assertIsNone(inventory(self.root)["packages"][0]["copyright_sha256"])
+
+    def test_do_not_follow_symlinked_shared_parent(self):
+        docs = self.root / "usr/share/doc"
+        backup = self.root / "docs-copy"
+        docs.rename(backup)
+        docs.symlink_to(backup, target_is_directory=True)
+        self.assertIsNone(inventory(self.root)["packages"][0]["copyright_sha256"])
+        self.assertIsNone(inventory(self.root)["packages"][1]["copyright_sha256"])
+
 
 if __name__ == "__main__":
     unittest.main()
