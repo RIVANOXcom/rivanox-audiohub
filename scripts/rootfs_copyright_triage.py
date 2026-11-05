@@ -127,6 +127,59 @@ def _reason_for_undocumented(docs: Path, name: str) -> str:
     return "copyright_hash_unresolved"
 
 
+
+def _link_chain_evidence(docs: Path, name: str, arch: str, status: dict) -> dict:
+    """Inspect only bounded, package-named sibling links; never follow them.
+
+    A trace is evidence for human review, not permission to resolve a
+    multi-hop copyright notice or an assertion of Debian Policy compliance.
+    """
+    chain = [name]
+    policy = []
+    current = name
+    termination = "too_many_links"
+    for _ in range(5):
+        path = docs / current
+        metadata = _lstat(path)
+        if metadata is None:
+            termination = "target_missing"
+            break
+        if stat.S_ISDIR(metadata.st_mode):
+            termination = "target_directory"
+            break
+        if not stat.S_ISLNK(metadata.st_mode):
+            termination = "not_a_directory"
+            break
+        next_package = os.readlink(path)
+        if PACKAGE.fullmatch(next_package) is None:
+            termination = "unsafe_link_target"
+            break
+        if next_package in chain:
+            termination = "cyclic_links"
+            break
+        a = status.get((current, arch)) or status.get((current, "all"))
+        b = status.get((next_package, arch)) or status.get((next_package, "all"))
+        if a is None or b is None:
+            relation = "source_metadata_unavailable"
+        elif _source_package(a) != _source_package(b):
+            relation = "source_mismatch"
+        elif not _depends_on(a, next_package):
+            relation = "direct_dependency_not_verified"
+        else:
+            relation = "same_source_and_direct_dependency_declared"
+        policy.append(relation)
+        chain.append(next_package)
+        current = next_package
+    return {
+        "package": name,
+        "architecture": arch,
+        "named_hops": chain,
+        "hop_metadata_checks": policy,
+        "termination": termination,
+        "legal_clearance": False,
+    }
+
+
 def analyze(rootfs: Path, inventory_path: Path) -> dict:
     rootfs = Path(rootfs)
     inventory_path = Path(inventory_path)
@@ -150,6 +203,7 @@ def analyze(rootfs: Path, inventory_path: Path) -> dict:
     ))
     unresolved = []
     alias_info = []
+    unresolved_link_chains = []
     for item in inventory["packages"]:
         name = item["name"]
         arch = item["architecture"]
@@ -167,6 +221,10 @@ def analyze(rootfs: Path, inventory_path: Path) -> dict:
             if reason not in REASONS:
                 raise ValueError("Unrecognized copyright issue code")
             unresolved.append({"package": name, "reason": reason})
+            if reason == "doc_alias_target_link":
+                unresolved_link_chains.append(
+                    _link_chain_evidence(docs, name, arch, status)
+                )
             continue
         directory = docs / name
         st = _lstat(directory)
@@ -209,6 +267,7 @@ def analyze(rootfs: Path, inventory_path: Path) -> dict:
         "unresolved_count": len(unresolved),
         "unresolved": unresolved,
         "unresolved_reason_counts": {k: counts[k] for k in sorted(counts)},
+        "unresolved_link_chains": unresolved_link_chains,
         "documented_directory_aliases": alias_info,
         "alias_relationship_counts": {k: alias_counts[k] for k in ALIAS_METADATA},
         "all_third_party_licenses_checked": False,
