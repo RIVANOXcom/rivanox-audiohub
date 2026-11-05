@@ -107,6 +107,63 @@ class SourceRightsLedgerTests(unittest.TestCase):
         (folder / "sample.cpython-313.pyc").write_bytes(b"compiled")
         self.assertEqual(audit(self.root)["files_covered"], len(self.contents["files"]))
 
+    def test_canonical_papa_handoff_documents_actual_authority(self):
+        path = ROOT / "docs/PAPA_CANONICAL_RESUME_20261105.md"
+        text = path.read_text(encoding="utf-8")
+        for marker in (
+            "RIVANOX AudioHub canonical resume",
+            "AGPL-3.0-only", "NOT EFFECTIVE",
+            "42106833667", "13453052359",
+            "raspberrypi-net-mods", "SOURCE-RIGHTS-LEDGER.json",
+            "Issue #37", "Issue #40",
+            "copy/paste", "PAPA / RIVANOX AUDIOHUB WEITER",
+        ):
+            self.assertIn(marker.lower(), text.lower(), marker)
+
+    def test_machine_checkpoint_matches_restricted_rights_ledger(self):
+        state = json.loads(
+            (ROOT / "docs/PAPA_AUDIOHUB_CHECKPOINT_20261105.json").read_text()
+        )
+        self.assertEqual(state["schema"], "rivanox-audiohub-papa-checkpoint/1")
+        self.assertEqual(state["effective_license"], "AGPL-3.0-only")
+        self.assertFalse(state["future_license_effective"])
+        self.assertFalse(state["license_rightsholder_verified"])
+        self.assertFalse(state["third_party_commercial_clearance"])
+        self.assertFalse(state["model_c_private_repo_verified"])
+        self.assertFalse(state["public_release_authorized"])
+        self.assertFalse(state["hardware_accepted"])
+        self.assertTrue(state["old_agpl_recipient_rights_preserved"])
+        self.assertEqual(
+            state["source_rights_ledger"]["file_count"],
+            audit(ROOT)["files_covered"],
+        )
+        self.assertFalse(state["source_rights_ledger"]["all_reviewed"])
+        self.assertEqual(state["last_native_verified"]["installed_packages"], 689)
+        self.assertEqual(state["last_native_verified"]["copyright_paths_unresolved"], 9)
+        self.assertFalse(state["last_native_verified"]["public_release_ready"])
+        self.assertEqual(
+            [item["number"] for item in state["draft_pr_chain"]],
+            [35, 36, 38, 39, 41, 42],
+        )
+
+    def test_primary_handoff_points_to_authoritative_resume(self):
+        docs = (ROOT / "docs/PROJECT-HANDOFF.md").read_text()
+        self.assertIn("PAPA_CANONICAL_RESUME_20261105.md", docs)
+        self.assertIn("PAPA_AUDIOHUB_CHECKPOINT_20261105.json", docs)
+
+    def test_readme_licensing_notice_has_real_newlines(self):
+        text = (ROOT / "README.md").read_text()
+        self.assertNotIn("\\n> ", text)
+        self.assertIn("PAPA_CANONICAL_RESUME_20261105.md", text)
+        self.assertIn("AGPL-3.0-only", text)
+
+    def test_declared_license_switch_has_not_occurred(self):
+        state = json.loads(
+            (ROOT / "docs/licensing/TRANSITION-STATE.json").read_text()
+        )
+        self.assertFalse(state["license_switch_effective"])
+        self.assertFalse(state["public_release_authorized"])
+
 
 if __name__ == "__main__":
     unittest.main()
