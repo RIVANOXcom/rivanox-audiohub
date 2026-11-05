@@ -147,3 +147,22 @@ This is a **package inventory, NOT a complete SBOM**: pip/vendor libraries,
 firmware, kernel blobs, license text interpretation, source-offer obligations,
 installed-but-untracked binaries and chain of title still require a separate
 human/legal audit. It cannot authorize an official GitHub Release.
+
+## Proposed Model C distribution requirements — NOT EFFECTIVE
+
+RIVANOX has selected a *future* source-available personal-use-free /
+paid-commercial-permission model (Model C). A source file's presence in
+the public repository does not prove that RIVANOX has the right to
+relicense it, nor may a later license withdraw valid AGPL grants.
+
+For any actual future SD release, the human operator must check a
+**version-specific license bill of materials**, separate RIVANOX-owned
+files from upstream libraries/firmware, ship all third-party notices,
+comply with corresponding-source and patent duties, identify the
+effective licensor and rights holder, and attach both the actual
+license grant and historical-version disclosure to the release.
+
+Existing temporary image artifacts and the public `main` branch
+remain AGPL. The [Model C document](../LICENSE-C-DRAFT.md) is **not an
+operative agreement** and no commercial customer pricing is set.
+The official image publisher stays blocked.
