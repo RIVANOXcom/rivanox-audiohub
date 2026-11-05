@@ -63,7 +63,8 @@ class PairingAgent(dbus.service.Object):
         self.adapter.Set("org.bluez.Adapter1", "DiscoverableTimeout", dbus.UInt32(0))
         bus.add_signal_receiver(
             self.changed, dbus_interface="org.freedesktop.DBus.Properties",
-            signal_name="PropertiesChanged", path_keyword="path"
+            signal_name="PropertiesChanged", path_keyword="path",
+            bus_name="org.bluez"
         )
         self.refresh()
         GLib.timeout_add_seconds(5, self.refresh)
@@ -122,7 +123,10 @@ class PairingAgent(dbus.service.Object):
                     self.bus.get_object("org.bluez", path),
                     "org.freedesktop.DBus.Properties"
                 )
-                device.Set("org.bluez.Device1", "Trusted", dbus.Boolean(True))
+                # Verify the real, current BlueZ property. A forged or
+                # delayed PropertiesChanged signal alone proves nothing.
+                if device.Get("org.bluez.Device1", "Paired"):
+                    device.Set("org.bluez.Device1", "Trusted", dbus.Boolean(True))
         finally:
             # An authorization is one-use; a later signal cannot replay it.
             self.pending_authorizations.pop(path, None)
