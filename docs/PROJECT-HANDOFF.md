@@ -136,6 +136,7 @@ execution has not been observed.
 - [Audio lab acceptance matrix](THREE-SOURCE-LAB-ACCEPTANCE.md).
 - [Audio architecture](ARCHITECTURE.md), [release gates](RELEASE-ACCEPTANCE.md)
   and [device threat model](SECURITY-THREAT-MODEL.md).
+- New follow-ups: [#27 owner-verified source assignment](https://github.com/RIVANOXcom/rivanox-audiohub/issues/27), [#28 main protection](https://github.com/RIVANOXcom/rivanox-audiohub/issues/28).
 - GitHub issues:
   [#1 owner/Wi-Fi](https://github.com/RIVANOXcom/rivanox-audiohub/issues/1),
   [#2 Pi hardware](https://github.com/RIVANOXcom/rivanox-audiohub/issues/2),
