@@ -124,9 +124,9 @@ def _bounded_regular_bytes(path, limit):
             os.close(directory)
 
 
-def read_public_status(*, path=STATE, now=None):
+def read_public_status(*, path=None, now=None):
     """Read a bounded, non-symlinked runtime state file, never raw secrets."""
-    body = _bounded_regular_bytes(path, STATUS_MAX_BYTES)
+    body = _bounded_regular_bytes(STATE if path is None else path, STATUS_MAX_BYTES)
     if body is None:
         return public_status({}, now=now)
     try:
