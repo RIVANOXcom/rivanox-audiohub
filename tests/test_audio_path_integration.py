@@ -276,6 +276,33 @@ class AudioPathTests(unittest.TestCase):
         self.assertFalse(atomic.call_args.args[1]["usb_route_ready"])
         self.assertEqual(s.loopbacks, {})
 
+    @mock.patch("audiohub.runtime.atomic_json")
+    @mock.patch("audiohub.runtime.subprocess.Popen")
+    @mock.patch("audiohub.runtime.run")
+    def test_full_scale_three_source_gain_is_bounded_in_actual_usb_commands(
+            self, commands, launch, atomic):
+        from audiohub.mixer import CHANNELS
+        s = self.supervisor()
+        s.settings["master"] = 100
+        for channel in CHANNELS:
+            s.settings[channel].update({
+                "volume": 100, "mute": False,
+                "bass": 0, "mid": 0, "treble": 0,
+            })
+        commands.side_effect = lambda *args: SimpleNamespace(
+            returncode=0, stdout=json.dumps(mixer_nodes()) if args == ("pw-dump",) else ""
+        )
+        launch.return_value = Process()
+        with mock.patch("audiohub.runtime.read_json", side_effect=lambda path, fallback: fallback):
+            s.poll()
+        self.assertIn(
+            ("wpctl", "set-volume", "11", str(1 / 3)),
+            [call.args for call in commands.call_args_list],
+        )
+        data = atomic.call_args.args[1]
+        self.assertEqual(data["effective_master_percent"], 33)
+        self.assertTrue(data["usb_route_ready"])
+
     def test_malformed_pipewire_props_never_crash_discovery(self):
         values = [
             node(5, "bad", "Audio/Source"),
