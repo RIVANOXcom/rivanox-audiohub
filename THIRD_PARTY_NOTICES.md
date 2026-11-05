@@ -26,3 +26,16 @@ reports `legal_review_approved=false`, and the preview bundle validator rejects
 extra/secret-bearing fields or false legal claims. This is evidence for manual
 review, **not** a complete SBOM, patent clearance, third-party license grant,
 or authorization to redistribute an image. Missing notices require follow-up.
+
+## Forward-looking Model C review — NOT EFFECTIVE
+
+The owner's planned personal-free/commercial-license model applies **only**
+to future separately identified original material where RIVANOX has adequate
+rights. This document is not an assignment of Debian, Raspberry Pi OS,
+pi-gen, PipeWire, WirePlumber, BlueZ, upstream Scream, firmware, kernel,
+or other third-party copyrights. Even an approved future proprietary
+RIVANOX license cannot remove applicable upstream GPL/AGPL obligations,
+attribution, copyright notices or rights of legitimate prior AGPL users.
+See [current rights audit](docs/licensing/RIGHTS-AUDIT-2026-11-05.md) and
+[Model C proposed terms](LICENSE-C-DRAFT.md). Full binary/legal audit
+and source-of-dependencies checklist remain open.
