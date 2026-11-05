@@ -186,3 +186,21 @@ explicit unresolved package-name list for legal triage. Its own tests do
 run and **human legal review** are required before describing an image
 bundle as available. The Model C source-available license is still only a
 proposed future policy, not an operative switch.
+
+## Verified inventory export recovery and subsequent alias review
+
+The export bridge subsequently passed native ARM64
+[run 42098223599](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42098223599)
+at source `a5d11cc6a071baa11520dd9bd41f601520a9af64`:
+302/302 source tests, 55/55 actual rootfs guards, a verified
+four-file ZIP [artifact #13447794801](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42098223599/artifacts/13447794801)
+(expires 2026-12-05). Still **UNVERIFIED**, legal review false,
+physical Pi hardware false, public release false.
+
+The new one-hop Debian doc-directory alias implementation is intended
+to explain and potentially reduce the **58 unresolved copyright paths**,
+while rejecting any host-escape or copyright-file symlink. Its results
+must be checked in a **separate new native run**. Even a complete set of
+hashes cannot certify compliance with upstream licenses. No automatic
+public release, payment, approval, Model C activation or private-code
+distribution is enabled.

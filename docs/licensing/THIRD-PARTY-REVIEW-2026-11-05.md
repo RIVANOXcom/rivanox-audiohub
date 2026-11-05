@@ -125,3 +125,37 @@ lawyer's opinion. It cannot prove the rights of all code were obtained.
    after the source and binary facts are confirmed.
 5. Fix PR #34 image export and achieve fresh successful native ARM64
    artifact integrity + a separate physical Pi4/Edifier acceptance.
+
+## 2026-11-05 follow-up: safe Debian shared-documentation aliases
+
+The real **subsequent** ARM64 [run 42098223599](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42098223599) for draft PR #36
+**SUCCEEDED** with 302/302 Python tests, 55/55 real rootfs checks,
+verified image/checksums, manifest schema v2 and temporary
+[UNVERIFIED artifact #13447794801](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42098223599/artifacts/13447794801).
+As before, the inventory recorded **689 packages / 631 available hashes /
+58 unresolved copyright paths**. A failed older run is retained above
+only as historical debugging evidence; its defect was corrected.
+
+The 58 unresolved entries, now captured by exact-name native build logs,
+are primarily package families for GCC/binutils, kernel/headers,
+console/debconf, Python support and utilities (full itemization is
+available in [PR #36 comment](https://github.com/RIVANOXcom/rivanox-audiohub/pull/36)
+and the successful ARM64 build log). No conclusion is drawn that any
+of these packages lack copyright, are unlicensed or are lawful to distribute.
+
+**New narrow engineering attempt (not yet accepted for exact native image):**
+the `_copyright_hash` routine in `scripts/rootfs_package_inventory.py`
+now accepts *only* a single, direct, same-directory package-name
+symlink (e.g. `/usr/share/doc/a -> b` if `b` is a real directory)
+and verifies a real non-symlinked regular `copyright` file using
+directory-fd-relative `O_NOFOLLOW` opens. It refuses parent/absolute
+paths, multi-step symlinks, out-of-root links, oversized files and
+symlinked copyright files. This is deliberately narrower than all
+filesystem symlinks Debian may legally support.
+
+**Important:** A newly discovered hash only means a file was located,
+not that its licensing terms have been read, complied with or approved
+for commercial redistribution. The full Pi rootfs image and source
+provenance require human/legal review. New native ARM64 evidence for
+this modified extractor must be verified at its exact source SHA,
+not inferred from the earlier successful artifact.
