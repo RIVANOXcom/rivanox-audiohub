@@ -97,3 +97,14 @@ No entry is `DONE` until its acceptance criteria are evidenced.
 - Current isolated [PR #30](https://github.com/RIVANOXcom/rivanox-audiohub/pull/30) layers hardware acceptance visibility over already verified PR #29 flexible 3-source route policy: read-only independent PR #13 hardware topology preflight ported, plus real PipeWire Link node IDs inspections, 10+ malformed/duplicate/privacy graph tests and firstboot SD report numeric links/3 direct EQ-to-USB edges only. USB sink presence, default selection, PipeWire links, and actual audible sound are **four different levels of evidence**. The graph's direct-link count can be 0 when adapters exist; never call it hardware failure or GO without on-device proof.
 - Next step: inspect a REAL, locally captured **redacted** Pi4 PipeWire graph when operator provides it, add adapter/port-level topology mapping, measure audible Edifier USB and dual A2DP feasibility. Keep raw MACs, serials, SSIDs and link metadata out of public issues.
 - PR #30 source CI and full native ARM64 rootfs+XZ+SHA256 artifact upload need exact final SHA verification. Existing #29 image artifact #13441980660 remains source-only experimental and does NOT contain this new diagnostic.
+
+## 2026-11-05 package-inventory continuation (stacked from PR #31)
+
+The standalone rootfs package-inventory branch adds Python extraction from
+actual pi-gen rootfs dpkg status, safe hashes of available Debian copyright
+files, an independently validated/redacted `ROOTFS-PACKAGES.json` and a
+manifest-v2 SHA binding before temporary test ZIP upload. It **cannot** prove
+license rights or audio hardware: missing copyright count is visible and
+`legal_review_approved=false` cannot be overridden. The public Release
+workflow is still blocked; AGPL LICENSE and main remain unchanged. Update
+status with exact CI evidence from the final new PR; no claim before tests.

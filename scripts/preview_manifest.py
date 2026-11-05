@@ -14,6 +14,10 @@ from pathlib import Path
 import re
 import sys
 
+# Works as python3 scripts/preview_manifest.py and as an imported test module.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from scripts.verify_package_inventory import verify as verify_package_inventory
+
 SHA = re.compile(r"[a-f0-9]{40}\Z")
 RUN = re.compile(r"[0-9]{1,20}\Z")
 PIN = re.compile(r'^PIN="([a-f0-9]{40})"$', re.MULTILINE)
@@ -42,8 +46,10 @@ def manifest(directory: Path, source_sha: str, run_id: str, build_script: Path):
         digest + "  " + image.name
     ]:
         raise ValueError("Image digest does not match checksum file")
+    inventory_proof = verify_package_inventory(directory / "ROOTFS-PACKAGES.json")
     metadata = {
-        "schema": "rivanox-audiohub-preview-bundle/1",
+        "schema": "rivanox-audiohub-preview-bundle/2",
+        "package_inventory": {"file": "ROOTFS-PACKAGES.json", **inventory_proof},
         "image": image.name,
         "image_bytes": image.stat().st_size,
         "image_sha256": digest,

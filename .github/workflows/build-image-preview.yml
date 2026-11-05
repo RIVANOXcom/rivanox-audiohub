@@ -2,7 +2,7 @@ name: Build unverified Pi 4 image
 on:
   workflow_dispatch:
   push:
-    branches: [audiohub-preview-build, wd-papa-5b2e6939-image-audit, wd-papa-5b2e6939-preview-download-trace-20261105, wd-papa-5b2e6939-pi-preview-local-status-20261105, wd-papa-5b2e6939-offline-boot-diagnostics-20261105, wd-papa-5b2e6939-audio-path-integration-20261105, wd-papa-5b2e6939-audio-routing-gain-budget-20261105, wd-papa-5b2e6939-three-input-laptop-integration-20261105, wd-papa-5b2e6939-configurable-input-names-and-handoff-20261105, wd-papa-5b2e6939-flexible-source-route-assignment-20261105, wd-papa-5b2e6939-live-pipewire-graph-validation-20261105, wd-papa-5b2e6939-licensing-sustainability-release-checks-20261105]
+    branches: [audiohub-preview-build, wd-papa-5b2e6939-image-audit, wd-papa-5b2e6939-preview-download-trace-20261105, wd-papa-5b2e6939-pi-preview-local-status-20261105, wd-papa-5b2e6939-offline-boot-diagnostics-20261105, wd-papa-5b2e6939-audio-path-integration-20261105, wd-papa-5b2e6939-audio-routing-gain-budget-20261105, wd-papa-5b2e6939-three-input-laptop-integration-20261105, wd-papa-5b2e6939-configurable-input-names-and-handoff-20261105, wd-papa-5b2e6939-flexible-source-route-assignment-20261105, wd-papa-5b2e6939-live-pipewire-graph-validation-20261105, wd-papa-5b2e6939-licensing-sustainability-release-checks-20261105, wd-papa-20261105-rootfs-license-inventory]
 permissions:
   contents: read
 concurrency:
@@ -40,6 +40,7 @@ jobs:
           set -euo pipefail
           mkdir -p dist
           sudo cp .pi-gen-build/pi-gen/deploy/*.img.xz dist/
+          sudo cp .pi-gen-build/pi-gen/deploy/ROOTFS-PACKAGES.json dist/
           sudo chown -R "$(id -u):$(id -g)" dist
           cd dist
           shopt -s nullglob
@@ -74,6 +75,7 @@ jobs:
             dist/*.img.xz
             dist/SHA256SUMS.txt
             dist/PREVIEW-MANIFEST.json
+            dist/ROOTFS-PACKAGES.json
           if-no-files-found: error
           retention-days: 30
       - name: Show test-image download in GitHub job summary

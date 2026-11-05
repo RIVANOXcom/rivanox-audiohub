@@ -172,3 +172,19 @@ Newest isolated stacked **DRAFT**: [PR #30](https://github.com/RIVANOXcom/rivano
 This next step imports previously separate read-only hardware topology preflight PR #13, adds `src/audiohub/audio_graph.py` to inspect actual PipeWire Link `info.output-node-id` / `info.input-node-id` relationships and report observed direct `audiohub.<slot>.output`→selected USB sink links; stereo port links are deduplicated by node-pair. The runtime periodically inspects its existing `pw-dump` snapshot; first-boot FAT report stores only **numeric** counts `pipewire_links_inspected` (0..8192) and `eq_usb_direct_links` (0..3) with no node identifiers or personal data. No sound, pairing, source access, LAN service or owner authentication changes. Negative graph/privacy/real-image-rootfs checks added, and `docs/PIPEWIRE-LINK-OBSERVABILITY.md` describes evidence limitations. Direct-link absence does NOT prove no sound because PipeWire may insert intermediate adapter nodes.
 
 **At next chat:** Look up PR #30 exact head SHA, latest source checks and native ARM64 run. Confirm full test count, 100% rootfs security checks, `sha256sum -c`, `xz --test`, manifest and uploaded temporary artifact **before** claiming a new SD image. Do not reuse artifact #13441980660 as if it includes these new link diagnostics. Update this paragraph with final CI IDs once confirmed. Existing gaps: hardware Pi4+Edifier/BT/3-way test, authenticated owner+phone Wi-Fi, real source enrollment, trustworthy Windows transport, main active ruleset (still empty), legal/official release.
+
+## 2026-11-05 continuation: rootfs package and copyright evidence (separate draft)
+
+New branch `wd-papa-20261105-rootfs-license-inventory` starts from exact
+previous draft PR #31 SHA `bb83f7de8a689f59fd2e1cbfcf077040122124ab`.
+It collects dpkg package versions/architectures and hashes of available
+`/usr/share/doc/<package>/copyright` from the **real built rootfs**,
+records missing notices without assuming legal clearance and adds
+`ROOTFS-PACKAGES.json` to the unverified ZIP. Its SHA-256 and exact package
+counts are bound into `PREVIEW-MANIFEST.json` schema v2 and checked by an
+independent strict-allowlist offline verifier. Parent PRs, main branch,
+publish-image.yml, AGPL LICENSE and permissions are unchanged.
+**Before claiming a build:** check the exact new PR head, source CI, native
+ARM64 rootfs/export/integrity status and uploaded artifact ID. Physical Pi4
+sound, authenticated phone ownership, license clearance and owner public
+Release approval remain OPEN. No official release has been authorized.

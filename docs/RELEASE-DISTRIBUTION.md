@@ -23,7 +23,9 @@ download an expiring ZIP from the run's Artifacts area:
 - [Download temporary Actions test ZIP #13443339137](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42086909475/artifacts/13443339137),
   606,222,225 bytes; expires **2026-12-05**. GitHub sign-in can be required.
   The bundle contains a single `*-UNVERIFIED.img.xz`,
-  `SHA256SUMS.txt` and `PREVIEW-MANIFEST.json`.
+  `SHA256SUMS.txt`, `PREVIEW-MANIFEST.json` and a redacted `ROOTFS-PACKAGES.json`
+  in the newer inventory-enabled development branch. The prior verified PR #30 ZIP
+  has only the first three files.
 
 These are **not** publicly downloadable long-lived Releases and they
 cannot honestly be called "latest verified stable SD image". The user
@@ -37,7 +39,7 @@ started for testing, is unauthenticated.
 Actions ZIP for all of:
 
 1. Exactly one properly named **UNVERIFIED** `.img.xz` plus only
-   `SHA256SUMS.txt` and `PREVIEW-MANIFEST.json` — no accidental
+   `SHA256SUMS.txt`, `PREVIEW-MANIFEST.json` and `ROOTFS-PACKAGES.json` — no accidental
    secret-bearing extra files, empty files or symlink shortcuts.
 2. Expected source SHA (optionally supplied), pi-gen pin, workflow
    run ID, manifest schema, image size and SHA-256 digest.
@@ -46,7 +48,11 @@ Actions ZIP for all of:
 4. Explicit preview-only assertions: `hardware_verified=false`,
    `release_approved=false`, `supports_phone_wifi_setup=false`
    and a statement that it is not a release.
-5. Always outputs `public_release_ready=false`, even when integrity
+5. Inventory hash bound to the preview manifest: exact installed dpkg
+   names/versions/architectures, SHA-256 of available Debian copyright files,
+   counts of **missing copyright documents**, strict allowed fields and
+   `legal_review_approved=false`. Missing notices remain explicit risks.
+6. Always outputs `public_release_ready=false`, even when integrity
    passes: source tests and image integrity **cannot constitute**
    owner authorization, legal rights or real hardware approval.
 
@@ -123,3 +129,21 @@ optional separately negotiated paid-license strategy.
 `AUDIOHUB-TEST-REPORT.json` and audible result in
 [Issue #2](https://github.com/RIVANOXcom/rivanox-audiohub/issues/2).
 This source development does not perform the device test itself.
+
+## Automated rootfs package and license *evidence*, not license clearance
+
+The next stacked development PR adds `scripts/rootfs_package_inventory.py`
+(run inside pi-gen's actual built ARM64 rootfs), which produces deterministic
+`ROOTFS-PACKAGES.json`. It exports only installed package name, architecture,
+version and an optional SHA256 of an available Debian copyright notice —
+**never** post-install scripts, email addresses, local credentials, Wi-Fi, MAC
+addresses or device serials. A missing or linked copyright file is recorded
+as **missing**, not silently treated as legally compliant. The artifact is
+included in the **temporary test ZIP** and SHA-bound to its source/image
+provenance manifest. Independent validation rejects extra keys, duplicates,
+malformed metadata, symlinked inventory and fabricated legal approval.
+
+This is a **package inventory, NOT a complete SBOM**: pip/vendor libraries,
+firmware, kernel blobs, license text interpretation, source-offer obligations,
+installed-but-untracked binaries and chain of title still require a separate
+human/legal audit. It cannot authorize an official GitHub Release.
