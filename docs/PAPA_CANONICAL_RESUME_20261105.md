@@ -227,5 +227,49 @@ copyright/permission issue remains unresolved (#40).
 
 **Unchanged legal boundary:** `main` and recipients' AGPL-3.0-only rights remain; future Model C NOT EFFECTIVE, private owner repo `rivanox-audiohub-next` not accessible/verified, legal issue #32, rights issue #40, device test issue #2 and owner setup issue #37 remain OPEN. No merge to `main`, no release, no history rewrite.
 
+
+## L. Follow-up Draft PR #45: fail-closed supervisor audio route shutdown
+
+[Draft PR #45](https://github.com/RIVANOXcom/rivanox-audiohub/pull/45)
+`wd-papa-20261105-supervisor-error-route-cleanup` is stacked on
+[Draft PR #44](https://github.com/RIVANOXcom/rivanox-audiohub/pull/44),
+whose exact source CI [run #42120108827](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42120108827)
+passed **395/395 Python tests** at SHA
+`ea661f155a375238b79e44e01c48acf98a21b755`.
+The PR44 independent native ARM64 run is
+[42120100453](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42120100453);
+**check its live final status** before asserting image 58/58 guard success.
+
+**Concrete issue in historical alpha runtime:** `Supervisor.serve()` caught
+every exception from `poll()` with a bare `pass`; previously spawned
+`pw-loopback` child processes were not necessarily stopped after a failure
+such as an unsafe/unwritable runtime status destination or malformed
+local state. That could leave an unsupervised managed audio path running.
+
+**Engineering change:** `_stop_all_managed_routes()` terminates each
+managed process with the existing bounded wait + forced kill fallback,
+clears retry tracking and refuses to swallow cleanup failure. The new
+`poll_safely()` uses this on unexpected errors; `serve()` additionally
+stops routes on service-loop shutdown. If cleanup itself fails, the
+exception must propagate so systemd restarts and terminates the service
+**control group**. `audiohub-runtime.service` now explicitly sets
+`KillMode=control-group` and `TimeoutStopSec=8s`, retaining
+`NoNewPrivileges=yes` and `Restart=always`.
+
+**New tests:** 9 behavioral tests in `tests/test_runtime_recovery.py`,
+3 rootfs guard tests in `tests/test_rootfs_audit.py`, and one
+systemd-static test in `tests/test_runtime_static.py`. Rootfs
+`unexpected_runtime_failure_stops_all_audio_routes` guard should
+increment **58 to 59 checks** only when native ARM64 build has
+actually passed. All tests must run on the exact PR45 SHA.
+
+**Current PR45 acceptance state:** Draft and not merged; source CI
+and native ARM64 must be observed independently. The old
+AGPL-3.0-only grants remain valid, Model C future license NOT EFFECTIVE,
+new private development repo not verified, nine third-party
+copyright paths (including raspberrypi-net-mods) still need legal
+review, and Pi4 + Edifier audible/hardware acceptance is open.
+
+
 **END OF HANDOFF.** If a live run/PR contradicts this document, treat
 the live GitHub evidence as authoritative, reconcile and update this file.

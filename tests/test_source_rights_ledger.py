@@ -149,13 +149,20 @@ class SourceRightsLedgerTests(unittest.TestCase):
         self.assertFalse(state["next_runtime_state_security_change"]["physical_device_accepted"])
         self.assertEqual(state["next_runtime_state_security_change"]["expected_rootfs_guard_count"], 58)
         self.assertTrue(state["next_runtime_state_security_change"]["random_exclusive_temporary_file"])
+        self.assertEqual(state["next_supervisor_failclosed_change"]["pr"], 45)
+        self.assertEqual(state["next_supervisor_failclosed_change"]["expected_rootfs_guard_count"], 59)
+        self.assertTrue(state["next_supervisor_failclosed_change"]["managed_routes_stopped_on_failure"])
+        self.assertTrue(state["next_supervisor_failclosed_change"]["cleanup_failure_escalates_to_systemd"])
+        self.assertFalse(state["next_supervisor_failclosed_change"]["model_c_effective"])
+        self.assertFalse(state["next_supervisor_failclosed_change"]["public_release_authorized"])
+        self.assertFalse(state["next_supervisor_failclosed_change"]["hardware_audio_accepted"])
 
         self.assertEqual(state["last_native_verified"]["installed_packages"], 689)
         self.assertEqual(state["last_native_verified"]["copyright_paths_unresolved"], 9)
         self.assertFalse(state["last_native_verified"]["public_release_ready"])
         self.assertEqual(
             [item["number"] for item in state["draft_pr_chain"]],
-            [35, 36, 38, 39, 41, 42, 43, 44],
+            [35, 36, 38, 39, 41, 42, 43, 44, 45],
         )
 
     def test_primary_handoff_points_to_authoritative_resume(self):

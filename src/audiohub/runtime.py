@@ -254,6 +254,36 @@ class Supervisor:
             process.kill()
             process.wait(timeout=2)
 
+    def _stop_all_managed_routes(self):
+        """Never leave managed PipeWire players running after a failed poll.
+
+        A cleanup failure escalates to systemd, whose control-group shutdown
+        must kill any remaining subprocesses; no Bluetooth addresses or
+        source/node identifiers are included in the failure message.
+        """
+        errors = 0
+        for address, (_, _, process) in list(self.loopbacks.items()):
+            try:
+                self._stop_process(process)
+            except Exception:
+                errors += 1
+            finally:
+                self.loopbacks.pop(address, None)
+        retries = getattr(self, "retry_state", None)
+        if isinstance(retries, dict):
+            retries.clear()
+        if errors:
+            raise RuntimeError("Managed AudioHub routing cleanup failed")
+
+    def poll_safely(self):
+        """One supervised cycle; unexpected errors stop every active route."""
+        try:
+            self.poll()
+        except Exception:
+            self._stop_all_managed_routes()
+            return False
+        return True
+
     def _route(self, sources, sinks, *, now=None):
         """Route up to two Bluetooth inputs; pause all routes without USB.
 
@@ -389,13 +419,14 @@ class Supervisor:
         })
 
     def serve(self):
-        while True:
-            try:
-                self.poll()
-            except Exception:
-                # Untrusted metadata must never kill the headless audio loop.
-                pass
-            time.sleep(5)
+        try:
+            while True:
+                self.poll_safely()
+                time.sleep(5)
+        finally:
+            # KeyboardInterrupt and ordinary shutdown must not orphan
+            # managed audio processes. systemd also kills the service cgroup.
+            self._stop_all_managed_routes()
 
 
 def main():

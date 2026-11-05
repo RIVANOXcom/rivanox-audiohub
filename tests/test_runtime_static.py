@@ -22,6 +22,17 @@ class RuntimeStaticTests(unittest.TestCase):
         self.assertIn("python3 -m audiohub.runtime", service)
         self.assertIn("NoNewPrivileges=yes", service)
 
+    def test_runtime_child_processes_are_stopped_by_systemd_cgroup(self):
+        service = (
+            ROOT / "image/stage-audiohub/01-install/files/systemd/audiohub-runtime.service"
+        ).read_text()
+        self.assertIn("KillMode=control-group", service)
+        self.assertIn("Restart=always", service)
+        source = (ROOT / "src/audiohub/runtime.py").read_text()
+        self.assertIn("def _stop_all_managed_routes(self):", source)
+        self.assertIn("def poll_safely(self):", source)
+
+
 
 if __name__ == "__main__":
     unittest.main()

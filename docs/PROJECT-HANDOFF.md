@@ -319,3 +319,22 @@ rootfs security check; previous count 57, expected 58 only after real
 native run. Exact source/native CI for #44 not yet established at this
 documentation checkpoint. Existing AGPL rights unchanged; Model C
 remains NOT EFFECTIVE pending issue #37 and human legal review.
+
+## 2026-11-05 stacked PR #45 — unexpected supervisor errors stop managed audio
+
+PR #44 source run #42120108827 PASSED 395 Python tests; native run
+#42120100453 is independently checked for real 58/58 rootfs guards.
+Draft [PR #45](https://github.com/RIVANOXcom/rivanox-audiohub/pull/45)
+fixes a separate existing legacy AGPL flaw: in `Supervisor.serve()`,
+exceptions from `poll()` were previously silently swallowed,
+potentially leaving started `pw-loopback` processes routing without
+supervision. The new safe wrapper stops every managed route on error,
+clears retries and refuses to suppress a failed cleanup; systemd
+KillMode=control-group makes child termination explicit on service
+restart. New 9 runtime, 3 rootfs and 1 static service tests were added,
+with a new native rootfs security guard (expected count 59 if verified).
+
+Update canonical `docs/PAPA_CANONICAL_RESUME_20261105.md`, GitHub
+PR45 and Workbench after precise HEAD source CI and native ARM64 run.
+No release, merge, Model C effective license, upstream vendor license
+clearance or physical audio acceptance is implied.

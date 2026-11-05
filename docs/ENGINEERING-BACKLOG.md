@@ -167,3 +167,15 @@ symlink/permission/hardlink/FIFO/large JSON and valid refresh cases.
 Verify **source CI and native ARM64** at final SHA before closing this
 security issue; never interpret a PASS as legal, hardware or production
 ownership acceptance.
+
+## 2026-11-05 — fail-closed cleanup for audio supervisor errors
+
+[Draft PR #45](https://github.com/RIVANOXcom/rivanox-audiohub/pull/45)
+fixes `Supervisor.serve()` swallowing unexpected runtime errors
+while spawned audio children could continue. A central cleanup helper
+stops managed PipeWire children, clears retry state, escalates failed
+shutdown to systemd; runtime unit explicitly sets
+`KillMode=control-group`. Nine behavioral tests, three rootfs negative
+tests and a static service test added; new native image guard target is
+59 real checks. Verify actual source CI and native image success, and
+document exact final SHA. No confirmed real Pi4/Edifier audio test.

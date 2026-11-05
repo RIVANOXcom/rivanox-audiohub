@@ -58,6 +58,23 @@ def inspect(root: Path) -> dict[str, bool]:
         ) and 'path.with_suffix(".tmp")' not in runtime_security
     except OSError:
         checks["runtime_private_state_nofollow_atomic"] = False
+    # An unexpected supervisor exception must stop all managed audio routes;
+    # systemd must kill the entire service cgroup if cleanup itself fails.
+    try:
+        runtime_source = (source / "runtime.py").read_text()
+        runtime_unit = (root / SERVICES["runtime"][0]).read_text()
+        checks["unexpected_runtime_failure_stops_all_audio_routes"] = all(
+            mark in runtime_source for mark in (
+                "def _stop_all_managed_routes(self):",
+                "def poll_safely(self):",
+                "self._stop_all_managed_routes()",
+                "self.poll_safely()",
+            )
+        ) and all(mark in runtime_unit for mark in (
+            "KillMode=control-group", "Restart=always"
+        ))
+    except OSError:
+        checks["unexpected_runtime_failure_stops_all_audio_routes"] = False
     # Build-time guard: the alpha status UI is unauthenticated, so the
     # installed image must never bind to all interfaces by default.
     try:

@@ -2,6 +2,7 @@
 import json
 import os
 import stat
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -204,6 +205,150 @@ class PrivateRuntimeStateTests(unittest.TestCase):
                     atomic_json(invalid, {"value": 1})
                 self.assertEqual(read_json(invalid, {"blocked": True}),
                                  {"blocked": True})
+
+
+class SupervisorFailClosedTests(unittest.TestCase):
+    def instance(self):
+        s = Supervisor.__new__(Supervisor)
+        s.loopbacks = {}
+        s.retry_state = {"first": ("node", 123, 2)}
+        return s
+
+    def test_failed_cycle_terminates_each_active_audio_route(self):
+        s = self.instance()
+        a = FakeProcess()
+        b = FakeProcess()
+        s.loopbacks = {"A": ("bluez_input.a", "audiohub.music", a),
+                       "B": ("bluez_input.b", "audiohub.tablet", b)}
+        with mock.patch.object(s, "poll", side_effect=OSError("untrusted state")):
+            self.assertFalse(s.poll_safely())
+        self.assertTrue(a.terminated)
+        self.assertTrue(b.terminated)
+        self.assertEqual(s.loopbacks, {})
+        self.assertEqual(s.retry_state, {})
+
+    def test_successful_cycle_preserves_current_routes(self):
+        s = self.instance()
+        proc = FakeProcess()
+        s.loopbacks = {"A": ("bluez_input.a", "audiohub.music", proc)}
+        with mock.patch.object(s, "poll", return_value=None):
+            self.assertTrue(s.poll_safely())
+        self.assertFalse(proc.terminated)
+        self.assertIn("A", s.loopbacks)
+
+    def test_unwritable_runtime_status_cannot_leave_routes_running(self):
+        s = self.instance()
+        proc = FakeProcess()
+        s.loopbacks = {"A": ("bluez_input.a", "audiohub.music", proc)}
+        with mock.patch.object(s, "poll", side_effect=PermissionError("status")):
+            self.assertFalse(s.poll_safely())
+        self.assertTrue(proc.terminated)
+
+    def test_cleanup_failure_escalates_to_service_restart_without_secrets(self):
+        s = self.instance()
+
+        class Unkillable:
+            def poll(self):
+                return None
+
+            def terminate(self):
+                raise OSError("Sensitive Bluetooth address 11:22:33:44:55:66")
+
+        s.loopbacks = {"SENSITIVE": ("private", "audiohub.music", Unkillable())}
+        with mock.patch.object(s, "poll", side_effect=ValueError("private")):
+            with self.assertRaisesRegex(RuntimeError, "cleanup failed") as thrown:
+                s.poll_safely()
+        self.assertNotIn("11:22", str(thrown.exception))
+        self.assertNotIn("SENSITIVE", str(thrown.exception))
+        self.assertEqual(s.loopbacks, {})
+
+    def test_one_cleanup_failure_does_not_skip_other_route(self):
+        s = self.instance()
+        good = FakeProcess()
+
+        class FailedProcess:
+            def poll(self):
+                return None
+
+            def terminate(self):
+                raise OSError("fail")
+
+        s.loopbacks = {
+            "A": ("bluez_input.a", "audiohub.music", FailedProcess()),
+            "B": ("bluez_input.b", "audiohub.tablet", good),
+        }
+        with mock.patch.object(s, "poll", side_effect=RuntimeError("failure")):
+            with self.assertRaises(RuntimeError):
+                s.poll_safely()
+        self.assertTrue(good.terminated)
+        self.assertEqual(s.loopbacks, {})
+
+    def test_termination_timeout_forces_kill(self):
+        s = self.instance()
+
+        class SlowProcess:
+            def __init__(self):
+                self.killed = False
+
+            def poll(self):
+                return None
+
+            def terminate(self):
+                pass
+
+            def wait(self, timeout=2):
+                if not self.killed:
+                    raise subprocess.TimeoutExpired("pw-loopback", timeout)
+                return 0
+
+            def kill(self):
+                self.killed = True
+
+        proc = SlowProcess()
+        s.loopbacks = {"A": ("bluez_input.a", "audiohub.music", proc)}
+        with mock.patch.object(s, "poll", side_effect=RuntimeError("failure")):
+            self.assertFalse(s.poll_safely())
+        self.assertTrue(proc.killed)
+        self.assertEqual(s.loopbacks, {})
+
+    def test_after_safe_failure_later_cycle_can_retry(self):
+        s = self.instance()
+        proc = FakeProcess()
+        s.loopbacks = {"A": ("bluez_input.a", "audiohub.music", proc)}
+        with mock.patch.object(s, "poll", side_effect=[ValueError("bad"), None]):
+            self.assertFalse(s.poll_safely())
+            self.assertTrue(s.poll_safely())
+        self.assertTrue(proc.terminated)
+        self.assertEqual(s.loopbacks, {})
+
+    def test_serve_keyboard_interrupt_cleans_managed_routes(self):
+        s = self.instance()
+        proc = FakeProcess()
+        s.loopbacks = {"A": ("bluez_input.a", "audiohub.music", proc)}
+        with mock.patch.object(s, "poll", return_value=None), mock.patch(
+            "audiohub.runtime.time.sleep", side_effect=KeyboardInterrupt
+        ):
+            with self.assertRaises(KeyboardInterrupt):
+                s.serve()
+        self.assertTrue(proc.terminated)
+        self.assertEqual(s.loopbacks, {})
+
+    def test_serve_keyboard_interrupt_propagates_failed_cleanup(self):
+        s = self.instance()
+
+        class BadProcess:
+            def poll(self):
+                return None
+
+            def terminate(self):
+                raise OSError("bad route")
+
+        s.loopbacks = {"A": ("bluez_input.a", "audiohub.music", BadProcess())}
+        with mock.patch.object(s, "poll", return_value=None), mock.patch(
+            "audiohub.runtime.time.sleep", side_effect=KeyboardInterrupt
+        ):
+            with self.assertRaisesRegex(RuntimeError, "cleanup failed"):
+                s.serve()
 
 
 if __name__ == "__main__":

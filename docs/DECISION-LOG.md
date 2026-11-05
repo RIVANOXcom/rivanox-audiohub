@@ -35,6 +35,8 @@ These decisions capture user-confirmed requirements and current engineering arch
 
 | ADR-026 | Harden existing AudioHub runtime status and local settings file persistence against predictable temporary-file/symlink attacks, hardlinks, special files and unbounded JSON. | Draft [PR #44](https://github.com/RIVANOXcom/rivanox-audiohub/pull/44); source/native validation required | Storage must be owned/private, directory-FD nofollow, regular 32KiB limited JSON, atomic O_EXCL random 0600 temp and fsync; preserve fail-closed routing and historical AGPL grants. No claim of physical Pi4/hardware acceptance or Model C legal eligibility. |
 
+| ADR-027 | Unexpected audio supervisor errors must not leave managed PipeWire child routes running. | Draft [PR #45](https://github.com/RIVANOXcom/rivanox-audiohub/pull/45), exact native acceptance pending | Stop all managed children, clear retry state and propagate cleanup failures for systemd control-group termination; retain privacy and no owner/Model C release claims. |
+
 ## Engineering observations (not product acceptance)
 
 - Source-level tests and policy checks have succeeded on GitHub Actions.
