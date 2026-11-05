@@ -34,5 +34,14 @@
   "security": "Configuración segura en desarrollo",
   "copyright": "Mezclador de audio libre para Raspberry Pi.",
   "speakerConnected": "Altavoces USB detectados",
-  "speakerDisconnected": "Altavoces USB no detectados"
+  "speakerDisconnected": "Altavoces USB no detectados",
+  "input1": "Entrada 1",
+  "input2": "Entrada 2",
+  "input3": "Entrada 3",
+  "inputName": "Nombre de entrada",
+  "sourceHint1": "Entrada Bluetooth · asignación segura de origen pendiente",
+  "sourceHint2": "Entrada LAN de prueba manual · desactivada de forma predeterminada",
+  "sourceHint3": "Segunda entrada Bluetooth · compatibilidad de hardware sin verificar",
+  "invalidInputName": "Elige un nombre único (1–32 caracteres, sin controles ni etiquetas HTML).",
+  "previewNamesOnly": "Guardado solo en este navegador. No cambia las rutas de audio del equipo."
 }

@@ -34,5 +34,14 @@
   "security": "Secure onboarding is being developed",
   "copyright": "Open-source audio mixing for Raspberry Pi.",
   "speakerConnected": "USB speakers detected",
-  "speakerDisconnected": "USB speakers not detected"
+  "speakerDisconnected": "USB speakers not detected",
+  "input1": "Input 1",
+  "input2": "Input 2",
+  "input3": "Input 3",
+  "inputName": "Input name",
+  "sourceHint1": "Bluetooth input · assign a supported source during secure setup",
+  "sourceHint2": "Manual LAN test input · disabled until explicitly started",
+  "sourceHint3": "Second Bluetooth input · real hardware support unverified",
+  "invalidInputName": "Choose a distinct name (1–32 characters; no control or markup characters).",
+  "previewNamesOnly": "Saved for this browser only. Device routing remains unchanged."
 }

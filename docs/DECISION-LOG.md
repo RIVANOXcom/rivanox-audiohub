@@ -18,6 +18,9 @@ These decisions capture user-confirmed requirements and current engineering arch
 | ADR-012 | First boot, pairing, network setup and administrative actions must be secure without a globally shared default secret. | Accepted release requirement | Ownership-claim UX not yet delivered. Release blocker. |
 | ADR-013 | Store live runtime status in a volatile location and persist settings sparingly. | Implemented design | Reduce microSD writes and improve uptime. |
 | ADR-014 | No silent assumptions about compliance, third-party licenses or EU/DE legal suitability. | Accepted | A reviewed software bill of materials, license notices and applicability assessment are release gates. |
+| ADR-015 | Three mixer inputs are **generic, individually renameable logical slots**, not mandatory phone/laptop/tablet product categories. | Accepted product requirement 2026-11-05 | Keep existing technical PipeWire keys for compatibility; browser-only previews and offline private labels precede a secure owner-synced API. Dynamic real source/transport reassignment remains unimplemented until authorized, tested. |
+| ADR-016 | An untrusted, unauthenticated Scream UDP receiver must never be auto-started by Pi image installation. | Existing security boundary | Manual isolated lab opt-in only, until an authenticated transport/owner API is reviewed. |
+| ADR-017 | `main` must use an active, main-only PR+CI ruleset with no AI app bypass. | Proposed for operator action; not yet configured | Current repo ruleset query returned `[]`; only authorized owner enables protection, no permission changes by engineering agent. |
 
 ## Engineering observations (not product acceptance)
 

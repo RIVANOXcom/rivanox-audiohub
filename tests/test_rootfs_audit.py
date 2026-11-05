@@ -55,17 +55,29 @@ class RootfsAuditTests(unittest.TestCase):
             "MAX_PCM_PACKET_BYTES = 1152",
             "self._packets.popleft()",
         )))
+        make("opt/audiohub/src/audiohub/input_profiles.py", "\\n".join((
+            'SLOTS = ("music", "laptop", "tablet")',
+            "MAX_NAME_CHARS = 32",
+            "O_NOFOLLOW",
+            "fcntl.flock",
+        )))
         make("opt/audiohub/src/audiohub/status_bind.py",
              'LOOPBACK = "127.0.0.1"\\n'
              'values.get("AUDIOHUB_STATUS_BIND_IP", LOOPBACK)\\n'
              'values.get("AUDIOHUB_UNSAFE_STATUS_LAN") != "YES"\\n')
         make("opt/audiohub/src/audiohub/webserver.py",
              "from .status_bind import select_bind_address\\n"
-             "ThreadingHTTPServer((select_bind_address(), 8765), Handler)\\n")
+             "ThreadingHTTPServer((select_bind_address(), 8765), Handler)\\n"
+             "def do_POST(self):\\nRead-only preview\\n")
         make("opt/audiohub/src/audiohub/firstboot_diag.py",
              'OUTPUT_NAME = "AUDIOHUB-TEST-REPORT.json"')
         for name in ("index.html", "app.js", "styles.css"):
             make("opt/audiohub/web/" + name)
+        make("opt/audiohub/web/app.js", "\\n".join((
+            "audiohub.preview.input-labels.v1",
+            "localStorage.setItem",
+            "nameInput.addEventListener",
+        )))
         data = {f"k{n}": "test" for n in range(30)}
         for lang in audit.LANGUAGES:
             make(f"opt/audiohub/web/locales/{lang}.json", json.dumps(data))
@@ -224,6 +236,25 @@ class RootfsAuditTests(unittest.TestCase):
                 "MAX_BUFFER_PACKETS = 16", "MAX_BUFFER_PACKETS = 65536"
             ))
             self.assertFalse(audit.inspect(root)["laptop_manual_receiver_packaged"])
+
+    def test_missing_input_names_model_blocks_image_export(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            (root / "opt/audiohub/src/audiohub/input_profiles.py").unlink()
+            self.assertFalse(audit.inspect(root)["editable_names_offline_no_public_api"])
+
+    def test_missing_client_only_rename_blocks_image_export(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            (root / "opt/audiohub/web/app.js").write_text("display only")
+            self.assertFalse(audit.inspect(root)["editable_names_offline_no_public_api"])
+
+    def test_nonread_only_web_api_blocks_image_export(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            web = root / "opt/audiohub/src/audiohub/webserver.py"
+            web.write_text(web.read_text().replace("Read-only preview", "owner write API"))
+            self.assertFalse(audit.inspect(root)["editable_names_offline_no_public_api"])
 
     def test_valid_synthetic_rootfs_passes(self):
         with tempfile.TemporaryDirectory() as tmp:

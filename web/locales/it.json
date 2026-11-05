@@ -34,5 +34,14 @@
   "security": "Configurazione sicura in sviluppo",
   "copyright": "Mixer audio open source per Raspberry Pi.",
   "speakerConnected": "Altoparlanti USB rilevati",
-  "speakerDisconnected": "Altoparlanti USB non rilevati"
+  "speakerDisconnected": "Altoparlanti USB non rilevati",
+  "input1": "Ingresso 1",
+  "input2": "Ingresso 2",
+  "input3": "Ingresso 3",
+  "inputName": "Nome ingresso",
+  "sourceHint1": "Ingresso Bluetooth · assegnazione sicura della sorgente da implementare",
+  "sourceHint2": "Ingresso LAN di prova manuale · disattivato per impostazione predefinita",
+  "sourceHint3": "Secondo ingresso Bluetooth · compatibilità hardware non verificata",
+  "invalidInputName": "Scegli un nome unico (1–32 caratteri, senza controlli o tag HTML).",
+  "previewNamesOnly": "Salvato solo in questo browser. L’instradamento del dispositivo non cambia."
 }

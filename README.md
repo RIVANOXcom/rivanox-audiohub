@@ -19,15 +19,26 @@
 
 Stop choosing between music, a laptop video, and a tablet. AudioHub is being built to mix multiple simultaneous sources into one set of speakers, with **independent channel volume and EQ**. It is designed to run without a monitor or keyboard after the image has been flashed.
 
-### Planned audio channels
+### Three independently named inputs — not fixed device categories
 
-| Input | Intended connection | Independent controls |
+| Display slot | Current ALPHA-capable input transport | Separate controls |
 | --- | --- | --- |
-| Phone | Bluetooth A2DP | Volume, mute, EQ |
-| Laptop | Local-network audio, optional wired adapter | Volume, mute, EQ |
-| Tablet | Bluetooth where hardware allows, or a supported network source | Volume, mute, EQ |
+| **Input 1** (rename e.g. *Living room TV*) | First Bluetooth A2DP source | Volume, mute, three-band EQ |
+| **Input 2** (rename e.g. *Console*) | Manual isolated LAN PCM input, **OFF by default** | Volume, mute, three-band EQ |
+| **Input 3** (rename e.g. *Work PC*) | Second Bluetooth A2DP source, **hardware-unverified** | Volume, mute, three-band EQ |
 
-**Hardware note:** Simultaneous Bluetooth A2DP input from two different devices is not yet validated. This must not be represented as a guaranteed feature. Tested alternatives may require an extra Bluetooth adapter or a dedicated network-streaming method.
+You are **not** required to own a phone, laptop or tablet for the
+respective slot. The internal PipeWire identifiers `music/laptop/tablet`
+remain stable for compatibility; their **visible names are freely editable**.
+The current web prototype saves chosen names **only in the current browser**,
+not to the Pi. A separate private offline local-console storage model exists,
+but authenticated phone-to-device synchronization and changing a slot's
+actual transport/source assignment still require engineering work.
+
+**Hardware note:** Two simultaneous A2DP senders have not been verified
+on Pi 4. The Windows Scream receiver is plaintext/unauthenticated and is
+never started automatically. Renaming a channel does not authorize a
+device, select a Bluetooth peer or enable the network receiver.
 
 **Output:** A compatible USB audio speaker, initially the Edifier R600USB, plus a master output volume control.
 
@@ -51,7 +62,18 @@ No display, keyboard, SSH session, shell commands, or Linux administration shoul
 
 > ⚠️ **Alpha development – no verified, ready-to-flash SD image has been published yet.** Source snapshots and preview builds are **not stable releases**. Do not assume they are suitable for an unattended device.
 
-For **experimental hardware bench tests only**, an older, short-lived [4 November 2026 Actions image artifact](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/41792407565/artifacts/13303394505) exists (expires 11 November 2026). It is **not** in Releases, is based on older unverified source code, requires GitHub sign-in, and must not be connected to a trusted LAN. See [first Pi 4 experimental test and download help](./docs/FIRST-PI-ALPHA-TEST.md). New preview-image build summaries will link their temporary artifacts and checksum/provenance manifest; they are still not hardware-certified releases.
+For **experimental hardware bench tests only**, the last fully
+verified source-and-image artifact **before the input-rename branch** is:
+[5 November 2026 Pi4 Alpha ZIP #13428684879](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42057278883/artifacts/13428684879)
+(GitHub Actions run **42057278883**, source
+`ed89d4ede47cf026d4dc49a41bc8088207dbe4d1`,
+159 tests / 48 rootfs checks; expires **5 December 2026**).
+It is **not** in Releases, requires GitHub sign-in and does not
+contain the subsequent channel-rename interface. Verify included
+`SHA256SUMS.txt` for the `.img.xz`; use a spare SD and an isolated
+Pi without trusted Ethernet/WLAN. See [first Pi alpha test guide](./docs/FIRST-PI-ALPHA-TEST.md).
+A **newer** unverified image must only be linked after its own complete
+native ARM64 CI, checksum, manifest and artifact-upload evidence exists.
 
 Once hardware tests and security acceptance are complete, download images from:
 
@@ -72,6 +94,8 @@ The release will include `AudioHub-Pi4.img.xz`, `SHA256SUMS.txt`, and release no
 - Secure provisioning, diagnostic visibility and long-term reliability
 
 See [status](./docs/STATUS.md), [architecture](./docs/ARCHITECTURE.md) and [release policy](./docs/RELEASE-POLICY.md) for what is and is not implemented.
+
+**Continue development without losing decisions:** [current project handoff](./docs/PROJECT-HANDOFF.md), [prioritized engineering backlog, defects and optimizations](./docs/ENGINEERING-BACKLOG.md) and [GitHub main-branch protection setup for the owner](./docs/GITHUB-SECURITY-RULESET.md). These documents are under active draft development; `main` has not incorporated the stacked PR chain yet.
 
 ## Open source, commercial alternatives and third-party software
 

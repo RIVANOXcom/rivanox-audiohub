@@ -34,5 +34,14 @@
   "security": "Configuration sécurisée en cours de développement",
   "copyright": "Mixeur audio open source pour Raspberry Pi.",
   "speakerConnected": "Enceintes USB détectées",
-  "speakerDisconnected": "Enceintes USB non détectées"
+  "speakerDisconnected": "Enceintes USB non détectées",
+  "input1": "Entrée 1",
+  "input2": "Entrée 2",
+  "input3": "Entrée 3",
+  "inputName": "Nom de l’entrée",
+  "sourceHint1": "Entrée Bluetooth · attribution sécurisée de la source à venir",
+  "sourceHint2": "Entrée LAN de test manuel · désactivée par défaut",
+  "sourceHint3": "Deuxième entrée Bluetooth · compatibilité matérielle non vérifiée",
+  "invalidInputName": "Choisissez un nom unique (1 à 32 caractères, sans contrôles ni balises HTML).",
+  "previewNamesOnly": "Enregistré uniquement dans ce navigateur. Le routage de l’appareil ne change pas."
 }
