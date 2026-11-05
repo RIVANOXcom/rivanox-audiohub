@@ -156,8 +156,8 @@ class CopyrightTriageTests(unittest.TestCase):
 
     def test_stale_package_version_is_refused(self):
         self.status.write_text(self.status.read_text().replace(
-            "Version: 2\\nArchitecture: arm64",
-            "Version: 3\\nArchitecture: arm64"))
+            "Version: 2\nArchitecture: arm64",
+            "Version: 3\nArchitecture: arm64"))
         with self.assertRaisesRegex(ValueError, "version differs"):
             analyze(self.root, self.report)
 
@@ -177,30 +177,30 @@ class CopyrightTriageTests(unittest.TestCase):
 
     def test_unreported_installed_package_is_refused(self):
         self.status.write_text(self.status.read_text() +
-            "\\nPackage: unreported\\nStatus: install ok installed\\n"
-            "Version: 1\\nArchitecture: arm64\\n")
+            "\nPackage: unreported\nStatus: install ok installed\n"
+            "Version: 1\nArchitecture: arm64\n")
         with self.assertRaisesRegex(ValueError, "identities"):
             analyze(self.root, self.report)
 
     def test_removed_installed_package_is_refused(self):
         self.status.write_text(self.status.read_text().replace(
-            "Package: misc\\nStatus: install ok installed\\n"
-            "Version: 2\\nArchitecture: arm64\\n", ""))
+            "Package: misc\nStatus: install ok installed\n"
+            "Version: 2\nArchitecture: arm64\n", ""))
         with self.assertRaisesRegex(ValueError, "identities"):
             analyze(self.root, self.report)
 
     def test_duplicate_same_architecture_package_is_refused(self):
         self.status.write_text(self.status.read_text() +
-            "\\nPackage: libb\\nStatus: install ok installed\\n"
-            "Version: 1\\nArchitecture: arm64\\n")
+            "\nPackage: libb\nStatus: install ok installed\n"
+            "Version: 1\nArchitecture: arm64\n")
         with self.assertRaisesRegex(ValueError, "Duplicate package/architecture"):
             analyze(self.root, self.report)
 
     def test_same_binary_name_different_architecture_is_supported(self):
         self.status.write_text(self.status.read_text() +
-            "\\nPackage: libb\\nStatus: install ok installed\\n"
-            "Version: 1\\nArchitecture: armhf\\n"
-            "Source: librarysuite (1)\\n")
+            "\nPackage: libb\nStatus: install ok installed\n"
+            "Version: 1\nArchitecture: armhf\n"
+            "Source: librarysuite (1)\n")
         self.refresh()
         result = analyze(self.root, self.report)
         self.assertEqual(result["installed_packages"], 4)
@@ -208,10 +208,10 @@ class CopyrightTriageTests(unittest.TestCase):
 
     def test_shared_doc_target_architecture_all_is_resolved(self):
         self.status.write_text(self.status.read_text().replace(
-            "Package: libb\\nStatus: install ok installed\\n"
-            "Version: 1\\nArchitecture: arm64",
-            "Package: libb\\nStatus: install ok installed\\n"
-            "Version: 1\\nArchitecture: all"))
+            "Package: libb\nStatus: install ok installed\n"
+            "Version: 1\nArchitecture: arm64",
+            "Package: libb\nStatus: install ok installed\n"
+            "Version: 1\nArchitecture: all"))
         self.refresh()
         result = analyze(self.root, self.report)
         self.assertEqual(result["alias_relationship_counts"][
