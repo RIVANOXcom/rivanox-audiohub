@@ -130,6 +130,27 @@ def inspect(root: Path) -> dict[str, bool]:
     except OSError:
         checks["bluetooth_input_role_configured"] = False
         checks["managed_eq_routing_and_usb_gate"] = False
+    # Image must ship the already reviewed AH-003 conservative
+    # 3-channel gain budget; source runtime settings cannot silently
+    # restore an unbounded master volume.
+    try:
+        mixer_source = (source / "mixer.py").read_text()
+        runtime_source = (source / "runtime.py").read_text()
+        checks["conservative_mix_gain_installed"] = all(
+            needle in mixer_source for needle in (
+                "def mix_gain_budget(settings):",
+                "def effective_master_gain(settings):",
+                "return min(1.0, 1.0 / worst_case)",
+                "str(effective_master_gain(settings))",
+            )
+        ) and all(
+            needle in runtime_source for needle in (
+                "effective_master_gain(self.settings)",
+                '"effective_master_percent"',
+            )
+        )
+    except OSError:
+        checks["conservative_mix_gain_installed"] = False
     for name in ("index.html", "app.js", "styles.css"):
         checks["web_" + name] = (root / "opt/audiohub/web" / name).is_file()
     base_keys = None
