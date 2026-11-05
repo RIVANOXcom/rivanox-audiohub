@@ -246,3 +246,25 @@ symlinks. Add source regression tests and rerun ARM64, check actual
 copyright hashes/missing count at exact new SHA. **Never treat hashes
 as legal approval.** Public main and existing AGPL LICENSE untouched.
 Model C product code must await separate PRIVATE repo, owner Issue #37.
+
+## 2026-11-05: Nine notice gaps classified, next exact-dpkg reconciliation
+
+PR #39 exact SHA \`065506961fad34448e75f513d39db684f65c7cd7\`
+native ARM64 run #42105112961 **SUCCESS**, 324 Python tests,
+55 real rootfs guards, unverified four-file artifact #13452656211.
+689 dpkg packages, 680 copyright hashes, 9 unresolved: eight
+\`doc_alias_target_link\` multi-hop doc chains and one expected copyright
+file absent at \`raspberrypi-net-mods\`. All 49 one-hop shared-doc aliases
+passed source/direct-dep metadata checks. This is **not** legal clearance.
+
+New stacked development branch
+\`wd-papa-20261105-dpkg-identity-reconciliation\` based exactly on
+PR39 SHA strengthens runtime source-vs-inventory consistency:
+set-equality of (package,architecture) records, precise installed
+version verification, legitimately coinstalled multiarch package support
+and bounded *read-only* chain metadata traces. New adversarial tests
+cover forged versions and architectures, package additions/removals,
+duplicate keys, chain cycles and unsafe targets. Verify the exact
+new PR source CI + native ARM64 before claiming these changes run in
+the real image. Current AGPL source unchanged; future Model C requires
+separate PRIVATE repo and legal signoff.
