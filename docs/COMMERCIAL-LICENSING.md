@@ -1,4 +1,13 @@
-# RIVANOX AudioHub: open-source rights and commercial licensing
+# RIVANOX AudioHub: current AGPL rights and planned Model C licensing
+
+> **Model C chosen as future business direction (2026-11-05), NOT EFFECTIVE.**
+> The [proposed source-available community/commercial terms](../LICENSE-C-DRAFT.md)
+> are a **legal-review draft**, NOT an operative license. Future eligible
+> RIVANOX-owned versions would permit private non-commercial use for free,
+> while commercial and organizational use would need separate written
+> permission. See [detailed chain-of-title audit](licensing/RIGHTS-AUDIT-2026-11-05.md)
+> and [machine-readable review state](licensing/TRANSITION-STATE.json).
+> Historical AGPL rights persist and the existing LICENSE is unchanged.
 
 **Status:** Public policy explanation, not a commercial license agreement,
 price list, trademark registration, or legal clearance. Reviewed 2026-11-05.
@@ -80,10 +89,12 @@ license grant or contribution agreement, with legal review.
 5. Only release after explicit owner approval and real Pi4 acceptance;
    the presence of an image in GitHub Actions does not mean it is
    suitable for public download under GitHub Releases.
-6. If RIVANOX later decides **every** commercial deployment must pay,
-   stop describing future code as OSI-approved open source and develop a
-   distinct forward-looking source-available/commercial license with
-   legal advice. That change cannot revoke the existing AGPL grants.
+6. **RIVANOX has decided Model C as the target commercial strategy.**
+   Develop forward-looking source-available/community terms for only
+   eligible code, subject to rights/counsel review and express activation.
+   Model C is **not OSI open source**. Earlier AGPL rights are unaffected.
+   No future mandatory-commercial fee is enforceable by this draft
+   against a valid AGPL recipient.
 
 **For commercial inquiries:** use the existing public
 [RIVANOX website](https://rivanox.com). No unverified email address,
