@@ -1,7 +1,9 @@
 """Build-time security checks for experimental Bluetooth pairing policy."""
 import ast
 import re
+import time
 import unittest
+from unittest import mock
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -90,6 +92,46 @@ class PairingAuthorizationBoundaryTests(unittest.TestCase):
         self.assertIn("self.authorize_pending(device)", source)
         self.assertIn("if p.Get(", source)
         self.assertIn('raise Rejected("Untrusted device")', source)
+
+
+def agent_methods_without_pi_imports():
+    """Exercise real PairingAgent methods with DBus decorators removed."""
+    source = ROOT / "src/audiohub/pairing.py"
+    tree = ast.parse(source.read_text(encoding="utf-8"))
+    selected = []
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and any(
+            isinstance(t, ast.Name) and t.id in
+            ("PAIRING_LIMIT", "AUTHORIZATION_TTL", "BLUEZ_DEVICE_PATH")
+            for t in node.targets
+        ):
+            selected.append(node)
+        elif isinstance(node, ast.FunctionDef) and node.name == "authorized_pairing_signal":
+            selected.append(node)
+        elif isinstance(node, ast.ClassDef) and node.name == "PairingAgent":
+            node.bases = []
+            for method in node.body:
+                if isinstance(method, ast.FunctionDef):
+                    method.decorator_list = []
+            selected.append(node)
+
+    class DBus:
+        @staticmethod
+        def Boolean(value):
+            return bool(value)
+
+        @staticmethod
+        def Interface(obj, interface):
+            return obj
+
+    namespace = {
+        "re": re, "time": time, "dbus": DBus,
+        "Rejected": type("Rejected", (Exception,), {}),
+    }
+    exec(compile(ast.fix_missing_locations(ast.Module(
+        body=selected, type_ignores=[]
+    )), str(source), "exec"), namespace)
+    return namespace
 
 if __name__ == "__main__":
     unittest.main()
