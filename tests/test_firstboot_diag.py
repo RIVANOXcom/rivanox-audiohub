@@ -40,6 +40,35 @@ class DiagnosticTests(unittest.TestCase):
         self.runtime.write_text(json.dumps(record))
         self.runtime.chmod(0o600)
 
+    def test_pipewire_link_evidence_is_bounded_and_anonymous(self):
+        self.runtime_write({
+            "updated_at": 100, "usb_output": True,
+            "pipewire_links_inspected": 12,
+            "eq_output_usb_direct_links": ["music", "laptop", "music", "invalid", {"id": 3}],
+            "private_bluetooth_mac": "AA:BB:CC:DD:EE:FF",
+            "secret": "CUSTOMER-WIFI",
+        })
+        data = diag.sample(self.runtime, self.uid, now=101)
+        self.assertEqual(data["pipewire_links_inspected"], 12)
+        self.assertEqual(data["eq_usb_direct_links"], 2)
+        self.assertNotIn("CUSTOMER-WIFI", json.dumps(data))
+        self.assertNotIn("AA:BB", json.dumps(data))
+
+    def test_pipewire_link_counters_cannot_fake_hardware_acceptance(self):
+        self.runtime_write({
+            "updated_at": 100, "pipewire_links_inspected": True,
+            "eq_output_usb_direct_links": ["music", "laptop", "tablet"],
+        })
+        data = diag.sample(self.runtime, self.uid, now=101)
+        self.assertEqual(data["pipewire_links_inspected"], 0)
+        self.assertEqual(data["eq_usb_direct_links"], 3)
+        self.assertNotIn("hardware_accepted", data)
+        self.runtime_write({"updated_at": 1, "pipewire_links_inspected": 5,
+                            "eq_output_usb_direct_links": ["music"]})
+        stale = diag.sample(self.runtime, self.uid, now=101)
+        self.assertEqual(stale["pipewire_links_inspected"], 0)
+        self.assertEqual(stale["eq_usb_direct_links"], 0)
+
     def test_missing_runtime_is_not_reported_healthy(self):
         report = diag.sample(self.runtime, self.uid, now=1000)
         self.assertEqual(report["runtime_status"], "unavailable_or_stale")
