@@ -28,6 +28,8 @@ class RootfsAuditTests(unittest.TestCase):
         make("opt/audiohub/src/audiohub/webserver.py",
              "from .status_bind import select_bind_address\\n"
              "ThreadingHTTPServer((select_bind_address(), 8765), Handler)\\n")
+        make("opt/audiohub/src/audiohub/firstboot_diag.py",
+             'OUTPUT_NAME = "AUDIOHUB-TEST-REPORT.json"')
         for name in ("index.html", "app.js", "styles.css"):
             make("opt/audiohub/web/" + name)
         data = {f"k{n}": "test" for n in range(30)}
@@ -39,6 +41,18 @@ class RootfsAuditTests(unittest.TestCase):
             link = root / link_path
             link.parent.mkdir(parents=True, exist_ok=True)
             link.symlink_to("../" + Path(unit_path).name)
+        diag_unit = "etc/systemd/system/audiohub-firstboot-diag.service"
+        make(diag_unit, (
+            "[Unit]\\nConditionPathIsMountPoint=/boot/firmware\\n"
+            "[Service]\\nExecStart=/usr/bin/python3 -m audiohub.firstboot_diag\\n"
+            "PrivateNetwork=yes\\nNoNewPrivileges=yes\\nProtectSystem=strict\\n"
+            "ReadWritePaths=/boot/firmware\\n"
+        ))
+        enabled = root / (
+            "etc/systemd/system/multi-user.target.wants/audiohub-firstboot-diag.service"
+        )
+        enabled.parent.mkdir(parents=True, exist_ok=True)
+        enabled.symlink_to("../audiohub-firstboot-diag.service")
         make("var/lib/systemd/linger/audiohub", "")
         for executable in audit.REQUIRED_BINARIES:
             make("usr/bin/" + executable)
@@ -73,6 +87,29 @@ class RootfsAuditTests(unittest.TestCase):
                 service.read_text() + "Environment=AUDIOHUB_UNSAFE_STATUS_LAN=YES\\n"
             )
             self.assertFalse(audit.inspect(root)["status_service_no_unsafe_lan_opt_in"])
+
+    def test_missing_offline_diag_agent_fails_image_audit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            (root / "opt/audiohub/src/audiohub/firstboot_diag.py").unlink()
+            self.assertFalse(audit.inspect(root)["source_firstboot_diag.py"])
+            self.assertFalse(audit.inspect(root)["offline_diag_no_network_clients"])
+
+    def test_offline_diag_must_not_enable_network(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            unit = root / "etc/systemd/system/audiohub-firstboot-diag.service"
+            unit.write_text(unit.read_text().replace("PrivateNetwork=yes", "PrivateNetwork=no"))
+            self.assertFalse(audit.inspect(root)["offline_diag_unit_sandboxed"])
+
+    def test_offline_diag_must_be_enabled_in_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            link = root / (
+                "etc/systemd/system/multi-user.target.wants/audiohub-firstboot-diag.service"
+            )
+            link.unlink()
+            self.assertFalse(audit.inspect(root)["offline_diag_enabled"])
 
     def test_valid_synthetic_rootfs_passes(self):
         with tempfile.TemporaryDirectory() as tmp:

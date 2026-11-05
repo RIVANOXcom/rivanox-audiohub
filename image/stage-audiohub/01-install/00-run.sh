@@ -10,6 +10,7 @@ install -d -m755 "${ROOTFS_DIR}/opt/audiohub/src" \
 cp -a files/src/audiohub "${ROOTFS_DIR}/opt/audiohub/src/"
 cp -a files/web/. "${ROOTFS_DIR}/opt/audiohub/web/"
 cp files/systemd/audiohub-bluetooth.service "${ROOTFS_DIR}/etc/systemd/system/"
+cp files/systemd/audiohub-firstboot-diag.service "${ROOTFS_DIR}/etc/systemd/system/"
 cp files/systemd/audiohub-runtime.service "${ROOTFS_DIR}/etc/systemd/user/"
 cp files/systemd/audiohub-status-web.service "${ROOTFS_DIR}/etc/systemd/user/"
 ln -sfn ../audiohub-runtime.service \
@@ -22,6 +23,7 @@ on_chroot <<'CHROOT'
 set -e
 systemctl enable bluetooth.service
 systemctl enable audiohub-bluetooth.service
+systemctl enable audiohub-firstboot-diag.service
 install -d -o audiohub -g audiohub -m700 /home/audiohub/.config
 PYTHONPATH=/opt/audiohub/src runuser -u audiohub -- python3 -m audiohub.eq_setup
 CHROOT
