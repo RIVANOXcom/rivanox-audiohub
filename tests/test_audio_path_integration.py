@@ -94,7 +94,7 @@ class AudioPathTests(unittest.TestCase):
     def test_rejects_unsupported_or_injected_capture_targets(self):
         for name, channel in (
             ("bluez_input.A;touch /tmp/x", "music"),
-            ("bluez_input.first", "laptop"),
+            ("bluez_input.first", "unknown"),
             ("alsa_output.usb-Edifier", "music"),
             ("bluez_input." + "A"*200, "music"),
             (None, "music"),
