@@ -109,3 +109,16 @@ misrepresented as limitations of GNU AGPL-3.0.
 **Disposition:** MODEL C IS THE OWNER'S COMMERCIAL DIRECTION,
 BUT CURRENT EFFECTIVE REPOSITORY LICENSE REMAINS AGPL-3.0-only
 UNTIL CHAIN-OF-TITLE, LEGAL REVIEW AND EXPLICIT CHANGE ARE COMPLETED.
+
+## Third-party technical follow-up (2026-11-05)
+
+[Detailed source and binary review](THIRD-PARTY-REVIEW-2026-11-05.md):
+AudioHub Python imports are largely standard library plus D-Bus and
+PyGObject; checked UI uses local JavaScript/CSS. The Scream test receiver
+appears implemented in the AudioHub tree, with no bundled Windows driver,
+but independent code provenance/similarity is **not** proven. The real
+PR #34 ARM64 build [42092547313](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42092547313)
+recorded 689 packages / 631 copyright hashes / 58 unresolved copyright
+paths, then **FAILED** at missing `deploy/ROOTFS-PACKAGES.json`.
+No inventory-containing test ZIP or legal sign-off resulted. Human
+license review and corrected image export remain mandatory.
