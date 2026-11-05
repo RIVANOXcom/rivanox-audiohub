@@ -31,7 +31,7 @@ SERVICES = {
         "python3 -m audiohub.webserver",
     ),
 }
-REQUIRED_BINARIES = ("python3", "pw-dump", "pw-loopback", "wpctl", "bluetoothctl")
+REQUIRED_BINARIES = ("python3", "pw-dump", "pw-loopback", "pw-cat", "wpctl", "bluetoothctl")
 
 
 def inspect(root: Path) -> dict[str, bool]:
@@ -40,7 +40,7 @@ def inspect(root: Path) -> dict[str, bool]:
         return {"rootfs_exists": False}
     checks: dict[str, bool] = {}
     source = root / "opt/audiohub/src/audiohub"
-    for name in ("__init__.py", "runtime.py", "pairing.py", "mixer.py", "webserver.py", "status_bind.py", "firstboot_diag.py"):
+    for name in ("__init__.py", "runtime.py", "pairing.py", "mixer.py", "webserver.py", "status_bind.py", "firstboot_diag.py", "network_laptop.py", "network_buffer.py"):
         checks["source_" + name] = (source / name).is_file()
     # Build-time guard: the alpha status UI is unauthenticated, so the
     # installed image must never bind to all interfaces by default.
@@ -151,6 +151,50 @@ def inspect(root: Path) -> dict[str, bool]:
         )
     except OSError:
         checks["conservative_mix_gain_installed"] = False
+    # An unauthenticated legacy LAN PCM receiver may be shipped as source
+    # ONLY for deliberate bench testing. It must never bind a socket or
+    # register a service during image boot. This deliberately does not
+    # authorize the Windows sender for a consumer release.
+    try:
+        laptop_source = (source / "network_laptop.py").read_text()
+        buffer_source = (source / "network_buffer.py").read_text()
+        checks["laptop_manual_receiver_packaged"] = all(
+            token in laptop_source for token in (
+                'TARGET = "audiohub.laptop"',
+                '"--target=" + TARGET',
+                "validate_options(sender_ip, bind_ip, port, unsafe_lan_test)",
+                'parser.add_argument("--unsafe-lan-test", action="store_true"',
+                '"10.0.0.0/8"',
+            )
+        ) and all(
+            token in buffer_source for token in (
+                "MAX_BUFFER_PACKETS = 16",
+                "MAX_PCM_PACKET_BYTES = 1152",
+                "self._packets.popleft()",
+            )
+        )
+    except OSError:
+        checks["laptop_manual_receiver_packaged"] = False
+    systemd_paths = (
+        root / "etc/systemd/system", root / "etc/systemd/user",
+    )
+    try:
+        service_files = [
+            file for folder in systemd_paths if folder.is_dir()
+            for file in folder.rglob("*.service") if file.is_file()
+        ]
+        checks["laptop_receiver_not_autostarted"] = (
+            bool(service_files)
+            and not any(
+                "audiohub-laptop" in file.name
+                or "audiohub-network" in file.name
+                or "audiohub.network_laptop" in file.read_text(errors="replace")
+                or "--unsafe-lan-test" in file.read_text(errors="replace")
+                for file in service_files
+            )
+        )
+    except OSError:
+        checks["laptop_receiver_not_autostarted"] = False
     for name in ("index.html", "app.js", "styles.css"):
         checks["web_" + name] = (root / "opt/audiohub/web" / name).is_file()
     base_keys = None
