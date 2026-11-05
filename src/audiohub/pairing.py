@@ -44,7 +44,7 @@ class PairingAgent(dbus.service.Object):
     def __init__(self, bus):
         super().__init__(bus, PATH)
         self.bus = bus
-        self.deadline = time.monotonic() + BOOT_WINDOW
+        self.deadline = float(BOOT_WINDOW)  # Linux monotonic uptime, independent of service restart
         self.pending_authorizations = {}
         mgr = dbus.Interface(bus.get_object("org.bluez", "/org/bluez"), "org.bluez.AgentManager1")
         mgr.RegisterAgent(PATH, "NoInputNoOutput")
