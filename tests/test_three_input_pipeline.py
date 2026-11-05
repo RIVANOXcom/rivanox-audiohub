@@ -75,7 +75,7 @@ class ThreeInputIntegrationTests(unittest.TestCase):
             {c.args[0][-1] for c in spawn.call_args_list},
             {"audiohub.music", "audiohub.tablet"},
         )
-        self.assertEqual(network_laptop.player_command()[8], "--target=audiohub.laptop")
+        self.assertEqual(network_laptop.player_command()[7], "--target=audiohub.laptop")
         self.assertTrue(all(
             "audiohub.laptop" not in str(c.args[0]) for c in spawn.call_args_list
         ))
