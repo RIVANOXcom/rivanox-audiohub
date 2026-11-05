@@ -154,9 +154,9 @@ class AudioPathTests(unittest.TestCase):
         self.assertEqual(launch.call_count, 2)
         second.alive = False
         s._route([self.src()], {"audiohub.music": 21}, now=7)
-        s._route([self.src()], {"audiohub.music": 21}, now=17)
+        s._route([self.src()], {"audiohub.music": 21}, now=16)
         self.assertEqual(launch.call_count, 2)
-        s._route([self.src()], {"audiohub.music": 21}, now=67)
+        s._route([self.src()], {"audiohub.music": 21}, now=17)
         self.assertEqual(launch.call_count, 3)
 
     @mock.patch("audiohub.runtime.subprocess.Popen", side_effect=OSError("stream failed"))
@@ -196,7 +196,7 @@ class AudioPathTests(unittest.TestCase):
         })
         with mock.patch("audiohub.runtime.atomic_json") as write:
             s._assign([self.src(PHONE)])
-        self.assertEqual(s.assignments, {PHONE2: "music"})
+        self.assertEqual(s.assignments, {PHONE2: "music", PHONE: "tablet"})
         write.assert_called_once()
 
     def test_capped_exponential_failure_delays(self):
