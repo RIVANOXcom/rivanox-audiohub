@@ -23,6 +23,7 @@ PORT = 4010
 MAX_PCM = 1152
 HEADER_SIZE = 5
 HEALTH_CHECK_SECONDS = 3.0
+ROUTE_POLICY_CHECK_SECONDS = 1.0
 IDLE_SECONDS = 5.0
 # Only explicit local IPv4 host addresses are allowed for manual opt-in tests.
 # ipaddress.is_private alone also includes link-local/special ranges.
@@ -152,6 +153,7 @@ def serve(sender_ip, bind_ip, port, *, unsafe_lan_test=False, prefill_packets=1,
     retry_after = 0.0
     last_written_at = None
     next_health_check = 0.0
+    next_policy_check = 0.0
     next_report_at = None
 
     def stop_player():
@@ -182,8 +184,10 @@ def serve(sender_ip, bind_ip, port, *, unsafe_lan_test=False, prefill_packets=1,
                 now = time.monotonic()
                 # Do not keep playing into a stale input when the operator
                 # changes the manual LAN slot. Exit and require a fresh opt-in.
-                if lan_target() != target:
-                    raise RuntimeError("LAN route changed; restart isolated test receiver")
+                if now >= next_policy_check:
+                    next_policy_check = now + ROUTE_POLICY_CHECK_SECONDS
+                    if lan_target() != target:
+                        raise RuntimeError("LAN route changed; restart isolated test receiver")
                 if next_report_at is None:
                     next_report_at = now + 60.0
                 report(now)
