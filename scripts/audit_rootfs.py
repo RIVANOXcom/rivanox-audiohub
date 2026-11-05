@@ -103,6 +103,33 @@ def inspect(root: Path) -> dict[str, bool]:
         checks["offline_diag_unit_sandboxed"] = False
         checks["offline_diag_enabled"] = False
         checks["offline_diag_no_network_clients"] = False
+    # A2DP must be routed into the two managed EQ sinks, not bypassed
+    # through WirePlumber's default phone-as-playback behavior.
+    try:
+        bluez_config = (
+            root / "etc/wireplumber/wireplumber.conf.d/90-audiohub.conf"
+        ).read_text()
+        runtime_source = (source / "runtime.py").read_text()
+        checks["bluetooth_input_role_configured"] = all(
+            needle in bluez_config for needle in (
+                "bluez5.roles = [ a2dp_sink ]",
+                'node.name = "~bluez_input.*"',
+                "bluez5.media-source-role = input",
+                "monitor.bluez.rules = [",
+            )
+        )
+        checks["managed_eq_routing_and_usb_gate"] = all(
+            needle in runtime_source for needle in (
+                '("music", "tablet")',
+                '"--capture", source',
+                '"--playback", "audiohub." + channel',
+                'usb_ready = bool(selected and selected.returncode == 0)',
+                'self._route(sources, sinks if usb_ready else {})',
+            )
+        )
+    except OSError:
+        checks["bluetooth_input_role_configured"] = False
+        checks["managed_eq_routing_and_usb_gate"] = False
     for name in ("index.html", "app.js", "styles.css"):
         checks["web_" + name] = (root / "opt/audiohub/web" / name).is_file()
     base_keys = None

@@ -21,6 +21,19 @@ class RootfsAuditTests(unittest.TestCase):
             file.write_text(content)
         for name in ("__init__.py", "runtime.py", "pairing.py", "mixer.py"):
             make("opt/audiohub/src/audiohub/" + name)
+        make("opt/audiohub/src/audiohub/runtime.py", "\\n".join((
+            '("music", "tablet")',
+            '"--capture", source',
+            '"--playback", "audiohub." + channel',
+            'usb_ready = bool(selected and selected.returncode == 0)',
+            'self._route(sources, sinks if usb_ready else {})',
+        )))
+        make("etc/wireplumber/wireplumber.conf.d/90-audiohub.conf", "\\n".join((
+            "bluez5.roles = [ a2dp_sink ]",
+            'node.name = "~bluez_input.*"',
+            "bluez5.media-source-role = input",
+            "monitor.bluez.rules = [",
+        )))
         make("opt/audiohub/src/audiohub/status_bind.py",
              'LOOPBACK = "127.0.0.1"\\n'
              'values.get("AUDIOHUB_STATUS_BIND_IP", LOOPBACK)\\n'
@@ -110,6 +123,31 @@ class RootfsAuditTests(unittest.TestCase):
             )
             link.unlink()
             self.assertFalse(audit.inspect(root)["offline_diag_enabled"])
+
+    def test_missing_bluetooth_input_role_blocks_image_export(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            conf = root / "etc/wireplumber/wireplumber.conf.d/90-audiohub.conf"
+            conf.write_text(conf.read_text().replace(
+                "bluez5.media-source-role = input", "bluez5.media-source-role = playback"
+            ))
+            self.assertFalse(audit.inspect(root)["bluetooth_input_role_configured"])
+
+    def test_missing_usb_gate_blocks_image_export(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            source = root / "opt/audiohub/src/audiohub/runtime.py"
+            source.write_text(source.read_text().replace(
+                'self._route(sources, sinks if usb_ready else {})',
+                'self._route(sources, sinks)'
+            ))
+            self.assertFalse(audit.inspect(root)["managed_eq_routing_and_usb_gate"])
+
+    def test_missing_wireplumber_config_blocks_image_export(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            (root / "etc/wireplumber/wireplumber.conf.d/90-audiohub.conf").unlink()
+            self.assertFalse(audit.inspect(root)["bluetooth_input_role_configured"])
 
     def test_valid_synthetic_rootfs_passes(self):
         with tempfile.TemporaryDirectory() as tmp:

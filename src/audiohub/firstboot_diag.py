@@ -64,6 +64,9 @@ def sample(runtime_path, user_id, *, now=None, controller_present=False):
         return {
             "runtime_status": "unavailable_or_stale",
             "usb_audio_detected": False,
+            "usb_audio_route_ready": False,
+            "route_start_failures": 0,
+            "output_switch_failures": 0,
             "bluetooth_audio_sources": 0,
             "active_audio_routes": 0,
             "virtual_audio_channels": 0,
@@ -76,6 +79,9 @@ def sample(runtime_path, user_id, *, now=None, controller_present=False):
     return {
         "runtime_status": "recent",
         "usb_audio_detected": data.get("usb_output") is True,
+        "usb_audio_route_ready": data.get("usb_route_ready") is True,
+        "route_start_failures": _bounded(data.get("route_start_failures"), 999),
+        "output_switch_failures": _bounded(data.get("output_switch_failures"), 999),
         "bluetooth_audio_sources": _bounded(data.get("bluetooth_source_count"), 2),
         "active_audio_routes": _bounded(data.get("active_routes"), 3),
         "virtual_audio_channels": len(set(

@@ -1,66 +1,110 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-"""Safe recognition of a USB speaker and Bluetooth PipeWire sources."""
+"""Fail-closed PipeWire discovery for USB playback and A2DP inputs.
+
+No discovery result constitutes device ownership or a physical sound test.
+"""
 from __future__ import annotations
 
 import json
 import re
 
+_MAC = re.compile(r"(?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}\Z")
+_BLUEZ_NAME = re.compile(r"bluez_input\.([0-9A-Fa-f_]{17})(?:\.[a-zA-Z0-9_.:-]{1,32})?\Z")
+_CHANNEL_NAMES = frozenset(("audiohub.music", "audiohub.laptop", "audiohub.tablet"))
+
 
 def pipewire_nodes(raw):
     try:
         data = json.loads(raw) if isinstance(raw, str) else raw
-    except (TypeError, json.JSONDecodeError):
+    except (TypeError, ValueError):
         return []
     if not isinstance(data, list):
         return []
-    return [obj for obj in data if isinstance(obj, dict) and obj.get("type") == "PipeWire:Interface:Node"]
+    return [
+        obj for obj in data
+        if isinstance(obj, dict) and obj.get("type") == "PipeWire:Interface:Node"
+    ]
 
 
 def props(node):
-    return (node.get("info") or {}).get("props") or {}
+    if not isinstance(node, dict):
+        return {}
+    info = node.get("info")
+    if not isinstance(info, dict):
+        return {}
+    fields = info.get("props")
+    return fields if isinstance(fields, dict) else {}
+
+
+def _id(node):
+    ident = node.get("id") if isinstance(node, dict) else None
+    return ident if type(ident) is int and 0 <= ident <= 2**31 - 1 else None
 
 
 def choose_usb_output(nodes):
-    """Prefer matching Edifier USB; decline ambiguous unrelated outputs."""
+    """Select exactly one Edifier or the sole unambiguous USB audio output."""
     sinks = []
     for item in nodes:
         value = props(item)
-        if value.get("media.class") != "Audio/Sink":
+        if value.get("media.class") != "Audio/Sink" or _id(item) is None:
             continue
-        name = str(value.get("node.name", ""))
-        if not name.startswith("alsa_output.usb-"):
+        name = value.get("node.name")
+        if type(name) is not str or not name.startswith("alsa_output.usb-"):
             continue
         sinks.append(item)
     matching = [
         item for item in sinks
-        if "edifier" in " ".join(str(props(item).get(k, "")) for k in
-            ("node.name", "node.description", "device.product.name")).lower()
+        if "edifier" in " ".join(
+            str(props(item).get(k, ""))[:128]
+            for k in ("node.name", "node.description", "device.product.name")
+        ).lower()
     ]
     if len(matching) == 1:
         return matching[0]
+    if len(matching) > 1:
+        return None
+    # Generic USB speakers can identify as "USB Audio Device"; only select
+    # them when there is no competing USB sink. HDMI is never a fallback.
     return sinks[0] if len(sinks) == 1 else None
 
 
 def bluetooth_sources(nodes):
-    sources = []
+    """Recognize only actual A2DP-style BlueZ source nodes with valid MACs.
+
+    Unknown names or inconsistent addresses are ignored rather than treated
+    as new pairing candidates. The MAC is kept only inside the local process.
+    """
+    result = []
+    seen = set()
     for item in nodes:
         value = props(item)
-        name = str(value.get("node.name", ""))
-        if value.get("media.class") != "Audio/Source" or not name.startswith("bluez_input."):
+        name = value.get("node.name")
+        if (value.get("media.class") != "Audio/Source"
+                or type(name) is not str or len(name) > 128
+                or _id(item) is None):
             continue
-        address = value.get("api.bluez5.address") or value.get("device.address")
-        if not address:
-            match = re.search(r"bluez_input\.([0-9A-Fa-f_]{17})", name)
-            address = match.group(1).replace("_", ":") if match else name
-        sources.append({"name": name, "address": str(address).upper(), "id": item.get("id")})
-    return sources
+        match = _BLUEZ_NAME.fullmatch(name)
+        if match is None:
+            continue
+        name_mac = match.group(1).replace("_", ":").upper()
+        property_mac = value.get("api.bluez5.address") or value.get("device.address")
+        if property_mac is not None:
+            if (type(property_mac) is not str or _MAC.fullmatch(property_mac) is None
+                    or property_mac.upper() != name_mac):
+                continue
+        if name_mac in seen:
+            continue
+        seen.add(name_mac)
+        result.append({"name": name, "address": name_mac, "id": item["id"]})
+    return result
 
 
 def virtual_sinks(nodes):
     found = {}
     for item in nodes:
         value = props(item)
-        name = str(value.get("node.name", ""))
-        if value.get("media.class") == "Audio/Sink" and name.startswith("audiohub."):
-            found[name] = item.get("id")
+        name = value.get("node.name")
+        ident = _id(item)
+        if value.get("media.class") == "Audio/Sink" and name in _CHANNEL_NAMES and ident is not None:
+            found[name] = ident
     return found

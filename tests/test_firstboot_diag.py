@@ -188,6 +188,33 @@ class DiagnosticTests(unittest.TestCase):
         self.assertEqual(report["snapshots"][1]["active_audio_routes"], 1)
         self.assertFalse(report["hardware_accepted"])
 
+    def test_usb_presence_is_distinct_from_successful_audio_routing(self):
+        self.runtime_write({
+            "updated_at": 100, "usb_output": True,
+            "usb_route_ready": False, "route_start_failures": 12,
+            "output_switch_failures": 3,
+            "wifi_password": "private-test-only",
+        })
+        result = diag.sample(self.runtime, self.uid, now=101)
+        self.assertTrue(result["usb_audio_detected"])
+        self.assertFalse(result["usb_audio_route_ready"])
+        self.assertEqual(result["route_start_failures"], 12)
+        self.assertEqual(result["output_switch_failures"], 3)
+        self.assertNotIn("private-test-only", json.dumps(result))
+
+    def test_audio_failure_counters_are_bounded_and_type_checked(self):
+        self.runtime_write({
+            "updated_at": 100, "usb_output": 1,
+            "usb_route_ready": "yes",
+            "route_start_failures": 99999,
+            "output_switch_failures": True,
+        })
+        result = diag.sample(self.runtime, self.uid, now=101)
+        self.assertFalse(result["usb_audio_detected"])
+        self.assertFalse(result["usb_audio_route_ready"])
+        self.assertEqual(result["route_start_failures"], 999)
+        self.assertEqual(result["output_switch_failures"], 0)
+
     def test_diagnostics_install_uses_only_readonly_runtime_and_boot_file(self):
         script = (ROOT / "src/audiohub/firstboot_diag.py").read_text()
         service = (ROOT / "image/stage-audiohub/01-install/files/systemd"
