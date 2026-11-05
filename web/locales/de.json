@@ -34,5 +34,14 @@
   "security": "Sichere Ersteinrichtung in Entwicklung",
   "copyright": "Open-Source-Audiomixer für Raspberry Pi.",
   "speakerConnected": "USB-Lautsprecher erkannt",
-  "speakerDisconnected": "USB-Lautsprecher nicht erkannt"
+  "speakerDisconnected": "USB-Lautsprecher nicht erkannt",
+  "input1": "Eingang 1",
+  "input2": "Eingang 2",
+  "input3": "Eingang 3",
+  "inputName": "Eingangsname",
+  "sourceHint1": "Bluetooth-Eingang · Quelle erst nach sicherer Einrichtung zuordnen",
+  "sourceHint2": "Manueller LAN-Testeingang · standardmäßig deaktiviert",
+  "sourceHint3": "Zweiter Bluetooth-Eingang · auf echter Hardware noch ungeprüft",
+  "invalidInputName": "Eindeutigen Namen wählen (1–32 Zeichen, keine Steuer- oder HTML-Zeichen).",
+  "previewNamesOnly": "Nur in diesem Browser gespeichert. Die Gerätezuteilung bleibt unverändert."
 }
