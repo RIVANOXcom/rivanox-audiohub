@@ -43,7 +43,7 @@ class RootfsAuditTests(unittest.TestCase):
         )))
         # Minimum installed runtime private-state read/write safety markers.
         runtime_path = root / "opt/audiohub/src/audiohub/runtime.py"
-        runtime_path.write_text(runtime_path.read_text() + "\\n".join((
+        runtime_path.write_text(runtime_path.read_text() + "\n".join((
             "MAX_RUNTIME_JSON_BYTES = 32 * 1024",
             "def _private_parent_fd(path, *, create=False):",
             "os.O_NOFOLLOW", "os.O_NONBLOCK",
