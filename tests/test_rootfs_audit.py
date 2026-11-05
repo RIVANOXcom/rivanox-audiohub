@@ -46,7 +46,10 @@ class RootfsAuditTests(unittest.TestCase):
             '\\neffective_master_gain(self.settings)\\n"effective_master_percent"\\n'
             'load_routes(CONFIG)\\nplan["mode"] == "manual"\\n'
             'channel != getattr(self, "route_plan", default_routes())["lan_slot"]\\n'
-            'self.route_policy_valid = False\\n')
+            'self.route_policy_valid = False\\n'
+            'summarize_links(result.stdout\\n'
+            '"eq_output_usb_direct_links"\\n'
+            '"pipewire_links_inspected"\\n')
         make("opt/audiohub/src/audiohub/network_laptop.py", "\\n".join((
             'TARGET = "audiohub.laptop"',
             '"--target=" + target',
@@ -71,6 +74,15 @@ class RootfsAuditTests(unittest.TestCase):
             'if slot in used:',
             'def lan_target(directory=None):',
         )))
+        make("opt/audiohub/src/audiohub/audio_graph.py", "\\n".join((
+            "def summarize_links(raw):",
+            '"PipeWire:Interface:Link"',
+            '"output-node-id"',
+            '"input-node-id"',
+            '"release_ready": False',
+        )))
+        make("opt/audiohub/src/audiohub/hardware_preflight.py",
+             "from .audio_graph import summarize_links")
         make("opt/audiohub/src/audiohub/input_profiles.py", "\\n".join((
             'SLOTS = ("music", "laptop", "tablet")',
             "MAX_NAME_CHARS = 32",
@@ -86,7 +98,9 @@ class RootfsAuditTests(unittest.TestCase):
              "ThreadingHTTPServer((select_bind_address(), 8765), Handler)\\n"
              "def do_POST(self):\\nRead-only preview\\n")
         make("opt/audiohub/src/audiohub/firstboot_diag.py",
-             'OUTPUT_NAME = "AUDIOHUB-TEST-REPORT.json"')
+             'OUTPUT_NAME = "AUDIOHUB-TEST-REPORT.json"\\n'
+             '"pipewire_links_inspected"\\n'
+             '"eq_usb_direct_links"')
         for name in ("index.html", "app.js", "styles.css"):
             make("opt/audiohub/web/" + name)
         make("opt/audiohub/web/app.js", "\\n".join((
@@ -302,6 +316,31 @@ class RootfsAuditTests(unittest.TestCase):
             self.assertFalse(
                 audit.inspect(root)["source_routing_isolated_and_fail_closed"]
             )
+
+    def test_missing_graph_source_blocks_image_export(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            (root / "opt/audiohub/src/audiohub/audio_graph.py").unlink()
+            self.assertFalse(audit.inspect(root)["privacy_safe_pipewire_link_observation"])
+            self.assertFalse(audit.inspect(root)["source_audio_graph.py"])
+
+    def test_disabling_actual_link_inspection_blocks_export(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            graph = root / "opt/audiohub/src/audiohub/audio_graph.py"
+            graph.write_text(graph.read_text().replace(
+                '"output-node-id"', '"node.name"'
+            ))
+            self.assertFalse(audit.inspect(root)["privacy_safe_pipewire_link_observation"])
+
+    def test_missing_sd_link_metrics_blocks_export(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            file = root / "opt/audiohub/src/audiohub/firstboot_diag.py"
+            file.write_text(file.read_text().replace(
+                '"eq_usb_direct_links"', '"hardware_passed"'
+            ))
+            self.assertFalse(audit.inspect(root)["privacy_safe_pipewire_link_observation"])
 
     def test_valid_synthetic_rootfs_passes(self):
         with tempfile.TemporaryDirectory() as tmp:
