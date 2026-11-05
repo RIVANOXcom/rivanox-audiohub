@@ -299,3 +299,5 @@ restricted Model C feature publication**. Check next Draft PR HEAD
 and source/native ARM64 status before claiming completion. Do not
 change `main/LICENSE`, publish a stable image, merge unrelated PRs,
 or claim legal/physical hardware acceptance.
+
+**2026-11-05 verified source security CI:** follow-up [Draft PR #43](https://github.com/RIVANOXcom/rivanox-audiohub/pull/43), commit `d4fb934ad4ed15cac20a79799d475b2956b94769`, [source run #42111311812](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42111311812) **SUCCESS, 375 Python tests**. Corresponding independent native ARM64 run #42111297565 was submitted and must be checked at that exact SHA before asserting build/test ZIP success. The canonical resume and machine-readable snapshot now list Draft PR #43. Never conflate source CI and Pi-native image validation.
