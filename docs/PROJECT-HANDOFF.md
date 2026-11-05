@@ -148,6 +148,18 @@ execution has not been observed.
   All were **validation_required** at the previous checkpoint;
   verify live status. Add Workbench evidence IDs only after actual save.
 
+## 2026-11-05 commercial strategy and distribution continuation
+
+**New separate development branch:** `wd-papa-5b2e6939-licensing-sustainability-release-checks-20261105`, based on the exact previous Draft PR #30 head `8ab26da637604723e4c29f114cc93a478e0d02f0` (the earlier chain #6 → #20 → #21 → #22 → #23 → #24 → #25 → #26 → #29 → #30 is unmerged). Keep every parent unchanged. Latest source and CI proof must be verified on this new branch/PR; no automatic merge or new Release.
+
+The **LICENSE itself is still GNU AGPL-3.0-only**, granting commercial usage without a mandatory revenue share. Existing `docs/COMMERCIAL-LICENSING.md` already anticipated optional commercial licensing for owned rights; expanded explanation now covers legal ownership, independent services, community contributions, third-party packages, irreversible previously issued AGPL grants and voluntary donations. There is NO signed commercial contract or set fee. Sponsorship link `ko_fi: RIVANOX` already exists in GitHub main; new responsive, prominent `web/index.html` support call-to-action and all five locales explicitly disclaim paywalls and donation-as-license. No payment processing is embedded in AudioHub. README now highlights same optional support and links the latest verified source/image.
+
+**Latest prior verified experimental ARM64 test image:** Draft PR #30 exact SHA `8ab26da637604723e4c29f114cc93a478e0d02f0`, source [42086920486](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42086920486) SUCCESS **226 tests**, ARM64 [42086909475](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42086909475) SUCCESS **55/55 real rootfs pre-export checks**, checksum XZ+manifest and uploaded artifact [#13443339137](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42086909475/artifacts/13443339137) **606,222,225-byte ZIP, expires 2026-12-05**. The artifact contains PR #30 graph diagnostics, NOT new funding/release-audit UI changes.
+
+**New code in this branch:** `scripts/release_bundle_audit.py` validates strict three-file temporary preview ZIP, image SHA256, XZ decompression, commit and pi-gen manifest provenance, no extra files or forged approval flags, returns immutable `public_release_ready=false`. Integrated into experimental ARM64 CI before preview artifact upload. Fifteen adversarial Python tests plus new five-locale/readme policy tests. `.github/workflows/publish-image.yml` remains **blocked** until real Pi4+Edifier audio, phone secure ownership, 3-way mix, legal/rootfs compliance and owner/CEO publication authorization. No official Releases exist; don't announce a new image until new branch's full native ARM64 CI/ZIP upload has succeeded.
+
+**If chat resets:** verify the newest PR's exact head SHA, CI source run, and any ARM64 build run and artifact. Update canonical docs only after observed result. For monetization: confirm Ko-fi payout operationally and enable the GitHub Sponsor UI *as owner* if required; negotiate specific commercial licenses only with verified RIVANOX code ownership and third-party counsel. Continue Pi4 hardware acceptance + safe phone-owner provisioning in separate owner-verified branches. User requires persistent GitHub updates but not an unreviewed public Release.
+
 **Release-go rule:** source CI is insufficient; image CI is insufficient;
 only human-authorized real Pi hardware, owner security, compliance,
 reproducible build provenance and release approval may close the gates.
