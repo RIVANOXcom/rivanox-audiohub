@@ -124,7 +124,8 @@ def inspect(root: Path) -> dict[str, bool]:
                 '"--capture", source',
                 '"--playback", "audiohub." + channel',
                 'usb_ready = bool(selected and selected.returncode == 0)',
-                'self._route(sources, sinks if usb_ready else {})',
+                'self._route(sources if self.route_policy_valid else [],',
+                'sinks if (usb_ready and self.route_policy_valid) else {})',
             )
         )
     except OSError:
