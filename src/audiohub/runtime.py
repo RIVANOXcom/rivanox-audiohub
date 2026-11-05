@@ -15,6 +15,7 @@ from pathlib import Path
 
 from .discovery import bluetooth_sources, choose_usb_output, pipewire_nodes, virtual_sinks
 from .mixer import CHANNELS, defaults, effective_master_gain, patch_settings, volume_commands
+from .source_routes import defaults as default_routes, load as load_routes
 
 CONFIG = Path.home() / ".config" / "audiohub"
 SETTINGS = CONFIG / "settings.json"
@@ -63,7 +64,7 @@ def backoff_seconds(failures):
 def pipewire_loopback_args(source, channel):
     """Explicit capture source and EQ playback target, never a default sink."""
     if (type(source) is not str or _SOURCE_NAME.fullmatch(source) is None
-            or channel not in ("music", "tablet")):
+            or channel not in CHANNELS):
         raise ValueError("Unsupported Bluetooth capture or audio channel")
     return [
         "pw-loopback", "--name", "audiohub-" + channel,
@@ -82,17 +83,29 @@ class Supervisor:
         self.route_failures_total = 0
         self.output_switch_failures = 0
         self.last_default = None
+        self.route_plan = default_routes()
+        self.route_policy_valid = True
 
     def _assign(self, sources):
-        """Keep paired source assignments stable; never evict another source."""
+        """Bind Bluetooth only to permitted, non-LAN-reserved mixer slots.
+
+        Auto mode retains legacy stable assignments but never uses the
+        configured LAN input slot; manual mode admits only the explicitly
+        listed BT MACs. This source allowlist is NOT cryptographic pairing
+        or a replacement for owner authentication.
+        """
+        plan = getattr(self, "route_plan", default_routes())
+        lan = plan["lan_slot"]
+        allowed = tuple(slot for slot in CHANNELS if slot != lan)
+        if plan["mode"] == "manual":
+            self.assignments = dict(plan["bluetooth"])
+            return
         self.assignments = {
             address: channel
             for address, channel in self.assignments.items()
             if type(address) is str and _BLUETOOTH_MAC.fullmatch(address)
-            and channel in ("music", "tablet")
+            and channel in allowed
         }
-        # A corrupted on-disk mapping with duplicate channels must not
-        # let unrelated sources force two streams into the same EQ input.
         unique = {}
         assigned = set()
         for address, channel in sorted(self.assignments.items()):
@@ -106,7 +119,7 @@ class Supervisor:
             if (type(address) is not str or _BLUETOOTH_MAC.fullmatch(address) is None
                     or address in self.assignments):
                 continue
-            for channel in ("music", "tablet"):
+            for channel in allowed:
                 if channel not in assigned:
                     self.assignments[address] = channel
                     assigned.add(channel)
@@ -152,7 +165,7 @@ class Supervisor:
             target = "audiohub." + channel if channel else None
             if (type(address) is str and _BLUETOOTH_MAC.fullmatch(address)
                     and type(name) is str and _SOURCE_NAME.fullmatch(name)
-                    and channel in ("music", "tablet") and target in sinks
+                    and channel in CHANNELS and channel != getattr(self, "route_plan", default_routes())["lan_slot"] and target in sinks
                     and address not in desired and len(desired) < MAX_BT_INPUTS):
                 desired[address] = (name, target)
 
@@ -216,7 +229,21 @@ class Supervisor:
 
         sources = bluetooth_sources(nodes)
         sinks = virtual_sinks(nodes)
-        self._route(sources, sinks if usb_ready else {})
+        try:
+            plan = load_routes(CONFIG)
+            self.route_policy_valid = True
+        except (OSError, ValueError, TypeError, UnicodeError):
+            # A corrupt or unsafe route plan cannot silently restore
+            # automatic pairing and bind an unknown source.
+            plan = default_routes()
+            plan["mode"] = "manual"
+            self.route_policy_valid = False
+        prior = getattr(self, "route_plan", default_routes())
+        if prior["mode"] != plan["mode"] and plan["mode"] == "auto":
+            self.assignments = read_json(ASSIGNMENTS, {})
+        self.route_plan = plan
+        self._route(sources if self.route_policy_valid else [],
+                    sinks if (usb_ready and self.route_policy_valid) else {})
         try:
             state = patch_settings(defaults(), read_json(SETTINGS, self.settings))
             self.settings = state
@@ -232,6 +259,7 @@ class Supervisor:
         atomic_json(STATE, {
             "usb_output": bool(output),
             "usb_route_ready": usb_ready,
+            "route_policy_valid": self.route_policy_valid,
             # Bounded *requested gain* estimate, not measured sound or a limiter.
             "effective_master_percent": min(
                 100, max(0, round(100 * effective_master_gain(self.settings)))
