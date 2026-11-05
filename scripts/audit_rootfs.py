@@ -120,7 +120,7 @@ def inspect(root: Path) -> dict[str, bool]:
         )
         checks["managed_eq_routing_and_usb_gate"] = all(
             needle in runtime_source for needle in (
-                '["music", "tablet"]' if False else '("music", "tablet")',
+                '("music", "tablet")',
                 '"--capture", source',
                 '"--playback", "audiohub." + channel',
                 'usb_ready = bool(selected and selected.returncode == 0)',
