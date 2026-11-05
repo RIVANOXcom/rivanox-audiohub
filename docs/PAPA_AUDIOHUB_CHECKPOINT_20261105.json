@@ -63,14 +63,20 @@
       "base": "wd-papa-20261105-canonical-resume-source-rights",
       "head": "wd-papa-20261105-readonly-web-file-hardening",
       "verified_head_sha": null
+    },
+    {
+      "number": 44,
+      "base": "wd-papa-20261105-readonly-web-file-hardening",
+      "head": "wd-papa-20261105-runtime-state-atomic-security",
+      "verified_head_sha": null
     }
   ],
   "last_native_verified": {
-    "run_id": 42106833667,
-    "source_sha": "5eae1104469a1585db8368e1bef00b5de204fb68",
+    "run_id": 42111542474,
+    "source_sha": "9e92d95a539a6a8e54a2b433b0a6d9bcaf4fa975",
     "conclusion": "success",
-    "python_tests": 336,
-    "rootfs_checks_passed": 55,
+    "python_tests": 375,
+    "rootfs_checks_passed": 57,
     "installed_packages": 689,
     "architecture_counts": {
       "arm64": 538,
@@ -83,9 +89,9 @@
       "doc_alias_target_link": 8,
       "copyright_file_missing": 1
     },
-    "artifact_id": 13453052359,
+    "artifact_id": 13454668013,
     "artifact_unverified": true,
-    "artifact_expiry": "2026-12-05T20:56:59Z",
+    "artifact_expiry": "2026-12-05T21:27:00Z",
     "public_release_ready": false
   },
   "open_issues": [
@@ -134,7 +140,7 @@
   "latest_legacy_security_change": {
     "pr": 43,
     "defect": "Allowlisted web URLs used unbounded and symlink-following local-file reads",
-    "status": "code implemented, source CI PASS; independent native ARM64 must be verified at matching source SHA",
+    "status": "verified successful native ARM64 preview, NOT public release",
     "static_file_cap_bytes": 524288,
     "anonymized_status_json_cap_bytes": 32768,
     "all_path_components_nofollow": true,
@@ -142,11 +148,25 @@
     "physical_pi_security_accepted": false,
     "model_c_license_effective": false,
     "source_ci_verified": {
-      "run_id": 42111311812,
-      "commit_sha": "d4fb934ad4ed15cac20a79799d475b2956b94769",
+      "run_id": 42111552842,
+      "commit_sha": "9e92d95a539a6a8e54a2b433b0a6d9bcaf4fa975",
       "result": "success",
       "python_tests": 375
     },
-    "native_run_pending_validation": 42111297565
+    "native_run_pending_validation": null,
+    "native_run_verified": 42111542474
+  },
+  "next_runtime_state_security_change": {
+    "pr": 44,
+    "prior_defect": "Predictable .tmp filename and unbounded symlink-following private runtime JSON read/write",
+    "status": "new implementation in DRAFT, exact-head source and ARM64 CI not yet confirmed",
+    "max_json_bytes": 32768,
+    "nofollow_all_directory_path_components": true,
+    "random_exclusive_temporary_file": true,
+    "restrictive_mode_0600": true,
+    "explicit_owner_and_hardlink_validation": true,
+    "expected_rootfs_guard_count": 58,
+    "physical_device_accepted": false,
+    "model_c_effective": false
   }
 }

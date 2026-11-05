@@ -39,3 +39,19 @@ handler retains bounded nofollow reads. Automated source and image tests
 are necessary but are not proof of physically secure owner enrollment,
 network threat resistance, Pi4/Edifier sound, legal redistribution rights
 or GA readiness. Never expose the alpha web port on the public Internet.
+
+## Private runtime JSON persistence (2026-11-05 development)
+
+Historical AudioHub alpha `runtime.py` wrote user-assignment and status
+JSON through a predictable `.tmp` pathname and read JSON without a size
+or symlink guard. [Draft PR #44](https://github.com/RIVANOXcom/rivanox-audiohub/pull/44)
+changes this legacy AGPL path to open directories by non-symlinked
+file descriptors, require private owner permissions, bound input/output
+to 32KiB, reject special/hardlinked/foreign-owned targets, and publish
+only via 0600 randomly named exclusive atomic temp files plus fsync.
+A failed read falls back to safe defaults rather than accepting
+partially parsed or untrusted local configuration.
+
+The source and native ARM64 tests must be independently checked at the
+exact PR #44 SHA. These controls do not create owner enrollment, network
+authentication, firmware license permission or a stable device release.

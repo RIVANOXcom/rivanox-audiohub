@@ -9,6 +9,8 @@ from __future__ import annotations
 import json
 import os
 import re
+import secrets
+import stat
 import subprocess
 import time
 from pathlib import Path
@@ -40,21 +42,123 @@ def run(*args, timeout=8):
         return None
 
 
-def read_json(path, fallback):
+
+MAX_RUNTIME_JSON_BYTES = 32 * 1024
+
+
+def _private_parent_fd(path, *, create=False):
+    """Walk absolute parent directories with nofollow at every component.
+
+    The final storage directory must belong to the current unprivileged
+    audiohub user and be private (no group/other access). Intermediate
+    directories may be system-owned; never follow their symlinks.
+    """
+    path = Path(path)
+    if not path.is_absolute() or ".." in path.parts or not path.name:
+        raise ValueError("AudioHub state path must be an absolute safe path")
+    parent = path.parent
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
+    fd = os.open("/", flags)
     try:
-        value = json.loads(path.read_text())
+        for part in parent.parts[1:]:
+            try:
+                next_fd = os.open(part, flags, dir_fd=fd)
+            except FileNotFoundError:
+                if not create:
+                    raise
+                os.mkdir(part, 0o700, dir_fd=fd)
+                next_fd = os.open(part, flags, dir_fd=fd)
+            os.close(fd)
+            fd = next_fd
+        info = os.fstat(fd)
+        if (info.st_uid != os.geteuid()
+                or stat.S_IMODE(info.st_mode) & 0o077):
+            raise PermissionError("AudioHub storage directory must be user-owned and private")
+        result = fd
+        fd = None
+        return result
+    finally:
+        if fd is not None:
+            os.close(fd)
+
+
+def read_json(path, fallback):
+    """Read only one bounded, private regular JSON file, never symlinks."""
+    dirfd = None
+    filefd = None
+    try:
+        path = Path(path)
+        dirfd = _private_parent_fd(path)
+        filefd = os.open(
+            path.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK
+            | os.O_CLOEXEC, dir_fd=dirfd
+        )
+        st = os.fstat(filefd)
+        if (not stat.S_ISREG(st.st_mode) or st.st_nlink != 1
+                or st.st_uid != os.geteuid()
+                or stat.S_IMODE(st.st_mode) & 0o077
+                or not 0 < st.st_size <= MAX_RUNTIME_JSON_BYTES):
+            return fallback
+        raw = os.read(filefd, MAX_RUNTIME_JSON_BYTES + 1)
+        if len(raw) != st.st_size:
+            return fallback
+        value = json.loads(raw.decode("utf-8"))
         return value if isinstance(value, type(fallback)) else fallback
-    except (OSError, ValueError, TypeError):
+    except (OSError, ValueError, TypeError, UnicodeError):
         return fallback
+    finally:
+        if filefd is not None:
+            os.close(filefd)
+        if dirfd is not None:
+            os.close(dirfd)
 
 
 def atomic_json(path, data):
-    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    temporary = path.with_suffix(".tmp")
-    with temporary.open("w") as stream:
-        json.dump(data, stream, indent=2, sort_keys=True)
-    os.chmod(temporary, 0o600)
-    temporary.replace(path)
+    """Atomically write private state without predictable .tmp or symlinks.
+
+    A pre-existing symlink/nonregular/hardlinked destination is not silently
+    repaired. Writes use random exclusive temp names in an open directory
+    FD; the file and directory are fsynced before returning success.
+    """
+    path = Path(path)
+    raw = (json.dumps(data, indent=2, sort_keys=True, allow_nan=False)
+           + "\n").encode("utf-8")
+    if not 0 < len(raw) <= MAX_RUNTIME_JSON_BYTES:
+        raise ValueError("AudioHub state exceeds private storage limit")
+    dirfd = _private_parent_fd(path, create=True)
+    name = "." + path.name + "." + secrets.token_hex(12) + ".tmp"
+    tmpfd = None
+    try:
+        try:
+            prior = os.stat(path.name, dir_fd=dirfd, follow_symlinks=False)
+        except FileNotFoundError:
+            prior = None
+        if prior is not None and (
+                not stat.S_ISREG(prior.st_mode) or prior.st_nlink != 1
+                or prior.st_uid != os.geteuid()
+                or stat.S_IMODE(prior.st_mode) & 0o077):
+            raise PermissionError("Unsafe existing AudioHub state destination")
+        tmpfd = os.open(
+            name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
+            | os.O_CLOEXEC, 0o600, dir_fd=dirfd
+        )
+        # A restrictive process umask must not leave an unreadable state file.
+        os.fchmod(tmpfd, 0o600)
+        with os.fdopen(tmpfd, "wb") as stream:
+            tmpfd = None
+            stream.write(raw)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(name, path.name, src_dir_fd=dirfd, dst_dir_fd=dirfd)
+        os.fsync(dirfd)
+    finally:
+        if tmpfd is not None:
+            os.close(tmpfd)
+        try:
+            os.unlink(name, dir_fd=dirfd)
+        except FileNotFoundError:
+            pass
+        os.close(dirfd)
 
 
 def backoff_seconds(failures):

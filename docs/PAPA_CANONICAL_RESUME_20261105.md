@@ -209,5 +209,23 @@ future Model C license NOT EFFECTIVE; no private Model C repo verified
 qualified legal approval (issue #32); the upstream Raspberry Pi net-mods
 copyright/permission issue remains unresolved (#40).
 
+
+## K. Additional runtime state safety development — stacked Draft PR #44
+
+**Next child:** [Draft PR #44](https://github.com/RIVANOXcom/rivanox-audiohub/pull/44) on branch `wd-papa-20261105-runtime-state-atomic-security`, based on PR #43 exact baseline SHA
+`9e92d95a539a6a8e54a2b433b0a6d9bcaf4fa975`.
+
+**Parent PR #43 native evidence now VERIFIED:** [ARM64 run #42111542474](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42111542474) **SUCCESS**, source 375/375 Python tests, **57/57 actual Pi rootfs guards**, actual built OS package count 689, 680 copyright hashes and nine unresolved (eight linked doc chains + `raspberrypi-net-mods` absent expected file); strict XZ/SHA/provenance/bundle gate passed. Temporary non-release UNVERIFIED [artifact #13454668013](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42111542474/artifacts/13454668013), expires 2026-12-05. The public release-ready flag remains FALSE.
+
+**New verified-in-source defect addressed, NOT YET verified on native Pi image for PR #44:** `src/audiohub/runtime.py` previously used unbounded `Path.read_text()` for private settings, assignments and runtime JSON, and wrote with fixed-name `path.with_suffix(".tmp")`, `open("w")` following symlinks. Since local user-owned storage can contain altered symlinks or raceable files, this could read or overwrite unintended local files or consume excess memory. This is *local state security maintenance* of existing AGPL software, NOT a new Model C-only product feature.
+
+**Implementation:** `_private_parent_fd` traverses absolute path components using directory FDs and `O_NOFOLLOW`, requires private (no group/other) and correct owner for last directory; creates missing paths with restrictive permissions; `read_json` only opens nonlinked, regular, owner-only file with exactly one hard link, nonblocking and at most 32KiB; invalid values safely fall back. `atomic_json` serializes before writing, checks max 32KiB, rejects bad existing destinations, uses random `secrets.token_hex(12)` `O_CREAT|O_EXCL|O_NOFOLLOW` temp file and explicit mode 0600, `fsync` file and parent directory, `os.replace` atomically, and cleans up any leftover temporary file.
+
+**Source tests:** adds 17 adverse tests in `tests/test_runtime_recovery.py` for normal roundtrip, strict permissions, missing directories, symlinked ancestor/destination, stale predictable .tmp symlink, FIFO, hardlinks, untrusted modes, oversized/corrupt/wrong-type/NaN JSON and atomic replacements. `scripts/audit_rootfs.py` adds native package guard `runtime_private_state_nofollow_atomic` and 3 synthetic rootfs tests in `tests/test_rootfs_audit.py`. Expected actual Pi rootfs guard count rises from **57 to 58** if implemented and verified.
+
+**State at handoff writing:** Draft PR #44 created; precise CI and native ARM64 **NOT YET CONFIRMED**. Check current HEAD and source Actions runs, then run full native ARM64 on exact final SHA; do not state success until both finish. Update Workbench, PR comments and this runbook with observed outcomes, failures and SHA. Neither a source CI PASS nor a Pi image guard count proves physical audio/ownership security or legal rights.
+
+**Unchanged legal boundary:** `main` and recipients' AGPL-3.0-only rights remain; future Model C NOT EFFECTIVE, private owner repo `rivanox-audiohub-next` not accessible/verified, legal issue #32, rights issue #40, device test issue #2 and owner setup issue #37 remain OPEN. No merge to `main`, no release, no history rewrite.
+
 **END OF HANDOFF.** If a live run/PR contradicts this document, treat
 the live GitHub evidence as authoritative, reconcile and update this file.

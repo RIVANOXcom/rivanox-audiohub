@@ -143,13 +143,19 @@ class SourceRightsLedgerTests(unittest.TestCase):
         self.assertEqual(state["latest_legacy_security_change"]["static_file_cap_bytes"], 524288)
         self.assertEqual(state["latest_legacy_security_change"]["anonymized_status_json_cap_bytes"], 32768)
         self.assertTrue(state["latest_legacy_security_change"]["all_path_components_nofollow"])
+        self.assertEqual(state["last_native_verified"]["rootfs_checks_passed"], 57)
+        self.assertEqual(state["last_native_verified"]["run_id"], 42111542474)
+        self.assertFalse(state["next_runtime_state_security_change"]["model_c_effective"])
+        self.assertFalse(state["next_runtime_state_security_change"]["physical_device_accepted"])
+        self.assertEqual(state["next_runtime_state_security_change"]["expected_rootfs_guard_count"], 58)
+        self.assertTrue(state["next_runtime_state_security_change"]["random_exclusive_temporary_file"])
 
         self.assertEqual(state["last_native_verified"]["installed_packages"], 689)
         self.assertEqual(state["last_native_verified"]["copyright_paths_unresolved"], 9)
         self.assertFalse(state["last_native_verified"]["public_release_ready"])
         self.assertEqual(
             [item["number"] for item in state["draft_pr_chain"]],
-            [35, 36, 38, 39, 41, 42, 43],
+            [35, 36, 38, 39, 41, 42, 43, 44],
         )
 
     def test_primary_handoff_points_to_authoritative_resume(self):

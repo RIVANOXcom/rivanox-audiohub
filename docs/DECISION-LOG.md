@@ -33,6 +33,8 @@ These decisions capture user-confirmed requirements and current engineering arch
 
 | ADR-025 | Harden the legacy read-only status webserver against symlink escape and unbounded local-file reads, and reject unsafe static resources during Pi image packaging. | Engineering implementation in isolated subsequent draft, requires exact-head CI and ARM64 validation | Allowlist alone does not prevent filesystem symlink escape. Require per-component nofollow file opens, regular-file checks, small caps, stale health on invalid status and pre-export web-file checks. No owner authentication or general release approval is implied. |
 
+| ADR-026 | Harden existing AudioHub runtime status and local settings file persistence against predictable temporary-file/symlink attacks, hardlinks, special files and unbounded JSON. | Draft [PR #44](https://github.com/RIVANOXcom/rivanox-audiohub/pull/44); source/native validation required | Storage must be owned/private, directory-FD nofollow, regular 32KiB limited JSON, atomic O_EXCL random 0600 temp and fsync; preserve fail-closed routing and historical AGPL grants. No claim of physical Pi4/hardware acceptance or Model C legal eligibility. |
+
 ## Engineering observations (not product acceptance)
 
 - Source-level tests and policy checks have succeeded on GitHub Actions.
