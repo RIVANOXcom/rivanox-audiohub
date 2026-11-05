@@ -215,6 +215,30 @@ class DiagnosticTests(unittest.TestCase):
         self.assertEqual(result["route_start_failures"], 999)
         self.assertEqual(result["output_switch_failures"], 0)
 
+    def test_conservative_master_estimate_is_redacted_and_bounded(self):
+        self.runtime_write({
+            "updated_at": 101,
+            "usb_output": True,
+            "usb_route_ready": True,
+            "effective_master_percent": 33,
+            "ssid": "SECRET-WIFI",
+        })
+        report = diag.sample(self.runtime, self.uid, now=102)
+        self.assertEqual(report["effective_master_percent"], 33)
+        self.assertNotIn("SECRET-WIFI", json.dumps(report))
+        self.runtime_write({
+            "updated_at": 101, "effective_master_percent": 9000,
+        })
+        self.assertEqual(
+            diag.sample(self.runtime, self.uid, now=102)["effective_master_percent"], 100
+        )
+        self.runtime_write({
+            "updated_at": 101, "effective_master_percent": True,
+        })
+        self.assertEqual(
+            diag.sample(self.runtime, self.uid, now=102)["effective_master_percent"], 0
+        )
+
     def test_diagnostics_install_uses_only_readonly_runtime_and_boot_file(self):
         script = (ROOT / "src/audiohub/firstboot_diag.py").read_text()
         service = (ROOT / "image/stage-audiohub/01-install/files/systemd"

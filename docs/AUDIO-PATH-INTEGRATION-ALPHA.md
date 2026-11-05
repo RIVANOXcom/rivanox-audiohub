@@ -65,9 +65,16 @@ The alpha image does not automatically enable unauthenticated Scream.
 1. The per-source EQ graph is defined at image installation. Changing
    EQ values from an unauthenticated web interface is **not implemented**
    and must not be enabled before secure owner control exists.
-2. No inter-sample true-peak limiter or measured master-mix clipping
-   safeguard is implemented. Keep physical test volume low; validate
-   simultaneous full-level playback before approving sound quality.
+2. A **conservative gain budget** from the separately reviewed
+   AH-003 Draft PR #9 now attenuates the master based on the
+   worst-case sum of all configured unmuted channel levels and
+   positive EQ boosts, including channels that may start playing
+   between polls. It is not an inter-sample true-peak or look-ahead
+   limiter and does not substitute for hardware clipping tests.
+   Keep physical test volume low and verify full-level simultaneous
+   playback before approving sound quality. The SD report records
+   only the bounded requested `effective_master_percent`, not
+   measured audio peaks.
 3. No supported authenticated Windows/laptop sender is enabled in this
    branch, and Pi hardware cannot be assumed to support dual Bluetooth.
 4. This code cannot prove USB audio is actually audible, whether
