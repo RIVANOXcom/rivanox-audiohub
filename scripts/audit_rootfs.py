@@ -40,7 +40,7 @@ def inspect(root: Path) -> dict[str, bool]:
         return {"rootfs_exists": False}
     checks: dict[str, bool] = {}
     source = root / "opt/audiohub/src/audiohub"
-    for name in ("__init__.py", "runtime.py", "pairing.py", "mixer.py", "webserver.py", "status_bind.py", "firstboot_diag.py", "network_laptop.py", "network_buffer.py", "input_profiles.py"):
+    for name in ("__init__.py", "runtime.py", "pairing.py", "mixer.py", "webserver.py", "status_bind.py", "firstboot_diag.py", "network_laptop.py", "network_buffer.py", "input_profiles.py", "source_routes.py"):
         checks["source_" + name] = (source / name).is_file()
     # Build-time guard: the alpha status UI is unauthenticated, so the
     # installed image must never bind to all interfaces by default.
@@ -161,8 +161,10 @@ def inspect(root: Path) -> dict[str, bool]:
         checks["laptop_manual_receiver_packaged"] = all(
             token in laptop_source for token in (
                 'TARGET = "audiohub.laptop"',
-                '"--target=" + TARGET',
+                '"--target=" + target',
                 "validate_options(sender_ip, bind_ip, port, unsafe_lan_test)",
+                "target = lan_target()",
+                "if lan_target() != target:",
                 'parser.add_argument("--unsafe-lan-test", action="store_true"',
                 '"10.0.0.0/8"',
             )
@@ -220,6 +222,39 @@ def inspect(root: Path) -> dict[str, bool]:
         ) and "input_profiles" not in webserver
     except OSError:
         checks["editable_names_offline_no_public_api"] = False
+    # Physical input rebinding cannot originate from public status or
+    # unauthenticated LAN packets. A private local policy must reserve the
+    # manual LAN slot and keep Bluetooth streams off that same EQ input.
+    try:
+        routes = (source / "source_routes.py").read_text()
+        supervisor = (source / "runtime.py").read_text()
+        receiver = (source / "network_laptop.py").read_text()
+        checks["source_routing_isolated_and_fail_closed"] = all(
+            token in routes for token in (
+                'FILENAME = "source-routes.json"',
+                'MAX_FILE_BYTES = 4096',
+                'os.O_NOFOLLOW',
+                'fcntl.flock',
+                'if slot in used:',
+                'def lan_target(directory=None):',
+            )
+        ) and all(
+            token in supervisor for token in (
+                "load_routes(CONFIG)",
+                'plan["mode"] == "manual"',
+                'channel != getattr(self, "route_plan", default_routes())["lan_slot"]',
+                'self.route_policy_valid = False',
+            )
+        ) and all(
+            token in receiver for token in (
+                'target = lan_target()',
+                'check_audio_target(target)',
+                'player_command(target)',
+                'if lan_target() != target:',
+            )
+        )
+    except OSError:
+        checks["source_routing_isolated_and_fail_closed"] = False
     for name in ("index.html", "app.js", "styles.css"):
         checks["web_" + name] = (root / "opt/audiohub/web" / name).is_file()
     base_keys = None
