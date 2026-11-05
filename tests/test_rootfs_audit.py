@@ -26,7 +26,8 @@ class RootfsAuditTests(unittest.TestCase):
             '"--capture", source',
             '"--playback", "audiohub." + channel',
             'usb_ready = bool(selected and selected.returncode == 0)',
-            'self._route(sources, sinks if usb_ready else {})',
+            'self._route(sources if self.route_policy_valid else [],',
+            'sinks if (usb_ready and self.route_policy_valid) else {})',
         )))
         make("etc/wireplumber/wireplumber.conf.d/90-audiohub.conf", "\\n".join((
             "bluez5.roles = [ a2dp_sink ]",
@@ -186,8 +187,8 @@ class RootfsAuditTests(unittest.TestCase):
             root = self.root(tmp)
             source = root / "opt/audiohub/src/audiohub/runtime.py"
             source.write_text(source.read_text().replace(
-                'self._route(sources, sinks if usb_ready else {})',
-                'self._route(sources, sinks)'
+                'sinks if (usb_ready and self.route_policy_valid) else {})',
+                'sinks)'
             ))
             self.assertFalse(audit.inspect(root)["managed_eq_routing_and_usb_gate"])
 
