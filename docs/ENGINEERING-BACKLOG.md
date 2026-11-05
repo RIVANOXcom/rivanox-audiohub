@@ -154,3 +154,16 @@ Native ARM64 run #42111297565 was started; verify exact source SHA and
 native result before claiming shipping readiness. No device-owner
 authentication, secure production setup or Pi4 audible playback
 acceptance has been implemented. Public AGPL and Model C gates remain.
+
+## Private runtime state writing/read security (after PR #43)
+
+[Draft PR #44](https://github.com/RIVANOXcom/rivanox-audiohub/pull/44):
+legacy `runtime.py` predictable `.tmp` local write and unbounded
+symlink-following state JSON read replaced with bounded nonlinking
+private state reads and randomized exclusive fsynced 0600 file
+replacement. The existing native image guard rises 57 -> 58 with
+`runtime_private_state_nofollow_atomic`. New negative tests cover
+symlink/permission/hardlink/FIFO/large JSON and valid refresh cases.
+Verify **source CI and native ARM64** at final SHA before closing this
+security issue; never interpret a PASS as legal, hardware or production
+ownership acceptance.
