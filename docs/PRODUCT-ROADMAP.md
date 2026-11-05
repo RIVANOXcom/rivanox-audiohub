@@ -10,7 +10,7 @@ Workstream owner: PAPA project `PJ2611-0001:R001`. The source-of-truth for produ
 - [x] Five-language browser UI prototype with translation tests.
 - [x] Pinned `pi-gen` ARM64 development-image build.
 - [x] First `.img.xz` produced in native ARM64 CI (run 41730586400).
-- [ ] Artifact checksum, integrity test and upload verified (new preview run pending).
+- [x] Experimental ARM64 artifact checksum, integrity test, provenance and GitHub Actions upload verified (PR #25, CI 42057278883); this is **not** a verified product release.
 - [ ] Image contents audited against release security policy.
 
 ## M1 — Minimum useful Bluetooth-to-USB appliance
