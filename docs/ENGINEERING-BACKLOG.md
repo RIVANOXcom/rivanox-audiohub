@@ -57,6 +57,14 @@ No entry is `DONE` until its acceptance criteria are evidenced.
 | LOCALIZATION-01 | Five supported languages need parity, rename error/status messages and screen-reader review. | Automated keys parity + real keyboard/screen reader/mobile checks. |
 | LEGAL-01 | AGPL/commercial dual licensing policy and voluntary support need separate distribution review. | Legal applicability and accurate third-party attribution documented before distribution. |
 
+## Licensing, funding and release infrastructure (2026-11-05)
+
+- **MONETIZE-01 / Legal review:** The existing `LICENSE` is AGPL-3.0-only, including commercial permission with **no mandatory royalties**. RIVANOX can separately negotiate commercial licenses for rights it controls. Final contract, actual chain of title, contributor grant and real rootfs third-party obligations remain unresolved; do **not** promise exclusivity or change `LICENSE` without legal review. See [COMMERCIAL-LICENSING.md](COMMERCIAL-LICENSING.md).
+- **MONETIZE-02 / Voluntary support:** Existing GitHub `.github/FUNDING.yml` has `ko_fi: RIVANOX`, and README already links the account. New isolated release/distribution development branch adds prominent, responsive **five-language** optional support section to the web UI and README; it explicitly says donations do not buy licenses/support or unlock functions. GitHub owner may need to enable Sponsorships under Settings → General → Features. Payout status has not been checked.
+- **RELEASE-02 / Offline preflight:** New `scripts/release_bundle_audit.py` verifies exact 3-file preview ZIP extraction, source SHA/pi-gen/run provenance, streamed image SHA256 and full XZ integrity, rejects forged approval, symlinks, extra files and unauthorized archive contents. New native ARM64 preview pipeline runs it before upload, **always NO-GO**. See [RELEASE-DISTRIBUTION.md](RELEASE-DISTRIBUTION.md) and test suite. Official `publish-image.yml` remains a failing safety hold; no published GitHub Releases.
+- **RELEASE-03 / Public download:** Before a full public GitHub Release, operator needs evidence of Pi4 Edifier audible playback, headless owner/wifi security, three-way mixing, legal SBOM, release/permission safety, reproducible checksum and an explicit owner publication decision. Public Releases and login-only, expiring Actions artifacts are different distribution channels.
+- **TEST-04 / Source CI:** Five translated funding statements, accurate AGPL rights, no paywall, existing publication hold and negative artifact integrity tests must all stay green. Future change to license or monetization must pass an independent legal policy review.
+
 ## Source evidence and dependency map
 
 - Main unchanged at `84303e22b14da9e876ec6288af376671fd9898a9` when checked 2026-11-05; no GitHub Releases.
