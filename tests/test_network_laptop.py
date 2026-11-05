@@ -22,6 +22,31 @@ def node(nid, name, media_class):
 
 
 class NetworkLaptopTests(unittest.TestCase):
+    @mock.patch("audiohub.network_laptop.check_audio_target")
+    @mock.patch("audiohub.network_laptop.socket.socket")
+    def test_direct_serve_cannot_bypass_manual_lan_opt_in(self, socket, target):
+        with self.assertRaisesRegex(ValueError, "opt-in"):
+            laptop.serve("192.168.1.10", "192.168.1.20", 4010)
+        socket.assert_not_called()
+        target.assert_not_called()
+
+    @mock.patch("audiohub.network_laptop.check_audio_target")
+    @mock.patch("audiohub.network_laptop.socket.socket")
+    def test_manual_opt_in_still_rejects_wildcard_binding(self, socket, target):
+        with self.assertRaisesRegex(ValueError, "specific"):
+            laptop.serve("192.168.1.10", "0.0.0.0", 4010, unsafe_lan_test=True)
+        socket.assert_not_called()
+        target.assert_not_called()
+
+    @mock.patch("audiohub.network_laptop.check_audio_target")
+    @mock.patch("audiohub.network_laptop.socket.socket")
+    def test_malformed_prefill_cannot_open_receiver_port(self, socket, target):
+        with self.assertRaises(ValueError):
+            laptop.serve("192.168.1.10", "192.168.1.20", 4010,
+                         unsafe_lan_test=True, prefill_packets=17)
+        socket.assert_not_called()
+        target.assert_not_called()
+
     def test_legacy_scream_stereo_frame_is_parsed(self):
         data = bytes(1152)
         self.assertEqual(laptop.parse_scream_packet(packet(data)), data)
@@ -111,7 +136,7 @@ class NetworkLaptopTests(unittest.TestCase):
             KeyboardInterrupt(),
         ]
         with self.assertRaises(KeyboardInterrupt):
-            laptop.serve("192.168.1.10", "127.0.0.1", 4010)
+            laptop.serve("192.168.1.10", "127.0.0.1", 4010, unsafe_lan_test=True)
         receiver.bind.assert_called_once_with(("127.0.0.1", 4010))
         player.assert_not_called()
 
@@ -130,7 +155,7 @@ class NetworkLaptopTests(unittest.TestCase):
         process.stdin.fileno.return_value = 42
         process.poll.return_value = None
         with self.assertRaises(KeyboardInterrupt):
-            laptop.serve("192.168.1.10", "127.0.0.1", 4010)
+            laptop.serve("192.168.1.10", "127.0.0.1", 4010, unsafe_lan_test=True)
         command = player.call_args.args[0]
         self.assertIn("--target=audiohub.laptop", command)
         write.assert_called_once_with(42, b"\x01\x02\x03\x04")
@@ -154,7 +179,7 @@ class NetworkLaptopTests(unittest.TestCase):
         process.stdin.fileno.return_value = 42
         process.poll.return_value = None
         with self.assertRaises(KeyboardInterrupt):
-            laptop.serve("192.168.1.10", "127.0.0.1", 4010)
+            laptop.serve("192.168.1.10", "127.0.0.1", 4010, unsafe_lan_test=True)
         close_player.assert_any_call(process)
         self.assertEqual(write.call_count, 1)
 
@@ -175,7 +200,7 @@ class NetworkLaptopTests(unittest.TestCase):
         process.stdin.fileno.return_value = 42
         process.poll.return_value = None
         with self.assertRaises(KeyboardInterrupt):
-            laptop.serve("192.168.1.10", "127.0.0.1", 4010)
+            laptop.serve("192.168.1.10", "127.0.0.1", 4010, unsafe_lan_test=True)
         self.assertEqual(check_target.call_count, 3)
         close_player.assert_any_call(process)
         self.assertEqual(write.call_count, 1)
