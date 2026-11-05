@@ -43,6 +43,18 @@ class RootfsAuditTests(unittest.TestCase):
         audio_runtime = root / "opt/audiohub/src/audiohub/runtime.py"
         audio_runtime.write_text(audio_runtime.read_text() +
             '\\neffective_master_gain(self.settings)\\n"effective_master_percent"\\n')
+        make("opt/audiohub/src/audiohub/network_laptop.py", "\\n".join((
+            'TARGET = "audiohub.laptop"',
+            '"--target=" + TARGET',
+            "validate_options(sender_ip, bind_ip, port, unsafe_lan_test)",
+            'parser.add_argument("--unsafe-lan-test", action="store_true"',
+            '"10.0.0.0/8"',
+        )))
+        make("opt/audiohub/src/audiohub/network_buffer.py", "\\n".join((
+            "MAX_BUFFER_PACKETS = 16",
+            "MAX_PCM_PACKET_BYTES = 1152",
+            "self._packets.popleft()",
+        )))
         make("opt/audiohub/src/audiohub/status_bind.py",
              'LOOPBACK = "127.0.0.1"\\n'
              'values.get("AUDIOHUB_STATUS_BIND_IP", LOOPBACK)\\n'
@@ -175,6 +187,43 @@ class RootfsAuditTests(unittest.TestCase):
                 "effective_master_gain(self.settings)", "self.settings['master']"
             ))
             self.assertFalse(audit.inspect(root)["conservative_mix_gain_installed"])
+
+    def test_missing_dormant_windows_receiver_blocks_image_export(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            (root / "opt/audiohub/src/audiohub/network_laptop.py").unlink()
+            checks = audit.inspect(root)
+            self.assertFalse(checks["source_network_laptop.py"])
+            self.assertFalse(checks["laptop_manual_receiver_packaged"])
+
+    def test_missing_receiver_optin_guard_blocks_image_export(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            source = root / "opt/audiohub/src/audiohub/network_laptop.py"
+            source.write_text(source.read_text().replace(
+                'validate_options(sender_ip, bind_ip, port, unsafe_lan_test)',
+                'sender_ip, bind_ip, port'
+            ))
+            self.assertFalse(audit.inspect(root)["laptop_manual_receiver_packaged"])
+
+    def test_unsafe_network_receiver_service_blocks_image_export(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            bad = root / "etc/systemd/system/audiohub-laptop.service"
+            bad.write_text(
+                "[Service]\\nExecStart=/usr/bin/python3 -m "
+                "audiohub.network_laptop --unsafe-lan-test\\n"
+            )
+            self.assertFalse(audit.inspect(root)["laptop_receiver_not_autostarted"])
+
+    def test_bounded_laptop_buffer_required_for_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            buf = root / "opt/audiohub/src/audiohub/network_buffer.py"
+            buf.write_text(buf.read_text().replace(
+                "MAX_BUFFER_PACKETS = 16", "MAX_BUFFER_PACKETS = 65536"
+            ))
+            self.assertFalse(audit.inspect(root)["laptop_manual_receiver_packaged"])
 
     def test_valid_synthetic_rootfs_passes(self):
         with tempfile.TemporaryDirectory() as tmp:
