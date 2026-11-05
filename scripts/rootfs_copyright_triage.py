@@ -17,7 +17,7 @@ import re
 import stat
 
 from scripts.rootfs_package_inventory import (
-    PACKAGE, MAX_STATUS_BYTES, _paragraphs, _copyright_hash,
+    PACKAGE, VERSION, ARCH, MAX_STATUS_BYTES, _paragraphs, _copyright_hash,
 )
 from scripts.verify_package_inventory import verify
 
@@ -63,7 +63,7 @@ def _depends_on(item: dict, target: str) -> bool:
     return re.search(pattern, depends) is not None
 
 
-def _metadata(status: Path) -> dict[str, dict]:
+def _metadata(status: Path) -> dict[tuple[str, str], dict]:
     if status.is_symlink() or not status.is_file():
         raise ValueError("Rootfs dpkg status is unsafe")
     if not 0 < status.stat().st_size <= MAX_STATUS_BYTES:
@@ -73,9 +73,15 @@ def _metadata(status: Path) -> dict[str, dict]:
         if item.get("Status") != "install ok installed":
             continue
         name = item.get("Package", "")
-        if not PACKAGE.fullmatch(name) or name in data:
-            raise ValueError("Invalid duplicate package in rootfs status")
-        data[name] = item
+        arch = item.get("Architecture", "")
+        version = item.get("Version", "")
+        if (not PACKAGE.fullmatch(name) or not ARCH.fullmatch(arch)
+                or not VERSION.fullmatch(version)):
+            raise ValueError("Invalid rootfs dpkg package identity")
+        key = (name, arch)
+        if key in data:
+            raise ValueError("Duplicate package/architecture in rootfs status")
+        data[key] = item
     return data
 
 
@@ -131,6 +137,13 @@ def analyze(rootfs: Path, inventory_path: Path) -> dict:
     proof = verify(inventory_path)
     inventory = json.loads(inventory_path.read_text(encoding="utf-8"))
     status = _metadata(rootfs / "var/lib/dpkg/status")
+    recorded = {(p["name"], p["architecture"]) for p in inventory["packages"]}
+    if recorded != set(status):
+        raise ValueError("Inventory differs from installed dpkg package identities")
+    for item in inventory["packages"]:
+        key = (item["name"], item["architecture"])
+        if item["version"] != status[key]["Version"]:
+            raise ValueError("Inventory package version differs from real rootfs")
     docs = rootfs / "usr/share/doc"
     valid_tree = not any((rootfs / p).is_symlink() for p in (
         "usr", "usr/share", "usr/share/doc"
@@ -139,8 +152,8 @@ def analyze(rootfs: Path, inventory_path: Path) -> dict:
     alias_info = []
     for item in inventory["packages"]:
         name = item["name"]
-        if name not in status:
-            raise ValueError("Inventory package missing in actual rootfs")
+        arch = item["architecture"]
+        source_record = status[(name, arch)]
         # Ensure package hash was computed from these actual rootfs bytes,
         # not merely a syntactically valid but stale or forged digest.
         if _copyright_hash(rootfs, name) != item["copyright_sha256"]:
@@ -162,16 +175,20 @@ def analyze(rootfs: Path, inventory_path: Path) -> dict:
         target = os.readlink(directory)
         if PACKAGE.fullmatch(target) is None:
             raise ValueError("Unsafe alias reported as verified copyright")
-        if target not in status:
+        # Prefer exact architecture; Architecture: all is also valid
+        # for Debian shared documentation. Never silently select a
+        # different-architecture installed source package.
+        target_record = status.get((target, arch)) or status.get((target, "all"))
+        if target_record is None:
             relationship = "source_metadata_unavailable"
         else:
-            source_a = _source_package(status[name])
-            source_b = _source_package(status[target])
+            source_a = _source_package(source_record)
+            source_b = _source_package(target_record)
             if source_a is None or source_b is None:
                 relationship = "source_metadata_unavailable"
             elif source_a != source_b:
                 relationship = "source_mismatch"
-            elif not _depends_on(status[name], target):
+            elif not _depends_on(source_record, target):
                 relationship = "direct_dependency_not_verified"
             else:
                 relationship = "same_source_and_direct_dependency_declared"
