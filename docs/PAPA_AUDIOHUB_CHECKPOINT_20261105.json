@@ -57,6 +57,12 @@
       "base": "wd-papa-20261105-dpkg-identity-reconciliation",
       "head": "wd-papa-20261105-canonical-resume-source-rights",
       "verified_head_sha": null
+    },
+    {
+      "number": 43,
+      "base": "wd-papa-20261105-canonical-resume-source-rights",
+      "head": "wd-papa-20261105-readonly-web-file-hardening",
+      "verified_head_sha": null
     }
   ],
   "last_native_verified": {
@@ -124,5 +130,23 @@
     "python_tests": 354,
     "source_rights_ledger_file_count": 79,
     "production_arm64_build_not_rerun_for_docs_only": true
+  },
+  "latest_legacy_security_change": {
+    "pr": 43,
+    "defect": "Allowlisted web URLs used unbounded and symlink-following local-file reads",
+    "status": "code implemented, source CI PASS; independent native ARM64 must be verified at matching source SHA",
+    "static_file_cap_bytes": 524288,
+    "anonymized_status_json_cap_bytes": 32768,
+    "all_path_components_nofollow": true,
+    "unsafe_local_files_denied": true,
+    "physical_pi_security_accepted": false,
+    "model_c_license_effective": false,
+    "source_ci_verified": {
+      "run_id": 42111311812,
+      "commit_sha": "d4fb934ad4ed15cac20a79799d475b2956b94769",
+      "result": "success",
+      "python_tests": 375
+    },
+    "native_run_pending_validation": 42111297565
   }
 }
