@@ -68,6 +68,7 @@ No entry is `DONE` until its acceptance criteria are evidenced.
   [ARM64 image CI 42057278883](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42057278883) **SUCCESS**, **48/48 rootfs checks**, ZIP [#13428684879](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42057278883/artifacts/13428684879), exp. 2026-12-05.
 - Independently reviewed gain safety PR #9 is ported into draft #24; BT ownership challenge drafts #16–#18 are **not equivalent** to working phone setup.
 - Current naming + durable GitHub documentation development builds **on PR #25** and must get its own CI proof before any new SD image is announced.
+- Follow-up issues opened specifically for the current user requirements: [#27 owner-verified input names and routing](https://github.com/RIVANOXcom/rivanox-audiohub/issues/27) and [#28 owner-only main branch ruleset setup](https://github.com/RIVANOXcom/rivanox-audiohub/issues/28).
 - Primary issues: [#1 security onboarding](https://github.com/RIVANOXcom/rivanox-audiohub/issues/1), [#2 physical Pi/Edifier](https://github.com/RIVANOXcom/rivanox-audiohub/issues/2), [#3 audio/network](https://github.com/RIVANOXcom/rivanox-audiohub/issues/3), [#4 authenticated web UI](https://github.com/RIVANOXcom/rivanox-audiohub/issues/4).
 
 ## Resume protocol after a lost chat
