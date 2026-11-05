@@ -34,6 +34,15 @@ class RootfsAuditTests(unittest.TestCase):
             "bluez5.media-source-role = input",
             "monitor.bluez.rules = [",
         )))
+        make("opt/audiohub/src/audiohub/mixer.py", "\\n".join((
+            "def mix_gain_budget(settings):",
+            "def effective_master_gain(settings):",
+            "return min(1.0, 1.0 / worst_case)",
+            "str(effective_master_gain(settings))",
+        )))
+        audio_runtime = root / "opt/audiohub/src/audiohub/runtime.py"
+        audio_runtime.write_text(audio_runtime.read_text() +
+            '\\neffective_master_gain(self.settings)\\n"effective_master_percent"\\n')
         make("opt/audiohub/src/audiohub/status_bind.py",
              'LOOPBACK = "127.0.0.1"\\n'
              'values.get("AUDIOHUB_STATUS_BIND_IP", LOOPBACK)\\n'
@@ -148,6 +157,24 @@ class RootfsAuditTests(unittest.TestCase):
             root = self.root(tmp)
             (root / "etc/wireplumber/wireplumber.conf.d/90-audiohub.conf").unlink()
             self.assertFalse(audit.inspect(root)["bluetooth_input_role_configured"])
+
+    def test_missing_gain_budget_blocks_image_export(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            mixer = root / "opt/audiohub/src/audiohub/mixer.py"
+            mixer.write_text(mixer.read_text().replace(
+                "str(effective_master_gain(settings))", "str(settings['master'])"
+            ))
+            self.assertFalse(audit.inspect(root)["conservative_mix_gain_installed"])
+
+    def test_missing_effective_master_diagnostics_blocks_image_export(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            runtime = root / "opt/audiohub/src/audiohub/runtime.py"
+            runtime.write_text(runtime.read_text().replace(
+                "effective_master_gain(self.settings)", "self.settings['master']"
+            ))
+            self.assertFalse(audit.inspect(root)["conservative_mix_gain_installed"])
 
     def test_valid_synthetic_rootfs_passes(self):
         with tempfile.TemporaryDirectory() as tmp:
