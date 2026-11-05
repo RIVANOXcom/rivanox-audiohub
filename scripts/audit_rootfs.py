@@ -40,7 +40,7 @@ def inspect(root: Path) -> dict[str, bool]:
         return {"rootfs_exists": False}
     checks: dict[str, bool] = {}
     source = root / "opt/audiohub/src/audiohub"
-    for name in ("__init__.py", "runtime.py", "pairing.py", "mixer.py", "webserver.py", "status_bind.py", "firstboot_diag.py", "network_laptop.py", "network_buffer.py", "input_profiles.py", "source_routes.py"):
+    for name in ("__init__.py", "runtime.py", "pairing.py", "mixer.py", "webserver.py", "status_bind.py", "firstboot_diag.py", "network_laptop.py", "network_buffer.py", "input_profiles.py", "source_routes.py", "audio_graph.py", "hardware_preflight.py"):
         checks["source_" + name] = (source / name).is_file()
     # Build-time guard: the alpha status UI is unauthenticated, so the
     # installed image must never bind to all interfaces by default.
@@ -256,6 +256,36 @@ def inspect(root: Path) -> dict[str, bool]:
         )
     except OSError:
         checks["source_routing_isolated_and_fail_closed"] = False
+    # A green rootfs audit must not regress to name-only audio topology
+    # assertions. The runtime must extract actual, bounded PipeWire Link
+    # node IDs and report only aggregate counts on the offline SD card.
+    try:
+        graph_source = (source / "audio_graph.py").read_text()
+        preflight_source = (source / "hardware_preflight.py").read_text()
+        runtime_source = (source / "runtime.py").read_text()
+        offline_source = (source / "firstboot_diag.py").read_text()
+        checks["privacy_safe_pipewire_link_observation"] = all(
+            token in graph_source for token in (
+                "def summarize_links(raw):",
+                '"PipeWire:Interface:Link"',
+                '"output-node-id"',
+                '"input-node-id"',
+                '"release_ready": False',
+            )
+        ) and "summarize_links" in preflight_source and all(
+            token in runtime_source for token in (
+                "summarize_links(result.stdout",
+                '"eq_output_usb_direct_links"',
+                '"pipewire_links_inspected"',
+            )
+        ) and all(
+            token in offline_source for token in (
+                '"pipewire_links_inspected"',
+                '"eq_usb_direct_links"',
+            )
+        )
+    except OSError:
+        checks["privacy_safe_pipewire_link_observation"] = False
     for name in ("index.html", "app.js", "styles.css"):
         checks["web_" + name] = (root / "opt/audiohub/web" / name).is_file()
     base_keys = None
