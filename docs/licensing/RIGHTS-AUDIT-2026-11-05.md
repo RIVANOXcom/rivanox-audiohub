@@ -1,6 +1,7 @@
 # RIVANOX AudioHub — Model C rights, provenance and licensing due diligence
 
 **Assessment date:** 2026-11-05. **Status: legal review required — NO LICENSE SWITCH.**
+**Latest verified technical evidence:** [ARM64 #42106833667](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42106833667) SUCCESS, 336 source tests, 55/55 real rootfs gates, 689 dpkg packages (538 arm64/151 all), 680 copyright hashes, 8 two-hop link-chain copyright paths and 1 absent expected `raspberrypi-net-mods` copyright file. All 49 one-hop aliases have matching dpkg Source/direct Depends observations; these findings **do not grant distribution rights**. [Canonical handoff](../PAPA_CANONICAL_RESUME_20261105.md) and [79-file pending source-rights ledger](SOURCE-RIGHTS-LEDGER.json).
 **Project:** PJ2611-0001:R001. **Base:** draft PR #34
 `c28a61bea275f8602458c2961e06454430cc4319`.
 **Target:** publicly viewable source; private personal usage without a fee;
