@@ -65,6 +65,8 @@ def sample(runtime_path, user_id, *, now=None, controller_present=False):
             "runtime_status": "unavailable_or_stale",
             "usb_audio_detected": False,
             "usb_audio_route_ready": False,
+            "pipewire_links_inspected": 0,
+            "eq_usb_direct_links": 0,
             "source_route_policy_valid": False,
             "effective_master_percent": 0,
             "route_start_failures": 0,
@@ -82,6 +84,14 @@ def sample(runtime_path, user_id, *, now=None, controller_present=False):
         "runtime_status": "recent",
         "usb_audio_detected": data.get("usb_output") is True,
         "usb_audio_route_ready": data.get("usb_route_ready") is True,
+        "pipewire_links_inspected": _bounded(data.get("pipewire_links_inspected"), 8192),
+        "eq_usb_direct_links": len(set(
+            slot for slot in (
+                data.get("eq_output_usb_direct_links")
+                if type(data.get("eq_output_usb_direct_links")) is list else []
+            )
+            if type(slot) is str and slot in ("music", "laptop", "tablet")
+        )),
         "source_route_policy_valid": data.get("route_policy_valid") is True,
         "effective_master_percent": _bounded(data.get("effective_master_percent"), 100),
         "route_start_failures": _bounded(data.get("route_start_failures"), 999),
