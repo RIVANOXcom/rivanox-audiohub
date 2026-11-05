@@ -114,7 +114,8 @@ class NetworkLaptopTests(unittest.TestCase):
         ]
         run.return_value = subprocess.CompletedProcess(["pw-dump"], 0, json.dumps(found), "")
         laptop.check_audio_target()
-        run.assert_called_once()
+        self.assertEqual(run.call_count, 2)
+        self.assertEqual(run.call_args.args[0], ["wpctl", "set-default", "10"])
         run.return_value = subprocess.CompletedProcess(["pw-dump"], 0, json.dumps(found[:1]), "")
         with self.assertRaisesRegex(RuntimeError, "USB"):
             laptop.check_audio_target()
@@ -124,6 +125,20 @@ class NetworkLaptopTests(unittest.TestCase):
         run.return_value = subprocess.CompletedProcess(["pw-dump"], 1, "", "error")
         with self.assertRaises(RuntimeError):
             laptop.check_audio_target()
+
+    @mock.patch("audiohub.network_laptop.subprocess.run")
+    def test_missing_usb_default_selection_denies_laptop_audio(self, run):
+        found = [
+            node(5, "audiohub.laptop", "Audio/Sink"),
+            node(10, "alsa_output.usb-Edifier_R600USB", "Audio/Sink"),
+        ]
+        run.side_effect = [
+            subprocess.CompletedProcess(["pw-dump"], 0, json.dumps(found), ""),
+            subprocess.CompletedProcess(["wpctl", "set-default", "10"], 1, "", "error"),
+        ]
+        with self.assertRaisesRegex(RuntimeError, "routing not ready"):
+            laptop.check_audio_target()
+        self.assertEqual(run.call_count, 2)
 
     @mock.patch("audiohub.network_laptop.check_audio_target")
     @mock.patch("audiohub.network_laptop.subprocess.Popen")
