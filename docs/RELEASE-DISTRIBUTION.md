@@ -204,3 +204,18 @@ must be checked in a **separate new native run**. Even a complete set of
 hashes cannot certify compliance with upstream licenses. No automatic
 public release, payment, approval, Model C activation or private-code
 distribution is enabled.
+
+## Nine unresolved copyright paths and semantic alias checks
+
+ARM64 [run #42100728004](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42100728004)
+**SUCCESS**, source 312/312, rootfs 55/55, 689 installed packages,
+**680 notice hashes** and **9 unresolved paths**. This improves technical
+copyright discovery but **does not clear binary redistribution**.
+See [nine named packages and review limits](licensing/THIRD-PARTY-REVIEW-2026-11-05.md).
+
+The next isolated source change emits read-only fixed-category triage
+for unresolved notices and checks whether a shared Debian documentation
+directory symlink has an apparent same-source + direct-Depends
+relationship in the **actual installed dpkg status**. Matching hashes
+and relationships are never treated as legal approval. Preview archive
+format stays unchanged and public release remains blocked.

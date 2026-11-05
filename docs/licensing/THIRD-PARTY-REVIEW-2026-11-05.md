@@ -159,3 +159,54 @@ for commercial redistribution. The full Pi rootfs image and source
 provenance require human/legal review. New native ARM64 evidence for
 this modified extractor must be verified at its exact source SHA,
 not inferred from the earlier successful artifact.
+
+## 2026-11-05 native copyright-file audit: 49 more verified paths, 9 remaining
+
+At exact previous draft PR #38 source `d0645965ae98082c3c3bdf5568938857df18c658`,
+[native ARM64 image run 42100728004](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42100728004)
+finished **SUCCESS**, with 312 Python source tests, 55/55 actual Pi rootfs
+guards and a checksum/XZ/provenance-verified **UNVERIFIED** temporary
+[4-file archive #13448859215](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42100728004/artifacts/13448859215)
+(expiry 2026-12-05). Rootfs inventory from the final built image:
+
+- **689 installed dpkg packages** (same as before)
+- **680 captured copyright-file hashes** (49 more than previously)
+- **9 unresolved file paths**, not automatically license violations
+
+**The exact nine unverified package paths** from rootfs export logs:
+
+| Package | Follow-up concern |
+| --- | --- |
+| `binutils-aarch64-linux-gnu` | Compiler/binutils multiarch copyright/path and source mapping |
+| `libctf0` | Binutils shared-library documentation and source mapping |
+| `libgprofng0` | Binutils gprofng shared-library documentation and source mapping |
+| `libpython3.13` | Python runtime package copyright/path and source mapping |
+| `linux-headers-rpi-2712` | Raspberry Pi kernel header metapackage license notices |
+| `linux-headers-rpi-v8` | Raspberry Pi kernel header metapackage license notices |
+| `linux-image-rpi-2712` | Raspberry Pi kernel metapackage notices and corresponding source |
+| `linux-image-rpi-v8` | Raspberry Pi kernel metapackage notices and corresponding source |
+| `raspberrypi-net-mods` | Raspberry Pi network package copyright/firmware provenance |
+
+**Caution:** The present ten-column summary is an investigation queue, not
+a claim that any particular actual package has a missing license grant,
+that a binary is illegally distributed, or that upstream versions have
+been individually reviewed. Exact paths and package versions must be
+matched to the actual image, which was a temporary CI artifact.
+
+Debian Policy 12.3/12.5 permits same-source documentation directory links
+only when the first binary package directly depends on the target package.
+Merely accepting a safe single-hop path does **not** prove these semantic
+conditions. [Debian Policy §§12.3,12.5](https://www.debian.org/doc/debian-policy/ch-docs.html).
+
+**Next technical change in PR #39:** `scripts/rootfs_copyright_triage.py`
+checks the real dpkg status `Source` and `Depends` metadata for every
+captured same-directory doc alias, detects potential source mismatches,
+classifies each of the nine remaining null hashes by specific fixed
+reason codes, and verifies that each recorded hash matches actual
+rootfs bytes. This extra evidence goes only to controlled **CI logs**,
+not into the public image/4-file preview ZIP. All apparent matches
+remain subject to independent legal/compliance review and do not
+convert `legal_review_approved=false` into true.
+
+Future Model C licensing remains **NOT EFFECTIVE**; no public stable
+release, historical commit rewriting or publication authorization.
