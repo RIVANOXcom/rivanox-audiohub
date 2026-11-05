@@ -49,12 +49,46 @@ jobs:
           sha256sum -c SHA256SUMS.txt
           xz --test -- "${images[@]}"
           test -s SHA256SUMS.txt
-      - name: Upload short-lived unverified artifact
+          cd ..
+          python3 scripts/preview_manifest.py \\
+            --directory dist \\
+            --source-sha "$GITHUB_SHA" \\
+            --run-id "$GITHUB_RUN_ID" \\
+            --build-script build-image.sh
+          test -s dist/PREVIEW-MANIFEST.json
+      - name: Upload temporary unverified Pi 4 image artifact
+        id: preview_artifact
         uses: actions/upload-artifact@v4
         with:
           name: AUDIOHUB-ALPHA-UNVERIFIED-DO-NOT-DISTRIBUTE
           path: |
             dist/*.img.xz
             dist/SHA256SUMS.txt
+            dist/PREVIEW-MANIFEST.json
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 30
+      - name: Show test-image download in GitHub job summary
+        shell: bash
+        env:
+          PREVIEW_ARTIFACT_URL: ${{ steps.preview_artifact.outputs.artifact-url }}
+        run: |
+          set -euo pipefail
+          test -n "$PREVIEW_ARTIFACT_URL"
+          {
+            echo "## Raspberry Pi 4: UNVERIFIED AudioHub test image"
+            echo
+            echo "**[Download the temporary test-image ZIP]($PREVIEW_ARTIFACT_URL)**"
+            echo
+            echo "Sign in to GitHub and open the run's **Artifacts** section if required."
+            echo "The ZIP contains an \`.img.xz\`, \`SHA256SUMS.txt\` and \`PREVIEW-MANIFEST.json\`."
+            echo "Artifact retention requested: 30 days (repository policy may reduce it)."
+            echo
+            echo "**Warning:** SOURCE BUILD ONLY, not hardware-verified, no secure phone setup."
+            echo "No official release, do not use on a trusted home network."
+            echo "Flash a spare microSD and test only in an isolated environment."
+            echo
+            echo "Source SHA: \`$GITHUB_SHA\`"
+            echo "Run ID: \`$GITHUB_RUN_ID\`"
+            echo
+            echo "Full instructions: [experimental first Pi boot](https://github.com/RIVANOXcom/rivanox-audiohub/blob/$GITHUB_SHA/docs/FIRST-PI-ALPHA-TEST.md)."
+          } >> "$GITHUB_STEP_SUMMARY"
