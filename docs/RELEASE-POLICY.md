@@ -19,3 +19,5 @@ Release workflow:
 The image named `AudioHub-Pi4.img.xz` will be downloadable from GitHub Releases. The release with the most recent stable version is exposed at https://github.com/RIVANOXcom/rivanox-audiohub/releases/latest.
 
 Do not embed reusable passwords, private keys, personal credentials, undisclosed upstream binaries or unsupported service claims in release assets.
+
+The [offline preview-bundle auditor](../scripts/release_bundle_audit.py) and its CI integration verify artifact consistency (image SHA256, decompressed XZ and exact provenance) but **always report public_release_ready=false**. This is deliberately separate from a human-approved public GitHub Release. Follow the [distribution and operator gate procedure](RELEASE-DISTRIBUTION.md) to move an eligible, physically tested image from temporary private Actions artifacts to durable public Releases. The current `publish-image.yml` remains blocked until real owner/security/hardware/compliance evidence and explicit approval are documented.

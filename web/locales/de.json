@@ -43,5 +43,11 @@
   "sourceHint2": "Manueller LAN-Testeingang · standardmäßig deaktiviert",
   "sourceHint3": "Zweiter Bluetooth-Eingang · auf echter Hardware noch ungeprüft",
   "invalidInputName": "Eindeutigen Namen wählen (1–32 Zeichen, keine Steuer- oder HTML-Zeichen).",
-  "previewNamesOnly": "Nur in diesem Browser gespeichert. Die Gerätezuteilung bleibt unverändert."
+  "previewNamesOnly": "Nur in diesem Browser gespeichert. Die Gerätezuteilung bleibt unverändert.",
+  "sustainabilityEyebrow": "Unabhängige Open-Source-Entwicklung",
+  "sustainabilityTitle": "Hilf mit, AudioHub weiterzuentwickeln",
+  "sustainabilityDescription": "Deine freiwillige Unterstützung hilft bei Raspberry-Pi-Hardwaretests, Sicherheit, Barrierefreiheit und Wartung.",
+  "sustainabilityDisclosure": "Spenden sind freiwillig. AudioHub bleibt unter AGPL-3.0 verfügbar. Eine Spende ist weder eine kommerzielle Lizenz noch ein Anspruch auf bevorzugten Support.",
+  "sustainabilityDonate": "Auf Ko-fi unterstützen",
+  "sustainabilityCommercial": "Informationen zu kommerziellen Lizenzen"
 }
