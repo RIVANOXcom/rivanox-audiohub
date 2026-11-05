@@ -6,6 +6,39 @@ Rulesets API returns `[]`; the repository UI explicitly warns that `main`
 is not protected. User's screenshot shows a **new, disabled** ruleset form
 without target branches. Nothing was changed remotely by this engineering PR.
 
+## Public repository versus write permissions
+
+A GitHub sign-in requirement for downloading a **private Actions artifact**
+is not evidence that a public source repository is private. Currently
+`RIVANOXcom/rivanox-audiohub` is public. Public visitors can see and
+download the source, clone/fork it, and submit their own proposed pull
+requests or public issues if these features are enabled. **They cannot
+push commits into the RIVANOX repository or merge changes without
+specific repository write permissions.** A fork/PR does not change
+your repository by itself.
+
+The owner and the explicitly authorized connected GitHub App can
+continue to create branches, modify sources, commit tests, open draft
+pull requests and update GitHub issue/documentation records. A main
+branch PR+checks ruleset is meant to protect the project's accepted
+history even from accidental writes by these authorized actors; it
+does not prohibit their normal branch-based development. Do not add
+an AI App to unrestricted admin/bypass solely to "allow development".
+
+If "download only" means visitors should not even be able to propose
+issues, you can disable Issues/Discussions manually, but this would
+undermine the project's durable bug/backlog register. **Recommended:
+keep Issues open and use write permissions to block actual changes.**
+A public repository cannot make legally available source unreadable
+or prevent others from cloning/forking it simply by requiring login.
+
+Protect the **human GitHub account** with passkeys or two-factor
+authentication, check authorized organization members and installed
+GitHub Apps under repository/organization Settings, and revoke stale
+tokens. Do not paste access tokens into the repository, discussions,
+Actions logs or ChatGPT. Rulesets and account login solve different
+security problems.
+
 ## Exact operator configuration
 
 Navigate to **Repository → Settings → Rules → Rulesets → New branch ruleset**

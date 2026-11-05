@@ -32,8 +32,12 @@ respective slot. The internal PipeWire identifiers `music/laptop/tablet`
 remain stable for compatibility; their **visible names are freely editable**.
 The current web prototype saves chosen names **only in the current browser**,
 not to the Pi. A separate private offline local-console storage model exists,
-but authenticated phone-to-device synchronization and changing a slot's
-actual transport/source assignment still require engineering work.
+but authenticated phone-to-device synchronization still needs engineering.
+**An isolated local-console routing policy now allows the two supported
+Bluetooth source slots and the dormant, manually started LAN source to
+be reassigned among the three internal EQ inputs.** It does not pair,
+authenticate or enroll devices and is not accessible from the web UI.
+See [offline source routing for the development bench](./docs/FLEXIBLE-SOURCE-ROUTING-LAB.md).
 
 **Hardware note:** Two simultaneous A2DP senders have not been verified
 on Pi 4. The Windows Scream receiver is plaintext/unauthenticated and is
@@ -62,18 +66,21 @@ No display, keyboard, SSH session, shell commands, or Linux administration shoul
 
 > ⚠️ **Alpha development – no verified, ready-to-flash SD image has been published yet.** Source snapshots and preview builds are **not stable releases**. Do not assume they are suitable for an unattended device.
 
-For **experimental hardware bench tests only**, the last fully
-verified source-and-image artifact **before the input-rename branch** is:
-[5 November 2026 Pi4 Alpha ZIP #13428684879](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42057278883/artifacts/13428684879)
-(GitHub Actions run **42057278883**, source
-`ed89d4ede47cf026d4dc49a41bc8088207dbe4d1`,
-159 tests / 48 rootfs checks; expires **5 December 2026**).
-It is **not** in Releases, requires GitHub sign-in and does not
-contain the subsequent channel-rename interface. Verify included
-`SHA256SUMS.txt` for the `.img.xz`; use a spare SD and an isolated
-Pi without trusted Ethernet/WLAN. See [first Pi alpha test guide](./docs/FIRST-PI-ALPHA-TEST.md).
-A **newer** unverified image must only be linked after its own complete
-native ARM64 CI, checksum, manifest and artifact-upload evidence exists.
+For **experimental hardware bench tests only**, the last
+verified source-and-image artifact **before the flexible source-routing
+changes** is [5 November Pi4 Alpha ZIP #13433476966](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42064465468/artifacts/13433476966):
+Actions run **42064465468**, source
+`9e612290841ed586effc19ca37d2edab479d4524`,
+**172 Python tests / 50 rootfs checks**, expiring 5 December 2026.
+It is **not** a Release, requires GitHub sign-in, includes local naming
+but does **not** contain the new free source assignments in draft PR #29.
+Verify the **inner compressed image** against the bundled
+`SHA256SUMS.txt`, use a spare SD and an isolated Pi without trusted
+Ethernet/WLAN. A newer image from PR #29 can be called downloadable
+only after its **own** successful native ARM64 build, rootfs security
+audit, SHA256/XZ/manifest verification and actual artifact upload;
+see [PR #29](https://github.com/RIVANOXcom/rivanox-audiohub/pull/29).
+[Pi bench instructions](./docs/FIRST-PI-ALPHA-TEST.md).
 
 Once hardware tests and security acceptance are complete, download images from:
 

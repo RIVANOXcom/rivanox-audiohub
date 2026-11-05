@@ -22,11 +22,12 @@ class RootfsAuditTests(unittest.TestCase):
         for name in ("__init__.py", "runtime.py", "pairing.py", "mixer.py"):
             make("opt/audiohub/src/audiohub/" + name)
         make("opt/audiohub/src/audiohub/runtime.py", "\\n".join((
-            '("music", "tablet")',
+            "channel not in CHANNELS",
             '"--capture", source',
             '"--playback", "audiohub." + channel',
             'usb_ready = bool(selected and selected.returncode == 0)',
-            'self._route(sources, sinks if usb_ready else {})',
+            'self._route(sources if self.route_policy_valid else [],',
+            'sinks if (usb_ready and self.route_policy_valid) else {})',
         )))
         make("etc/wireplumber/wireplumber.conf.d/90-audiohub.conf", "\\n".join((
             "bluez5.roles = [ a2dp_sink ]",
@@ -42,10 +43,17 @@ class RootfsAuditTests(unittest.TestCase):
         )))
         audio_runtime = root / "opt/audiohub/src/audiohub/runtime.py"
         audio_runtime.write_text(audio_runtime.read_text() +
-            '\\neffective_master_gain(self.settings)\\n"effective_master_percent"\\n')
+            '\\neffective_master_gain(self.settings)\\n"effective_master_percent"\\n'
+            'load_routes(CONFIG)\\nplan["mode"] == "manual"\\n'
+            'channel != getattr(self, "route_plan", default_routes())["lan_slot"]\\n'
+            'self.route_policy_valid = False\\n')
         make("opt/audiohub/src/audiohub/network_laptop.py", "\\n".join((
             'TARGET = "audiohub.laptop"',
-            '"--target=" + TARGET',
+            '"--target=" + target',
+            "target = lan_target()",
+            "if lan_target() != target:",
+            "check_audio_target(target)",
+            "player_command(target)",
             "validate_options(sender_ip, bind_ip, port, unsafe_lan_test)",
             'parser.add_argument("--unsafe-lan-test", action="store_true"',
             '"10.0.0.0/8"',
@@ -54,6 +62,14 @@ class RootfsAuditTests(unittest.TestCase):
             "MAX_BUFFER_PACKETS = 16",
             "MAX_PCM_PACKET_BYTES = 1152",
             "self._packets.popleft()",
+        )))
+        make("opt/audiohub/src/audiohub/source_routes.py", "\\n".join((
+            'FILENAME = "source-routes.json"',
+            'MAX_FILE_BYTES = 4096',
+            'os.O_NOFOLLOW',
+            'fcntl.flock',
+            'if slot in used:',
+            'def lan_target(directory=None):',
         )))
         make("opt/audiohub/src/audiohub/input_profiles.py", "\\n".join((
             'SLOTS = ("music", "laptop", "tablet")',
@@ -171,8 +187,8 @@ class RootfsAuditTests(unittest.TestCase):
             root = self.root(tmp)
             source = root / "opt/audiohub/src/audiohub/runtime.py"
             source.write_text(source.read_text().replace(
-                'self._route(sources, sinks if usb_ready else {})',
-                'self._route(sources, sinks)'
+                'sinks if (usb_ready and self.route_policy_valid) else {})',
+                'sinks)'
             ))
             self.assertFalse(audit.inspect(root)["managed_eq_routing_and_usb_gate"])
 
@@ -255,6 +271,37 @@ class RootfsAuditTests(unittest.TestCase):
             web = root / "opt/audiohub/src/audiohub/webserver.py"
             web.write_text(web.read_text().replace("Read-only preview", "owner write API"))
             self.assertFalse(audit.inspect(root)["editable_names_offline_no_public_api"])
+
+    def test_missing_flexible_source_plan_blocks_alpha_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            (root / "opt/audiohub/src/audiohub/source_routes.py").unlink()
+            checks = audit.inspect(root)
+            self.assertFalse(checks["source_source_routes.py"])
+            self.assertFalse(checks["source_routing_isolated_and_fail_closed"])
+
+    def test_missing_dynamic_lan_target_blocks_alpha_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            receiver = root / "opt/audiohub/src/audiohub/network_laptop.py"
+            receiver.write_text(receiver.read_text().replace(
+                "if lan_target() != target:", "if False:"
+            ))
+            self.assertFalse(
+                audit.inspect(root)["source_routing_isolated_and_fail_closed"]
+            )
+
+    def test_missing_source_isolation_blocks_alpha_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            runtime = root / "opt/audiohub/src/audiohub/runtime.py"
+            runtime.write_text(runtime.read_text().replace(
+                'channel != getattr(self, "route_plan", default_routes())["lan_slot"]',
+                "True"
+            ))
+            self.assertFalse(
+                audit.inspect(root)["source_routing_isolated_and_fail_closed"]
+            )
 
     def test_valid_synthetic_rootfs_passes(self):
         with tempfile.TemporaryDirectory() as tmp:

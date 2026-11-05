@@ -16,12 +16,14 @@ import time
 
 from .discovery import choose_usb_output, pipewire_nodes, virtual_sinks
 from .network_buffer import PcmPacketBuffer, ReceiverCounters
+from .source_routes import lan_target
 
 TARGET = "audiohub.laptop"
 PORT = 4010
 MAX_PCM = 1152
 HEADER_SIZE = 5
 HEALTH_CHECK_SECONDS = 3.0
+ROUTE_POLICY_CHECK_SECONDS = 1.0
 IDLE_SECONDS = 5.0
 # Only explicit local IPv4 host addresses are allowed for manual opt-in tests.
 # ipaddress.is_private alone also includes link-local/special ranges.
@@ -77,16 +79,18 @@ def accepted_pcm(packet, peer, sender_ip):
     return parse_scream_packet(packet)
 
 
-def player_command():
+def player_command(target=TARGET):
     """Use an explicit PipeWire sink instead of auto-routing to another output."""
+    if target not in ("audiohub.music", "audiohub.laptop", "audiohub.tablet"):
+        raise ValueError("Unsupported manual audio target")
     return [
         "pw-cat", "--playback", "--raw", "--format=s16",
         "--rate=48000", "--channels=2", "--channel-map=stereo",
-        "--target=" + TARGET, "--latency=100ms", "-",
+        "--target=" + target, "--latency=100ms", "-",
     ]
 
 
-def check_audio_target():
+def check_audio_target(target=TARGET):
     """Fail closed if the intended virtual channel or USB output is missing."""
     try:
         result = subprocess.run(
@@ -97,7 +101,7 @@ def check_audio_target():
     if result.returncode != 0:
         raise RuntimeError("PipeWire node inspection failed")
     nodes = pipewire_nodes(result.stdout)
-    if TARGET not in virtual_sinks(nodes):
+    if target not in ("audiohub.music", "audiohub.laptop", "audiohub.tablet") or target not in virtual_sinks(nodes):
         raise RuntimeError("Laptop virtual sink unavailable")
     output = choose_usb_output(nodes)
     if output is None:
@@ -142,12 +146,14 @@ def serve(sender_ip, bind_ip, port, *, unsafe_lan_test=False, prefill_packets=1,
     # Do not permit internal callers to bypass the CLI unsafe-LAN gate.
     sender_ip, bind_ip, port = validate_options(sender_ip, bind_ip, port, unsafe_lan_test)
     backlog = PcmPacketBuffer(prefill=prefill_packets)
-    check_audio_target()
+    target = lan_target()  # Private local route plan, not a CLI/UDP source field.
+    check_audio_target(target)
     counters = ReceiverCounters()
     player = None
     retry_after = 0.0
     last_written_at = None
     next_health_check = 0.0
+    next_policy_check = 0.0
     next_report_at = None
 
     def stop_player():
@@ -176,6 +182,12 @@ def serve(sender_ip, bind_ip, port, *, unsafe_lan_test=False, prefill_packets=1,
         try:
             while True:
                 now = time.monotonic()
+                # Do not keep playing into a stale input when the operator
+                # changes the manual LAN slot. Exit and require a fresh opt-in.
+                if now >= next_policy_check:
+                    next_policy_check = now + ROUTE_POLICY_CHECK_SECONDS
+                    if lan_target() != target:
+                        raise RuntimeError("LAN route changed; restart isolated test receiver")
                 if next_report_at is None:
                     next_report_at = now + 60.0
                 report(now)
@@ -186,7 +198,7 @@ def serve(sender_ip, bind_ip, port, *, unsafe_lan_test=False, prefill_packets=1,
                     elif now >= next_health_check:
                         next_health_check = now + HEALTH_CHECK_SECONDS
                         try:
-                            check_audio_target()
+                            check_audio_target(target)
                         except RuntimeError:
                             counters.output_lost += 1
                             stop_player()
@@ -221,9 +233,9 @@ def serve(sender_ip, bind_ip, port, *, unsafe_lan_test=False, prefill_packets=1,
                         continue
                     retry_after = time.monotonic() + 2.0
                     try:
-                        check_audio_target()
+                        check_audio_target(target)
                         player = subprocess.Popen(
-                            player_command(), stdin=subprocess.PIPE,
+                            player_command(target), stdin=subprocess.PIPE,
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                             bufsize=0, close_fds=True,
                         )

@@ -5,7 +5,7 @@ MissionPilot WD_JOB `PAPA-5B2E6939`.
 **Read this file first when a chat breaks.** Then open
 [ENGINEERING-BACKLOG.md](ENGINEERING-BACKLOG.md),
 [GITHUB-SECURITY-RULESET.md](GITHUB-SECURITY-RULESET.md)
-and GitHub [PR #26](https://github.com/RIVANOXcom/rivanox-audiohub/pull/26)
+and GitHub [PR #29](https://github.com/RIVANOXcom/rivanox-audiohub/pull/29)
 to verify the very latest live state. Do not trust a written SHA without
 re-checking GitHub. The Workbench `PJ2611-0001:R001` AH requirements
 remain the upstream task/validation authority; GitHub provides the
@@ -34,39 +34,38 @@ source, review, issues, artifacts and CI evidence.
   stable technical slots are internal identifiers, not mandatory
   device categories. Renaming does NOT enroll or route a source.
 
-## Latest verified build before the current naming change
+## Latest actually proven image and current work
 
-**PR #25** `wd-papa-5b2e6939-three-input-laptop-integration-20261105`
-head `ed89d4ede47cf026d4dc49a41bc8088207dbe4d1`:
-[CI 42057376647](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42057376647)
-**SUCCESS, 159 Python tests**;
-[native ARM64 42057278883](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42057278883)
-**SUCCESS, 48/48 rootfs checks**, verified compressed image SHA256,
-XZ integrity and provenance manifest.
-[Temporary test ZIP artifact #13428684879](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42057278883/artifacts/13428684879)
-(604,922,855 bytes; expires **2026-12-05**; GitHub sign-in).
-It contains `.img.xz`, `SHA256SUMS.txt`, `PREVIEW-MANIFEST.json`.
-The image is **UNVERIFIED, NOT a release**, no Pi boot/audio evidence.
+**Latest previous fully proven ARM64 build = PR #26**, source
+`9e612290841ed586effc19ca37d2edab479d4524`,
+[source CI 42064478374](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42064478374)
+SUCCESS **172 tests**, [Pi4 image CI 42064465468](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42064465468)
+SUCCESS **50/50 rootfs checks**, image integrity/manifest verified,
+[temporary ZIP artifact #13433476966](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42064465468/artifacts/13433476966)
+expiring **2026-12-05**. Hardware/audio acceptance unverified;
+GitHub sign-in required for the artifact. The PR #26 image includes
+neutral local display names but **NOT the flexible source routing of PR #29**.
 
-**Current development branch (new):**
-`wd-papa-5b2e6939-configurable-input-names-and-handoff-20261105`,
-[stacked draft PR #26](https://github.com/RIVANOXcom/rivanox-audiohub/pull/26)
-based on PR #25's exact head. It adds **neutral Input 1–3 labels**,
-editable personal UI names persisted **in browser localStorage only**,
-a separate **private local audiohub console** name-storage model,
-five UI locales, rootfs safety guards and tests. The private Pi CLI
-is `python3 -m audiohub.input_profiles show` or
-`python3 -m audiohub.input_profiles set music "Wohnzimmer-TV"`
-(as the `audiohub` Linux user, on a physically controlled console).
-Neither interface changes physical source mapping; real authenticated
-phone owner UI and transport assignment remain backlog items.
+**Current in-progress DRAFT [PR #29](https://github.com/RIVANOXcom/rivanox-audiohub/pull/29)**,
+branch `wd-papa-5b2e6939-flexible-source-route-assignment-20261105`,
+stacked from PR #26 exact SHA
+`9e612290841ed586effc19ca37d2edab479d4524`.
+Adds private per-device 0600, schema-validated source mapping
+`src/audiohub/source_routes.py`, three-slot manual LAN reservation,
+at most two distinct Bluetooth sources on other slots, no duplicates,
+new CLI `python3 -m audiohub.source_routes`, dynamic runtime A2DP
+reassignment, fails closed on corrupt policy; the manually started
+LAN UDP player reads its private slot once and **exits if slot changes**.
+The source IP filter remains spoofable; do not use in trusted LAN.
+Offline SD report gets only a boolean source-policy-valid flag.
 
-**Important:** Before marking PR #26 deliverables CI-validated,
-look up its **exact latest head SHA**, CI Source checks run, test count,
-and if triggered, full ARM64 export/checksum/manifest/ZIP upload.
-The image artifact from #25 does **NOT** contain #26's new labels.
-If the new branch lacks a verified artifact, do not link #25's
-artifact as if it contained the changes.
+**Current work checkpoint:** the integration tests and docs are in
+this branch. Source checks must be confirmed against **the exact final
+PR #29 head**; a fresh Pi image can be claimed only when native ARM64
+CI passes its rootfs/pre-export checks, image SHA256/XZ, provenance,
+and artifact upload. Previous artifact #13433476966 cannot be linked
+as if it contains PR #29. Use PR #29 description and Issue #27 for
+current CI run and artifact links, not stale copied SHA.
 
 ## Branch graph (preserve all parallel work)
 
@@ -75,7 +74,7 @@ artifact as if it contained the changes.
 - Original USB hardware preflight **#13**, package inventory **#14**.
 - Original localhost web guard **#15**, owner state/claim **#16 → #17 → #18**.
 - Image/functional integration stack:
-  **#6 → #20 → #21 → #22 → #23 → #24 → #25 → #26**.
+  **#6 → #20 → #21 → #22 → #23 → #24 → #25 → #26 → #29**.
   Each has its own branch and is a Draft; a new author should
   only edit **their own newly created branch based on a verified head**.
 - Original per-source and conservative mix budget **#9** was ported
@@ -88,9 +87,10 @@ artifact as if it contained the changes.
 Three independent internal EQ sink IDs
 `audiohub.music`, `audiohub.laptop`, `audiohub.tablet`;
 the **display names are user-controlled**, defaults `Input 1/2/3`.
-BlueZ first/second A2DP may feed music/tablet if hardware supports
-two streams. A dormant manual Scream LAN receiver (not encrypted or
-authenticated) can feed `audiohub.laptop`. The source code enforces
+**The proposed PR #29 policy now allows BlueZ A2DP streams to use any
+two non-LAN-reserved EQ slots; the isolated, manually started LAN
+receiver can feed the remaining slot.** No authenticated sender
+or physical Bluetooth hardware concurrency is proven. The source code enforces
 a finite 18,432-byte buffer, manual unsafe LAN opt-in, exact RFC1918
 bind, explicit USB sink preflight and no auto network service.
 USB default/loopback routing and recovery have mocked test coverage.

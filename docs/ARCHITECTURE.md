@@ -43,3 +43,30 @@ working authenticated phone UI yet.
 
 See [PROJECT-HANDOFF.md](PROJECT-HANDOFF.md) and
 [ENGINEERING-BACKLOG.md](ENGINEERING-BACKLOG.md) for exact gated work.
+
+## Offline flexible source routing (Draft PR #29)
+
+The internal sink identifiers stay fixed for compatibility but the
+engineering route policy is not a permanent product/device category:
+
+- `music`, `laptop`, `tablet` are three stable EQ slots, shown
+  as independently renameable Input 1/2/3 in browser preview.
+- The private `source-routes.json` policy reserves exactly **one**
+  of these slots for the **manually** launched LAN receiver. Up to
+  two explicitly configured Bluetooth source MACs may be assigned
+  to distinct **remaining** slots; the legacy default auto mode
+  preserves old BT1/BT2 + LAN-slot behavior.
+- The BT supervisor reloads this policy each poll, closes/replaces
+  managed capture loopbacks when reassigned, and denies all BT routes
+  when the local policy is invalid or unsafe.
+- The isolated manual Windows PCM receiver pins the configured LAN
+  sink after private policy validation; if the policy changes while
+  the receiver runs, the receiver exits rather than flowing into
+  another channel. UDP remains **off by default**, plaintext,
+  unauthenticated and source-IP-spoofable.
+- A label is independent of route assignment, and an assigned
+  MAC is NOT proof of a trusted/paired owner device. There is no
+  user-facing authenticated API or validated Pi4 source switching yet.
+
+Implementation details and console lab commands:
+[FLEXIBLE-SOURCE-ROUTING-LAB.md](FLEXIBLE-SOURCE-ROUTING-LAB.md).
