@@ -157,6 +157,7 @@ class AgentCallbackAuthorizationTests(unittest.TestCase):
             def __init__(inner):
                 inner.values = {}
                 inner.trusted = False
+                inner.paired = True
 
             def Set(inner, interface, key, value):
                 inner.values[key] = value
@@ -164,9 +165,11 @@ class AgentCallbackAuthorizationTests(unittest.TestCase):
                     inner.trusted = value
 
             def Get(inner, interface, key):
-                if key != "Trusted":
-                    raise AssertionError("unexpected property")
-                return inner.trusted
+                if key == "Paired":
+                    return inner.paired
+                if key == "Trusted":
+                    return inner.trusted
+                raise AssertionError("unexpected property")
 
         class Bus:
             def get_object(inner, service, path):
@@ -220,6 +223,19 @@ class AgentCallbackAuthorizationTests(unittest.TestCase):
             self.agent.AuthorizeService(self.DEVICE, "audio")
         self.agent.RequestAuthorization(self.DEVICE)
         self.agent.AuthorizeService(self.DEVICE, "audio")
+
+    def test_forged_signal_when_bluez_device_is_not_paired_does_not_grant_trust(self):
+        self.agent.RequestAuthorization(self.DEVICE)
+        self.paired = 1
+        self.properties[self.DEVICE].paired = False
+        self.agent.changed("org.bluez.Device1", {"Paired": True}, [], self.DEVICE)
+        self.assertFalse(self.properties[self.DEVICE].trusted)
+        self.assertEqual(self.agent.pending_authorizations, {})
+
+    def test_signal_origin_filter_is_registered(self):
+        source = (ROOT / "src/audiohub/pairing.py").read_text(encoding="utf-8")
+        self.assertIn('bus_name="org.bluez"', source)
+        self.assertIn('device.Get("org.bluez.Device1", "Paired")', source)
 
     def test_trusted_reconnection_works_after_window(self):
         self.properties[self.DEVICE].trusted = True
