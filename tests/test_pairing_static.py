@@ -15,6 +15,22 @@ class PairingPolicyTests(unittest.TestCase):
         self.assertIn("self.initial_pairing_allowed = self.paired_count() == 0", text)
         self.assertIn("self.initial_pairing_allowed and time.monotonic() < self.deadline", text)
 
+    def test_boot_window_does_not_reset_on_agent_service_restart(self):
+        text = (ROOT / "src/audiohub/pairing.py").read_text(encoding="utf-8")
+        self.assertIn("self.deadline = float(BOOT_WINDOW)", text)
+        self.assertNotIn("self.deadline = time.monotonic() + BOOT_WINDOW", text)
+
+    def test_adapter_discovery_and_pairability_have_nonzero_failsafe(self):
+        text = (ROOT / "src/audiohub/pairing.py").read_text(encoding="utf-8")
+        for name in ("DiscoverableTimeout", "PairableTimeout"):
+            self.assertIn(name + '", dbus.UInt32(BOOT_WINDOW)', text)
+            self.assertNotIn(name + '", dbus.UInt32(0)', text)
+
+    def test_existing_discovery_is_closed_before_opening_boot_window(self):
+        text = (ROOT / "src/audiohub/pairing.py").read_text(encoding="utf-8")
+        self.assertIn('self.adapter.Set("org.bluez.Adapter1", "Discoverable", dbus.Boolean(False))', text)
+        self.assertIn('self.adapter.Set("org.bluez.Adapter1", "Pairable", dbus.Boolean(False))', text)
+
     def test_device_count_and_timeout_bounded(self):
         text = (ROOT / "src/audiohub/pairing.py").read_text(encoding="utf-8")
         self.assertIn("BOOT_WINDOW = 600", text)
