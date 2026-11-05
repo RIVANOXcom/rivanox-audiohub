@@ -55,4 +55,9 @@ printf "FIRST_USER_PASS='%s'\n" "$(openssl rand -hex 32)" >> "$WORK/pi-gen/confi
 echo "pi-gen SHA: $PIN"
 echo "Building unverified pi image. This may need >30 GB of free disk space."
 (cd "$WORK/pi-gen" && sudo ./build.sh)
+# The stage audit writes the inventory into the *actual final rootfs*.
+# pi-gen only exports .img.xz; export our reviewed metadata separately.
+# Never grab an unrelated host file, stale stage, or a fabricated approval.
+sudo python3 "$ROOT/scripts/export_rootfs_inventory.py" \
+  --pi-gen-root "$WORK/pi-gen"
 find "$WORK/pi-gen/deploy" -maxdepth 1 -type f -printf '%f\n'
