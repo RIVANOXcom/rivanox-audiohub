@@ -10,6 +10,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from scripts.preview_manifest import manifest
+from scripts.rootfs_package_inventory import write_inventory
 
 
 class PreviewBundleTests(unittest.TestCase):
@@ -29,6 +30,7 @@ class PreviewBundleTests(unittest.TestCase):
         self.image.write_bytes(lzma.compress(b"test image only"))
         self.checksum = self.dist / "SHA256SUMS.txt"
         self.write_checksum()
+        self.make_inventory()
 
     def write_checksum(self):
         self.checksum.write_text(
@@ -36,12 +38,19 @@ class PreviewBundleTests(unittest.TestCase):
             self.image.name + "\n"
         )
 
+    def make_inventory(self):
+        rootfs = self.path / "rootfs"
+        db = rootfs / "var/lib/dpkg/status"
+        db.parent.mkdir(parents=True, exist_ok=True)
+        db.write_text("Package: pipewire\\nStatus: install ok installed\\nVersion: 1.3-1\\nArchitecture: arm64\\n")
+        write_inventory(rootfs, self.dist / "ROOTFS-PACKAGES.json")
+
     def create(self):
         return manifest(self.dist, self.SHA, self.RUN, self.build_script)
 
     def test_manifest_records_exact_source_pin_and_verifiable_checksum(self):
         data = self.create()
-        self.assertEqual(data["schema"], "rivanox-audiohub-preview-bundle/1")
+        self.assertEqual(data["schema"], "rivanox-audiohub-preview-bundle/2")
         self.assertEqual(data["source_commit_sha"], self.SHA)
         self.assertEqual(data["pi_gen_commit_sha"], self.PIN)
         self.assertEqual(data["github_actions_run_id"], self.RUN)
@@ -49,6 +58,8 @@ class PreviewBundleTests(unittest.TestCase):
         self.assertEqual(data["image_sha256"],
                          hashlib.sha256(self.image.read_bytes()).hexdigest())
         self.assertEqual(data["image_bytes"], self.image.stat().st_size)
+        self.assertEqual(data["package_inventory"]["file"], "ROOTFS-PACKAGES.json")
+        self.assertEqual(data["package_inventory"]["installed_packages"], 1)
         self.assertEqual(json.loads((self.dist / "PREVIEW-MANIFEST.json").read_text()), data)
 
     def test_never_marks_release_hardware_or_wifi_setup_ready(self):
@@ -118,6 +129,7 @@ class PreviewBundleTests(unittest.TestCase):
         self.assertIn("id: preview_artifact", workflow)
         self.assertIn("artifact-url", workflow)
         self.assertIn("dist/PREVIEW-MANIFEST.json", workflow)
+        self.assertIn("dist/ROOTFS-PACKAGES.json", workflow)
         self.assertIn("scripts/preview_manifest.py", workflow)
         self.assertIn("UNVERIFIED", workflow)
         self.assertNotIn("gh release create", workflow)
