@@ -139,3 +139,18 @@ all combined GPL/copyleft/firmware sources and original-code provenance;
 do not infer lawful redistribution from checksum presence. Future proprietary
 feature development requires a separate PRIVATE repo after rights mapping;
 connected GitHub app cannot create/set repo visibility, owner action required.
+
+## 2026-11-05 — read-only local web security maintenance
+
+An existing legacy AGPL alpha status webserver security flaw was found:
+`webserver.py` had fixed URL allowlisting but followed local file
+symlinks and read unbounded static/status bytes. In [Draft PR #43](https://github.com/RIVANOXcom/rivanox-audiohub/pull/43),
+the runtime now uses bounded, per-component `O_NOFOLLOW` with
+`O_NONBLOCK`, requires ordinary files and caps static bytes at
+512 KiB and redacted state JSON at 32 KiB. A native `audit_rootfs.py`
+pre-export check refuses symlinked or oversized image web assets.
+375 source Python tests PASS [run #42111311812](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42111311812).
+Native ARM64 run #42111297565 was started; verify exact source SHA and
+native result before claiming shipping readiness. No device-owner
+authentication, secure production setup or Pi4 audible playback
+acceptance has been implemented. Public AGPL and Model C gates remain.
