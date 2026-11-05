@@ -159,9 +159,11 @@ def _link_chain_evidence(docs: Path, name: str, arch: str, status: dict) -> dict
             break
         a = status.get((current, arch)) or status.get((current, "all"))
         b = status.get((next_package, arch)) or status.get((next_package, "all"))
-        if a is None or b is None:
+        source_a = _source_package(a) if a is not None else None
+        source_b = _source_package(b) if b is not None else None
+        if source_a is None or source_b is None:
             relation = "source_metadata_unavailable"
-        elif _source_package(a) != _source_package(b):
+        elif source_a != source_b:
             relation = "source_mismatch"
         elif not _depends_on(a, next_package):
             relation = "direct_dependency_not_verified"
