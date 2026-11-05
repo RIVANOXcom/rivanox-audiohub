@@ -23,7 +23,9 @@
 > subject to a separate written license. The legal text is under review
 > in [LICENSE-C-DRAFT.md](./LICENSE-C-DRAFT.md), with the
 > [rights audit](./docs/licensing/RIGHTS-AUDIT-2026-11-05.md).
-> See the [source and OS third-party review](./docs/licensing/THIRD-PARTY-REVIEW-2026-11-05.md) and\n> [separate PRIVATE Model C development procedure](./docs/licensing/MODEL-C-PRIVATE-DEVELOPMENT.md).\n> The current published source remains **AGPL-3.0-only**, including
+> See the [source and OS third-party review](./docs/licensing/THIRD-PARTY-REVIEW-2026-11-05.md) and
+> [separate PRIVATE Model C development procedure](./docs/licensing/MODEL-C-PRIVATE-DEVELOPMENT.md).
+> The current published source remains **AGPL-3.0-only**, including
 > existing commercial-use rights under that license. No prior AGPL grant
 > is withdrawn; the draft does not yet grant or restrict additional rights.
 
