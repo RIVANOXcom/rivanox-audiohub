@@ -227,3 +227,22 @@ in pi-gen `work/<build-id>/stage-audiohub/rootfs` and copies verified,
 unique, non-symlinked metadata into deploy; adversarial unit tests protect
 against stale stages and fake approval. Native ARM64 build and artifact
 must be verified at the final exact SHA before claiming success.
+
+## 2026-11-05 build repaired, follow-up doc symlink inspection
+
+Exact PR #36 `a5d11cc6a071baa11520dd9bd41f601520a9af64`,
+source run 42098261940 SUCCESS 302 tests, native ARM64 build
+42098223599 SUCCESS with real 55/55 rootfs guard checks,
+689 packages, 631 copyright hashes, 58 unresolved. Four-file
+temporary image ZIP artifact #13447794801 expires 2026-12-05.
+`public_release_ready=false`, physical Pi4/Edifier and counsel
+review still OPEN. Workbench evidence #2784 saved.
+
+Next separate draft branch `wd-papa-20261105-rootfs-copyright-links`
+based on exact PR36 SHA changes **only legacy AGPL compliance tooling**:
+recognize one direct, safe sibling /usr/share/doc package directory
+link using no-follow FD-based reads; reject multi-hop/absolute/traversal
+symlinks. Add source regression tests and rerun ARM64, check actual
+copyright hashes/missing count at exact new SHA. **Never treat hashes
+as legal approval.** Public main and existing AGPL LICENSE untouched.
+Model C product code must await separate PRIVATE repo, owner Issue #37.
