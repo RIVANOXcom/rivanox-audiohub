@@ -40,6 +40,7 @@ jobs:
           set -euo pipefail
           mkdir -p dist
           sudo cp .pi-gen-build/pi-gen/deploy/*.img.xz dist/
+          sudo cp .pi-gen-build/pi-gen/deploy/ROOTFS-PACKAGES.json dist/
           sudo chown -R "$(id -u):$(id -g)" dist
           cd dist
           shopt -s nullglob
@@ -74,6 +75,7 @@ jobs:
             dist/*.img.xz
             dist/SHA256SUMS.txt
             dist/PREVIEW-MANIFEST.json
+            dist/ROOTFS-PACKAGES.json
           if-no-files-found: error
           retention-days: 30
       - name: Show test-image download in GitHub job summary
