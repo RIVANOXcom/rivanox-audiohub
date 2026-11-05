@@ -43,5 +43,11 @@
   "sourceHint2": "Entrée LAN de test manuel · désactivée par défaut",
   "sourceHint3": "Deuxième entrée Bluetooth · compatibilité matérielle non vérifiée",
   "invalidInputName": "Choisissez un nom unique (1 à 32 caractères, sans contrôles ni balises HTML).",
-  "previewNamesOnly": "Enregistré uniquement dans ce navigateur. Le routage de l’appareil ne change pas."
+  "previewNamesOnly": "Enregistré uniquement dans ce navigateur. Le routage de l’appareil ne change pas.",
+  "sustainabilityEyebrow": "Développement open source indépendant",
+  "sustainabilityTitle": "Aidez AudioHub à continuer de progresser",
+  "sustainabilityDescription": "Votre soutien facultatif contribue aux tests matériels Raspberry Pi, à la sécurité, à l'accessibilité et à la maintenance.",
+  "sustainabilityDisclosure": "Les dons sont facultatifs. AudioHub reste disponible sous AGPL-3.0 ; un don ne donne pas droit à une licence commerciale ni à une assistance prioritaire.",
+  "sustainabilityDonate": "Soutenir sur Ko-fi",
+  "sustainabilityCommercial": "Informations sur les licences commerciales"
 }
