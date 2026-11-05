@@ -10,6 +10,7 @@ import json
 import subprocess
 
 from .discovery import pipewire_nodes
+from .audio_graph import summarize_links
 
 CHANNELS = ("music", "laptop", "tablet")
 
@@ -73,6 +74,7 @@ def inspect_topology(raw, *, query_ok=True):
             "virtual_sink_unique": logical,
             "bluetooth_source_count": bluetooth,
         },
+        "link_observation": summarize_links(raw if query_ok else None),
         "hardware_gates": {
             "speaker_audible": "unverified",
             "three_simultaneous_sources": "unverified",
