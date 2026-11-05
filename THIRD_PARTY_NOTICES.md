@@ -15,3 +15,14 @@ This repository publishes RIVANOX-authored orchestration and UI code under AGPL-
 Before publishing binaries, archive exact dependency versions, redistributable source and applicable license/notice files. Retain upstream attribution; do not claim copyright over those components. Do not bundle streaming-service trademarks or copyrighted media. Spotify and similar services are independent; compatibility statements must not imply endorsement.
 
 The exact composition and legal obligations of a future image must be audited on the artifact actually shipped, not inferred from this provisional list.
+
+## Generated package inventory for future image reviews
+
+The inventory-enabled experimental image branch produces a deterministic
+`ROOTFS-PACKAGES.json` from the **built** dpkg database. It records installed
+package name, version and architecture, plus SHA-256 of an available Debian
+package copyright notice (or an explicit missing marker). Its schema expressly
+reports `legal_review_approved=false`, and the preview bundle validator rejects
+extra/secret-bearing fields or false legal claims. This is evidence for manual
+review, **not** a complete SBOM, patent clearance, third-party license grant,
+or authorization to redistribute an image. Missing notices require follow-up.
