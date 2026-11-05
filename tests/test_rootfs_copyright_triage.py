@@ -217,6 +217,75 @@ class CopyrightTriageTests(unittest.TestCase):
         self.assertEqual(result["alias_relationship_counts"][
             "same_source_and_direct_dependency_declared"], 1)
 
+    def test_second_hop_link_is_reported_but_not_treated_as_covered(self):
+        alias = self.root / "usr/share/doc/liba"
+        alias.unlink()
+        alias.symlink_to("middle", target_is_directory=True)
+        (self.root / "usr/share/doc/middle").symlink_to(
+            "libb", target_is_directory=True
+        )
+        self.status.write_text(self.status.read_text().replace(
+            "Depends: libb (>= 1)", "Depends: middle (>= 1)")
+            + "\nPackage: middle\nStatus: install ok installed\n"
+              "Version: 1\nArchitecture: arm64\n"
+              "Source: librarysuite (1)\nDepends: libb (>= 1)\n")
+        self.refresh()
+        result = analyze(self.root, self.report)
+        self.assertIn({"package": "liba", "reason": "doc_alias_target_link"},
+                      result["unresolved"])
+        item = result["unresolved_link_chains"][0]
+        self.assertEqual(item["named_hops"], ["liba", "middle", "libb"])
+        self.assertEqual(item["termination"], "target_directory")
+        self.assertEqual(item["hop_metadata_checks"], [
+            "same_source_and_direct_dependency_declared",
+            "same_source_and_direct_dependency_declared",
+        ])
+        self.assertFalse(item["legal_clearance"])
+
+    def test_second_hop_absolute_link_is_not_read_or_exposed(self):
+        alias = self.root / "usr/share/doc/liba"
+        alias.unlink()
+        alias.symlink_to("middle", target_is_directory=True)
+        (self.root / "usr/share/doc/middle").symlink_to(
+            "/private/host/secret", target_is_directory=True
+        )
+        self.refresh()
+        result = analyze(self.root, self.report)
+        item = result["unresolved_link_chains"][0]
+        self.assertEqual(item["named_hops"], ["liba", "middle"])
+        self.assertEqual(item["termination"], "unsafe_link_target")
+        self.assertNotIn("/private/host/secret", json.dumps(item))
+
+    def test_cycle_is_bounded_and_never_followed(self):
+        alias = self.root / "usr/share/doc/liba"
+        alias.unlink()
+        alias.symlink_to("middle", target_is_directory=True)
+        (self.root / "usr/share/doc/middle").symlink_to(
+            "liba", target_is_directory=True
+        )
+        self.refresh()
+        result = analyze(self.root, self.report)
+        item = result["unresolved_link_chains"][0]
+        self.assertEqual(item["named_hops"], ["liba", "middle"])
+        self.assertEqual(item["termination"], "cyclic_links")
+
+    def test_multi_hop_different_source_flags_metadata(self):
+        alias = self.root / "usr/share/doc/liba"
+        alias.unlink()
+        alias.symlink_to("middle", target_is_directory=True)
+        (self.root / "usr/share/doc/middle").symlink_to(
+            "libb", target_is_directory=True
+        )
+        self.status.write_text(self.status.read_text().replace(
+            "Depends: libb (>= 1)", "Depends: middle (>= 1)")
+            + "\nPackage: middle\nStatus: install ok installed\n"
+              "Version: 1\nArchitecture: arm64\n"
+              "Source: other-suite (1)\nDepends: libb (>= 1)\n")
+        self.refresh()
+        result = analyze(self.root, self.report)
+        item = result["unresolved_link_chains"][0]
+        self.assertIn("source_mismatch", item["hop_metadata_checks"])
+
 
 if __name__ == "__main__":
     unittest.main()
