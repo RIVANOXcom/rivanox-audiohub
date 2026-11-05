@@ -50,6 +50,10 @@ class RootfsAuditTests(unittest.TestCase):
             "os.O_EXCL", "secrets.token_hex(12)",
             "stat.S_ISREG", "os.replace(name, path.name",
             "os.fsync(dirfd)",
+            "def _stop_all_managed_routes(self):",
+            "def poll_safely(self):",
+            "self._stop_all_managed_routes()",
+            "self.poll_safely()",
         )))
         audio_runtime = root / "opt/audiohub/src/audiohub/runtime.py"
         audio_runtime.write_text(audio_runtime.read_text() +
@@ -131,6 +135,8 @@ class RootfsAuditTests(unittest.TestCase):
             link = root / link_path
             link.parent.mkdir(parents=True, exist_ok=True)
             link.symlink_to("../" + Path(unit_path).name)
+        audio_unit = root / audit.SERVICES["runtime"][0]
+        audio_unit.write_text(audio_unit.read_text() + "KillMode=control-group\n")
         diag_unit = "etc/systemd/system/audiohub-firstboot-diag.service"
         make(diag_unit, (
             "[Unit]\\nConditionPathIsMountPoint=/boot/firmware\\n"
@@ -246,6 +252,36 @@ class RootfsAuditTests(unittest.TestCase):
             root = self.root(tmp)
             self.assertTrue(audit.inspect(root)[
                 "runtime_private_state_nofollow_atomic"
+            ])
+
+
+    def test_missing_supervisor_shutdown_guard_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            runtime = root / "opt/audiohub/src/audiohub/runtime.py"
+            runtime.write_text(runtime.read_text().replace(
+                "self._stop_all_managed_routes()", "pass"
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "unexpected_runtime_failure_stops_all_audio_routes"
+            ])
+
+    def test_wrong_systemd_kill_mode_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            unit = root / audit.SERVICES["runtime"][0]
+            unit.write_text(unit.read_text().replace(
+                "KillMode=control-group", "KillMode=process"
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "unexpected_runtime_failure_stops_all_audio_routes"
+            ])
+
+    def test_managed_route_failure_guard_present_in_normal_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            self.assertTrue(audit.inspect(root)[
+                "unexpected_runtime_failure_stops_all_audio_routes"
             ])
 
     def test_unchecked_status_web_listener_prevents_image_export(self):
