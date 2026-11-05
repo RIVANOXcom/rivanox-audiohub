@@ -1,6 +1,6 @@
 # RIVANOX AudioHub – authoritative developer handoff
 
-> **2026-11-05 latest canonical recovery:** [PAPA_AUDIOHUB_CANONICAL_RESUME_20261105.md](PAPA_CANONICAL_RESUME_20261105.md) and [machine-readable snapshot](PAPA_AUDIOHUB_CHECKPOINT_20261105.json) supersede older PR/#29-centered instructions below. Read the canonical file **FIRST**, verify all live GitHub PR HEADs/CI, then consult this historical incremental log. Current follow-up Draft PR #42 remains isolated from public AGPL `main`; future Model C is **NOT EFFECTIVE**.
+> **2026-11-05 latest canonical recovery:** [PAPA_CANONICAL_RESUME_20261105.md](PAPA_CANONICAL_RESUME_20261105.md) and [machine-readable snapshot](PAPA_AUDIOHUB_CHECKPOINT_20261105.json) supersede older PR/#29-centered instructions below. Read the canonical file **FIRST**, verify all live GitHub PR HEADs/CI, then consult this historical incremental log. Current follow-up Draft PR #42 remains isolated from public AGPL `main`; future Model C is **NOT EFFECTIVE**.
 
 **Last synchronized:** 2026-11-05, project `PJ2611-0001:R001`,
 MissionPilot WD_JOB `PAPA-5B2E6939`.
@@ -270,3 +270,32 @@ duplicate keys, chain cycles and unsafe targets. Verify the exact
 new PR source CI + native ARM64 before claiming these changes run in
 the real image. Current AGPL source unchanged; future Model C requires
 separate PRIVATE repo and legal signoff.
+
+## 2026-11-05 following PR #42: read-only web filesystem boundary
+
+Owner requested continued AudioHub engineering and detailed future chat
+recovery. Parent Draft PR #42 SHA
+`76dc6a0900126bb41b4b691bd4782c4553eea4b0` has successful
+source run `42109205398`, 354/354 Python tests; 79-source-file pending
+Model C provenance ledger and canonical `docs/PAPA_CANONICAL_RESUME_20261105.md`.
+
+On isolated child branch
+`wd-papa-20261105-readonly-web-file-hardening` a real security defect
+was found: original read-only `webserver.py` allowed fixed URL asset
+paths to be opened using `Path.read_bytes()`, following malicious
+`/opt/audiohub/web` or asset symlinks and reading files without limits.
+The runtime `STATE` JSON was also read without an HTTP-specific size
+bound or nofollow check. The change uses `O_NOFOLLOW` for **every**
+absolute path component, `O_NONBLOCK` to refuse blocking special files,
+regular-file checks and caps of 512 KiB per static asset and 32 KiB for
+redacted runtime status. Unsafe/unavailable status is stale/false;
+unsafe assets return 503. `scripts/audit_rootfs.py` adds pre-export
+checks for nonregular, symlinked and oversized image web files and
+required installed server read guards. Regression tests cover those
+attacks; the image still does not expose write APIs.
+
+This is legacy AGPL safety maintenance, **not new commercially
+restricted Model C feature publication**. Check next Draft PR HEAD
+and source/native ARM64 status before claiming completion. Do not
+change `main/LICENSE`, publish a stable image, merge unrelated PRs,
+or claim legal/physical hardware acceptance.
