@@ -21,3 +21,16 @@ The image named `AudioHub-Pi4.img.xz` will be downloadable from GitHub Releases.
 Do not embed reusable passwords, private keys, personal credentials, undisclosed upstream binaries or unsupported service claims in release assets.
 
 The [offline preview-bundle auditor](../scripts/release_bundle_audit.py) and its CI integration verify artifact consistency (image SHA256, decompressed XZ and exact provenance) but **always report public_release_ready=false**. This is deliberately separate from a human-approved public GitHub Release. Follow the [distribution and operator gate procedure](RELEASE-DISTRIBUTION.md) to move an eligible, physically tested image from temporary private Actions artifacts to durable public Releases. The current `publish-image.yml` remains blocked until real owner/security/hardware/compliance evidence and explicit approval are documented.
+
+## License transition gate — 2026-11-05
+
+The owner selected **Model C** as the target for future eligible
+RIVANOX-owned releases (private non-commercial free; business use
+separately licensed). **NOT EFFECTIVE**: current published source is AGPL
+and prior recipient rights are preserved. A new restricted release
+requires a verified rights holder, contributor grants, an actual
+third-party license audit for the entire SD image, professionally reviewed
+community and commercial terms, new effective version, and explicit owner
+signoff. [Machine-audited transition state](licensing/TRANSITION-STATE.json)
+is deliberately NO-GO. Never alter `publish-image.yml` or announce a
+commercially restricted download merely because a draft PR passes CI.

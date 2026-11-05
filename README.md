@@ -17,6 +17,16 @@
 
 </div>
 
+> **Licensing transition — planned Model C, NOT EFFECTIVE.**
+> RIVANOX has selected a future **source-available** model: personal,
+> non-commercial use free of charge; new commercial/organizational use
+> subject to a separate written license. The legal text is under review
+> in [LICENSE-C-DRAFT.md](./LICENSE-C-DRAFT.md), with the
+> [rights audit](./docs/licensing/RIGHTS-AUDIT-2026-11-05.md).
+> See the [source and OS third-party review](./docs/licensing/THIRD-PARTY-REVIEW-2026-11-05.md).\n> The current published source remains **AGPL-3.0-only**, including
+> existing commercial-use rights under that license. No prior AGPL grant
+> is withdrawn; the draft does not yet grant or restrict additional rights.
+
 ## Make your existing speakers smarter
 
 Stop choosing between music, a laptop video, and a tablet. AudioHub is being built to mix multiple simultaneous sources into one set of speakers, with **independent channel volume and EQ**. It is designed to run without a monitor or keyboard after the image has been flashed.
