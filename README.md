@@ -51,6 +51,8 @@ No display, keyboard, SSH session, shell commands, or Linux administration shoul
 
 > ⚠️ **Alpha development – no verified, ready-to-flash SD image has been published yet.** Source snapshots and preview builds are **not stable releases**. Do not assume they are suitable for an unattended device.
 
+For **experimental hardware bench tests only**, an older, short-lived [4 November 2026 Actions image artifact](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/41792407565/artifacts/13303394505) exists (expires 11 November 2026). It is **not** in Releases, is based on older unverified source code, requires GitHub sign-in, and must not be connected to a trusted LAN. See [first Pi 4 experimental test and download help](./docs/FIRST-PI-ALPHA-TEST.md). New preview-image build summaries will link their temporary artifacts and checksum/provenance manifest; they are still not hardware-certified releases.
+
 Once hardware tests and security acceptance are complete, download images from:
 
 **[Latest verified release](https://github.com/RIVANOXcom/rivanox-audiohub/releases/latest)**
