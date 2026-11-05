@@ -21,6 +21,7 @@ These decisions capture user-confirmed requirements and current engineering arch
 | ADR-015 | Three mixer inputs are **generic, individually renameable logical slots**, not mandatory phone/laptop/tablet product categories. | Accepted product requirement 2026-11-05 | Keep existing technical PipeWire keys for compatibility; browser-only previews and offline private labels precede a secure owner-synced API. Dynamic real source/transport reassignment remains unimplemented until authorized, tested. |
 | ADR-016 | An untrusted, unauthenticated Scream UDP receiver must never be auto-started by Pi image installation. | Existing security boundary | Manual isolated lab opt-in only, until an authenticated transport/owner API is reviewed. |
 | ADR-017 | `main` must use an active, main-only PR+CI ruleset with no AI app bypass. | Proposed for operator action; not yet configured | Current repo ruleset query returned `[]`; only authorized owner enables protection, no permission changes by engineering agent. |
+| ADR-018 | Actual A2DP and manually opted-in LAN sources may be assigned to any distinct pair/remainder of the three stable EQ slots, **independent of display labels**. | Source-only engineering implementation, Draft PR #29, physical/owner security validation pending | Private offline policy reserves one manual LAN slot and up to two eligible Bluetooth sources in remaining slots; no automatic unsafe network exposure or proof of trusted device identity. |
 
 ## Engineering observations (not product acceptance)
 
