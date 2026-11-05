@@ -1,0 +1,185 @@
+"""Source-only tests for the manual, unauthenticated LAN audio prototype."""
+import json
+import sys
+import subprocess
+import unittest
+from pathlib import Path
+from unittest import mock
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+from audiohub import network_laptop as laptop
+
+
+def packet(payload=b"\x01\x02\x03\x04", rate=1, width=16, channels=2, mask=3):
+    return bytes((rate, width, channels)) + mask.to_bytes(2, "little") + payload
+
+
+def node(nid, name, media_class):
+    return {
+        "id": nid, "type": "PipeWire:Interface:Node",
+        "info": {"props": {"node.name": name, "media.class": media_class}}
+    }
+
+
+class NetworkLaptopTests(unittest.TestCase):
+    def test_legacy_scream_stereo_frame_is_parsed(self):
+        data = bytes(1152)
+        self.assertEqual(laptop.parse_scream_packet(packet(data)), data)
+        self.assertEqual(laptop.parse_scream_packet(packet(data, mask=0)), data)
+
+    def test_invalid_packets_are_dropped(self):
+        good = packet()
+        bad = (
+            b"", b"short", good + b"x", packet(b"abc"),
+            packet(bytes(1156)), packet(rate=0x81),
+            packet(width=24), packet(channels=6),
+            packet(mask=4), bytearray(good), "not bytes",
+        )
+        for value in bad:
+            with self.subTest(value=str(value)[:30]):
+                self.assertIsNone(laptop.parse_scream_packet(value))
+
+    def test_explicit_untrusted_lan_opt_in_is_mandatory(self):
+        with self.assertRaises(ValueError):
+            laptop.validate_options("192.168.1.10", "192.168.1.20", 4010, False)
+        self.assertEqual(
+            laptop.validate_options("192.168.1.10", "192.168.1.20", 4010, True),
+            ("192.168.1.10", "192.168.1.20", 4010),
+        )
+        self.assertEqual(
+            laptop.validate_options("127.0.0.1", "127.0.0.1", 4010, True),
+            ("127.0.0.1", "127.0.0.1", 4010),
+        )
+
+    def test_public_or_unsafe_sender_and_bind_addresses_are_rejected(self):
+        for sender, bind in (
+            ("8.8.8.8", "192.168.1.20"),
+            ("239.255.77.77", "192.168.1.20"),
+            ("0.0.0.0", "192.168.1.20"),
+            ("2001:db8::1", "192.168.1.20"),
+            ("192.168.1.10", "8.8.8.8"),
+            ("192.168.1.10", "239.255.77.77"),
+        ):
+            with self.subTest(sender=sender, bind=bind), self.assertRaises(ValueError):
+                laptop.validate_options(sender, bind, 4010, True)
+        for port in (0, 80, 65536, True):
+            with self.subTest(port=port), self.assertRaises(ValueError):
+                laptop.validate_options("127.0.0.1", "127.0.0.1", port, True)
+
+    def test_sender_allowlist_is_exact(self):
+        data = packet()
+        self.assertEqual(laptop.accepted_pcm(data, ("192.168.1.10", 4000), "192.168.1.10"), data[5:])
+        self.assertIsNone(laptop.accepted_pcm(data, ("192.168.1.11", 4000), "192.168.1.10"))
+        self.assertIsNone(laptop.accepted_pcm(packet(width=24), ("192.168.1.10", 4000), "192.168.1.10"))
+
+    def test_player_only_targets_isolated_laptop_sink(self):
+        command = laptop.player_command()
+        self.assertEqual(command[0], "pw-cat")
+        self.assertIn("--target=audiohub.laptop", command)
+        self.assertNotIn("--target=auto", command)
+        self.assertIn("--rate=48000", command)
+        self.assertIn("--raw", command)
+        self.assertEqual(command[-1], "-")
+
+    @mock.patch("audiohub.network_laptop.subprocess.run")
+    def test_audio_target_requires_both_sink_and_usb(self, run):
+        found = [
+            node(5, "audiohub.laptop", "Audio/Sink"),
+            node(10, "alsa_output.usb-Edifier_R600USB", "Audio/Sink"),
+        ]
+        run.return_value = subprocess.CompletedProcess(["pw-dump"], 0, json.dumps(found), "")
+        laptop.check_audio_target()
+        run.assert_called_once()
+        run.return_value = subprocess.CompletedProcess(["pw-dump"], 0, json.dumps(found[:1]), "")
+        with self.assertRaisesRegex(RuntimeError, "USB"):
+            laptop.check_audio_target()
+        run.return_value = subprocess.CompletedProcess(["pw-dump"], 0, json.dumps(found[1:]), "")
+        with self.assertRaisesRegex(RuntimeError, "Laptop"):
+            laptop.check_audio_target()
+        run.return_value = subprocess.CompletedProcess(["pw-dump"], 1, "", "error")
+        with self.assertRaises(RuntimeError):
+            laptop.check_audio_target()
+
+    @mock.patch("audiohub.network_laptop.check_audio_target")
+    @mock.patch("audiohub.network_laptop.subprocess.Popen")
+    @mock.patch("audiohub.network_laptop.socket.socket")
+    def test_stranger_or_malformed_packets_never_start_player(self, sock, player, target):
+        receiver = sock.return_value.__enter__.return_value
+        receiver.recvfrom.side_effect = [
+            (packet(), ("192.168.1.99", 4010)),
+            (packet(width=24), ("192.168.1.10", 4010)),
+            KeyboardInterrupt(),
+        ]
+        with self.assertRaises(KeyboardInterrupt):
+            laptop.serve("192.168.1.10", "127.0.0.1", 4010)
+        receiver.bind.assert_called_once_with(("127.0.0.1", 4010))
+        player.assert_not_called()
+
+    @mock.patch("audiohub.network_laptop.check_audio_target")
+    @mock.patch("audiohub.network_laptop.close_player")
+    @mock.patch("audiohub.network_laptop.os.write", return_value=4)
+    @mock.patch("audiohub.network_laptop.os.set_blocking")
+    @mock.patch("audiohub.network_laptop.subprocess.Popen")
+    @mock.patch("audiohub.network_laptop.socket.socket")
+    def test_valid_sender_streams_only_pcm_to_pipewire(
+        self, sock, player, set_blocking, write, close_player, target
+    ):
+        receiver = sock.return_value.__enter__.return_value
+        receiver.recvfrom.side_effect = [(packet(), ("192.168.1.10", 4010)), KeyboardInterrupt()]
+        process = player.return_value
+        process.stdin.fileno.return_value = 42
+        process.poll.return_value = None
+        with self.assertRaises(KeyboardInterrupt):
+            laptop.serve("192.168.1.10", "127.0.0.1", 4010)
+        command = player.call_args.args[0]
+        self.assertIn("--target=audiohub.laptop", command)
+        write.assert_called_once_with(42, b"\x01\x02\x03\x04")
+        set_blocking.assert_called_once_with(42, False)
+        close_player.assert_called_once_with(process)
+
+
+    @mock.patch("audiohub.network_laptop.check_audio_target")
+    @mock.patch("audiohub.network_laptop.close_player")
+    @mock.patch("audiohub.network_laptop.os.write", return_value=4)
+    @mock.patch("audiohub.network_laptop.os.set_blocking")
+    @mock.patch("audiohub.network_laptop.subprocess.Popen")
+    @mock.patch("audiohub.network_laptop.time.monotonic", side_effect=[100.0, 100.0, 100.0, 106.0])
+    @mock.patch("audiohub.network_laptop.socket.socket")
+    def test_idle_sender_releases_player(
+        self, sock, clock, popen, set_blocking, write, close_player, check_target
+    ):
+        receiver = sock.return_value.__enter__.return_value
+        receiver.recvfrom.side_effect = [(packet(), ("192.168.1.10", 4010)), KeyboardInterrupt()]
+        process = popen.return_value
+        process.stdin.fileno.return_value = 42
+        process.poll.return_value = None
+        with self.assertRaises(KeyboardInterrupt):
+            laptop.serve("192.168.1.10", "127.0.0.1", 4010)
+        close_player.assert_any_call(process)
+        self.assertEqual(write.call_count, 1)
+
+    @mock.patch("audiohub.network_laptop.check_audio_target",
+                side_effect=[None, None, RuntimeError("USB removed")])
+    @mock.patch("audiohub.network_laptop.close_player")
+    @mock.patch("audiohub.network_laptop.os.write", return_value=4)
+    @mock.patch("audiohub.network_laptop.os.set_blocking")
+    @mock.patch("audiohub.network_laptop.subprocess.Popen")
+    @mock.patch("audiohub.network_laptop.time.monotonic", side_effect=[100.0, 100.0, 100.0, 104.0])
+    @mock.patch("audiohub.network_laptop.socket.socket")
+    def test_usb_disappearance_stops_playback(
+        self, sock, clock, popen, set_blocking, write, close_player, check_target
+    ):
+        receiver = sock.return_value.__enter__.return_value
+        receiver.recvfrom.side_effect = [(packet(), ("192.168.1.10", 4010)), KeyboardInterrupt()]
+        process = popen.return_value
+        process.stdin.fileno.return_value = 42
+        process.poll.return_value = None
+        with self.assertRaises(KeyboardInterrupt):
+            laptop.serve("192.168.1.10", "127.0.0.1", 4010)
+        self.assertEqual(check_target.call_count, 3)
+        close_player.assert_any_call(process)
+        self.assertEqual(write.call_count, 1)
+
+
+if __name__ == "__main__":
+    unittest.main()
