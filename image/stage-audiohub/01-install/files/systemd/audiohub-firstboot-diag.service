@@ -1,0 +1,24 @@
+[Unit]
+Description=AudioHub ALPHA offline first-boot SD diagnostic (redacted)
+After=local-fs.target bluetooth.service
+ConditionPathIsMountPoint=/boot/firmware
+
+[Service]
+Type=oneshot
+Environment=PYTHONPATH=/opt/audiohub/src
+ExecStart=/usr/bin/python3 -m audiohub.firstboot_diag
+TimeoutStartSec=740
+NoNewPrivileges=yes
+UMask=0077
+ProtectSystem=strict
+ReadWritePaths=/boot/firmware
+ProtectHome=yes
+PrivateTmp=yes
+PrivateNetwork=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX
+
+[Install]
+WantedBy=multi-user.target
