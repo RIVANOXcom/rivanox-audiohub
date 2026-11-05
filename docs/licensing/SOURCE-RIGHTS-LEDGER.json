@@ -1,0 +1,567 @@
+{
+  "schema": "rivanox-audiohub-source-rights-ledger/1",
+  "effective_legacy_license": "AGPL-3.0-only",
+  "future_licensing_intent": "Model C: noncommercial personal free, commercial separately licensed, NOT EFFECTIVE",
+  "review_flags": {
+    "rights_holder_confirmed": false,
+    "human_authorship_and_assignments_checked": false,
+    "third_party_similarity_review_completed": false,
+    "all_sources_eligible_for_model_c": false,
+    "commercial_relicense_approved": false
+  },
+  "files": [
+    {
+      "path": ".github/workflows/build-image-preview.yml",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": ".github/workflows/publish-image.yml",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": ".github/workflows/source-checks.yml",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "build-image.sh",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "image/stage-audiohub/00-packages/00-packages-nr",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "image/stage-audiohub/01-install/00-run.sh",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "image/stage-audiohub/01-install/files/systemd/audiohub-bluetooth.service",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "image/stage-audiohub/01-install/files/systemd/audiohub-firstboot-diag.service",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "image/stage-audiohub/01-install/files/systemd/audiohub-runtime.service",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "image/stage-audiohub/01-install/files/systemd/audiohub-status-web.service",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "image/stage-audiohub/01-install/files/wireplumber/90-audiohub.conf",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "image/stage-audiohub/02-audit/00-run.sh",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "image/stage-audiohub/EXPORT_IMAGE",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "image/stage-audiohub/prerun.sh",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "scripts/audit_rootfs.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "scripts/export_rootfs_inventory.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "scripts/license_transition_audit.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "scripts/preview_manifest.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "scripts/release_bundle_audit.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "scripts/rootfs_copyright_triage.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "scripts/rootfs_package_inventory.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "scripts/source_dependency_audit.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "scripts/source_rights_ledger.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "scripts/verify_package_inventory.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "src/audiohub/__init__.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "src/audiohub/audio_graph.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "src/audiohub/discovery.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "src/audiohub/eq_setup.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "src/audiohub/firstboot_diag.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "src/audiohub/hardware_preflight.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "src/audiohub/input_profiles.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "src/audiohub/mixer.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "src/audiohub/network_buffer.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "src/audiohub/network_laptop.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "src/audiohub/pairing.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "src/audiohub/runtime.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "src/audiohub/source_routes.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "src/audiohub/status_bind.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "src/audiohub/webserver.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "tests/test_audio_graph.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "tests/test_audio_path_integration.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "tests/test_build_contract.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "tests/test_discovery.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "tests/test_export_rootfs_inventory.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "tests/test_firstboot_diag.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "tests/test_flexible_routing_integration.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "tests/test_hardware_preflight.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "tests/test_input_profiles.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "tests/test_license_transition.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "tests/test_locales.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "tests/test_mixer.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "tests/test_network_bind_scope.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "tests/test_network_buffer.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "tests/test_network_image_safety.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "tests/test_network_laptop.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "tests/test_pairing_static.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "tests/test_preview_manifest.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "tests/test_release_bundle_audit.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "tests/test_rootfs_audit.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "tests/test_rootfs_copyright_triage.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "tests/test_rootfs_package_inventory.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "tests/test_runtime_recovery.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "tests/test_runtime_static.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "tests/test_source_dependency_audit.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "tests/test_source_rights_ledger.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "tests/test_source_routes.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "tests/test_status_bind.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "tests/test_support_and_licensing.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "tests/test_three_input_pipeline.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "tests/test_verify_package_inventory.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "tests/test_web_status.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "web/app.js",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "web/index.html",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "web/locales/de.json",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "web/locales/en.json",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "web/locales/es.json",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "web/locales/fr.json",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "web/locales/it.json",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "web/styles.css",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    }
+  ]
+}
