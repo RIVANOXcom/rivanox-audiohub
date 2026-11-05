@@ -192,3 +192,14 @@ four rootfs checks added; initial exact code source CI #42124595480
 SUCCESS **434/434 tests**. New native image guard count target **60**
 requires a confirmed native ARM64 run on exact final SHA. Human owner
 claiming and physical pairing acceptance remain separate P0 work.
+
+## BlueZ finite Pairable/DiscoverableTimeout (PR #46 follow-up)
+
+Initial image had unlimited `DiscoverableTimeout=0`. Upstream BlueZ
+confirms zero disables timer; `PairableTimeout=0` also unlimited. PR46
+sets both to `BOOT_WINDOW=600`, starts from closed mode, and uses a
+boot-relative deadline so agent restarts cannot reopen a fresh full
+600-second interval. Added 3 static and 4 rootfs tests; code SHA
+`0852894bde8504606cfdc32252a3c5c075c5771a` source run
+42125422399 SUCCESS **441 tests**. Current native rootfs target **61**
+requires exact final build; no physical Bluetooth or owner-claiming pass.

@@ -81,3 +81,16 @@ window; untrusted clients cannot authorize services solely from open
 discovery. Agent Release clears pending requests. The temporary firstboot
 window is **not ownership verification**. Native Pi/BlueZ hardware tests,
 secure owner claiming and legal release signoff remain OPEN.
+
+## Bounded Bluetooth adapter discovery after agent crashes
+
+Official BlueZ Adapter1 documentation defines PairableTimeout=0 and
+DiscoverableTimeout=0 as unlimited. Legacy AudioHub set unlimited
+DiscoverableTimeout, which could leave pairing discoverability open after
+an agent crash. Draft PR #46 configures finite 600-second timeouts for
+**both** Adapter1 properties, first closes previously discoverable and
+pairable adapter states, and uses Linux monotonic boot-relative deadline
+instead of a fresh timeout on every systemd restart. This is a defense in
+depth for the alpha guest pairing window, **not** secure authenticated
+owner enrollment. Confirm exact native run + real device behavior before
+enabling general availability.

@@ -142,10 +142,10 @@
     "do not silently merge stacked draft PRs"
   ],
   "last_source_rights_ci_verified": {
-    "run_id": 42124595480,
-    "commit_sha": "f194b7740670c8549599844f5947edb4b1353bb4",
+    "run_id": 42125422399,
+    "commit_sha": "0852894bde8504606cfdc32252a3c5c075c5771a",
     "outcome": "success",
-    "python_tests": 434,
+    "python_tests": 441,
     "source_rights_ledger_file_count": 79
   },
   "latest_legacy_security_change": {
@@ -209,10 +209,20 @@
     "max_simultaneous_authorizations": 2,
     "bluez_paired_property_verified": true,
     "bluez_signal_sender_filtered": true,
-    "expected_rootfs_guard_count": 60,
+    "expected_rootfs_guard_count": 61,
     "authenticated_owner_claiming_complete": false,
     "hardware_acceptance": false,
     "model_c_effective": false,
-    "public_release_authorized": false
+    "public_release_authorized": false,
+    "pairable_timeout_seconds": 600,
+    "discoverable_timeout_seconds": 600,
+    "initial_deadline_relative_to_linux_boot": true,
+    "native_status": "not verified at exact latest code+docs commit",
+    "new_code_source_ci": {
+      "run_id": 42125422399,
+      "commit_sha": "0852894bde8504606cfdc32252a3c5c075c5771a",
+      "outcome": "success",
+      "python_tests": 441
+    }
   }
 }

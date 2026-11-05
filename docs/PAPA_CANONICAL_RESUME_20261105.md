@@ -286,5 +286,18 @@ review, and Pi4 + Edifier audible/hardware acceptance is open.
 
 **Unresolved gates unchanged:** Public main and historical AGPL rights unchanged, future Model C NOT EFFECTIVE, private new product repo not verified (issue #37), source ownership/legal review issue #32, Raspberry Pi OS third-party notices issue #40 (particularly raspberrypi-net-mods), and physical Pi4/Edifier approval issue #2 OPEN. No public Release, merge, history rewrite or owner provisioning claim. The latest source CI and native run must be rechecked live before next development.
 
+
+## N. Further PR46 BlueZ crash-safety fix: never allow infinite adapter discovery
+
+**Newly confirmed upstream BlueZ property semantics:** [official BlueZ org.bluez.Adapter documentation](https://github.com/bluez/bluez/blob/master/doc/org.bluez.Adapter.rst) states **DiscoverableTimeout=0** and **PairableTimeout=0** disable their respective timers, potentially leaving adapters discoverable/pairable indefinitely. The previous AudioHub agent explicitly set \`DiscoverableTimeout=dbus.UInt32(0)\` and did not set finite \`PairableTimeout\`. If the agent crashed or the OS unexpectedly lost its periodic refresh, the adapter could stay open.
+
+**Security fix on PR46:** Set **both** adapter timeouts to \`dbus.UInt32(BOOT_WINDOW)\` (= 600 seconds), first set Pairable/Discoverable false on startup and then reopen only after the \`allowed()\` decision. The initial guest pairing deadline now uses **boot-relative Linux CLOCK_MONOTONIC uptime** \`float(BOOT_WINDOW)\`, rather than \`time.monotonic() + BOOT_WINDOW\` on every agent process start: a simple systemd service crash/restart cannot regrant a complete ten-minute window. A reboot is a separate owner-claiming problem and is **not** security enrollment.
+
+**Test evidence:** code SHA \`0852894bde8504606cfdc32252a3c5c075c5771a\`, [source GitHub Actions run #42125422399](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42125422399) **SUCCESS, 441/441 Python tests**. Adds 3 static policy tests and 4 image-rootfs adversarial tests detecting infinite timeouts and restart-widened pairing window. New rootfs check \`bluetooth_pairable_discoverable_timers_bounded\` increases the total required real image checks to **61** (from PR45's verified 59 via PR46's two new guards). The independent native ARM64 run at this final docs update must be checked live; source CI does NOT establish BlueZ behavior on a real Pi.
+
+**Prior exact source CI #42124897548** passed 434 tests at initial docs checkpoint SHA \`8341d2a7709c10d2810462f7a4455b51ac5b8adf\`; superseded by the later 441 tests at code SHA above. Additional checkpoint/docs edits may supersede this SHA; always verify latest exact-head Actions run and artifact before stating final success.
+
+**Remaining limits:** still NoInputNoOutput experimental pairing, no cryptographically authenticated owner-claiming, no manual physical verification of BlueZ callbacks, no Pi4/Edifier loudspeaker acceptance, no effective Model C commercial license, no complete third-party OS permission review, no public image Release. Public AGPL recipients retain their rights.
+
 **END OF HANDOFF.** If a live run/PR contradicts this document, treat
 the live GitHub evidence as authoritative, reconcile and update this file.
