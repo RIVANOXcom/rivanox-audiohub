@@ -136,6 +136,55 @@ class FlexibleRoutingIntegration(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             network_laptop.check_audio_target("audiohub.tablet")
 
+    @mock.patch("audiohub.network_laptop.lan_target",
+                side_effect=["audiohub.music", "audiohub.tablet"])
+    @mock.patch("audiohub.network_laptop.check_audio_target")
+    @mock.patch("audiohub.network_laptop.subprocess.Popen")
+    @mock.patch("audiohub.network_laptop.socket.socket")
+    def test_manual_lan_receiver_exits_on_live_policy_change(
+            self, socket, player, check, targets):
+        # The first private route lookup occurs before the listener opens;
+        # the second detects that its input reservation changed.
+        with self.assertRaisesRegex(RuntimeError, "route changed"):
+            network_laptop.serve("192.168.1.11", "127.0.0.1", 4010,
+                                 unsafe_lan_test=True)
+        check.assert_called_once_with("audiohub.music")
+        socket.return_value.__enter__.return_value.bind.assert_called_once_with(
+            ("127.0.0.1", 4010))
+        player.assert_not_called()
+        self.assertEqual(targets.call_count, 2)
+
+    @mock.patch("audiohub.runtime.run")
+    @mock.patch("audiohub.runtime.atomic_json")
+    @mock.patch("audiohub.runtime.subprocess.Popen")
+    def test_corrupted_private_route_plan_terminates_running_capture(
+            self, spawn, atomic, execute):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp) / "audiohub"
+            directory.mkdir(mode=0o700)
+            (directory / source_routes.FILENAME).write_text("bad json")
+            old = Process()
+            s = self.supervisor(source_routes.defaults())
+            s.loopbacks = {BT1: (source(BT1)["name"], "audiohub.music", old)}
+            def run(*args):
+                return SimpleNamespace(returncode=0, stdout=(
+                    json.dumps([
+                        {"type":"PipeWire:Interface:Node","id":10,"info":{"props":{
+                            "node.name":"alsa_output.usb-Edifier_R600USB",
+                            "media.class":"Audio/Sink"}}},
+                        {"type":"PipeWire:Interface:Node","id":31,"info":{"props":{
+                            "node.name":"audiohub.music","media.class":"Audio/Sink"}}}
+                    ]) if args == ("pw-dump",) else ""
+                ))
+            execute.side_effect = run
+            with mock.patch.object(runtime, "CONFIG", directory):
+                s.poll()
+            self.assertFalse(s.route_policy_valid)
+            self.assertTrue(old.terminated)
+            self.assertEqual(s.loopbacks, {})
+            spawn.assert_not_called()
+            self.assertFalse(atomic.call_args.args[1]["route_policy_valid"])
+
     def test_unclaimed_status_does_not_expose_source_mac(self):
         from audiohub.webserver import public_status
         state = {"updated_at": 100, "usb_output": True,
