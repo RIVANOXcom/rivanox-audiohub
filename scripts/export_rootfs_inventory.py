@@ -17,6 +17,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from scripts.verify_package_inventory import verify
+from scripts.rootfs_copyright_triage import analyze
 
 
 FILENAME = "ROOTFS-PACKAGES.json"
