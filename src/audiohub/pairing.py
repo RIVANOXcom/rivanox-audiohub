@@ -5,6 +5,7 @@ Limited to a ten-minute, at-most-two-new-device window while unowned.
 This window does not provide cryptographic ownership proof: no public stable
 image may ship until device claiming and re-pairing are security reviewed.
 """
+import re
 import time
 
 import dbus
@@ -15,6 +16,24 @@ from gi.repository import GLib
 PATH = "/org/rivanox/audiohub/agent"
 BOOT_WINDOW = 600
 PAIRING_LIMIT = 2
+AUTHORIZATION_TTL = 45
+BLUEZ_DEVICE_PATH = re.compile(
+    r"/org/bluez/hci[0-9]{1,3}/dev_(?:[0-9A-F]{2}_){5}[0-9A-F]{2}\Z"
+)
+
+
+def authorized_pairing_signal(device, pending, initial_allowed, deadline,
+                              paired_count, now):
+    """Only a previously authorized, fresh BlueZ device may receive trust."""
+    return (
+        isinstance(device, str) and BLUEZ_DEVICE_PATH.fullmatch(device) is not None
+        and type(pending) is dict
+        and initial_allowed is True
+        and isinstance(now, (float, int)) and now < deadline
+        and type(paired_count) is int and 1 <= paired_count <= PAIRING_LIMIT
+        and device in pending and now < pending[device]
+    )
+
 
 
 class Rejected(dbus.DBusException):
@@ -26,6 +45,7 @@ class PairingAgent(dbus.service.Object):
         super().__init__(bus, PATH)
         self.bus = bus
         self.deadline = time.monotonic() + BOOT_WINDOW
+        self.pending_authorizations = {}
         mgr = dbus.Interface(bus.get_object("org.bluez", "/org/bluez"), "org.bluez.AgentManager1")
         mgr.RegisterAgent(PATH, "NoInputNoOutput")
         mgr.RequestDefaultAgent(PATH)
@@ -56,8 +76,30 @@ class PairingAgent(dbus.service.Object):
         )
 
     def allowed(self):
-        return (self.initial_pairing_allowed and time.monotonic() < self.deadline
-                and self.paired_count() < PAIRING_LIMIT)
+        if not (self.initial_pairing_allowed and time.monotonic() < self.deadline):
+            return False
+        try:
+            return self.paired_count() < PAIRING_LIMIT
+        except Exception:
+            # BlueZ reporting failure must close, not reopen, pairing.
+            return False
+
+    def authorize_pending(self, device):
+        if not isinstance(device, str) or BLUEZ_DEVICE_PATH.fullmatch(device) is None:
+            raise Rejected("Invalid Bluetooth device path")
+        if not self.allowed():
+            raise Rejected("Pairing is closed")
+        now = time.monotonic()
+        self.pending_authorizations = {
+            path: expires for path, expires in self.pending_authorizations.items()
+            if expires > now
+        }
+        if device not in self.pending_authorizations and (
+                len(self.pending_authorizations) >= PAIRING_LIMIT):
+            raise Rejected("Too many simultaneous pairing requests")
+        self.pending_authorizations[device] = min(
+            now + AUTHORIZATION_TTL, self.deadline
+        )
 
     def refresh(self):
         value = dbus.Boolean(self.allowed())
