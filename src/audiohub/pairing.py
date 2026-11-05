@@ -108,30 +108,56 @@ class PairingAgent(dbus.service.Object):
         return True
 
     def changed(self, interface, change, invalidated, path=None):
-        if interface == "org.bluez.Device1" and change.get("Paired") and path:
-            device = dbus.Interface(self.bus.get_object("org.bluez", path), "org.freedesktop.DBus.Properties")
-            device.Set("org.bluez.Device1", "Trusted", dbus.Boolean(True))
+        if interface != "org.bluez.Device1" or not isinstance(change, dict):
+            return
+        if not change.get("Paired") or path is None:
+            return
+        try:
+            now = time.monotonic()
+            count = self.paired_count()
+            if authorized_pairing_signal(
+                    path, self.pending_authorizations,
+                    self.initial_pairing_allowed, self.deadline, count, now):
+                device = dbus.Interface(
+                    self.bus.get_object("org.bluez", path),
+                    "org.freedesktop.DBus.Properties"
+                )
+                device.Set("org.bluez.Device1", "Trusted", dbus.Boolean(True))
+        finally:
+            # An authorization is one-use; a later signal cannot replay it.
+            self.pending_authorizations.pop(path, None)
             self.refresh()
 
     @dbus.service.method("org.bluez.Agent1", in_signature="", out_signature="")
     def Release(self):
-        pass
+        self.pending_authorizations.clear()
+        self.initial_pairing_allowed = False
+        self.refresh()
 
     @dbus.service.method("org.bluez.Agent1", in_signature="o", out_signature="")
     def RequestAuthorization(self, device):
-        if not self.allowed():
-            raise Rejected("Pairing is closed")
+        self.authorize_pending(device)
 
     @dbus.service.method("org.bluez.Agent1", in_signature="os", out_signature="")
     def AuthorizeService(self, device, uuid):
-        p = dbus.Interface(self.bus.get_object("org.bluez", device), "org.freedesktop.DBus.Properties")
-        if not p.Get("org.bluez.Device1", "Trusted") and not self.allowed():
+        if not isinstance(device, str) or BLUEZ_DEVICE_PATH.fullmatch(device) is None:
+            raise Rejected("Invalid Bluetooth device path")
+        p = dbus.Interface(
+            self.bus.get_object("org.bluez", device),
+            "org.freedesktop.DBus.Properties"
+        )
+        if p.Get("org.bluez.Device1", "Trusted"):
+            return
+        # Open discovery is not sufficient authorization for services.
+        now = time.monotonic()
+        if not self.allowed() or not (
+                device in self.pending_authorizations
+                and now < self.pending_authorizations[device]):
             raise Rejected("Untrusted device")
 
     @dbus.service.method("org.bluez.Agent1", in_signature="ou", out_signature="")
     def RequestConfirmation(self, device, passkey):
-        if not self.allowed():
-            raise Rejected("Pairing is closed")
+        self.authorize_pending(device)
 
     @dbus.service.method("org.bluez.Agent1", in_signature="o", out_signature="s")
     def RequestPinCode(self, device):
