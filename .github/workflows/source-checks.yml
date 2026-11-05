@@ -39,6 +39,12 @@ jobs:
           set -euo pipefail
           python3 scripts/source_dependency_audit.py
 
+      - name: Require per-file source ownership and third-party review ledger
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/source_rights_ledger.py
+
       - name: Check any checked-in Python or JS sources
         shell: bash
         run: |

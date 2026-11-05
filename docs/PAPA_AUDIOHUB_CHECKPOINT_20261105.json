@@ -1,0 +1,128 @@
+{
+  "schema": "rivanox-audiohub-papa-checkpoint/1",
+  "captured_date": "2026-11-05",
+  "timezone": "Europe/Berlin",
+  "project_key": "PJ2611-0001:R001",
+  "source_repo": "RIVANOXcom/rivanox-audiohub",
+  "public_main_sha_at_capture": "84303e22b14da9e876ec6288af376671fd9898a9",
+  "effective_license": "AGPL-3.0-only",
+  "future_license_intent": "RIVANOX personal-free/commercial-paid Model C",
+  "future_license_effective": false,
+  "license_rightsholder_verified": false,
+  "third_party_commercial_clearance": false,
+  "model_c_private_repo_verified": false,
+  "old_agpl_recipient_rights_preserved": true,
+  "public_release_authorized": false,
+  "hardware_accepted": false,
+  "official_release_count_at_capture": 0,
+  "source_rights_ledger": {
+    "path": "docs/licensing/SOURCE-RIGHTS-LEDGER.json",
+    "file_count": 79,
+    "all_reviewed": false
+  },
+  "canonical_resume": "docs/PAPA_CANONICAL_RESUME_20261105.md",
+  "draft_pr_chain": [
+    {
+      "number": 35,
+      "base": "wd-papa-20261105-rootfs-license-inventory",
+      "head": "wd-papa-20261105-model-c-licensing-transition",
+      "verified_head_sha": "4a546690cddb09a8366dffac1ef864e6ea32774c"
+    },
+    {
+      "number": 36,
+      "base": "wd-papa-20261105-model-c-licensing-transition",
+      "head": "wd-papa-20261105-legal-inventory-export-fix",
+      "verified_head_sha": "a5d11cc6a071baa11520dd9bd41f601520a9af64"
+    },
+    {
+      "number": 38,
+      "base": "wd-papa-20261105-legal-inventory-export-fix",
+      "head": "wd-papa-20261105-rootfs-copyright-links",
+      "verified_head_sha": "d0645965ae98082c3c3bdf5568938857df18c658"
+    },
+    {
+      "number": 39,
+      "base": "wd-papa-20261105-rootfs-copyright-links",
+      "head": "wd-papa-20261105-copyright-triage-and-doc-alias-policy",
+      "verified_head_sha": "065506961fad34448e75f513d39db684f65c7cd7"
+    },
+    {
+      "number": 41,
+      "base": "wd-papa-20261105-copyright-triage-and-doc-alias-policy",
+      "head": "wd-papa-20261105-dpkg-identity-reconciliation",
+      "verified_head_sha": "5eae1104469a1585db8368e1bef00b5de204fb68"
+    },
+    {
+      "number": 42,
+      "base": "wd-papa-20261105-dpkg-identity-reconciliation",
+      "head": "wd-papa-20261105-canonical-resume-source-rights",
+      "verified_head_sha": null
+    }
+  ],
+  "last_native_verified": {
+    "run_id": 42106833667,
+    "source_sha": "5eae1104469a1585db8368e1bef00b5de204fb68",
+    "conclusion": "success",
+    "python_tests": 336,
+    "rootfs_checks_passed": 55,
+    "installed_packages": 689,
+    "architecture_counts": {
+      "arm64": 538,
+      "all": 151
+    },
+    "copyright_hashes_available": 680,
+    "copyright_paths_unresolved": 9,
+    "one_hop_alias_source_dep_observations_passed": 49,
+    "unresolved_reason_counts": {
+      "doc_alias_target_link": 8,
+      "copyright_file_missing": 1
+    },
+    "artifact_id": 13453052359,
+    "artifact_unverified": true,
+    "artifact_expiry": "2026-12-05T20:56:59Z",
+    "public_release_ready": false
+  },
+  "open_issues": [
+    {
+      "number": 2,
+      "subject": "Physical Pi4 + Edifier R600USB audio acceptance"
+    },
+    {
+      "number": 32,
+      "subject": "Model C legal rightsholder, ownership, counsel review and effective version approval"
+    },
+    {
+      "number": 37,
+      "subject": "Owner: create empty private future Model C repository"
+    },
+    {
+      "number": 40,
+      "subject": "Nine unresolved Raspberry Pi OS copyright paths; upstream rights review"
+    }
+  ],
+  "upstream_open_issue": "https://github.com/RPi-Distro/raspberrypi-net-mods/issues/14",
+  "next_actions": [
+    "Verify PR42 exact SHA source CI and ledger gate",
+    "Review the eight two-hop documentation alias license texts and corresponding sources",
+    "Resolve explicit raspberrypi-net-mods rights/notice issue",
+    "Obtain owner-created private repo before new Model C-only product code",
+    "Complete DE/EU legal, authorship and human rights-holder review",
+    "Perform physical Pi4 Edifier sound and secure device ownership acceptance"
+  ],
+  "prohibited_unapproved_actions": [
+    "do not rewrite Git history",
+    "do not change main LICENSE",
+    "do not claim Model C effective",
+    "do not publish official image release",
+    "do not assert copyright hashes prove redistribution rights",
+    "do not silently merge stacked draft PRs"
+  ],
+  "last_source_rights_ci_verified": {
+    "run_id": 42108997052,
+    "commit_sha": "469dbb913deedfcb65c857bcee3903f40fe149cf",
+    "outcome": "success",
+    "python_tests": 354,
+    "source_rights_ledger_file_count": 79,
+    "production_arm64_build_not_rerun_for_docs_only": true
+  }
+}
