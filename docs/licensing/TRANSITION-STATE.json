@@ -1,0 +1,21 @@
+{
+  "schema": "rivanox-audiohub-license-transition/1",
+  "decision_date": "2026-11-05",
+  "project": "PJ2611-0001:R001",
+  "decision": "model-c-source-available-free-private-commercial-permission-required",
+  "stage": "draft_legal_review",
+  "current_effective_source_license": "AGPL-3.0-only",
+  "proposed_future_source_license": "LicenseRef-RIVANOX-Community-1.0",
+  "proposed_document": "LICENSE-C-DRAFT.md",
+  "current_license_path": "LICENSE",
+  "rights_holder_identified_and_verified": false,
+  "rights_chain_verified": false,
+  "historical_agpl_rights_preserved": true,
+  "third_party_license_clearance": false,
+  "legal_counsel_approved": false,
+  "owner_approved_effective_switch": false,
+  "hardware_and_release_approved": false,
+  "effective_release_tag": null,
+  "license_switch_effective": false,
+  "public_release_authorized": false
+}
