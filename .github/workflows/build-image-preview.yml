@@ -2,7 +2,7 @@ name: Build unverified Pi 4 image
 on:
   workflow_dispatch:
   push:
-    branches: [audiohub-preview-build, wd-papa-5b2e6939-image-audit, wd-papa-5b2e6939-preview-download-trace-20261105]
+    branches: [audiohub-preview-build, wd-papa-5b2e6939-image-audit, wd-papa-5b2e6939-preview-download-trace-20261105, wd-papa-5b2e6939-pi-preview-local-status-20261105]
 permissions:
   contents: read
 concurrency:
