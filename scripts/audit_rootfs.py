@@ -58,6 +58,14 @@ def inspect(root: Path) -> dict[str, bool]:
             and "ThreadingHTTPServer((select_bind_address(), 8765)" in webserver
             and "0.0.0.0" not in webserver
         )
+        checks["status_static_and_state_files_nofollow_bounded"] = all(
+            marker in webserver for marker in (
+                "STATIC_MAX_BYTES = 512 * 1024",
+                "STATUS_MAX_BYTES = 32 * 1024",
+                "os.O_NOFOLLOW", "os.O_NONBLOCK",
+                "stat.S_ISREG", "read_public_status()",
+            )
+        )
         checks["status_service_no_unsafe_lan_opt_in"] = (
             "AUDIOHUB_UNSAFE_STATUS_LAN" not in status_unit
             and "AUDIOHUB_STATUS_BIND_IP" not in status_unit
@@ -66,6 +74,7 @@ def inspect(root: Path) -> dict[str, bool]:
         checks["status_loopback_default"] = False
         checks["status_web_uses_guarded_bind"] = False
         checks["status_service_no_unsafe_lan_opt_in"] = False
+        checks["status_static_and_state_files_nofollow_bounded"] = False
     # Offline-only debug output is written by a strictly sandboxed root
     # service; never include network enrollment secrets in the image or report.
     diag_unit_path = root / "etc/systemd/system/audiohub-firstboot-diag.service"
@@ -286,6 +295,30 @@ def inspect(root: Path) -> dict[str, bool]:
         )
     except OSError:
         checks["privacy_safe_pipewire_link_observation"] = False
+    # Verify packaged web assets are actual local files. Symlinked webroots,
+    # locale directories, files, FIFOs or huge resources are release blockers
+    # even when the read-only Python server would fail closed at runtime.
+    static_root = root / "opt/audiohub/web"
+    web_dirs = ("opt", "opt/audiohub", "opt/audiohub/web",
+                "opt/audiohub/web/locales")
+    static_names = ("index.html", "app.js", "styles.css") + tuple(
+        "locales/" + lang + ".json" for lang in LANGUAGES
+    )
+    safe_directories = all(
+        (root / name).is_dir() and not (root / name).is_symlink()
+        for name in web_dirs
+    )
+    safe_files = safe_directories
+    for name in static_names:
+        path = static_root / name
+        try:
+            metadata = path.lstat()
+            file_safe = (stat.S_ISREG(metadata.st_mode)
+                         and 0 < metadata.st_size <= 512 * 1024)
+        except OSError:
+            file_safe = False
+        safe_files = safe_files and file_safe
+    checks["web_static_files_nofollow_regular_bounded"] = safe_files
     for name in ("index.html", "app.js", "styles.css"):
         checks["web_" + name] = (root / "opt/audiohub/web" / name).is_file()
     base_keys = None

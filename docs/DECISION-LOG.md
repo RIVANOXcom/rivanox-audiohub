@@ -31,6 +31,8 @@ These decisions capture user-confirmed requirements and current engineering arch
 | ADR-023 | Preserve historical public AGPL grants and make a **new PRIVATE repository** the boundary for future eligible Model C product features. | Accepted strategy; **owner setup pending** ([issue #37](https://github.com/RIVANOXcom/rivanox-audiohub/issues/37)) | No force-rewriting prior commits, no public fork presented as private, no bulk relicensing without file-by-file chain of title. Current GitHub integration cannot create a private repo. |
 | ADR-024 | Maintain a **canonical PAPA resume** and complete pending-rights ledger in CI for legacy AudioHub source during license transition. | Technical requirement implemented in isolated Draft [PR #42](https://github.com/RIVANOXcom/rivanox-audiohub/pull/42), not legal approval | Source file inventory must cover every current application/build/test/CI source with all copyright, third-party and Model C authorizations false until independently verified. Handoff must record exact GitHub SHAs, run IDs, risks and next-chat instructions. |
 
+| ADR-025 | Harden the legacy read-only status webserver against symlink escape and unbounded local-file reads, and reject unsafe static resources during Pi image packaging. | Engineering implementation in isolated subsequent draft, requires exact-head CI and ARM64 validation | Allowlist alone does not prevent filesystem symlink escape. Require per-component nofollow file opens, regular-file checks, small caps, stale health on invalid status and pre-export web-file checks. No owner authentication or general release approval is implied. |
+
 ## Engineering observations (not product acceptance)
 
 - Source-level tests and policy checks have succeeded on GitHub Actions.

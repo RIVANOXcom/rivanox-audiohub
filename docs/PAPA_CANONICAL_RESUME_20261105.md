@@ -148,9 +148,9 @@ bash -n build-image.sh
 ```text
 PAPA / RIVANOX AUDIOHUB WEITER — CANONICAL RESUME
 Read first:
-https://github.com/RIVANOXcom/rivanox-audiohub/blob/wd-papa-20261105-canonical-resume-source-rights/docs/PAPA_CANONICAL_RESUME_20261105.md
+https://github.com/RIVANOXcom/rivanox-audiohub/blob/wd-papa-20261105-readonly-web-file-hardening/docs/PAPA_CANONICAL_RESUME_20261105.md
 Project PAPA Workbench: PJ2611-0001:R001.
-Verify LIVE repo, current PR HEADs/CI and issue status before any changes.
+Verify LIVE repo, PR #43 / #42 stacked heads, exact code and image CI, and issue status before any changes.
 The public main and historical source remain AGPL-3.0-only; Model C
 personal-free/commercial-paid is a future NOT-EFFECTIVE draft.
 Continue evidence-backed engineering and code/license verification
@@ -162,6 +162,52 @@ copyright review is tracked in issue #40.
 Save exact commits, CI proof, decisions and detailed new handoff
 updates to GitHub and PAPA Workbench for future chat switches.
 ```
+
+
+## J. Next verified engineering branch after canonical PR #42: web file safety
+
+**Branch (child of #42):** `wd-papa-20261105-readonly-web-file-hardening`.
+**Base exact commit:** `76dc6a0900126bb41b4b691bd4782c4553eea4b0`.
+**Change scope:** existing AGPL alpha web security *maintenance only*;
+no new commercial-only Model C feature, no public main merge.
+
+**Root cause:** the original read-only `src/audiohub/webserver.py`
+selected allowlisted URLs but used `(WEBROOT / filename).read_bytes()`.
+If the installed web tree or selected file were a symlink, the service
+could read outside the intended static asset tree, and could consume
+unbounded memory or block on special files. The status endpoint used
+the same unbounded legacy `runtime.read_json(STATE, {})` path.
+
+**Implementation:** `_bounded_regular_bytes()` opens every absolute
+path component relative to a previously opened directory fd using
+`O_NOFOLLOW|O_DIRECTORY`, opens the last component using
+`O_NOFOLLOW|O_NONBLOCK`, requires a nonempty regular file, rejects a
+path traversal, and caps static files at 512 KiB and redacted state JSON
+at 32 KiB. It rejects incomplete/growing reads. Status unavailable,
+oversized, malformed or linked is reported as **stale** with
+non-sensitive zero counts; unsupported static files produce 503.
+No new HTTP mutation endpoints or LAN autostart flags are added.
+
+**Native packaging guard:** `scripts/audit_rootfs.py` verifies actual
+installed web assets are nonlinked regular files and below the static
+limit, checks all web tree intermediate dirs and requires the installed
+webserver source to include nofollow/bounded status controls.
+`tests/test_web_status.py` and `tests/test_rootfs_audit.py` contain
+15 + 6 new adversarial/security tests.
+
+**Verification:** [Draft PR #43](https://github.com/RIVANOXcom/rivanox-audiohub/pull/43), exact code SHA `d4fb934ad4ed15cac20a79799d475b2956b94769` [source CI #42111311812](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42111311812) **SUCCESS, 375/375 Python tests**, including 15 live-GET-dispatch/file and 6 rootfs safety tests. Native ARM64 run [#42111297565](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42111297565) started for that exact SHA; verify final result, web safety guard count, archive and release NO-GO before claiming native success. **Validation status:** use LIVE GitHub Actions for this child branch.
+No earlier PR #41/#42 source/native run proves the new code works.
+Explicitly distinguish source regression CI from native ARM64 Pi
+image build, which remains UNVERIFIED without real sound and secure
+device-owner testing. Maintain `SOURCE-RIGHTS-LEDGER.json` with all
+79 listed files, no false change of legal approval. Re-read the newer
+PR and its CI before saying this fix is complete.
+
+**Critical boundaries remain:** current AGPL recipient rights unchanged;
+future Model C license NOT EFFECTIVE; no private Model C repo verified
+(issue #37), no public Release, no hardware acceptance (issue #2), no
+qualified legal approval (issue #32); the upstream Raspberry Pi net-mods
+copyright/permission issue remains unresolved (#40).
 
 **END OF HANDOFF.** If a live run/PR contradicts this document, treat
 the live GitHub evidence as authoritative, reconcile and update this file.

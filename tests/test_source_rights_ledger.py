@@ -138,12 +138,18 @@ class SourceRightsLedgerTests(unittest.TestCase):
             audit(ROOT)["files_covered"],
         )
         self.assertFalse(state["source_rights_ledger"]["all_reviewed"])
+        self.assertFalse(state["latest_legacy_security_change"]["model_c_license_effective"])
+        self.assertFalse(state["latest_legacy_security_change"]["physical_pi_security_accepted"])
+        self.assertEqual(state["latest_legacy_security_change"]["static_file_cap_bytes"], 524288)
+        self.assertEqual(state["latest_legacy_security_change"]["anonymized_status_json_cap_bytes"], 32768)
+        self.assertTrue(state["latest_legacy_security_change"]["all_path_components_nofollow"])
+
         self.assertEqual(state["last_native_verified"]["installed_packages"], 689)
         self.assertEqual(state["last_native_verified"]["copyright_paths_unresolved"], 9)
         self.assertFalse(state["last_native_verified"]["public_release_ready"])
         self.assertEqual(
             [item["number"] for item in state["draft_pr_chain"]],
-            [35, 36, 38, 39, 41, 42],
+            [35, 36, 38, 39, 41, 42, 43],
         )
 
     def test_primary_handoff_points_to_authoritative_resume(self):
