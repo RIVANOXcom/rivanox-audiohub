@@ -42,7 +42,7 @@ class PreviewBundleTests(unittest.TestCase):
         rootfs = self.path / "rootfs"
         db = rootfs / "var/lib/dpkg/status"
         db.parent.mkdir(parents=True, exist_ok=True)
-        db.write_text("Package: pipewire\\nStatus: install ok installed\\nVersion: 1.3-1\\nArchitecture: arm64\\n")
+        db.write_text("Package: pipewire\nStatus: install ok installed\nVersion: 1.3-1\nArchitecture: arm64\n")
         write_inventory(rootfs, self.dist / "ROOTFS-PACKAGES.json")
 
     def create(self):
