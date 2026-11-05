@@ -113,3 +113,132 @@ def load(directory=None):
 def lan_target(directory=None):
     """Validate the private policy each time; never trust a remote target."""
     return "audiohub." + load(directory)["lan_slot"]
+
+
+def update(mutate, directory=None):
+    """Atomic source-policy change from a controlled local console only."""
+    directory = Path(directory) if directory is not None else (
+        Path.home() / ".config" / "audiohub")
+    fd = _private_dir(directory, create=True)
+    lock = None
+    temp = None
+    try:
+        lock = os.open(".source-routes.lock",
+                       os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC,
+                       0o600, dir_fd=fd)
+        st = os.fstat(lock)
+        if (not stat.S_ISREG(st.st_mode) or st.st_uid != os.geteuid()
+                or st.st_nlink != 1 or stat.S_IMODE(st.st_mode) & 0o077):
+            raise PermissionError("Unsafe source policy lock")
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        current = _read(fd)
+        desired = validate(mutate(current))
+        data = (json.dumps(desired, sort_keys=True, separators=(",", ":")) +
+                "\n").encode("utf-8")
+        if len(data) > MAX_FILE_BYTES:
+            raise ValueError("Route plan exceeds storage bound")
+        temp = "." + FILENAME + "." + secrets.token_hex(8) + ".tmp"
+        out = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL |
+                      os.O_NOFOLLOW | os.O_CLOEXEC, 0o600, dir_fd=fd)
+        try:
+            offset = 0
+            while offset < len(data):
+                written = os.write(out, data[offset:])
+                if written <= 0:
+                    raise OSError("Incomplete source policy write")
+                offset += written
+            os.fsync(out)
+        finally:
+            os.close(out)
+        os.replace(temp, FILENAME, src_dir_fd=fd, dst_dir_fd=fd)
+        temp = None
+        os.fsync(fd)
+        return desired
+    finally:
+        if temp:
+            try:
+                os.unlink(temp, dir_fd=fd)
+            except OSError:
+                pass
+        if lock is not None:
+            os.close(lock)
+        os.close(fd)
+
+
+def set_lan(slot, directory=None):
+    if type(slot) is not str or slot not in CHANNELS:
+        raise ValueError("Unknown input slot")
+    def change(plan):
+        plan["lan_slot"] = slot
+        return plan
+    return update(change, directory)
+
+
+def bind_bluetooth(address, slot, directory=None):
+    mac = canonical_mac(address)
+    if type(slot) is not str or slot not in CHANNELS:
+        raise ValueError("Unknown input slot")
+    def change(plan):
+        if plan["mode"] == "auto":
+            plan["mode"] = "manual"
+            plan["bluetooth"] = {}
+        plan["bluetooth"][mac] = slot
+        return plan
+    return update(change, directory)
+
+
+def unbind_bluetooth(address, directory=None):
+    mac = canonical_mac(address)
+    def change(plan):
+        if plan["mode"] != "manual" or mac not in plan["bluetooth"]:
+            raise ValueError("Bluetooth address is not manually bound")
+        del plan["bluetooth"][mac]
+        return plan
+    return update(change, directory)
+
+
+def set_mode(mode, directory=None):
+    if mode not in MODES:
+        raise ValueError("Invalid source policy mode")
+    def change(plan):
+        plan["mode"] = mode
+        # Explicit mode change drops stale source-specific authorizations.
+        plan["bluetooth"] = {}
+        return plan
+    return update(change, directory)
+
+
+def main(argv=None):
+    import argparse
+    parser = argparse.ArgumentParser(
+        description="Local-only AudioHub lab routing; not owner onboarding or Bluetooth trust")
+    sub = parser.add_subparsers(dest="action", required=True)
+    sub.add_parser("show")
+    lan = sub.add_parser("set-lan")
+    lan.add_argument("slot", choices=CHANNELS)
+    bt = sub.add_parser("bind-bt")
+    bt.add_argument("address")
+    bt.add_argument("slot", choices=CHANNELS)
+    unbind = sub.add_parser("unbind-bt")
+    unbind.add_argument("address")
+    mode = sub.add_parser("mode")
+    mode.add_argument("value", choices=MODES)
+    args = parser.parse_args(argv)
+    try:
+        if args.action == "show":
+            value = load()
+        elif args.action == "set-lan":
+            value = set_lan(args.slot)
+        elif args.action == "bind-bt":
+            value = bind_bluetooth(args.address, args.slot)
+        elif args.action == "unbind-bt":
+            value = unbind_bluetooth(args.address)
+        else:
+            value = set_mode(args.value)
+    except (OSError, ValueError, UnicodeError) as exc:
+        parser.exit(2, "AudioHub route not changed: " + str(exc) + "\n")
+    print(json.dumps(value, sort_keys=True))
+
+
+if __name__ == "__main__":
+    main()
