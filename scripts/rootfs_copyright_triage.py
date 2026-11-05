@@ -202,6 +202,10 @@ def analyze(rootfs: Path, inventory_path: Path) -> dict:
         "schema": "rivanox-audiohub-rootfs-copyright-triage/1",
         "inventory_sha256": proof["package_inventory_sha256"],
         "installed_packages": proof["installed_packages"],
+        "dpkg_name_version_architecture_reconciled": True,
+        "architecture_counts": dict(sorted(Counter(
+            item["architecture"] for item in inventory["packages"]
+        ).items())),
         "unresolved_count": len(unresolved),
         "unresolved": unresolved,
         "unresolved_reason_counts": {k: counts[k] for k in sorted(counts)},
