@@ -25,9 +25,14 @@ A second distinguishable Bluetooth source can be assigned to
 `audiohub.tablet` and has a separate EQ/volume/mute. This is **only a
 software-routing design**, not a claim that Pi4 Bluetooth reliably
 supports two simultaneous A2DP senders. The third channel
-`audiohub.laptop` remains reserved for a separately reviewed Windows
-LAN audio receiver from the **unmerged** AH-002 PR #11/#12/#19 chain.
-The alpha image does not automatically enable unauthenticated Scream.
+`audiohub.laptop` is now backed by the previously reviewed AH-002
+PR #11/#12/#19 **manual-only** Windows Scream UDP PCM receiver. It uses
+a bounded 16-packet PCM queue, direct `pw-cat --target=audiohub.laptop`
+playback into the independent laptop EQ sink, and USB preflight before
+opening a socket. Its source is **bundled but not started automatically**
+in an experimental Pi image. The Windows driver is not bundled and
+the unencrypted/unauthenticated UDP protocol is not a production
+network-input solution.
 
 ## Engineering changes
 
@@ -75,8 +80,12 @@ The alpha image does not automatically enable unauthenticated Scream.
    playback before approving sound quality. The SD report records
    only the bounded requested `effective_master_percent`, not
    measured audio peaks.
-3. No supported authenticated Windows/laptop sender is enabled in this
-   branch, and Pi hardware cannot be assumed to support dual Bluetooth.
+3. The Windows Scream sender is **never enabled by default**: no
+   systemd service, network discovery or authenticated login exists yet.
+   It needs a user-operated isolated LAN test, conscious per-invocation
+   unsafe opt-in, an external Windows driver and real physical playback
+   proof. IPv4 source restrictions cannot prevent spoofing. Pi hardware
+   also cannot be assumed to support dual Bluetooth.
 4. This code cannot prove USB audio is actually audible, whether
    WirePlumber applied the new BlueZ rule on real Pi OS, or whether
    `pw-loopback` connected the expected PipeWire ports. Hardware
