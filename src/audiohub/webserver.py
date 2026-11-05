@@ -9,12 +9,13 @@ from __future__ import annotations
 
 import json
 import os
+import stat
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from .runtime import STATE, read_json
+from .runtime import STATE
 from .status_bind import select_bind_address
 
 WEBROOT = Path(os.environ.get("AUDIOHUB_WEBROOT", "/opt/audiohub/web"))
@@ -66,6 +67,75 @@ def public_status(status, *, now=None):
     }
 
 
+STATIC_MAX_BYTES = 512 * 1024
+STATUS_MAX_BYTES = 32 * 1024
+
+
+def _bounded_regular_bytes(path, limit):
+    """Open every path component with O_NOFOLLOW and read at most 'limit'.
+
+    Never follow WEBROOT/asset/status symlinks outside the Pi image. This
+    also refuses FIFOs/devices, unexpectedly large assets and status JSON,
+    incomplete reads and non-absolute paths. The path comes from a fixed
+    allowlist or the runtime's own state path, not the HTTP request.
+    """
+    path = Path(path)
+    if (not path.is_absolute() or ".." in path.parts
+            or len(path.parts) < 2 or type(limit) is not int or limit <= 0):
+        return None
+    directory = None
+    file_fd = None
+    try:
+        directory = os.open("/", os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
+        for component in path.parts[1:-1]:
+            next_directory = os.open(
+                component,
+                os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
+                dir_fd=directory,
+            )
+            os.close(directory)
+            directory = next_directory
+        file_fd = os.open(
+            path.name,
+            os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC,
+            dir_fd=directory,
+        )
+        info = os.fstat(file_fd)
+        if not stat.S_ISREG(info.st_mode) or not 0 < info.st_size <= limit:
+            return None
+        chunks = []
+        remaining = info.st_size
+        while remaining:
+            part = os.read(file_fd, min(remaining, 65536))
+            if not part:
+                return None
+            chunks.append(part)
+            remaining -= len(part)
+        # Fail closed if content grew between stat and the bounded read.
+        if os.read(file_fd, 1):
+            return None
+        return b"".join(chunks)
+    except (OSError, ValueError):
+        return None
+    finally:
+        if file_fd is not None:
+            os.close(file_fd)
+        if directory is not None:
+            os.close(directory)
+
+
+def read_public_status(*, path=STATE, now=None):
+    """Read a bounded, non-symlinked runtime state file, never raw secrets."""
+    body = _bounded_regular_bytes(path, STATUS_MAX_BYTES)
+    if body is None:
+        return public_status({}, now=now)
+    try:
+        decoded = json.loads(body.decode("utf-8"))
+    except (UnicodeError, ValueError):
+        decoded = {}
+    return public_status(decoded, now=now)
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "AudioHub-Preview"
     sys_version = ""
@@ -86,17 +156,16 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         path = urlsplit(self.path).path
         if path == "/api/status":
-            body = json.dumps(public_status(read_json(STATE, {})), separators=(",", ":")).encode()
+            body = json.dumps(read_public_status(), separators=(",", ":")).encode()
             self.respond(200, body, "application/json; charset=utf-8")
             return
         if path not in ALLOWED:
             self.respond(404, b"Not found", "text/plain; charset=utf-8")
             return
         filename, content_type = ALLOWED[path]
-        try:
-            content = (WEBROOT / filename).read_bytes()
-        except OSError:
-            self.respond(503, b"Static resources not installed", "text/plain; charset=utf-8")
+        content = _bounded_regular_bytes(WEBROOT / filename, STATIC_MAX_BYTES)
+        if content is None:
+            self.respond(503, b"Static resources unavailable", "text/plain; charset=utf-8")
             return
         self.respond(200, content, content_type)
 
