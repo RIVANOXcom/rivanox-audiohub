@@ -239,6 +239,24 @@ class DiagnosticTests(unittest.TestCase):
             diag.sample(self.runtime, self.uid, now=102)["effective_master_percent"], 0
         )
 
+    def test_source_route_policy_failure_is_reported_without_mac_or_network_data(self):
+        self.runtime_write({
+            "updated_at": 100,
+            "route_policy_valid": False,
+            "bluetooth_allowlist": ["AA:BB:CC:DD:EE:FF"],
+            "local_network_sender_ip": "192.168.1.50",
+        })
+        result = diag.sample(self.runtime, self.uid, now=101)
+        self.assertFalse(result["source_route_policy_valid"])
+        self.assertNotIn("AA:BB:CC", json.dumps(result))
+        self.assertNotIn("192.168.1.50", json.dumps(result))
+        self.runtime_write({"updated_at": 100, "route_policy_valid": True})
+        self.assertTrue(diag.sample(self.runtime, self.uid, now=101)[
+            "source_route_policy_valid"])
+        self.runtime_write({"updated_at": 100, "route_policy_valid": "true"})
+        self.assertFalse(diag.sample(self.runtime, self.uid, now=101)[
+            "source_route_policy_valid"])
+
     def test_diagnostics_install_uses_only_readonly_runtime_and_boot_file(self):
         script = (ROOT / "src/audiohub/firstboot_diag.py").read_text()
         service = (ROOT / "image/stage-audiohub/01-install/files/systemd"
