@@ -96,7 +96,11 @@ class RootfsAuditTests(unittest.TestCase):
         make("opt/audiohub/src/audiohub/webserver.py",
              "from .status_bind import select_bind_address\\n"
              "ThreadingHTTPServer((select_bind_address(), 8765), Handler)\\n"
-             "def do_POST(self):\\nRead-only preview\\n")
+             "def do_POST(self):\\nRead-only preview\\n"
+             "STATIC_MAX_BYTES = 512 * 1024\\n"
+             "STATUS_MAX_BYTES = 32 * 1024\\n"
+             "os.O_NOFOLLOW\\nos.O_NONBLOCK\\nstat.S_ISREG\\n"
+             "read_public_status()\\n")
         make("opt/audiohub/src/audiohub/firstboot_diag.py",
              'OUTPUT_NAME = "AUDIOHUB-TEST-REPORT.json"\\n'
              '"pipewire_links_inspected"\\n'
@@ -138,6 +142,73 @@ class RootfsAuditTests(unittest.TestCase):
         )
         make("home/audiohub/.config/pipewire/pipewire.conf.d/90-audiohub-eq.conf", config)
         return root
+
+
+    def test_symlinked_html_and_locale_files_block_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            html = root / "opt/audiohub/web/index.html"
+            html.unlink()
+            html.symlink_to("/etc/passwd")
+            checks = audit.inspect(root)
+            self.assertFalse(checks["web_static_files_nofollow_regular_bounded"])
+            self.assertNotEqual(audit.run(root), 0)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            locale = root / "opt/audiohub/web/locales/en.json"
+            locale.unlink()
+            locale.symlink_to("/etc/passwd")
+            self.assertFalse(audit.inspect(root)[
+                "web_static_files_nofollow_regular_bounded"
+            ])
+
+    def test_symlinked_locale_directory_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            directory = root / "opt/audiohub/web/locales"
+            backup = root / "backup-locales"
+            directory.rename(backup)
+            directory.symlink_to(backup, target_is_directory=True)
+            self.assertFalse(audit.inspect(root)[
+                "web_static_files_nofollow_regular_bounded"
+            ])
+
+    def test_oversize_web_asset_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            js = root / "opt/audiohub/web/app.js"
+            js.write_bytes(b"x" * (512 * 1024 + 1))
+            self.assertFalse(audit.inspect(root)[
+                "web_static_files_nofollow_regular_bounded"
+            ])
+
+    def test_nonregular_web_asset_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            js = root / "opt/audiohub/web/styles.css"
+            js.unlink()
+            js.mkdir()
+            self.assertFalse(audit.inspect(root)[
+                "web_static_files_nofollow_regular_bounded"
+            ])
+
+    def test_missing_static_nofollow_guard_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            web = root / "opt/audiohub/src/audiohub/webserver.py"
+            web.write_text(web.read_text().replace(
+                "os.O_NOFOLLOW", "os.O_RDONLY"
+            ))
+            checks = audit.inspect(root)
+            self.assertFalse(checks["status_static_and_state_files_nofollow_bounded"])
+
+    def test_normal_web_assets_and_bounded_reader_pass_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            checks = audit.inspect(root)
+            self.assertTrue(checks["web_static_files_nofollow_regular_bounded"])
+            self.assertTrue(checks["status_static_and_state_files_nofollow_bounded"])
 
     def test_unchecked_status_web_listener_prevents_image_export(self):
         with tempfile.TemporaryDirectory() as tmp:
