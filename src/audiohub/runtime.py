@@ -14,7 +14,7 @@ import time
 from pathlib import Path
 
 from .discovery import bluetooth_sources, choose_usb_output, pipewire_nodes, virtual_sinks
-from .mixer import CHANNELS, defaults, patch_settings, volume_commands
+from .mixer import CHANNELS, defaults, effective_master_gain, patch_settings, volume_commands
 
 CONFIG = Path.home() / ".config" / "audiohub"
 SETTINGS = CONFIG / "settings.json"
@@ -232,6 +232,10 @@ class Supervisor:
         atomic_json(STATE, {
             "usb_output": bool(output),
             "usb_route_ready": usb_ready,
+            # Bounded *requested gain* estimate, not measured sound or a limiter.
+            "effective_master_percent": min(
+                100, max(0, round(100 * effective_master_gain(self.settings)))
+            ),
             "virtual_channels": [c for c in CHANNELS if "audiohub." + c in sinks],
             "bluetooth_source_count": min(len(sources), MAX_BT_INPUTS),
             "active_routes": min(sum(
