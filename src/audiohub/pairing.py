@@ -60,7 +60,8 @@ class PairingAgent(dbus.service.Object):
         self.adapter = dbus.Interface(bus.get_object("org.bluez", adapters[0]), "org.freedesktop.DBus.Properties")
         self.adapter.Set("org.bluez.Adapter1", "Powered", dbus.Boolean(True))
         self.adapter.Set("org.bluez.Adapter1", "Alias", dbus.String("AudioHub"))
-        self.adapter.Set("org.bluez.Adapter1", "DiscoverableTimeout", dbus.UInt32(0))
+        self.adapter.Set("org.bluez.Adapter1", "PairableTimeout", dbus.UInt32(BOOT_WINDOW))
+        self.adapter.Set("org.bluez.Adapter1", "DiscoverableTimeout", dbus.UInt32(BOOT_WINDOW))
         bus.add_signal_receiver(
             self.changed, dbus_interface="org.freedesktop.DBus.Properties",
             signal_name="PropertiesChanged", path_keyword="path",
