@@ -55,3 +55,16 @@ partially parsed or untrusted local configuration.
 The source and native ARM64 tests must be independently checked at the
 exact PR #44 SHA. These controls do not create owner enrollment, network
 authentication, firmware license permission or a stable device release.
+
+## Managed audio route cleanup after unexpected failure
+
+In the legacy headless alpha runtime, an unexpected poll error was
+previously caught without necessarily stopping already-created
+`pw-loopback` child processes. [Draft PR #45](https://github.com/RIVANOXcom/rivanox-audiohub/pull/45)
+adds guarded cleanup of all managed routes on errors and service exit.
+Cleanup failures are escalated instead of silently ignored; the
+`audiohub-runtime.service` systemd unit explicitly uses
+`KillMode=control-group` so any unresponsive child belongs to a
+service cgroup stopped on restart. Source and native ARM64 validation
+must be checked at exact CI SHAs. This does not prove the audio
+amplifier/mixer hardware route is safe or secure owner enrollment.
