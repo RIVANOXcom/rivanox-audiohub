@@ -108,3 +108,19 @@ license rights or audio hardware: missing copyright count is visible and
 `legal_review_approved=false` cannot be overridden. The public Release
 workflow is still blocked; AGPL LICENSE and main remain unchanged. Update
 status with exact CI evidence from the final new PR; no claim before tests.
+
+## 2026-11-05 approved business direction: Model C, pending legal activation
+
+Owner chooses source-available future RIVANOX-owned code; private
+non-commercial permission free, commercial/organizational use by
+separate written license. Current repository LICENSE is still AGPL,
+including commercial rights to prior valid recipients. New isolated
+license-review draft branch `wd-papa-20261105-model-c-licensing-transition`
+based on PR #34 tested source SHA `c28a61bea275f8602458c2961e06454430cc4319`.
+`LICENSE-C-DRAFT.md` and `docs/licensing/RIGHTS-AUDIT-2026-11-05.md`
+contain proposed terms and evidence gaps; review status and CI are
+fail closed. **P0 LEGAL-C-01:** identity/ownership/contributor provenance,
+AI-authorship and imported code. **P0 LEGAL-C-02:** actual binary and
+corresponding source/third-party legal clearance. **P0 LEGAL-C-03:**
+qualified contract review, final explicit owner LICENSE/tag approval.
+No blanket relicense, no auto-release, no permissions change.
