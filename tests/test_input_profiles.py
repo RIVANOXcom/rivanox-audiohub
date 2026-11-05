@@ -1,10 +1,95 @@
-"""Private AudioHub channel label tests."""
-import unittest
+"""Private AudioHub channel label model and source UI regression tests."""
+import json
+import os
 from pathlib import Path
+import stat
 import sys
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
-from audiohub import input_profiles
+import tempfile
+import unittest
 
-class InputProfilesSmoke(unittest.TestCase):
+ROOT=Path(__file__).resolve().parents[1]
+sys.path.insert(0,str(ROOT/"src"))
+from audiohub import input_profiles as p
+
+class InputProfiles(unittest.TestCase):
+    def setUp(self):
+        t=tempfile.TemporaryDirectory()
+        self.addCleanup(t.cleanup)
+        self.root=Path(t.name)/"audiohub"
+
     def test_generic_defaults(self):
-        self.assertEqual(tuple(input_profiles.DEFAULT_NAMES.values()), ('Input 1', 'Input 2', 'Input 3'))
+        self.assertEqual(p.load_labels(self.root),
+            {"music":"Input 1","laptop":"Input 2","tablet":"Input 3"})
+
+    def test_names_persist_on_private_console(self):
+        p.set_label("music","Wohnzimmer-TV",self.root)
+        p.set_label("laptop","Konsole & PC",self.root)
+        p.set_label("tablet","Café 🎵",self.root)
+        self.assertEqual(p.load_labels(self.root)["laptop"],"Konsole & PC")
+
+    def test_rejects_bad_names(self):
+        for value in (""," ", "X"*33, "<script>", "A>B",
+                      "line\nname", "a\u202eb", None, True, []):
+            with self.subTest(value=repr(value)),self.assertRaises(ValueError):
+                p.validate_name(value)
+
+    def test_duplicate_names_rejected(self):
+        p.set_label("music","TV",self.root)
+        with self.assertRaises(ValueError):
+            p.set_label("laptop","tv",self.root)
+
+    def test_unknown_channel_denied(self):
+        with self.assertRaises(ValueError):
+            p.set_label("evil","New",self.root)
+
+    def test_private_atomic_storage(self):
+        p.set_label("music","TV",self.root)
+        f=self.root/p.FILENAME
+        self.assertEqual(stat.S_IMODE(f.stat().st_mode),0o600)
+        self.assertEqual(stat.S_IMODE(self.root.stat().st_mode),0o700)
+        p.set_label("music","Console",self.root)
+        self.assertEqual(p.load_labels(self.root)["music"],"Console")
+
+    def test_corruption_fails_closed(self):
+        p.set_label("music","TV",self.root)
+        f=self.root/p.FILENAME
+        f.write_text("invalid!")
+        with self.assertRaises(ValueError):
+            p.load_labels(self.root)
+        with self.assertRaises(ValueError):
+            p.set_label("tablet","Radio",self.root)
+        self.assertEqual(f.read_text(),"invalid!")
+
+    def test_symlink_and_world_readable_rejected(self):
+        self.root.mkdir(mode=0o700)
+        path=self.root/p.FILENAME
+        external=self.root.parent/"outside"
+        external.write_text("secret")
+        path.symlink_to(external)
+        with self.assertRaises(OSError):
+            p.load_labels(self.root)
+        self.assertEqual(external.read_text(),"secret")
+        path.unlink()
+        p.set_label("music","TV",self.root)
+        path.chmod(0o644)
+        with self.assertRaises(PermissionError):
+            p.load_labels(self.root)
+
+    def test_web_remains_preview_without_post_api(self):
+        js=(ROOT/"web/app.js").read_text()
+        self.assertIn("audiohub.preview.input-labels.v1",js)
+        self.assertIn("localStorage.setItem",js)
+        self.assertIn("nameInput.addEventListener",js)
+        self.assertNotIn("innerHTML",js)
+        self.assertNotIn('method: "POST"',js)
+
+    def test_five_locales_have_all_inputs(self):
+        keys={"input1","input2","input3","inputName",
+              "sourceHint1","sourceHint2","sourceHint3",
+              "invalidInputName","previewNamesOnly"}
+        for code in ("en","de","es","fr","it"):
+            data=json.loads((ROOT/"web/locales"/(code+".json")).read_text())
+            self.assertTrue(keys.issubset(data),code)
+
+if __name__=="__main__":
+    unittest.main()
