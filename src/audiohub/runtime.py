@@ -14,6 +14,7 @@ import time
 from pathlib import Path
 
 from .discovery import bluetooth_sources, choose_usb_output, pipewire_nodes, virtual_sinks
+from .audio_graph import summarize_links
 from .mixer import CHANNELS, defaults, effective_master_gain, patch_settings, volume_commands
 from .source_routes import defaults as default_routes, load as load_routes
 
@@ -213,6 +214,7 @@ class Supervisor:
         """Reassert the USB default each poll before admitting audio routes."""
         result = run("pw-dump")
         nodes = pipewire_nodes(result.stdout) if result and result.returncode == 0 else []
+        graph_links = summarize_links(result.stdout if result and result.returncode == 0 else None)
         output = choose_usb_output(nodes)
         output_id = output.get("id") if output else None
         if type(output_id) is not int or output_id < 0:
@@ -259,6 +261,13 @@ class Supervisor:
         atomic_json(STATE, {
             "usb_output": bool(output),
             "usb_route_ready": usb_ready,
+            # Positive graph evidence only. Missing direct links may reflect
+            # PipeWire intermediary adapter nodes, never prove audio absence.
+            "pipewire_links_inspected": graph_links["links_inspected"],
+            "eq_output_usb_direct_links": [
+                slot for slot in CHANNELS
+                if graph_links["eq_output_to_usb_direct_link"][slot]
+            ],
             "route_policy_valid": self.route_policy_valid,
             # Bounded *requested gain* estimate, not measured sound or a limiter.
             "effective_master_percent": min(
