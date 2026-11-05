@@ -40,7 +40,7 @@ def inspect(root: Path) -> dict[str, bool]:
         return {"rootfs_exists": False}
     checks: dict[str, bool] = {}
     source = root / "opt/audiohub/src/audiohub"
-    for name in ("__init__.py", "runtime.py", "pairing.py", "mixer.py", "webserver.py", "status_bind.py"):
+    for name in ("__init__.py", "runtime.py", "pairing.py", "mixer.py", "webserver.py", "status_bind.py", "firstboot_diag.py"):
         checks["source_" + name] = (source / name).is_file()
     # Build-time guard: the alpha status UI is unauthenticated, so the
     # installed image must never bind to all interfaces by default.
@@ -66,6 +66,43 @@ def inspect(root: Path) -> dict[str, bool]:
         checks["status_loopback_default"] = False
         checks["status_web_uses_guarded_bind"] = False
         checks["status_service_no_unsafe_lan_opt_in"] = False
+    # Offline-only debug output is written by a strictly sandboxed root
+    # service; never include network enrollment secrets in the image or report.
+    diag_unit_path = root / "etc/systemd/system/audiohub-firstboot-diag.service"
+    diag_enable_path = root / (
+        "etc/systemd/system/multi-user.target.wants/audiohub-firstboot-diag.service"
+    )
+    try:
+        diag_unit = diag_unit_path.read_text()
+        checks["offline_diag_unit_sandboxed"] = all(
+            option in diag_unit for option in (
+                "python3 -m audiohub.firstboot_diag",
+                "PrivateNetwork=yes",
+                "NoNewPrivileges=yes",
+                "ProtectSystem=strict",
+                "ReadWritePaths=/boot/firmware",
+                "ConditionPathIsMountPoint=/boot/firmware",
+            )
+        ) and "ExecStart=/bin/sh" not in diag_unit
+        if diag_enable_path.is_symlink():
+            target = os.readlink(diag_enable_path)
+            resolved = (root / target.lstrip("/")) if os.path.isabs(target) else (
+                diag_enable_path.parent / target
+            )
+            checks["offline_diag_enabled"] = resolved.is_file()
+        else:
+            checks["offline_diag_enabled"] = False
+        diag_source = (source / "firstboot_diag.py").read_text()
+        checks["offline_diag_no_network_clients"] = (
+            "socket.socket" not in diag_source
+            and "subprocess.run" not in diag_source
+            and "dbus.SystemBus" not in diag_source
+            and 'OUTPUT_NAME = "AUDIOHUB-TEST-REPORT.json"' in diag_source
+        )
+    except OSError:
+        checks["offline_diag_unit_sandboxed"] = False
+        checks["offline_diag_enabled"] = False
+        checks["offline_diag_no_network_clients"] = False
     for name in ("index.html", "app.js", "styles.css"):
         checks["web_" + name] = (root / "opt/audiohub/web" / name).is_file()
     base_keys = None
