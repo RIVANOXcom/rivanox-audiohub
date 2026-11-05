@@ -43,5 +43,11 @@
   "sourceHint2": "Manual LAN test input · disabled until explicitly started",
   "sourceHint3": "Second Bluetooth input · real hardware support unverified",
   "invalidInputName": "Choose a distinct name (1–32 characters; no control or markup characters).",
-  "previewNamesOnly": "Saved for this browser only. Device routing remains unchanged."
+  "previewNamesOnly": "Saved for this browser only. Device routing remains unchanged.",
+  "sustainabilityEyebrow": "Independent open-source development",
+  "sustainabilityTitle": "Help keep AudioHub improving",
+  "sustainabilityDescription": "Your voluntary support helps fund Pi hardware tests, security improvements, accessibility, and maintenance.",
+  "sustainabilityDisclosure": "Donations are optional. AudioHub stays available under AGPL-3.0; a donation does not purchase a commercial license or priority support.",
+  "sustainabilityDonate": "Support on Ko-fi",
+  "sustainabilityCommercial": "Commercial licensing information"
 }
