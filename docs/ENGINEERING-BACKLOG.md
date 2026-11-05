@@ -82,3 +82,10 @@ No entry is `DONE` until its acceptance criteria are evidenced.
 4. Fix source + tests + documentation, get actual GitHub CI run/commit SHA, only claim image if the complete native ARM64 artifact upload and checksum succeeded.
 5. Attach evidence to PR, relevant issue and Workbench. Update next action, blocker and source hashes in this file and PROJECT-HANDOFF.
 6. All physical Pi4/Edifier, security, release, settings/permissions and deployment gates remain human-authorized. Never claim hardware PASS or release from code tests alone.
+
+ 
+## Diagnostic fidelity / TEST-03 (2026-11-05)
+
+- Current isolated [PR #30](https://github.com/RIVANOXcom/rivanox-audiohub/pull/30) layers hardware acceptance visibility over already verified PR #29 flexible 3-source route policy: read-only independent PR #13 hardware topology preflight ported, plus real PipeWire Link node IDs inspections, 10+ malformed/duplicate/privacy graph tests and firstboot SD report numeric links/3 direct EQ-to-USB edges only. USB sink presence, default selection, PipeWire links, and actual audible sound are **four different levels of evidence**. The graph's direct-link count can be 0 when adapters exist; never call it hardware failure or GO without on-device proof.
+- Next step: inspect a REAL, locally captured **redacted** Pi4 PipeWire graph when operator provides it, add adapter/port-level topology mapping, measure audible Edifier USB and dual A2DP feasibility. Keep raw MACs, serials, SSIDs and link metadata out of public issues.
+- PR #30 source CI and full native ARM64 rootfs+XZ+SHA256 artifact upload need exact final SHA verification. Existing #29 image artifact #13441980660 remains source-only experimental and does NOT contain this new diagnostic.
