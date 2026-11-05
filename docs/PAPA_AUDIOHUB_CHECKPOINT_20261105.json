@@ -84,6 +84,14 @@
   },
   "open_issues": [
     {
+      "number": 2,
+      "subject": "Physical Pi4 + Edifier R600USB audio acceptance"
+    },
+    {
+      "number": 32,
+      "subject": "Model C legal rightsholder, ownership, counsel review and effective version approval"
+    },
+    {
       "number": 37,
       "subject": "Owner: create empty private future Model C repository"
     },
@@ -108,5 +116,13 @@
     "do not publish official image release",
     "do not assert copyright hashes prove redistribution rights",
     "do not silently merge stacked draft PRs"
-  ]
+  ],
+  "last_source_rights_ci_verified": {
+    "run_id": 42108997052,
+    "commit_sha": "469dbb913deedfcb65c857bcee3903f40fe149cf",
+    "outcome": "success",
+    "python_tests": 354,
+    "source_rights_ledger_file_count": 79,
+    "production_arm64_build_not_rerun_for_docs_only": true
+  }
 }
