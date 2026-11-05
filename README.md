@@ -27,6 +27,8 @@
 > existing commercial-use rights under that license. No prior AGPL grant
 > is withdrawn; the draft does not yet grant or restrict additional rights.
 
+**Maintainer continuity:** [PAPA AudioHub canonical resume, exact PR/CI evidence and license gates](./docs/PAPA_CANONICAL_RESUME_20261105.md). This is an engineering handoff, not an authorized release.
+
 ## Make your existing speakers smarter
 
 Stop choosing between music, a laptop video, and a tablet. AudioHub is being built to mix multiple simultaneous sources into one set of speakers, with **independent channel volume and EQ**. It is designed to run without a monitor or keyboard after the image has been flashed.
