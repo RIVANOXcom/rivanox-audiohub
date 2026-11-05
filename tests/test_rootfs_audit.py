@@ -31,6 +31,11 @@ class RootfsAuditTests(unittest.TestCase):
             "if not self.allowed() or not (",
             'raise Rejected("Untrusted device")',
             "self.authorize_pending(device)",
+            "self.deadline = float(BOOT_WINDOW)",
+            'self.adapter.Set("org.bluez.Adapter1", "PairableTimeout", dbus.UInt32(BOOT_WINDOW))',
+            'self.adapter.Set("org.bluez.Adapter1", "DiscoverableTimeout", dbus.UInt32(BOOT_WINDOW))',
+            'self.adapter.Set("org.bluez.Adapter1", "Pairable", dbus.Boolean(False))',
+            'self.adapter.Set("org.bluez.Adapter1", "Discoverable", dbus.Boolean(False))',
         )))
         make("opt/audiohub/src/audiohub/runtime.py", "\\n".join((
             "channel not in CHANNELS",
@@ -334,6 +339,50 @@ class RootfsAuditTests(unittest.TestCase):
             root = self.root(tmp)
             self.assertTrue(audit.inspect(root)[
                 "bluetooth_trust_requires_agent_authorization"
+            ])
+
+
+    def test_unlimited_bluez_discoverability_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/src/audiohub/pairing.py"
+            path.write_text(path.read_text().replace(
+                'DiscoverableTimeout", dbus.UInt32(BOOT_WINDOW)',
+                'DiscoverableTimeout", dbus.UInt32(0)'
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "bluetooth_pairable_discoverable_timers_bounded"
+            ])
+
+    def test_unlimited_pairable_timeout_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/src/audiohub/pairing.py"
+            path.write_text(path.read_text().replace(
+                'PairableTimeout", dbus.UInt32(BOOT_WINDOW)',
+                'PairableTimeout", dbus.UInt32(0)'
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "bluetooth_pairable_discoverable_timers_bounded"
+            ])
+
+    def test_service_restart_reopens_full_guest_window_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/src/audiohub/pairing.py"
+            path.write_text(path.read_text().replace(
+                "self.deadline = float(BOOT_WINDOW)",
+                "self.deadline = time.monotonic() + BOOT_WINDOW"
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "bluetooth_pairable_discoverable_timers_bounded"
+            ])
+
+    def test_bounded_bluez_adapter_timeouts_pass_image_guard(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            self.assertTrue(audit.inspect(root)[
+                "bluetooth_pairable_discoverable_timers_bounded"
             ])
 
     def test_unchecked_status_web_listener_prevents_image_export(self):
