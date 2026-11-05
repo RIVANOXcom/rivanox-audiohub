@@ -40,8 +40,32 @@ def inspect(root: Path) -> dict[str, bool]:
         return {"rootfs_exists": False}
     checks: dict[str, bool] = {}
     source = root / "opt/audiohub/src/audiohub"
-    for name in ("__init__.py", "runtime.py", "pairing.py", "mixer.py", "webserver.py"):
+    for name in ("__init__.py", "runtime.py", "pairing.py", "mixer.py", "webserver.py", "status_bind.py"):
         checks["source_" + name] = (source / name).is_file()
+    # Build-time guard: the alpha status UI is unauthenticated, so the
+    # installed image must never bind to all interfaces by default.
+    try:
+        bind_module = (source / "status_bind.py").read_text()
+        webserver = (source / "webserver.py").read_text()
+        status_unit = (root / SERVICES["status"][0]).read_text()
+        checks["status_loopback_default"] = (
+            'LOOPBACK = "127.0.0.1"' in bind_module
+            and 'values.get("AUDIOHUB_STATUS_BIND_IP", LOOPBACK)' in bind_module
+            and 'values.get("AUDIOHUB_UNSAFE_STATUS_LAN") != "YES"' in bind_module
+        )
+        checks["status_web_uses_guarded_bind"] = (
+            "from .status_bind import select_bind_address" in webserver
+            and "ThreadingHTTPServer((select_bind_address(), 8765)" in webserver
+            and "0.0.0.0" not in webserver
+        )
+        checks["status_service_no_unsafe_lan_opt_in"] = (
+            "AUDIOHUB_UNSAFE_STATUS_LAN" not in status_unit
+            and "AUDIOHUB_STATUS_BIND_IP" not in status_unit
+        )
+    except OSError:
+        checks["status_loopback_default"] = False
+        checks["status_web_uses_guarded_bind"] = False
+        checks["status_service_no_unsafe_lan_opt_in"] = False
     for name in ("index.html", "app.js", "styles.css"):
         checks["web_" + name] = (root / "opt/audiohub/web" / name).is_file()
     base_keys = None
