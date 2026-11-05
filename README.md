@@ -8,6 +8,8 @@
 
 **Powered by [RIVANOX](https://rivanox.com)**
 
+**❤️ [Support AudioHub development on Ko-fi](https://ko-fi.com/RIVANOX)** · **[Commercial licensing information](./docs/COMMERCIAL-LICENSING.md)**
+
 [![Status: Alpha](https://img.shields.io/badge/status-alpha-orange)](./docs/STATUS.md)
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue)](./LICENSE)
 [![Website](https://img.shields.io/badge/RIVANOX-Website-black)](https://rivanox.com)
@@ -66,21 +68,26 @@ No display, keyboard, SSH session, shell commands, or Linux administration shoul
 
 > ⚠️ **Alpha development – no verified, ready-to-flash SD image has been published yet.** Source snapshots and preview builds are **not stable releases**. Do not assume they are suitable for an unattended device.
 
-For **experimental hardware bench tests only**, the last
-verified source-and-image artifact **before the flexible source-routing
-changes** is [5 November Pi4 Alpha ZIP #13433476966](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42064465468/artifacts/13433476966):
-Actions run **42064465468**, source
-`9e612290841ed586effc19ca37d2edab479d4524`,
-**172 Python tests / 50 rootfs checks**, expiring 5 December 2026.
-It is **not** a Release, requires GitHub sign-in, includes local naming
-but does **not** contain the new free source assignments in draft PR #29.
-Verify the **inner compressed image** against the bundled
-`SHA256SUMS.txt`, use a spare SD and an isolated Pi without trusted
-Ethernet/WLAN. A newer image from PR #29 can be called downloadable
-only after its **own** successful native ARM64 build, rootfs security
-audit, SHA256/XZ/manifest verification and actual artifact upload;
-see [PR #29](https://github.com/RIVANOXcom/rivanox-audiohub/pull/29).
-[Pi bench instructions](./docs/FIRST-PI-ALPHA-TEST.md).
+The **latest CI-validated experimental Pi4 image** is from
+[Draft PR #30](https://github.com/RIVANOXcom/rivanox-audiohub/pull/30),
+commit `8ab26da637604723e4c29f114cc93a478e0d02f0`:
+
+**[Download temporary Pi4 Alpha Test ZIP (Actions artifact #13443339137)](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42086909475/artifacts/13443339137)**
+
+- [Source CI 42086920486](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42086920486): **226 Python tests passed**.
+- [Native ARM64 image CI 42086909475](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42086909475): **SUCCESS**, **55/55 real rootfs checks**, image SHA256 / XZ integrity and preview provenance verified.
+- ZIP size 606,222,225 bytes. **Expires 5 December 2026**.
+  GitHub sign-in may be required for Actions artifacts, even though the
+  source repository is public. Extract the ZIP for the `.img.xz`,
+  `SHA256SUMS.txt` and `PREVIEW-MANIFEST.json`.
+- **Not a GitHub Release and not hardware certified.** Flash only to a
+  spare microSD and use an isolated test bench. No secure phone-first
+  ownership or Wi-Fi provisioning yet. The manually gated Windows UDP
+  input is **untrusted**, disabled by default. Do not connect it to a
+  trusted LAN.
+- [How to test the Pi safely](./docs/FIRST-PI-ALPHA-TEST.md) ·
+  [Offline integrity preflight](./docs/RELEASE-DISTRIBUTION.md) ·
+  [Observed PipeWire links and diagnostics](./docs/PIPEWIRE-LINK-OBSERVABILITY.md).
 
 Once hardware tests and security acceptance are complete, download images from:
 
@@ -106,19 +113,35 @@ See [status](./docs/STATUS.md), [architecture](./docs/ARCHITECTURE.md) and [rele
 
 ## Open source, commercial alternatives and third-party software
 
-Original RIVANOX code is offered under **GNU AGPL-3.0-only**, subject to ownership and third-party rights. The [license](./LICENSE) governs the open-source option. Commercial alternative licensing of eligible RIVANOX-owned code may be negotiated separately; a commercial license does not automatically cover third-party dependencies or community contributions.
+Original RIVANOX code is offered under **GNU AGPL-3.0-only**, subject to ownership and third-party rights. **Commercial use under AGPL is allowed without a fee or revenue share**; see the full terms for redistribution and network-access obligations. The [license](./LICENSE) governs the open-source option. Commercial alternative licensing of eligible RIVANOX-owned code may be negotiated separately; a commercial license does not automatically cover third-party dependencies or community contributions.
 
 The AGPL does **not** require all users, including commercial users, to pay. It grants the freedoms described in its terms. Nothing in the repository represents a legal opinion or a blanket commercial sublicense for dependencies.
 
 The RIVANOX name and branding are not automatically licensed for unrelated products. See the [trademark policy](./TRADEMARKS.md).
 
-## Support independent software development
+## Help keep AudioHub free, safe and maintained
 
-AudioHub is developed as an independent RIVANOX project. Your contributions can help fund hardware tests, accessibility, documentation and maintenance.
+Development includes real Raspberry Pi and speaker compatibility testing,
+security updates, accessibility, documentation and dependable releases.
+Community contributions can help fund that work.
 
-**☕ [Support RIVANOX on Ko-fi](https://ko-fi.com/RIVANOX)**
+**❤️ [Support AudioHub on Ko-fi — voluntary donation](https://ko-fi.com/RIVANOX)**
 
-Contributions are voluntary, do not purchase a commercial software license, and do not guarantee priority support. For products and services, explore **[RIVANOX.com](https://rivanox.com)**.
+Donations are entirely optional: **they never unlock AGPL rights,
+downloads, core functionality or support entitlements**. No tracking or
+payment processing is built into AudioHub.
+
+Businesses can also explore **[commercial licensing](./docs/COMMERCIAL-LICENSING.md)**
+for an optional, separately negotiated license to eligible RIVANOX-owned
+source, or professional integration and support services. Commercial use
+**under the existing AGPL remains permitted without paying royalties** if
+the license conditions are followed. RIVANOX cannot promise proprietary
+rights in upstream Raspberry Pi OS or third-party code.
+
+Official public GitHub Releases are planned only after hardware,
+security, legal and owner-approval gates; see the
+[reviewed release workflow](./docs/RELEASE-DISTRIBUTION.md).
+Learn more at **[RIVANOX.com](https://rivanox.com)**.
 
 ## Contribute or report an issue
 
