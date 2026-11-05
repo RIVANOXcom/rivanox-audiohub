@@ -33,6 +33,12 @@ jobs:
           set -euo pipefail
           python3 scripts/license_transition_audit.py
 
+      - name: Detect unreviewed source runtime dependencies and third-party assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/source_dependency_audit.py
+
       - name: Check any checked-in Python or JS sources
         shell: bash
         run: |
