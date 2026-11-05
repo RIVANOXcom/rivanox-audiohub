@@ -188,3 +188,22 @@ publish-image.yml, AGPL LICENSE and permissions are unchanged.
 ARM64 rootfs/export/integrity status and uploaded artifact ID. Physical Pi4
 sound, authenticated phone ownership, license clearance and owner public
 Release approval remain OPEN. No official release has been authorized.
+
+## 2026-11-05 Model C licensing decision — resume checkpoint
+
+Owner explicitly chose **Model C**: future RIVANOX-owned source made
+viewable/downloadable; personal private non-commercial use free;
+commercial/organizational use requires a separately agreed commercial
+license. Create new stacked DRAFT from PR #34 exact SHA
+`c28a61bea275f8602458c2961e06454430cc4319`, preserving
+all parents and `main`, with `LICENSE-C-DRAFT.md`,
+`docs/licensing/RIGHTS-AUDIT-2026-11-05.md`, transparent
+`docs/licensing/TRANSITION-STATE.json` and fail-closed source CI.
+**NOT EFFECTIVE**: historical/current GNU AGPL-3.0-only rights remain
+and no SD Release is approved. Need verified RIVANOX legal rights holder
+and human/AI/contributor chain of title, third-party complete rootfs
+legal audit and qualified German/EU counsel, explicit reviewed future
+version and owner signature before any effective switch. A user's
+choice of business policy is not a fake proof of legal clearance.
+Resume by verifying new Draft PR exact source CI, then keeping
+human checkpoints open in Workbench AH-008 #3274 and GitHub Issue #32.
