@@ -42,6 +42,22 @@ def inspect(root: Path) -> dict[str, bool]:
     source = root / "opt/audiohub/src/audiohub"
     for name in ("__init__.py", "runtime.py", "pairing.py", "mixer.py", "webserver.py", "status_bind.py", "firstboot_diag.py", "network_laptop.py", "network_buffer.py", "input_profiles.py", "source_routes.py", "audio_graph.py", "hardware_preflight.py"):
         checks["source_" + name] = (source / name).is_file()
+    # Runtime's private state must never follow attacker-controlled links,
+    # write through a fixed .tmp name, or accept unbounded JSON.
+    try:
+        runtime_security = (source / "runtime.py").read_text()
+        checks["runtime_private_state_nofollow_atomic"] = all(
+            marker in runtime_security for marker in (
+                "MAX_RUNTIME_JSON_BYTES = 32 * 1024",
+                "def _private_parent_fd(path, *, create=False):",
+                "os.O_NOFOLLOW", "os.O_NONBLOCK",
+                "os.O_EXCL", "secrets.token_hex(12)",
+                "stat.S_ISREG", "os.replace(name, path.name",
+                "os.fsync(dirfd)",
+            )
+        ) and 'path.with_suffix(".tmp")' not in runtime_security
+    except OSError:
+        checks["runtime_private_state_nofollow_atomic"] = False
     # Build-time guard: the alpha status UI is unauthenticated, so the
     # installed image must never bind to all interfaces by default.
     try:
