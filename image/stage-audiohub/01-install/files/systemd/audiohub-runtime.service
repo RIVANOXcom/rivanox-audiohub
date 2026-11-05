@@ -9,6 +9,8 @@ Environment=PYTHONPATH=/opt/audiohub/src
 ExecStart=/usr/bin/python3 -m audiohub.runtime
 Restart=always
 RestartSec=5
+KillMode=control-group
+TimeoutStopSec=8s
 NoNewPrivileges=yes
 
 [Install]
