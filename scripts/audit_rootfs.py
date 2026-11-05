@@ -128,6 +128,21 @@ def inspect(root: Path) -> dict[str, bool]:
         ) and "self.authorize_pending(device)" in pairing_source
     except OSError:
         checks["bluetooth_trust_requires_agent_authorization"] = False
+    # PairableTimeout=0 / DiscoverableTimeout=0 mean unlimited in BlueZ.
+    # The first-boot listener may not reopen a fresh window on restart.
+    try:
+        pairing_source = (source / "pairing.py").read_text()
+        checks["bluetooth_pairable_discoverable_timers_bounded"] = all(
+            token in pairing_source for token in (
+                "self.deadline = float(BOOT_WINDOW)",
+                'self.adapter.Set("org.bluez.Adapter1", "PairableTimeout", dbus.UInt32(BOOT_WINDOW))',
+                'self.adapter.Set("org.bluez.Adapter1", "DiscoverableTimeout", dbus.UInt32(BOOT_WINDOW))',
+                'self.adapter.Set("org.bluez.Adapter1", "Pairable", dbus.Boolean(False))',
+                'self.adapter.Set("org.bluez.Adapter1", "Discoverable", dbus.Boolean(False))',
+            )
+        ) and 'DiscoverableTimeout", dbus.UInt32(0)' not in pairing_source
+    except OSError:
+        checks["bluetooth_pairable_discoverable_timers_bounded"] = False
     # Offline-only debug output is written by a strictly sandboxed root
     # service; never include network enrollment secrets in the image or report.
     diag_unit_path = root / "etc/systemd/system/audiohub-firstboot-diag.service"
