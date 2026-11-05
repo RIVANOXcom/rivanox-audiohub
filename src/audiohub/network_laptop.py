@@ -120,14 +120,16 @@ def close_player(process):
             process.wait(timeout=2)
 
 
-def serve(sender_ip, bind_ip, port, *, prefill_packets=1, diagnostics=False):
+def serve(sender_ip, bind_ip, port, *, unsafe_lan_test=False, prefill_packets=1, diagnostics=False):
     """Manually gated receiver with finite PCM backlog and opt-in counters.
 
     This does not reconstruct missing/reordered UDP packets or authenticate
     the claimed sender. Keep the listener off in normal product operation.
     """
-    check_audio_target()
+    # Do not permit internal callers to bypass the CLI unsafe-LAN gate.
+    sender_ip, bind_ip, port = validate_options(sender_ip, bind_ip, port, unsafe_lan_test)
     backlog = PcmPacketBuffer(prefill=prefill_packets)
+    check_audio_target()
     counters = ReceiverCounters()
     player = None
     retry_after = 0.0
@@ -260,6 +262,7 @@ def main(argv=None):
             args.sender_ip, args.bind_ip, args.port, args.unsafe_lan_test
         )
         serve(sender, bind, port,
+              unsafe_lan_test=args.unsafe_lan_test,
               prefill_packets=args.prefill_packets, diagnostics=args.diagnostics)
     except (OSError, RuntimeError, ValueError) as exc:
         parser.exit(2, "AudioHub experimental receiver unavailable: " + str(exc) + "\n")
