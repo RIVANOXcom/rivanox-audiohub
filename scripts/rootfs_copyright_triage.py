@@ -17,7 +17,7 @@ import re
 import stat
 
 from scripts.rootfs_package_inventory import (
-    PACKAGE, MAX_STATUS_BYTES, _paragraphs,
+    PACKAGE, MAX_STATUS_BYTES, _paragraphs, _copyright_hash,
 )
 from scripts.verify_package_inventory import verify
 
@@ -141,6 +141,10 @@ def analyze(rootfs: Path, inventory_path: Path) -> dict:
         name = item["name"]
         if name not in status:
             raise ValueError("Inventory package missing in actual rootfs")
+        # Ensure package hash was computed from these actual rootfs bytes,
+        # not merely a syntactically valid but stale or forged digest.
+        if _copyright_hash(rootfs, name) != item["copyright_sha256"]:
+            raise ValueError("Inventory copyright hash differs from real rootfs")
         if not valid_tree:
             if item["copyright_sha256"] is None:
                 unresolved.append({"package": name, "reason": "unsafe_documentation_tree"})
