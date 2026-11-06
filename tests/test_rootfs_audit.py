@@ -21,6 +21,21 @@ class RootfsAuditTests(unittest.TestCase):
             file.write_text(content)
         for name in ("__init__.py", "runtime.py", "pairing.py", "mixer.py"):
             make("opt/audiohub/src/audiohub/" + name)
+        make("opt/audiohub/src/audiohub/eq_setup.py", "\\n".join((
+            "MAX_EQ_CONFIG_BYTES = 64 * 1024",
+            "def _safe_eq_parent_fd(target):",
+            "os.O_DIRECTORY | os.O_NOFOLLOW",
+            "os.mkdir(component, mode=0o700, dir_fd=fd)",
+            "stat.S_IMODE(st.st_mode) & 0o077",
+            "os.stat(target.name, dir_fd=dirfd, follow_symlinks=False)",
+            "not stat.S_ISREG(prior.st_mode)",
+            "prior.st_nlink != 1",
+            "os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW",
+            "secrets.token_hex(12)",
+            "os.fsync(out)",
+            "os.replace(temp, target.name, src_dir_fd=dirfd, dst_dir_fd=dirfd)",
+            "os.fsync(dirfd)",
+        )))
         make("opt/audiohub/src/audiohub/pairing.py", "\n".join((
             "AUTHORIZATION_TTL = 45",
             "def authorized_pairing_signal(",
@@ -462,6 +477,32 @@ class RootfsAuditTests(unittest.TestCase):
             self.assertTrue(checks["web_static_files_nofollow_regular_bounded"])
             self.assertTrue(checks["status_static_and_state_files_nofollow_bounded"])
 
+
+
+    def test_eq_setup_atomic_private_nofollow_guard_present(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            self.assertTrue(audit.inspect(root)["eq_setup_private_atomic_nofollow"])
+
+    def test_eq_setup_final_symlink_following_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/src/audiohub/eq_setup.py"
+            path.write_text(path.read_text().replace(
+                "os.stat(target.name, dir_fd=dirfd, follow_symlinks=False)",
+                "os.stat(target.name, dir_fd=dirfd)"
+            ))
+            self.assertFalse(audit.inspect(root)["eq_setup_private_atomic_nofollow"])
+
+    def test_eq_setup_inplace_write_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/src/audiohub/eq_setup.py"
+            path.write_text(path.read_text().replace(
+                "os.replace(temp, target.name, src_dir_fd=dirfd, dst_dir_fd=dirfd)",
+                "target.write_text(payload.decode())"
+            ))
+            self.assertFalse(audit.inspect(root)["eq_setup_private_atomic_nofollow"])
 
     def test_missing_private_runtime_atomic_guard_blocks_image(self):
         with tempfile.TemporaryDirectory() as tmp:
