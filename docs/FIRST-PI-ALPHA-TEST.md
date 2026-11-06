@@ -9,19 +9,19 @@ ownership or safe installation. Nothing in this guide grants release GO.
 ## Verified image snapshot — 6 November 2026
 
 The latest independently completed ARM64 Pi4 preview on this branch lineage
-at this checkpoint is **Draft PR70**. Do not replace it with a different
+at this checkpoint is **Draft PR75**. Do not replace it with a different
 or newer run without rechecking ALL commit, test, artifact and checksum data.
 
 | Proof | Exact value |
 | --- | --- |
-| Development PR | [PR70](https://github.com/RIVANOXcom/rivanox-audiohub/pull/70), Draft and unmerged |
-| Source commit | `83c5ccbdc206e4ba8e2fe2dbf481abd735b3ab12` |
-| Source checks | [GitHub Actions #42256023645](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42256023645), **686/686 PASS** |
-| Native ARM64 | [GitHub Actions #42255968531](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42255968531), **88/88** real installed-rootfs gates PASS |
-| Test-only artifact | [#13522368901](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42255968531/artifacts/13522368901) — `AUDIOHUB-ALPHA-UNVERIFIED-DO-NOT-DISTRIBUTE` |
-| ZIP SHA-256 (GitHub upload) | `6e8b309ae66062988610c19e156de561586b1e44398a17465611a3e739966935` |
-| Compressed Pi image SHA-256 (CI manifest) | `f03596a28d150ee3ee7ce89495910f84824c06851ceb1733dcd809c5252bdb87` |
-| Artifact expiry (server reported) | 6 December 2026, 16:57 UTC |
+| Development PR | [PR75](https://github.com/RIVANOXcom/rivanox-audiohub/pull/70), Draft and unmerged |
+| Source commit | `2b02bb4968467cd1033b47ddeaccaba092b96db0` |
+| Source checks | [GitHub Actions #42305591855](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42305591855), **709/709 PASS** |
+| Native ARM64 | [GitHub Actions #42305548510](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42305548510), **92/92** real installed-rootfs gates PASS |
+| Test-only artifact | [#13546207449](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42305548510/artifacts/13546207449) — `AUDIOHUB-ALPHA-UNVERIFIED-DO-NOT-DISTRIBUTE` |
+| ZIP SHA-256 (GitHub upload) | `b6bc5175fdee8f7c89aa0e041ec5521e7881ec2f1bd1d658156237434e1b9ad5` |
+| Compressed Pi image SHA-256 (CI manifest) | `7b1adf94685ffe2cdbe1e86e83e11839da0fcd814d78bca0818e362f24167c95` |
+| Artifact expiry (server reported) | 6 December 2026, 22:41 UTC |
 | Classification | `UNVERIFIED_ALPHA_TEST_ONLY`; `public_release_ready=false` |
 
 CI also reported `sha256sum -c` success, `xz --test` success, manifest provenance
@@ -32,22 +32,22 @@ The repository Releases tab does **not** contain this artifact.
 ### Retrieve and verify the exact test ZIP — operator only
 
 1. Sign in to GitHub with access to this repo. Open the exact
-   [ARM64 job #42255968531](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42255968531)
-   and download **artifact #13522368901** under **Artifacts**. Do not
+   [ARM64 job #42305548510](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42305548510)
+   and download **artifact #13546207449** under **Artifacts**. Do not
    take an old or similarly named ZIP from another build. If it expired
    or the account cannot access it, record **NOT AVAILABLE** and stop.
 2. Compare the locally downloaded **ZIP** SHA-256 with
-   `6e8b309ae66062988610c19e156de561586b1e44398a17465611a3e739966935`.
+   `b6bc5175fdee8f7c89aa0e041ec5521e7881ec2f1bd1d658156237434e1b9ad5`.
    Windows PowerShell: `Get-FileHash -Algorithm SHA256 .\downloaded-artifact.zip`.
    Linux/macOS with the required tools: `sha256sum downloaded-artifact.zip`.
    Stop on any mismatch.
 3. Extract the ZIP locally. Confirm it contains precisely one compressed
    `*.img.xz` image and the expected `SHA256SUMS.txt`,
    `PREVIEW-MANIFEST.json` and `ROOTFS-PACKAGES.json`.
-   Check the manifest source commit matches the exact PR70 SHA above,
-   and its source run ID is #42255968531.
+   Check the manifest source commit matches the exact PR75 SHA above,
+   and its source run ID is #42305548510.
 4. Check the image digest against the **manifest, SHA256SUMS.txt and**
-   `f03596a28d150ee3ee7ce89495910f84824c06851ceb1733dcd809c5252bdb87`.
+   `7b1adf94685ffe2cdbe1e86e83e11839da0fcd814d78bca0818e362f24167c95`.
    Linux: run `sha256sum -c SHA256SUMS.txt` in the extracted directory.
    Windows: `Get-FileHash -Algorithm SHA256 .\image_2026-11-06-AudioHub-Pi4-UNVERIFIED.img.xz`.
    If available, run `xz --test image_2026-11-06-AudioHub-Pi4-UNVERIFIED.img.xz`.

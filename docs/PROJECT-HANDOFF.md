@@ -678,3 +678,29 @@ clearance or official release. Effective license remains
 AGPL-3.0-only, 83 rights still need human review, nine installed OS
 copyright gaps remain. No merges, installations, deployments, payments,
 permissions or release GO; all changes in own Draft branch.
+
+
+## 2026-11-06: Draft PR76 — latest proven Pi4 isolated bench image snapshot
+
+PAPA MissionPilot WD_JOB PAPA-18B8B3C6 / AH-001/AH-009, new isolated
+Draft PR76 based ONLY on unchanged PR75 exact 2b02bb4968467cd1033b47ddeaccaba092b96db0.
+Parent PR75 Source #42305591855 SUCCESS 709/709 and native ARM64
+#42305548510 SUCCESS 92/92 actual installed rootfs, manifest, XZ,
+sha256sum and bundle all pass; its temporary NOT FOR DISTRIBUTION
+GitHub Actions artifact #13546207449 ZIP SHA256
+b6bc5175fdee8f7c89aa0e041ec5521e7881ec2f1bd1d658156237434e1b9ad5
+and compressed image SHA256
+7b1adf94685ffe2cdbe1e86e83e11839da0fcd814d78bca0818e362f24167c95,
+expiry 2026-12-06T22:41:35Z, PAPA Workbench evidence #3133.
+FIRST-PI-ALPHA-TEST.md and THREE-SOURCE-LAB-ACCEPTANCE.md previously
+pinned superseded PR70 despite later BlueZ and preflight hardening.
+Both now pin PR75's exact source, tested ARM64, archive and image
+provenance. Existing source-rights tests updated to reject obsolete
+PR70 artifact reuse while preserving original no-production/release
+warning, human-only SD flash, offline isolated Pi4/Edifier test and
+NOT TESTED hardware observation matrix. This is documentation/tests
+only, no new Pi image build is claimed for PR76. Source CI on the
+exact PR76 HEAD needs to be verified. No real Pi4/Edifier sound/24h,
+auth phone-owner WiFi, human legal signoff (83 source rights, nine
+OS copyright gaps), license Model C transition, release GO, merge,
+permissions, deployment, SD installation or payment.

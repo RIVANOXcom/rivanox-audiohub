@@ -349,11 +349,11 @@ class SourceRightsLedgerTests(unittest.TestCase):
     def test_first_pi_alpha_guide_has_verified_image_provenance(self):
         guide = (ROOT / "docs/FIRST-PI-ALPHA-TEST.md").read_text()
         for token in (
-            "83c5ccbdc206e4ba8e2fe2dbf481abd735b3ab12",
-            "42256023645", "42255968531", "13522368901",
-            "f03596a28d150ee3ee7ce89495910f84824c06851ceb1733dcd809c5252bdb87",
-            "6e8b309ae66062988610c19e156de561586b1e44398a17465611a3e739966935",
-            "88/88", "UNVERIFIED_ALPHA_TEST_ONLY",
+            "2b02bb4968467cd1033b47ddeaccaba092b96db0",
+            "42305591855", "42305548510", "13546207449",
+            "7b1adf94685ffe2cdbe1e86e83e11839da0fcd814d78bca0818e362f24167c95",
+            "b6bc5175fdee8f7c89aa0e041ec5521e7881ec2f1bd1d658156237434e1b9ad5",
+            "92/92", "UNVERIFIED_ALPHA_TEST_ONLY",
             "public_release_ready=false", "SHA256SUMS.txt",
             "PREVIEW-MANIFEST.json", "ROOTFS-PACKAGES.json",
             "Get-FileHash", "sha256sum", "NOT TESTED",
@@ -362,19 +362,23 @@ class SourceRightsLedgerTests(unittest.TestCase):
         ):
             with self.subTest(token=token):
                 self.assertIn(token, guide)
-        # Old unverified first-image instructions must not be re-promoted.
+        # Old PR70 and initial preview image artifacts must not be re-promoted.
         self.assertNotIn("41792407565", guide)
         self.assertNotIn("13303394505", guide)
         self.assertNotIn("93e637276d5fc772a4b06f7848aacdeddfddaf17", guide)
+        self.assertNotIn("13522368901", guide)
+        self.assertNotIn("42255968531", guide)
 
     def test_three_source_lab_links_to_same_verified_nonrelease_image(self):
         lab = (ROOT / "docs/THREE-SOURCE-LAB-ACCEPTANCE.md").read_text()
         self.assertIn("FIRST-PI-ALPHA-TEST.md", lab)
-        self.assertIn("83c5ccbdc206e4ba8e2fe2dbf481abd735b3ab12", lab)
-        self.assertIn("13522368901", lab)
-        self.assertIn("88/88", lab)
+        self.assertIn("2b02bb4968467cd1033b47ddeaccaba092b96db0", lab)
+        self.assertIn("13546207449", lab)
+        self.assertIn("92/92", lab)
         self.assertIn("NOT TESTED", lab)
         self.assertIn("no network listener during boot", lab.lower())
+        self.assertNotIn("13522368901", lab)
+        self.assertNotIn("42255968531", lab)
 
     def test_declared_license_switch_has_not_occurred(self):
         state = json.loads(
