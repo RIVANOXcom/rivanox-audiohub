@@ -200,6 +200,19 @@ def inspect(root: Path) -> dict[str, bool]:
         )
     except OSError:
         checks["pipewire_nodes_and_links_strict_shared_json_snapshot"] = False
+    # Hardware preflight reports count of sources eligible for routing,
+    # not arbitrary bluez_input-named PipeWire objects with invalid identity.
+    try:
+        preflight = (source / "hardware_preflight.py").read_text()
+        checks["hardware_preflight_only_counts_valid_bt_sources"] = (
+            "from .discovery import _conflicting_node_ids, bluetooth_sources, pipewire_nodes" in preflight
+            and "bluetooth = len(bluetooth_sources(nodes))" in preflight
+            and 'name.startswith("bluez_input.")' not in preflight
+            and '"bluetooth_source_count": bluetooth' in preflight
+            and '"release_ready": False' in preflight
+        )
+    except OSError:
+        checks["hardware_preflight_only_counts_valid_bt_sources"] = False
     # No operator-only "hardware check" may quietly grant legal, owner or
     # stable-image approval from detected topology or typed responses.
     try:
