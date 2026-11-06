@@ -444,3 +444,36 @@ PAPA-18B8B3C6 isolated Draft PR66 `wd-papa-18b8b3c6-web-input-name-unicode-20261
 ## 2026-11-06: Draft PR67 latest preview-language selection wins
 
 PAPA-18B8B3C6 isolated Draft PR67 `wd-papa-18b8b3c6-web-locale-latest-request-20261106`, based exclusively on PR66 exact `841425fdbcb240fe1c13fa13c6434542c6a2a392`. Fix stale successful/failed translation fetches overriding more recent user choices with monotonic async request IDs. Actual Node.js deferred Promise race test and three synthetic image checks, new native image gate targets **85** only after exact-head ARM64 proof. Parent PR66 source #42247530486 665/665 PASS, native #42247519470 pending at creation. Historical AGPL license, 83 source rights, nine OS copyright gaps, owner Wi-Fi and hardware release blockers unchanged. All PRs Draft and NO release. Canonical AI.
+
+
+## 2026-11-06: draft PR68 — consistent English locale fallback in read-only preview
+
+PAPA MissionPilot WD_JOB PAPA-18B8B3C6; isolated follow-up to PR67 exact
+c4c998a3266b798355153857b1bb3f79ef09df42. PR67 source checks
+#42248715296 SUCCESS 670/670 and independent native ARM64
+#42248655703 SUCCESS with actual 85/85 installed-rootfs guards, bundle
+integrity PASS. Test-only ZIP artifact #13519708564 has SHA256 digest
+9b88381fe55535070700bd6612683c366881dc6f4a229ae3b2e586bb8136bd98,
+expires 2026-12-06; Workbench evidence #3061.
+
+Failure reproduced with actual async JavaScript logic: when a user switches to
+Italian while neither Italian nor English locale JSON can load, the final
+English fallback rendered English tagline but left HTML lang, visible dropdown
+and saved browser locale in an old language (e.g. French). Fix the final
+catch branch to populate fallback data and fall through the existing current-
+request guarded shared language metadata commit, not return early. Added two
+Node runtime tests in the existing rights-ledger-covered tests/test_locales.py:
+both failures commit English consistently; an old delayed English failure
+cannot override a newer successful French selection. Synthetic installed-
+rootfs positive/negative checks protect the metadata path; new native gate
+web_preview_english_fallback_metadata_consistent targets 86 actual native
+checks ONLY after successful exact-head ARM64 CI. No change to stored device
+settings, local-only display labels, owner endpoints or five-locale contract.
+
+All stacked branches remain Draft/unmerged, public main untouched. Existing
+AGPL-3.0-only effective; 83 pending rights reviews and nine OS notice gaps;
+real Pi4/Edifier three-way audible/24h, secure owner-phone Wi-Fi and legal
+release signoff unverified. NO release/merge/deployment/install/permission
+or payment authority. Native/source results for this follow-up must be
+independently verified and recorded before treating its test artifact as
+built; do not claim product GO from passing CI.

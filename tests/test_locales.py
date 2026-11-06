@@ -132,5 +132,92 @@ verify().catch(e => {console.error(e); process.exitCode = 1;});
         self.assertEqual(result.returncode, 0, result.stderr)
 
 
+
+class BrowserLocaleFallbackTests(unittest.TestCase):
+    """The genuine shipping loader must commit a consistent English fallback."""
+
+    @unittest.skipUnless(shutil.which("node"), "Node.js runtime unavailable")
+    def test_double_locale_failure_commits_english_metadata(self):
+        setup = r'''
+const assert = require("node:assert/strict");
+const LANGUAGES = ["en", "de", "es", "fr", "it"];
+const document = {documentElement: {lang: "fr"}};
+const dropdown = {value: "fr"};
+const byId = id => {assert.equal(id, "language"); return dropdown;};
+const localStorage = {value: ["audiohub.locale", "fr"],
+  setItem(k, v) {this.value = [k, v];}};
+const translated = [];
+let words = {};
+let languageRequestId = 0;
+const translate = () => {translated.push([document.documentElement.lang, words.tagline]);};
+const fetch = async () => {throw new Error("locale offline");};
+'''
+        verify = r'''
+async function check() {
+  await setLanguage("it");
+  assert.equal(document.documentElement.lang, "en");
+  assert.equal(dropdown.value, "en");
+  assert.equal(words.tagline, "All your audio. One place.");
+  assert.deepEqual(localStorage.value, ["audiohub.locale", "en"]);
+  assert.deepEqual(translated, [["en", "All your audio. One place."]]);
+  // A second directly failed English request must retain the same UI state.
+  await setLanguage("en");
+  assert.deepEqual(translated, [
+    ["en", "All your audio. One place."],
+    ["en", "All your audio. One place."]
+  ]);
+}
+check().catch(e => {console.error(e); process.exitCode = 1;});
+'''
+        result = subprocess.run(
+            ["node", "-e", setup + "\n" + preview_language_loader_source() + "\n" + verify],
+            capture_output=True, text=True, timeout=15, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    @unittest.skipUnless(shutil.which("node"), "Node.js runtime unavailable")
+    def test_stale_english_fallback_failure_cannot_replace_latest_locale(self):
+        setup = r'''
+const assert = require("node:assert/strict");
+const LANGUAGES = ["en", "de", "es", "fr", "it"];
+const document = {documentElement: {lang: "it"}};
+const dropdown = {value: "it"};
+const byId = id => {assert.equal(id, "language"); return dropdown;};
+const localStorage = {value: ["audiohub.locale", "it"],
+  setItem(k, v) {this.value = [k, v];}};
+const translated = [];
+let words = {};
+let languageRequestId = 0;
+const translate = () => {translated.push([document.documentElement.lang, words.tagline]);};
+const pending = {};
+const fetch = uri => new Promise((resolve, reject) => {
+  pending[uri] = {resolve, reject};
+});
+'''
+        verify = r'''
+async function check() {
+  const old = setLanguage("de");
+  pending["./locales/de.json"].reject(new Error("German unavailable"));
+  await Promise.resolve();
+  assert.ok(pending["./locales/en.json"], "English fallback should be pending");
+  const latest = setLanguage("fr");
+  pending["./locales/fr.json"].resolve({
+    ok: true, json: async () => ({tagline: "Français"})
+  });
+  await latest;
+  pending["./locales/en.json"].reject(new Error("English fallback unavailable"));
+  await old;
+  assert.equal(document.documentElement.lang, "fr");
+  assert.equal(dropdown.value, "fr");
+  assert.equal(words.tagline, "Français");
+  assert.deepEqual(localStorage.value, ["audiohub.locale", "fr"]);
+  assert.deepEqual(translated, [["fr", "Français"]]);
+}
+check().catch(e => {console.error(e); process.exitCode = 1;});
+'''
+        result = subprocess.run(
+            ["node", "-e", setup + "\n" + preview_language_loader_source() + "\n" + verify],
+            capture_output=True, text=True, timeout=15, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
 if __name__ == "__main__":
     unittest.main()

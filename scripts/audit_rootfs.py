@@ -652,6 +652,22 @@ def inspect(root: Path) -> dict[str, bool]:
         ) and preview.count("if (requestId !== languageRequestId) return;") >= 2
     except OSError:
         checks["web_preview_latest_language_request_wins"] = False
+    # Even if both requested and English locale fetches fail, the preview
+    # must use the same metadata commit path as a successful English request.
+    try:
+        preview = (root / "opt/audiohub/web/app.js").read_text()
+        checks["web_preview_english_fallback_metadata_consistent"] = all(
+            token in preview for token in (
+                'if (language !== "en") return setLanguage("en");',
+                'data = { tagline: "All your audio. One place." };',
+                "if (requestId !== languageRequestId) return;",
+                "document.documentElement.lang = language;",
+                'byId("language").value = language;',
+                'localStorage.setItem("audiohub.locale", language)',
+            )
+        ) and 'words = { tagline: "All your audio. One place." };' not in preview
+    except OSError:
+        checks["web_preview_english_fallback_metadata_consistent"] = False
     # Physical input rebinding cannot originate from public status or
     # unauthenticated LAN packets. A private local policy must reserve the
     # manual LAN slot and keep Bluetooth streams off that same EQ input.

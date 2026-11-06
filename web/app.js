@@ -181,9 +181,8 @@
     } catch (_) {
       if (requestId !== languageRequestId) return;
       if (language !== "en") return setLanguage("en");
-      words = { tagline: "All your audio. One place." };
-      translate();
-      return;
+      // Use the shared commit path so failed English also updates locale metadata.
+      data = { tagline: "All your audio. One place." };
     }
     if (requestId !== languageRequestId) return;
     words = data;
