@@ -90,7 +90,7 @@ class BoundedCommandTests(unittest.TestCase):
                   "src/audiohub/process_capture.py").read_text()
         self.assertIn("selectors.DefaultSelector()", source)
         self.assertIn("max_bytes + 1 - len(output)", source)
-        self.assertNotIn("capture_output=True", source.split("def bounded_command_output")[1])
+        self.assertNotIn("subprocess.run(", source.split("def bounded_command_output")[1])
         self.assertNotIn(".communicate(", source.split("def bounded_command_output")[1])
 
 

@@ -17,8 +17,12 @@ MAX_PIPEWIRE_GRAPH_OBJECTS = 8192
 
 def pipewire_nodes(raw):
     # Reject overlarge or malformed snapshots before iterating nodes.
-    if type(raw) is str and len(raw.encode("utf-8")) > MAX_PIPEWIRE_GRAPH_BYTES:
-        return []
+    if type(raw) is str:
+        try:
+            if len(raw.encode("utf-8")) > MAX_PIPEWIRE_GRAPH_BYTES:
+                return []
+        except UnicodeError:
+            return []
     try:
         data = json.loads(raw) if type(raw) is str else raw
     except (TypeError, ValueError):

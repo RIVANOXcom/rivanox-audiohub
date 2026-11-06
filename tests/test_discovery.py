@@ -30,6 +30,15 @@ class DiscoveryTests(unittest.TestCase):
         sources = bluetooth_sources(nodes)
         self.assertEqual(sources[0]["address"], "AA:BB:CC:DD:EE:FF")
 
+    def test_oversized_json_text_and_graph_are_refused(self):
+        from audiohub.discovery import (MAX_PIPEWIRE_GRAPH_BYTES,
+                                        MAX_PIPEWIRE_GRAPH_OBJECTS)
+        self.assertEqual(pipewire_nodes(" " * (MAX_PIPEWIRE_GRAPH_BYTES + 1)), [])
+        self.assertEqual(pipewire_nodes([{}] * (MAX_PIPEWIRE_GRAPH_OBJECTS + 1)), [])
+
+    def test_invalid_unicode_graph_is_refused_without_crashing(self):
+        self.assertEqual(pipewire_nodes("\\ud800"), [])
+
     def test_invalid_pipewire_dump_is_safe(self):
         self.assertEqual(pipewire_nodes("bad JSON"), [])
         self.assertEqual(pipewire_nodes('{"anything": 1}'), [])
