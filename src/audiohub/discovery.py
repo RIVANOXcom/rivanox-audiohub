@@ -171,6 +171,13 @@ def bluetooth_sources(nodes):
         if match is None:
             continue
         name_mac = match.group(1).replace("_", ":").upper()
+        # Count every valid-named BlueZ profile before checking its optional
+        # metadata. A malformed first profile must still veto a second
+        # profile claiming the same MAC; neither is safe to route.
+        if name_mac in seen:
+            conflicted.add(name_mac)
+            continue
+        seen.add(name_mac)
         # BlueZ metadata can expose both address properties. Any stated
         # address must agree with the source node name; never mask a
         # contradictory or malformed value by selecting one with "or".
@@ -185,10 +192,6 @@ def bluetooth_sources(nodes):
                 break
         if address_conflict:
             continue
-        if name_mac in seen:
-            conflicted.add(name_mac)
-            continue
-        seen.add(name_mac)
         result.append({"name": name, "address": name_mac, "id": item["id"]})
     # An address with two eligible BlueZ source nodes is ambiguous.
     # Neither entry is safe to route; never trust whichever arrived first.
