@@ -112,6 +112,30 @@ class LinkEvidenceTests(unittest.TestCase):
         for secret in ("PRIVATE-SERIAL", "PRIVATE-WIFI", "AA:BB", "EDIFIER_R600USB"):
             self.assertNotIn(secret, summary)
 
+    def test_duplicate_link_endpoint_json_cannot_fake_usb_audio_path(self):
+        raw = json.dumps(graph())[:-1] + (
+            ',{"type":"PipeWire:Interface:Link","info":'
+            '{"output-node-id":99,"output-node-id":31,"input-node-id":10}}]'
+        )
+        observed = summarize_links(raw)
+        self.assertFalse(observed["inspection_available"])
+        self.assertFalse(observed["eq_output_to_usb_direct_link"]["music"])
+        self.assertEqual(observed["links_inspected"], 0)
+        self.assertFalse(observed["release_ready"])
+
+    def test_link_parser_and_node_parser_share_invalid_snapshot_policy(self):
+        raw_values = (
+            '[{"type":"PipeWire:Interface:Node","id":5,"id":7}]',
+            '[{"type":"PipeWire:Interface:Link","info":{"extra":NaN}}]',
+            '[{"type":"PipeWire:Interface:Link","info":{"extra":1e999}}]',
+            "[" * 1550 + "0" + "]" * 1550,
+        )
+        for raw in raw_values:
+            with self.subTest(raw=raw[:35]):
+                observed = summarize_links(raw)
+                self.assertFalse(observed["inspection_available"])
+                self.assertFalse(observed["release_ready"])
+
     def test_malformed_and_oversized_snapshots_never_pass(self):
         for raw in (None, {}, "oops", False, ["bad"], [None],
                     [{"type": "PipeWire:Interface:Link", "info": {"output-node-id": "31"}}],
