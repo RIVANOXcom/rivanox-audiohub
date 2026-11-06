@@ -47,6 +47,8 @@ These decisions capture user-confirmed requirements and current engineering arch
 
 | ADR-032 | Duplicate global PipeWire Node IDs, virtual sink names or Bluetooth source MACs cannot be resolved by first/last-wins heuristics for audio routing or hardware evidence. | Draft [PR #49](https://github.com/RIVANOXcom/rivanox-audiohub/pull/49), initial 500 source tests pass; final native ARM64 verification pending | Reject ambiguous source/sink IDs, stop previously managed routes, refuse positive topology/audio-link assertions; legitimate distinct identities remain functional. No physical speaker, owner or license acceptance implied. |
 
+| ADR-033 | Privileged first-boot diagnostic must refuse symlinked ancestor runtime paths and nonprivate/foreign-owned status files before observing health. | Draft [PR #50](https://github.com/RIVANOXcom/rivanox-audiohub/pull/50); code source 512 tests PASS; final ARM64 validation pending | All absolute path components opened with O_NOFOLLOW; private final UID/mode and bounded regular status required, unsafe paths give stale status. Does not assert physical audio, owner identity, license or hardware acceptance. |
+
 ## Engineering observations (not product acceptance)
 
 - Source-level tests and policy checks have succeeded on GitHub Actions.

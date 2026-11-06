@@ -134,3 +134,16 @@ virtual sinks. The read-only hardware topology and graph-link report also
 refuse positive evidence when Node IDs collide. Tests include malformed
 node metadata and legitimate distinct addresses. This is source/in-image
 safety maintenance, not a completed Pi4/Edifier physical audio test.
+
+## Privileged offline diagnostic runtime path hardening
+
+The system-owned `firstboot_diag` service must never follow an attacker-
+controlled symlink in a parent component of an unprivileged user's status
+path. Draft PR #50 opens every absolute directory component using
+`O_DIRECTORY|O_NOFOLLOW` via directory FDs and validates the last
+runtime directory and status file are owned by the expected audiohub UID
+and have no group/other rights. Hardlinks, invalid user IDs, traversal,
+missing or overlarge JSON fail as stale; no identifiers are exported.
+Tests verify valid existing private runtime status remains readable and
+unsupported inputs cannot make a report appear healthy. Offline report
+still means observation ONLY, no authentication, warranty or release.

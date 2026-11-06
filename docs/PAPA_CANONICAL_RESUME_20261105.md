@@ -148,7 +148,7 @@ bash -n build-image.sh
 ```text
 PAPA / RIVANOX AUDIOHUB WEITER — CANONICAL RESUME
 Read first:
-https://github.com/RIVANOXcom/rivanox-audiohub/blob/wd-papa-20261106-failclosed-pipewire-identity-ambiguity/docs/PAPA_CANONICAL_RESUME_20261105.md
+https://github.com/RIVANOXcom/rivanox-audiohub/blob/wd-papa-20261106-offline-diag-runtime-path-nofollow/docs/PAPA_CANONICAL_RESUME_20261105.md
 Project PAPA Workbench: PJ2611-0001:R001.
 Verify LIVE repo, PR #46/#45/#44 stacked heads, exact source and ARM64 CI, and open issues before changing anything.
 The public main and historical source remain AGPL-3.0-only; Model C
@@ -348,6 +348,23 @@ PR48 adds an installed `manual_acceptance.py` source check and independent no-re
 **CI evidence on code-only SHA `27d13828011a50fff9cd7b664a508e2ffe76ce89`:** [source Actions #42200344244](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42200344244) **SUCCESS 500/500 Python tests**, rights ledger all FALSE. Earlier red run #42200238395 surfaced obsolete BT integration expected first-wins behavior; test updated to assert that ambiguous MAC is discarded; following source run GREEN. Independent native ARM64 [#42200336164](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42200336164) was IN PROGRESS on code SHA, not confirmed as native PASS. This combined documentation/checkpoint commit will change PR49 HEAD; **always recheck the final exact-head source/native runs before claiming completion**.
 
 **Unchanged GO/NO-GO:** no public release or new commercial image. Main remains public AGPL-3.0-only; future Model C NOT EFFECTIVE, owner-created private repository `RIVANOXcom/rivanox-audiohub-next` not verified (issue #37). Open third-party OS rights issue #40, license/ownership issue #32 and actual Pi4/Edifier physical acceptance issue #2. Source/in-image static checks are NOT proof of sound, real Bluetooth compatibility, secure ownership or redistribution rights.
+
+
+## R. 2026-11-06 — root-owned offline diagnostic status path protection (Draft PR #50)
+
+**Parent:** [Draft PR #49](https://github.com/RIVANOXcom/rivanox-audiohub/pull/49) exact base SHA `1734042469c52aea21179d7ae40f7287fac5152e`, [source CI #42200628247](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42200628247) **SUCCESS 500/500 Python tests**. Parent independent [ARM64 run #42200618383](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42200618383) was in progress when PR50's source implementation completed; do not claim 66/66 without live verification. Last **independently verified native image** remains PR48 [#42181839470](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42181839470), 65/65 rootfs checks, 481 source tests and temporary UNVERIFIED artifact #13485629030, 689 installed packages/680 copyright hashes/9 unresolved notices, no release permission.
+
+**New [Draft PR #50](https://github.com/RIVANOXcom/rivanox-audiohub/pull/50)** on isolated branch `wd-papa-20261106-offline-diag-runtime-path-nofollow`, stacked on PR49. This is maintenance to existing legacy AGPL code, NOT future proprietary Model C product publication.
+
+**Concrete security defect:** system-level `audiohub-firstboot-diag.service` runs with elevated OS credentials to collect redacted health statistics from unprivileged user-owned `/run/user/UID/audiohub/runtime-status.json`. Earlier `firstboot_diag._read_runtime` used `O_NOFOLLOW` only when opening the *final* file; a user-created symlink in a parent component could route the privileged reader to a different same-UID JSON file and falsify the health report. The previous reader also did not explicitly require the parent directory and status file to have private owner-only permissions. This would not directly export raw device identifiers but undermines the integrity of reported observations.
+
+**Fix:** traverse the absolute runtime path from root with `O_DIRECTORY|O_NOFOLLOW` for **each** parent using directory FDs. Deny relative or `..` traversal paths and invalid user IDs. Check last directory is owned by target audiohub UID and has no group/other rights; open only the final plain regular file with nofollow/nonblocking, matching UID, one hardlink, no group/other rights and bounded nonempty 4 KiB JSON. Reject size changes or malformed JSON with safe stale/no-health output. No network connection or actual playback is triggered. Private valid runtime status still works.
+
+**Regression:** eight new adversarial local tests in `tests/test_firstboot_diag.py` (symlinked directory, public state directory, insecure file mode, hardlinked status, wrong owner, malformed paths/UID and private normal state) plus four synthetic rootfs tests in `tests/test_rootfs_audit.py` and new image audit `offline_diag_runtime_directory_nofollow_private`. Native target PR49's expected **66 + 1 = 67** rootfs checks, provided parent PR49 actually passes. Source rights ledger remains **83 entries**, all ownership, third-party and Model C approvals FALSE.
+
+**Initial PR50 code SHA `a362b1630e6001478634d2c1f4f6bfde9814a007`:** [source GitHub Actions #42201349549](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42201349549) **SUCCESS 512/512 Python tests**. Child native ARM64 run [#42201386174](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42201386174) was queued/in progress on later workflow SHA, not yet verified when this entry was written. This combined documentation/checkpoint commit itself changes PR50 HEAD: recheck exact-head source/native CI and rootfs count before claiming a new image or QA acceptance.
+
+**Release and legal limits remain:** AGPL-3.0-only public main unchanged; Model C future license not legally effective; private future product repo issue #37 not verified; legal review #32, Raspberry Pi OS third-party notices #40 and real Pi4/Edifier testing #2 remain open. No official GitHub Release, owner claim, public hardware signoff, deployment, merge or license change. Human operator must manually install any eventual Umbrel build.
 
 **END OF HANDOFF.** If a live run/PR contradicts this document, treat
 the live GitHub evidence as authoritative, reconcile and update this file.
