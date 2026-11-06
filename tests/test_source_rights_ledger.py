@@ -229,6 +229,12 @@ class SourceRightsLedgerTests(unittest.TestCase):
         self.assertFalse(state["next_status_private_file_identity_change"]["public_release_ready"])
         self.assertFalse(state["next_status_private_file_identity_change"]["model_c_license_effective"])
         self.assertFalse(state["next_status_private_file_identity_change"]["physical_edifier_accepted"])
+        self.assertEqual(state["next_status_malformed_input_failclosed_change"]["pr"], 54)
+        self.assertEqual(state["next_status_malformed_input_failclosed_change"]["parent_pr"], 53)
+        self.assertEqual(state["next_status_malformed_input_failclosed_change"]["expected_native_rootfs_guard_count"], 71)
+        self.assertTrue(state["next_status_malformed_input_failclosed_change"]["nested_json_fail_closed"])
+        self.assertTrue(state["next_status_malformed_input_failclosed_change"]["malformed_request_target_returns_404"])
+        self.assertFalse(state["next_status_malformed_input_failclosed_change"]["public_release_ready"])
         self.assertEqual(state["next_bluetooth_agent_trust_security_change"]["pairable_timeout_seconds"], 600)
         self.assertEqual(state["next_bluetooth_agent_trust_security_change"]["discoverable_timeout_seconds"], 600)
         self.assertTrue(state["next_bluetooth_agent_trust_security_change"]["initial_deadline_relative_to_linux_boot"])
@@ -238,7 +244,7 @@ class SourceRightsLedgerTests(unittest.TestCase):
         self.assertFalse(state["last_native_verified"]["public_release_ready"])
         self.assertEqual(
             [item["number"] for item in state["draft_pr_chain"]],
-            [35, 36, 38, 39, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53],
+            [35, 36, 38, 39, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54],
         )
 
     def test_primary_handoff_points_to_authoritative_resume(self):
