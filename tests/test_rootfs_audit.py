@@ -120,6 +120,14 @@ class RootfsAuditTests(unittest.TestCase):
             "validate_options(sender_ip, bind_ip, port, unsafe_lan_test)",
             'parser.add_argument("--unsafe-lan-test", action="store_true"',
             '"10.0.0.0/8"',
+            "IDLE_SECONDS = 5.0",
+            "if last_written_at is not None and now - last_written_at >= IDLE_SECONDS:",
+            "last_written_at = None",
+            "backlog.clear()",
+            "os.set_blocking(player.stdin.fileno(), False)",
+            "last_written_at = now",
+            "next_health_check = now + HEALTH_CHECK_SECONDS",
+            "except BlockingIOError:",
             "from .process_capture import bounded_command_output",
             'bounded_command_output(("pw-dump",), timeout=5)',
             '("wpctl", "set-default", str(output["id"])), timeout=5,',
@@ -1302,6 +1310,37 @@ class RootfsAuditTests(unittest.TestCase):
                 "MAX_BUFFER_PACKETS = 16", "MAX_BUFFER_PACKETS = 65536"
             ))
             self.assertFalse(audit.inspect(root)["laptop_manual_receiver_packaged"])
+
+
+    def test_initial_lan_write_deadline_present_in_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            self.assertTrue(audit.inspect(root)[
+                "manual_lan_first_pcm_write_stall_bounded"
+            ])
+
+    def test_missing_initial_lan_write_deadline_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/src/audiohub/network_laptop.py"
+            path.write_text(path.read_text().replace(
+                "last_written_at = now", "last_written_at = None"
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "manual_lan_first_pcm_write_stall_bounded"
+            ])
+
+    def test_inactive_lan_idle_deadline_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/src/audiohub/network_laptop.py"
+            path.write_text(path.read_text().replace(
+                "now - last_written_at >= IDLE_SECONDS",
+                "now - last_written_at >= float('inf')"
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "manual_lan_first_pcm_write_stall_bounded"
+            ])
 
     def test_missing_input_names_model_blocks_image_export(self):
         with tempfile.TemporaryDirectory() as tmp:
