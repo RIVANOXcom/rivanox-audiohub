@@ -171,6 +171,18 @@ class RootfsAuditTests(unittest.TestCase):
              'OUTPUT_NAME = "AUDIOHUB-TEST-REPORT.json"\\n'
              '"pipewire_links_inspected"\\n'
              '"eq_usb_direct_links"')
+        offline_diag = root / "opt/audiohub/src/audiohub/firstboot_diag.py"
+        offline_diag.write_text(offline_diag.read_text() + "\n".join((
+            "def _read_runtime(path, user_id):",
+            'os.open("/", flags)',
+            "os.O_DIRECTORY | os.O_NOFOLLOW",
+            "os.open(component, flags, dir_fd=dirfd)",
+            "parent.st_uid != user_id",
+            "stat.S_IMODE(parent.st_mode) & 0o077",
+            "meta.st_nlink != 1",
+            "stat.S_IMODE(meta.st_mode) & 0o077",
+            "MAX_RUNTIME_BYTES + 1",
+        )))
         for name in ("index.html", "app.js", "styles.css"):
             make("opt/audiohub/web/" + name)
         make("opt/audiohub/web/app.js", "\\n".join((
@@ -552,6 +564,49 @@ class RootfsAuditTests(unittest.TestCase):
             self.assertTrue(audit.inspect(root)[
                 "pipewire_node_identity_ambiguity_fails_closed"
             ])
+
+
+    def test_offline_diag_symlinked_runtime_directory_guard_missing_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/src/audiohub/firstboot_diag.py"
+            path.write_text(path.read_text().replace(
+                "os.open(component, flags, dir_fd=dirfd)",
+                "os.open(component, flags)"
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "offline_diag_runtime_directory_nofollow_private"
+            ])
+
+    def test_offline_diag_public_runtime_directory_guard_missing_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/src/audiohub/firstboot_diag.py"
+            path.write_text(path.read_text().replace(
+                "stat.S_IMODE(parent.st_mode) & 0o077", "False"
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "offline_diag_runtime_directory_nofollow_private"
+            ])
+
+    def test_offline_diag_hardlinked_status_guard_missing_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/src/audiohub/firstboot_diag.py"
+            path.write_text(path.read_text().replace(
+                "meta.st_nlink != 1", "False"
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "offline_diag_runtime_directory_nofollow_private"
+            ])
+
+    def test_private_offline_diagnostic_status_read_guard_passes_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            self.assertTrue(audit.inspect(root)[
+                "offline_diag_runtime_directory_nofollow_private"
+            ])
+
 
     def test_unchecked_status_web_listener_prevents_image_export(self):
         with tempfile.TemporaryDirectory() as tmp:
