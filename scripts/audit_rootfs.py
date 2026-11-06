@@ -152,6 +152,23 @@ def inspect(root: Path) -> dict[str, bool]:
         ) and 'value.get("api.bluez5.address") or' not in bt_source
     except (OSError, ValueError):
         checks["bluetooth_dual_address_metadata_agrees"] = False
+    # A malformed BlueZ profile is still a duplicate identity candidate:
+    # check same-MAC collision BEFORE returning early on metadata mismatch.
+    try:
+        discovery_source = (source / "discovery.py").read_text()
+        start = discovery_source.index("def bluetooth_sources(nodes):")
+        end = discovery_source.index("def virtual_sinks(nodes):", start)
+        bt = discovery_source[start:end]
+        duplicate = bt.index("if name_mac in seen:")
+        seen_mark = bt.index("seen.add(name_mac)", duplicate)
+        metadata = bt.index('for field in ("api.bluez5.address", "device.address"):')
+        checks["bluetooth_duplicate_mac_checked_before_metadata"] = (
+            duplicate < seen_mark < metadata
+            and "conflicted.add(name_mac)" in bt
+            and 'return [source for source in result if source["address"] not in conflicted]' in bt
+        )
+    except (OSError, ValueError):
+        checks["bluetooth_duplicate_mac_checked_before_metadata"] = False
     # Real PipeWire metadata is untrusted: one JSON object with duplicate
     # Node IDs or Link endpoints must not become a last-wins valid graph,
     # and a deeply nested but size-bounded pw-dump must not crash services.
