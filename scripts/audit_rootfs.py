@@ -220,6 +220,16 @@ def inspect(root: Path) -> dict[str, bool]:
                 "def log_message(self, format, *args):",
             )
         ) and "server = BoundedStatusHTTPServer(" in webserver
+        # A malformed status JSON document or HTTP absolute request URI
+        # must fail closed, rather than throw out of the alpha status handler.
+        checks["status_malformed_inputs_fail_closed"] = all(
+            mark in webserver for mark in (
+                'json.loads(body.decode("utf-8"))',
+                "except (UnicodeError, ValueError, RecursionError):",
+                "path = urlsplit(self.path).path",
+                "except ValueError:",
+            )
+        )
         checks["status_service_no_unsafe_lan_opt_in"] = (
             "AUDIOHUB_UNSAFE_STATUS_LAN" not in status_unit
             and "AUDIOHUB_STATUS_BIND_IP" not in status_unit
@@ -231,6 +241,7 @@ def inspect(root: Path) -> dict[str, bool]:
         checks["status_static_and_state_files_nofollow_bounded"] = False
         checks["status_http_clients_bounded_no_request_logs"] = False
         checks["status_runtime_private_owner_and_hardlink_guard"] = False
+        checks["status_malformed_inputs_fail_closed"] = False
     # BlueZ's PropertiesChanged signal is not a license to mark arbitrary
     # neighbors as Trusted. Ensure the installed agent requires a short-lived
     # explicit authorization callback, verifies real BlueZ paired state and
