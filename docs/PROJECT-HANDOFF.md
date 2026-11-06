@@ -648,3 +648,33 @@ effective AGPL-3.0-only, proposed Model C not approved, 83 rights rows
 and nine OS copyright gaps pending. No real Pi4+Edifier multi-source
 audio/24h, authenticated phone Wi-Fi, legal or CEO release signoff.
 No installation, merge, deployment, permissions/payment or release GO.
+
+
+## 2026-11-06: Draft PR75 — Pi4 preflight counts only eligible Bluetooth capture
+
+PAPA MissionPilot PAPA-18B8B3C6 / AH-009 and AH-002. Isolated Draft
+PR75 stacks only on PR74 exact `529a940d93e310b1e5b9d623c74dcf5c078ed2fb`. Previously
+hardware_preflight.inspect_topology incremented bluetooth_source_count
+for any PipeWire Audio/Source named bluez_input.*, even if the real
+bluetooth_sources discovery rejected that node for invalid BlueZ MAC,
+contradictory metadata or a duplicate same-MAC source. This could give
+a hands-on operator misleading positive topology diagnostics, despite
+routing refusing that input. Now preflight reuses exactly the shipping
+Bluetooth eligible-source filter, counts only unambiguous eligible
+sources, and still explicitly marks all acoustic, hardware and release
+gates UNVERIFIED. Three real source regressions cover conflicting
+secondary MAC, duplicate malformed+valid BlueZ profiles, unrelated
+valid profile, and malformed bluez_input name; existing normal Pi4
+topology observation remains one eligible source. A native pre-export
+rootfs check hardware_preflight_only_counts_valid_bt_sources and three
+synthetic positive/adversarial checks prevent fake counts or release
+acceptance. Expected rootfs count 92 only after actual independent
+ARM64 success. Parent PR74 exact source #42305206169 PASS 703/703;
+ARM64 #42305163557 still pending at implementation. Earlier Draft
+PR73 exact source 698/698, native 90/90 test only and Workbench #3128.
+This is NOT evidence of actual Pi4/Edifier playback, two Bluetooth
+streams, 24-hour endurance, authentication, owner phone WiFi, legal
+clearance or official release. Effective license remains
+AGPL-3.0-only, 83 rights still need human review, nine installed OS
+copyright gaps remain. No merges, installations, deployments, payments,
+permissions or release GO; all changes in own Draft branch.
