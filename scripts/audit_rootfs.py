@@ -220,6 +220,18 @@ def inspect(root: Path) -> dict[str, bool]:
                 "def log_message(self, format, *args):",
             )
         ) and "server = BoundedStatusHTTPServer(" in webserver
+        # A per-recv socket timeout can be kept alive forever by a slow
+        # sender; cap total request lifetime and suppress peer-bearing tracebacks.
+        checks["status_http_total_lifetime_and_peer_error_privacy"] = all(
+            mark in webserver for mark in (
+                "CLIENT_MAX_LIFETIME_SECONDS = 15",
+                "threading.Timer(",
+                "watchdog.start()",
+                "watchdog.cancel()",
+                "request.shutdown(socket.SHUT_RDWR)",
+                "def handle_error(self, request, client_address):",
+            )
+        )
         # A malformed status JSON document or HTTP absolute request URI
         # must fail closed, rather than throw out of the alpha status handler.
         checks["status_malformed_inputs_fail_closed"] = all(
@@ -256,6 +268,7 @@ def inspect(root: Path) -> dict[str, bool]:
         checks["status_runtime_private_owner_and_hardlink_guard"] = False
         checks["status_malformed_inputs_fail_closed"] = False
         checks["status_json_unique_keys_and_finite_numbers_only"] = False
+        checks["status_http_total_lifetime_and_peer_error_privacy"] = False
     # BlueZ's PropertiesChanged signal is not a license to mark arbitrary
     # neighbors as Trusted. Ensure the installed agent requires a short-lived
     # explicit authorization callback, verifies real BlueZ paired state and
