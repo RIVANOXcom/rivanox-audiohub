@@ -181,7 +181,7 @@ def inspect(root: Path) -> dict[str, bool]:
         )
         checks["status_web_uses_guarded_bind"] = (
             "from .status_bind import select_bind_address" in webserver
-            and "ThreadingHTTPServer((select_bind_address(), 8765)" in webserver
+            and "BoundedStatusHTTPServer((select_bind_address(), 8765)" in webserver
             and "0.0.0.0" not in webserver
         )
         checks["status_static_and_state_files_nofollow_bounded"] = all(
@@ -192,6 +192,20 @@ def inspect(root: Path) -> dict[str, bool]:
                 "stat.S_ISREG", "read_public_status()",
             )
         )
+        checks["status_http_clients_bounded_no_request_logs"] = all(
+            mark in webserver for mark in (
+                "MAX_STATUS_CLIENTS = 8",
+                "CLIENT_READ_TIMEOUT_SECONDS = 5",
+                "class BoundedStatusHTTPServer(ThreadingHTTPServer):",
+                "threading.BoundedSemaphore(MAX_STATUS_CLIENTS)",
+                "self._client_slots.acquire(blocking=False)",
+                "self.shutdown_request(request)",
+                "def process_request_thread(self, request, client_address):",
+                "self._client_slots.release()",
+                "conn.settimeout(CLIENT_READ_TIMEOUT_SECONDS)",
+                "def log_message(self, format, *args):",
+            )
+        ) and "server = BoundedStatusHTTPServer(" in webserver
         checks["status_service_no_unsafe_lan_opt_in"] = (
             "AUDIOHUB_UNSAFE_STATUS_LAN" not in status_unit
             and "AUDIOHUB_STATUS_BIND_IP" not in status_unit
@@ -201,6 +215,7 @@ def inspect(root: Path) -> dict[str, bool]:
         checks["status_web_uses_guarded_bind"] = False
         checks["status_service_no_unsafe_lan_opt_in"] = False
         checks["status_static_and_state_files_nofollow_bounded"] = False
+        checks["status_http_clients_bounded_no_request_logs"] = False
     # BlueZ's PropertiesChanged signal is not a license to mark arbitrary
     # neighbors as Trusted. Ensure the installed agent requires a short-lived
     # explicit authorization callback, verifies real BlueZ paired state and
