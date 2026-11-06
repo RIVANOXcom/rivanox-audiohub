@@ -620,3 +620,31 @@ secure Bluetooth cryptographic ownership, two A2DP simultaneous,
 24h or authenticated phone WiFi proof. Effective AGPL-3.0-only,
 83 rights pending, 9 OS copyright gaps. Draft/unmerged and no
 release, permission changes, deployment, install or GO.
+
+
+## 2026-11-06: Draft PR74 — stale BlueZ trust never authorizes an unpaired service
+
+PAPA WD_JOB PAPA-18B8B3C6, AH-005. New isolated Draft PR74
+stacks only on verified parent PR73 exact 0ba7084145d0e014070f2bcf0150d3381632b6b0, leaving
+parent branches and public main unchanged. The experimental PairingAgent
+AuthorizeService previously accepted any device whose Device1.Trusted
+property was truthy, without verifying its *current* Device1.Paired status.
+A stale Trusted flag after unpairing could therefore authorize the audio
+service while actually unpaired, including after initial discovery closed.
+Fix: on the Trusted path additionally query current Paired and reject
+unpaired devices. Genuine paired trusted reconnection continues to work;
+the existing short-lived explicit authorization path for not-yet-trusted
+new devices remains unchanged (and is NOT secure owner onboarding).
+Added two real AST-extracted PairingAgent callback regressions and a new
+native rootfs guard bluetooth_trusted_service_requires_paired with
+positive and two deliberately invalid fixture tests. Expected native
+check count 91 only after real exact-head ARM64 SUCCESS.
+Parent PR73 source #42260209621 SUCCESS 698/698 and ARM64
+#42260198699 SUCCESS 90/90, test-only ZIP artifact #13525217144,
+image SHA256 f938bef2a2637503b906129868aa23922fc6a5dff4cbc0447847ba98c515b039
+(Workbench #3128). Parent PR72 source 694/694 and ARM64 89/89,
+test-only artifact #13523918724 (Workbench #3127). Still Draft,
+effective AGPL-3.0-only, proposed Model C not approved, 83 rights rows
+and nine OS copyright gaps pending. No real Pi4+Edifier multi-source
+audio/24h, authenticated phone Wi-Fi, legal or CEO release signoff.
+No installation, merge, deployment, permissions/payment or release GO.
