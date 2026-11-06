@@ -20,11 +20,11 @@ working three-source appliance exists.
 
 Before physical tests, follow the
 [isolated first-boot guide](FIRST-PI-ALPHA-TEST.md) and verify **the exact**
-Draft PR70 source `83c5ccbdc206e4ba8e2fe2dbf481abd735b3ab12` and the independent
-[ARM64 run #42255968531](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42255968531)
-with **88/88** rootfs gates. Its only proven non-release test image is
-[artifact #13522368901](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42255968531/artifacts/13522368901),
-image SHA256 `f03596a28d150ee3ee7ce89495910f84824c06851ceb1733dcd809c5252bdb87`.
+Draft PR75 source `2b02bb4968467cd1033b47ddeaccaba092b96db0` and the independent
+[ARM64 run #42305548510](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42305548510)
+with **92/92** rootfs gates. Its only proven non-release test image is
+[artifact #13546207449](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42305548510/artifacts/13546207449),
+image SHA256 `7b1adf94685ffe2cdbe1e86e83e11839da0fcd814d78bca0818e362f24167c95`.
 Check ZIP, manifest and image locally; do not reuse older PRs or assume that
 a later Source CI run proves a corresponding image. Physical test result:
 **NOT TESTED** until an operator observes it. The Windows LAN test is
