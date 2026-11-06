@@ -2,6 +2,9 @@
 import json
 import os
 import sys
+import threading
+from http.server import ThreadingHTTPServer
+from unittest import mock
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -10,6 +13,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 from audiohub.webserver import (ALLOWED, PUBLIC_FIELDS, Handler,
+                                BoundedStatusHTTPServer, MAX_STATUS_CLIENTS,
+                                CLIENT_READ_TIMEOUT_SECONDS,
                                 STATIC_MAX_BYTES, STATUS_MAX_BYTES,
                                 _bounded_regular_bytes, public_status,
                                 read_public_status)
@@ -203,6 +208,99 @@ class ReadonlyWebFileBoundaryTests(unittest.TestCase):
 
     def test_missing_status_is_stale(self):
         self.assertFalse(read_public_status(path=self.status)["fresh"])
+
+
+
+class BoundedStatusHTTPResourceTests(unittest.TestCase):
+    """No listening port, external network or production server needed."""
+
+    def server(self, cap=1):
+        instance = object.__new__(BoundedStatusHTTPServer)
+        instance._client_slots = threading.BoundedSemaphore(cap)
+        instance.shutdown_request = mock.Mock()
+        return instance
+
+    def test_worker_and_read_limits_are_small_and_fixed(self):
+        self.assertEqual(MAX_STATUS_CLIENTS, 8)
+        self.assertEqual(CLIENT_READ_TIMEOUT_SECONDS, 5)
+        self.assertEqual(BoundedStatusHTTPServer.request_queue_size, 8)
+        self.assertTrue(BoundedStatusHTTPServer.daemon_threads)
+
+    def test_extra_connection_is_closed_without_new_thread(self):
+        server = self.server()
+        socket = mock.Mock()
+        peer = ("127.0.0.1", 12345)
+        with mock.patch.object(ThreadingHTTPServer, "process_request") as parent:
+            server.process_request(socket, peer)
+            server.process_request(socket, peer)
+            parent.assert_called_once_with(socket, peer)
+        server.shutdown_request.assert_called_once_with(socket)
+
+    def test_completed_request_releases_worker_slot(self):
+        server = self.server()
+        peer = ("127.0.0.1", 23456)
+        socket = mock.Mock()
+        with mock.patch.object(ThreadingHTTPServer, "process_request"):
+            server.process_request(socket, peer)
+        self.assertFalse(server._client_slots.acquire(blocking=False))
+        with mock.patch.object(ThreadingHTTPServer, "process_request_thread") as worker:
+            server.process_request_thread(socket, peer)
+            worker.assert_called_once_with(socket, peer)
+        self.assertTrue(server._client_slots.acquire(blocking=False))
+
+    def test_worker_exception_also_releases_slot(self):
+        server = self.server()
+        peer = ("127.0.0.1", 23456)
+        socket = mock.Mock()
+        with mock.patch.object(ThreadingHTTPServer, "process_request"):
+            server.process_request(socket, peer)
+        with mock.patch.object(ThreadingHTTPServer, "process_request_thread",
+                               side_effect=RuntimeError("private request data")):
+            with self.assertRaisesRegex(RuntimeError, "private request"):
+                server.process_request_thread(socket, peer)
+        self.assertTrue(server._client_slots.acquire(blocking=False))
+
+    def test_thread_start_error_releases_slot(self):
+        server = self.server()
+        peer = ("127.0.0.1", 23456)
+        socket = mock.Mock()
+        with mock.patch.object(ThreadingHTTPServer, "process_request",
+                               side_effect=OSError("thread creation denied")):
+            with self.assertRaises(OSError):
+                server.process_request(socket, peer)
+        self.assertTrue(server._client_slots.acquire(blocking=False))
+
+    def test_accepted_socket_has_finite_read_timeout(self):
+        server = self.server()
+        sock = mock.Mock()
+        peer = ("127.0.0.1", 8765)
+        with mock.patch.object(ThreadingHTTPServer, "get_request",
+                               return_value=(sock, peer)):
+            actual = server.get_request()
+        self.assertEqual(actual, (sock, peer))
+        sock.settimeout.assert_called_once_with(5)
+
+    def test_rejected_socket_timeout_setup_closes_socket(self):
+        server = self.server()
+        sock = mock.Mock()
+        sock.settimeout.side_effect = OSError("bad socket")
+        with mock.patch.object(ThreadingHTTPServer, "get_request",
+                               return_value=(sock, ("127.0.0.1", 8765))):
+            with self.assertRaises(OSError):
+                server.get_request()
+        sock.close.assert_called_once()
+
+    def test_raw_http_queries_cannot_enter_access_logs(self):
+        handler = object.__new__(Handler)
+        with mock.patch("sys.stderr") as sink:
+            handler.log_message('%s GET /api/status?token=%s',
+                                "CLIENT_MAC_AA_BB_CC_DD_EE_FF", "TOP-SECRET")
+        sink.write.assert_not_called()
+
+    def test_existing_readonly_handler_routes_are_unmodified(self):
+        self.assertIn("/api/status", Handler.do_GET.__code__.co_consts)
+        self.assertTrue(callable(Handler.do_POST))
+        self.assertIs(Handler.do_DELETE, Handler.do_POST)
 
 
 if __name__ == "__main__":
