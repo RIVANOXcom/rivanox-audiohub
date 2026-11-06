@@ -49,10 +49,12 @@ def _pipewire_graph_shape_bounded(data):
         seen += 1
         if seen > MAX_PIPEWIRE_GRAPH_VALUES or depth > MAX_PIPEWIRE_JSON_DEPTH:
             return False
-        if type(item) is dict:
-            todo.extend((value, depth + 1) for value in item.values())
-        elif type(item) is list:
-            todo.extend((value, depth + 1) for value in item)
+        if type(item) is dict or type(item) is list:
+            # Check breadth before allocating an attacker-sized traversal stack.
+            if len(item) + len(todo) + seen > MAX_PIPEWIRE_GRAPH_VALUES:
+                return False
+            values = item.values() if type(item) is dict else item
+            todo.extend((value, depth + 1) for value in values)
     return True
 
 
