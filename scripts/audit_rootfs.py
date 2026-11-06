@@ -94,6 +94,22 @@ def inspect(root: Path) -> dict[str, bool]:
         )
     except OSError:
         checks["offline_diag_runtime_directory_nofollow_private"] = False
+    # The root-owned offline SD diagnostic must not translate malformed or
+    # ambiguous audiohub-owned JSON into an apparent healthy hardware report.
+    try:
+        offline_source = (source / "firstboot_diag.py").read_text()
+        checks["offline_diag_json_integrity_fail_closed"] = all(
+            mark in offline_source for mark in (
+                "def _unique_runtime_json_object(pairs):",
+                'raise ValueError("duplicate diagnostic runtime JSON member")',
+                "object_pairs_hook=_unique_runtime_json_object",
+                "def _reject_runtime_json_constant(_value):",
+                "parse_constant=_reject_runtime_json_constant",
+                "except (UnicodeError, ValueError, RecursionError):",
+            )
+        )
+    except OSError:
+        checks["offline_diag_json_integrity_fail_closed"] = False
     # PipeWire Node IDs and virtual sink identities must be unique before
     # wpctl set-default or pw-loopback can use them. Duplicate records or
     # conflicting BT profiles cannot choose an arbitrary first/last node.
