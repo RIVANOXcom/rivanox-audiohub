@@ -75,7 +75,7 @@ CLIENT_READ_TIMEOUT_SECONDS = 5
 
 
 
-def _bounded_regular_bytes(path, limit):
+def _bounded_regular_bytes(path, limit, *, private_owner=None):
     """Open every path component with O_NOFOLLOW and read at most 'limit'.
 
     Never follow WEBROOT/asset/status symlinks outside the Pi image. This
@@ -85,7 +85,9 @@ def _bounded_regular_bytes(path, limit):
     """
     path = Path(path)
     if (not path.is_absolute() or ".." in path.parts
-            or len(path.parts) < 2 or type(limit) is not int or limit <= 0):
+            or len(path.parts) < 2 or type(limit) is not int or limit <= 0
+            or (private_owner is not None and
+                (type(private_owner) is not int or private_owner < 0))):
         return None
     directory = None
     file_fd = None
@@ -99,6 +101,14 @@ def _bounded_regular_bytes(path, limit):
             )
             os.close(directory)
             directory = next_directory
+        if private_owner is not None:
+            # Static assets are root-owned and world-readable by design.
+            # Only live runtime status is a private owner-authored file.
+            parent = os.fstat(directory)
+            if (not stat.S_ISDIR(parent.st_mode)
+                    or parent.st_uid != private_owner
+                    or stat.S_IMODE(parent.st_mode) & 0o077):
+                return None
         file_fd = os.open(
             path.name,
             os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC,
@@ -106,6 +116,10 @@ def _bounded_regular_bytes(path, limit):
         )
         info = os.fstat(file_fd)
         if not stat.S_ISREG(info.st_mode) or not 0 < info.st_size <= limit:
+            return None
+        if private_owner is not None and (
+                info.st_uid != private_owner or info.st_nlink != 1
+                or stat.S_IMODE(info.st_mode) & 0o077):
             return None
         chunks = []
         remaining = info.st_size
@@ -130,7 +144,10 @@ def _bounded_regular_bytes(path, limit):
 
 def read_public_status(*, path=None, now=None):
     """Read a bounded, non-symlinked runtime state file, never raw secrets."""
-    body = _bounded_regular_bytes(STATE if path is None else path, STATUS_MAX_BYTES)
+    body = _bounded_regular_bytes(
+        STATE if path is None else path, STATUS_MAX_BYTES,
+        private_owner=os.geteuid(),
+    )
     if body is None:
         return public_status({}, now=now)
     try:
