@@ -117,6 +117,12 @@
       "base": "wd-papa-20261106-laptop-pipewire-bounded-process",
       "head": "wd-papa-20261106-bounded-status-http-workers-privacy",
       "verified_head_sha": null
+    },
+    {
+      "number": 53,
+      "base": "wd-papa-20261106-bounded-status-http-workers-privacy",
+      "head": "wd-papa-20261106-private-status-file-identity",
+      "verified_head_sha": null
     }
   ],
   "last_native_verified": {
@@ -178,10 +184,10 @@
     "do not silently merge stacked draft PRs"
   ],
   "last_source_rights_ci_verified": {
-    "run_id": 42209656187,
-    "commit_sha": "ed9dbc68ccff2e03f2ae123aa066efc69d794971",
+    "run_id": 42210517166,
+    "commit_sha": "2206e81d527afc6ce3a9c1a6c813f447b9556e2b",
     "outcome": "success",
-    "python_tests": 535,
+    "python_tests": 547,
     "source_rights_ledger_file_count": 83
   },
   "latest_legacy_security_change": {
@@ -394,5 +400,28 @@
       "conclusion": "success"
     },
     "native_run_pending_validation": 42209649230
+  },
+  "next_status_private_file_identity_change": {
+    "pr": 53,
+    "branch": "wd-papa-20261106-private-status-file-identity",
+    "parent_pr": 52,
+    "initial_code_sha": "2206e81d527afc6ce3a9c1a6c813f447b9556e2b",
+    "initial_source_ci": {
+      "run_id": 42210517166,
+      "conclusion": "success",
+      "python_tests": 547
+    },
+    "status": "initial code source 547/547 tests PASS; final exact-head source and native ARM64 pending",
+    "prior_defect": "read-only status web UI trusted group/world-readable, foreign-owned or hardlinked runtime status JSON, unlike privileged offline diagnostic",
+    "private_owner_required": true,
+    "private_parent_directory_required": true,
+    "hardlink_count_must_equal_one": true,
+    "static_html_world_readability_preserved": true,
+    "stale_no_health_on_invalid_status": true,
+    "expected_native_rootfs_guard_count": 70,
+    "source_rights_ledger_file_count": 83,
+    "public_release_ready": false,
+    "model_c_license_effective": false,
+    "physical_edifier_accepted": false
   }
 }

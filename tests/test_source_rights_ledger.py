@@ -219,6 +219,16 @@ class SourceRightsLedgerTests(unittest.TestCase):
         self.assertFalse(state["next_status_http_resource_privacy_change"]["model_c_license_effective"])
         self.assertFalse(state["next_status_http_resource_privacy_change"]["public_release_ready"])
         self.assertFalse(state["next_status_http_resource_privacy_change"]["hardware_accepted"])
+        self.assertEqual(state["next_status_private_file_identity_change"]["pr"], 53)
+        self.assertEqual(state["next_status_private_file_identity_change"]["expected_native_rootfs_guard_count"], 70)
+        self.assertTrue(state["next_status_private_file_identity_change"]["private_owner_required"])
+        self.assertTrue(state["next_status_private_file_identity_change"]["private_parent_directory_required"])
+        self.assertTrue(state["next_status_private_file_identity_change"]["hardlink_count_must_equal_one"])
+        self.assertTrue(state["next_status_private_file_identity_change"]["static_html_world_readability_preserved"])
+        self.assertTrue(state["next_status_private_file_identity_change"]["stale_no_health_on_invalid_status"])
+        self.assertFalse(state["next_status_private_file_identity_change"]["public_release_ready"])
+        self.assertFalse(state["next_status_private_file_identity_change"]["model_c_license_effective"])
+        self.assertFalse(state["next_status_private_file_identity_change"]["physical_edifier_accepted"])
         self.assertEqual(state["next_bluetooth_agent_trust_security_change"]["pairable_timeout_seconds"], 600)
         self.assertEqual(state["next_bluetooth_agent_trust_security_change"]["discoverable_timeout_seconds"], 600)
         self.assertTrue(state["next_bluetooth_agent_trust_security_change"]["initial_deadline_relative_to_linux_boot"])
@@ -228,7 +238,7 @@ class SourceRightsLedgerTests(unittest.TestCase):
         self.assertFalse(state["last_native_verified"]["public_release_ready"])
         self.assertEqual(
             [item["number"] for item in state["draft_pr_chain"]],
-            [35, 36, 38, 39, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52],
+            [35, 36, 38, 39, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53],
         )
 
     def test_primary_handoff_points_to_authoritative_resume(self):

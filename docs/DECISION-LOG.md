@@ -53,6 +53,8 @@ These decisions capture user-confirmed requirements and current engineering arch
 
 | ADR-035 | Never permit unbounded status HTTP request workers or journal attacker-controlled URLs in the unauthenticated alpha preview. | Draft [PR #52](https://github.com/RIVANOXcom/rivanox-audiohub/pull/52), 535 initial source tests pass; native exact-head pending | Limit simultaneous client threads to 8, five-second read timeout, close excess sockets and suppress default BaseHTTPRequestHandler URL/request logging; preserve read-only loopback default and explicit unsafe LAN opt-in. No owner or legal GO. |
 
+| ADR-036 | Do not treat group/world-readable, foreign-owned, hardlinked or publicly accessible runtime JSON as fresh status in the read-only web UI. | Draft [PR53](https://github.com/RIVANOXcom/rivanox-audiohub/pull/53), initial 547 source tests SUCCESS; native exact-head proof pending | Validate final status directory and file against effective audiohub UID, private permissions and nlink=1, while preserving static world-readable HTML/JS; fail to stale status with no false USB/audio health. No owner authentication, redistribution permission or physical audio acceptance implied. |
+
 ## Engineering observations (not product acceptance)
 
 - Source-level tests and policy checks have succeeded on GitHub Actions.

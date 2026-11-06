@@ -168,6 +168,7 @@ class ReadonlyWebFileBoundaryTests(unittest.TestCase):
             "bluetooth_source_count": 1, "virtual_channels": ["music"],
             "mac": "A1:B2:C3:D4:E5:F6", "password": "NEVER-LEAK"
         }))
+        self.status.chmod(0o600)
         result = read_public_status(path=self.status, now=124)
         self.assertEqual(set(result), PUBLIC_FIELDS)
         self.assertEqual(result["active_routes"], 2)
@@ -182,6 +183,7 @@ class ReadonlyWebFileBoundaryTests(unittest.TestCase):
             "bluetooth_source_count": 1, "ssid": "PRIVATE-SSID",
             "password": "PRIVATE-PASSWORD"
         }))
+        self.status.chmod(0o600)
         code, body, _ = self._request("/api/status")
         self.assertEqual(code, 200)
         self.assertEqual(set(json.loads(body)), PUBLIC_FIELDS)
@@ -205,6 +207,70 @@ class ReadonlyWebFileBoundaryTests(unittest.TestCase):
     def test_status_nonregular_is_stale(self):
         self.status.mkdir()
         self.assertFalse(read_public_status(path=self.status)["fresh"])
+
+
+    def test_private_status_file_with_correct_owner_reports_health(self):
+        self.status.write_text('{"updated_at":100,"usb_output":true}')
+        self.status.chmod(0o600)
+        self.assertTrue(read_public_status(path=self.status, now=101)["fresh"])
+
+    def test_world_or_group_readable_runtime_status_is_stale(self):
+        self.status.write_text('{"updated_at":100,"usb_output":true}')
+        for mode in (0o644, 0o640, 0o604, 0o666):
+            with self.subTest(mode=oct(mode)):
+                self.status.chmod(mode)
+                report = read_public_status(path=self.status, now=101)
+                self.assertFalse(report["fresh"])
+                self.assertFalse(report["usb_connected"])
+
+    def test_hardlinked_runtime_status_cannot_report_healthy(self):
+        self.status.write_text('{"updated_at":100,"usb_output":true}')
+        self.status.chmod(0o600)
+        outside = self.root.parent / "other-hardlink"
+        os.link(self.status, outside)
+        self.assertFalse(read_public_status(path=self.status, now=101)["fresh"])
+
+    def test_status_owned_by_different_uid_is_not_trusted(self):
+        self.status.write_text('{"updated_at":100,"usb_output":true}')
+        self.status.chmod(0o600)
+        wrong = os.geteuid() + 1
+        with patch("audiohub.webserver.os.geteuid", return_value=wrong):
+            self.assertFalse(read_public_status(path=self.status, now=101)["fresh"])
+
+    def test_world_readable_status_directory_is_rejected(self):
+        self.status.write_text('{"updated_at":100,"usb_output":true}')
+        self.status.chmod(0o600)
+        parent = self.status.parent
+        parent.chmod(0o755)
+        self.assertFalse(read_public_status(path=self.status, now=101)["fresh"])
+        parent.chmod(0o700)
+        self.assertTrue(read_public_status(path=self.status, now=101)["fresh"])
+
+    def test_static_asset_world_readability_stays_allowed(self):
+        self.ok_asset.chmod(0o644)
+        code, content, _ = self._request("/app.js")
+        self.assertEqual(code, 200)
+        self.assertEqual(content, b"// local prototype")
+
+    def test_private_status_owner_argument_rejects_bad_types(self):
+        self.status.write_text('{"updated_at":100,"usb_output":true}')
+        self.status.chmod(0o600)
+        for bad in (True, -1, "audiohub", [], {}):
+            with self.subTest(owner=repr(bad)):
+                self.assertIsNone(_bounded_regular_bytes(
+                    self.status, STATUS_MAX_BYTES, private_owner=bad
+                ))
+
+    def test_a_public_status_file_cannot_create_false_usb_health(self):
+        self.status.write_text(json.dumps({
+            "updated_at": 100, "usb_output": True, "active_routes": 2,
+            "password": "PRIVATE_WIFI_PASSWORD",
+        }))
+        self.status.chmod(0o644)
+        result = read_public_status(path=self.status, now=101)
+        self.assertEqual(result["active_routes"], 0)
+        self.assertFalse(result["usb_connected"])
+        self.assertNotIn("PRIVATE_WIFI_PASSWORD", json.dumps(result))
 
     def test_missing_status_is_stale(self):
         self.assertFalse(read_public_status(path=self.status)["fresh"])
