@@ -555,6 +555,23 @@ def inspect(root: Path) -> dict[str, bool]:
         )
     except OSError:
         checks["laptop_manual_receiver_packaged"] = False
+    # The manual unauthenticated LAN player must tear down a blocked
+    # pw-cat even when zero PCM writes have ever completed successfully.
+    try:
+        laptop_source = (source / "network_laptop.py").read_text()
+        start = laptop_source.index("os.set_blocking(player.stdin.fileno(), False)")
+        deadline = laptop_source.index("last_written_at = now", start)
+        next_check = laptop_source.index("next_health_check = now + HEALTH_CHECK_SECONDS", start)
+        checks["manual_lan_first_pcm_write_stall_bounded"] = (
+            "IDLE_SECONDS = 5.0" in laptop_source
+            and "if last_written_at is not None and now - last_written_at >= IDLE_SECONDS:" in laptop_source
+            and start < deadline < next_check
+            and "last_written_at = None" in laptop_source
+            and "backlog.clear()" in laptop_source
+            and "except BlockingIOError:" in laptop_source
+        )
+    except (OSError, ValueError):
+        checks["manual_lan_first_pcm_write_stall_bounded"] = False
     # This optional unauthenticated LAN receiver must never reintroduce
     # unbounded pw-dump/wpctl stderr or stdout after the live runtime and
     # hardware preflight were moved to the safe bounded process reader.
