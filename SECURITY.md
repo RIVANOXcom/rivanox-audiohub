@@ -161,3 +161,17 @@ failed `wpctl` also denies readiness. The receiver is still disabled
 unless an operator explicitly launches the unsafe LAN experiment. This is
 not cryptographic network peer authentication, a secure consumer service,
 real Edifier sound validation or public release approval.
+
+## Alpha status HTTP worker exhaustion and log privacy
+
+Python's default ThreadingHTTPServer spawns a thread for every accepted
+connection. The original read-only AudioHub status preview also inherited
+BaseHTTPRequestHandler.log_message, which logs raw URL paths/query data to
+systemd stderr. Draft PR #52 caps accepted request workers to 8 with a
+nonblocking BoundedSemaphore, bounds socket reads to 5 seconds, closes extra
+connections, releases worker slots even on failures, and suppresses
+attacker-supplied request-line logging. The service continues to bind
+only to local IPv4 loopback unless an engineer explicitly opts into an
+unsafe specific RFC1918 interface. The GET/API remains read-only; the
+new controls are resource safety and privacy improvements, NOT authentication
+or permission to expose the preview to the Internet.

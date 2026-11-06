@@ -143,8 +143,8 @@ class SourceRightsLedgerTests(unittest.TestCase):
         self.assertEqual(state["latest_legacy_security_change"]["static_file_cap_bytes"], 524288)
         self.assertEqual(state["latest_legacy_security_change"]["anonymized_status_json_cap_bytes"], 32768)
         self.assertTrue(state["latest_legacy_security_change"]["all_path_components_nofollow"])
-        self.assertEqual(state["last_native_verified"]["rootfs_checks_passed"], 67)
-        self.assertEqual(state["last_native_verified"]["run_id"], 42201589717)
+        self.assertEqual(state["last_native_verified"]["rootfs_checks_passed"], 68)
+        self.assertEqual(state["last_native_verified"]["run_id"], 42208440878)
         self.assertFalse(state["next_runtime_state_security_change"]["model_c_effective"])
         self.assertFalse(state["next_runtime_state_security_change"]["physical_device_accepted"])
         self.assertEqual(state["next_runtime_state_security_change"]["expected_rootfs_guard_count"], 58)
@@ -208,6 +208,17 @@ class SourceRightsLedgerTests(unittest.TestCase):
         self.assertFalse(state["next_laptop_bounded_capture_security_change"]["model_c_license_effective"])
         self.assertFalse(state["next_laptop_bounded_capture_security_change"]["public_release_ready"])
         self.assertFalse(state["next_laptop_bounded_capture_security_change"]["physical_edifier_accepted"])
+        self.assertEqual(state["next_status_http_resource_privacy_change"]["pr"], 52)
+        self.assertEqual(state["next_status_http_resource_privacy_change"]["max_concurrent_clients"], 8)
+        self.assertEqual(state["next_status_http_resource_privacy_change"]["client_read_timeout_seconds"], 5)
+        self.assertEqual(state["next_status_http_resource_privacy_change"]["expected_native_rootfs_guard_count"], 69)
+        self.assertTrue(state["next_status_http_resource_privacy_change"]["nonblocking_overflow_closure"])
+        self.assertTrue(state["next_status_http_resource_privacy_change"]["raw_request_logging_disabled"])
+        self.assertTrue(state["next_status_http_resource_privacy_change"]["read_only_status_api_preserved"])
+        self.assertTrue(state["next_status_http_resource_privacy_change"]["lan_bind_requires_explicit_unsafe_optin"])
+        self.assertFalse(state["next_status_http_resource_privacy_change"]["model_c_license_effective"])
+        self.assertFalse(state["next_status_http_resource_privacy_change"]["public_release_ready"])
+        self.assertFalse(state["next_status_http_resource_privacy_change"]["hardware_accepted"])
         self.assertEqual(state["next_bluetooth_agent_trust_security_change"]["pairable_timeout_seconds"], 600)
         self.assertEqual(state["next_bluetooth_agent_trust_security_change"]["discoverable_timeout_seconds"], 600)
         self.assertTrue(state["next_bluetooth_agent_trust_security_change"]["initial_deadline_relative_to_linux_boot"])
@@ -217,7 +228,7 @@ class SourceRightsLedgerTests(unittest.TestCase):
         self.assertFalse(state["last_native_verified"]["public_release_ready"])
         self.assertEqual(
             [item["number"] for item in state["draft_pr_chain"]],
-            [35, 36, 38, 39, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51],
+            [35, 36, 38, 39, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52],
         )
 
     def test_primary_handoff_points_to_authoritative_resume(self):

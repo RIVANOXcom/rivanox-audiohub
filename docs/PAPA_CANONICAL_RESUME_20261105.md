@@ -148,7 +148,7 @@ bash -n build-image.sh
 ```text
 PAPA / RIVANOX AUDIOHUB WEITER — CANONICAL RESUME
 Read first:
-https://github.com/RIVANOXcom/rivanox-audiohub/blob/wd-papa-20261106-laptop-pipewire-bounded-process/docs/PAPA_CANONICAL_RESUME_20261105.md
+https://github.com/RIVANOXcom/rivanox-audiohub/blob/wd-papa-20261106-bounded-status-http-workers-privacy/docs/PAPA_CANONICAL_RESUME_20261105.md
 Project PAPA Workbench: PJ2611-0001:R001.
 Verify LIVE repo, PR #46/#45/#44 stacked heads, exact source and ARM64 CI, and open issues before changing anything.
 The public main and historical source remain AGPL-3.0-only; Model C
@@ -380,6 +380,28 @@ PR48 adds an installed `manual_acceptance.py` source check and independent no-re
 **Next MISSIONPILOT action:** check LIVE PR51 HEAD and exact source/native ARM64 run after this docs/checkpoint commit (docs change triggers new CI and cancels intermediate runs). Confirm true 68/68 rootfs checks, temporary artifact properties, 689/680/9 rights evidence and `public_release_ready=false`. Record passing/failing exact SHA, run IDs, PR comment and Workbench. Do NOT merge or publish GitHub Releases.
 
 **Existing blockers unaffected:** no actual Pi4 + Edifier R600USB audible/multi-input hardware signoff (issue #2); nine missing supplier OS notice file paths and rights issue #40; rightsholder + commercial Model C counsel review issue #32; future independently created PRIVATE `RIVANOXcom/rivanox-audiohub-next` not visible to connector (owner task #37). Public main remains AGPL-3.0-only; future Model C license NOT EFFECTIVE. No Gitea software package release or permission to install.
+
+
+## T. 2026-11-06: bounded HTTP status-preview clients and private request logs — Draft PR #52
+
+**Parent [Draft PR51](https://github.com/RIVANOXcom/rivanox-audiohub/pull/51)** exact source/docs SHA `d4fd8053a13618f3f7ad35fb26888288f6586a1d`: [source GitHub Actions #42208450554](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42208450554) **SUCCESS 522/522 Python tests**. Independent [native ARM64 #42208440878](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42208440878) was still in progress during this section's initial writing, expected **68** real rootfs checks; no native pass may be inferred until checked live. Last verified native PR50 run #42201589717 achieved 67/67. Public main remains AGPL-3.0-only; no actual public release.
+
+**New [Draft PR52](https://github.com/RIVANOXcom/rivanox-audiohub/pull/52)** on `wd-papa-20261106-bounded-status-http-workers-privacy`, stacked on PR51. The existing **read-only unauthenticated alpha status page** defaulted to IPv4 loopback but supported manual explicit insecure LAN opt-in. Standard `ThreadingHTTPServer` generated one Python thread **per accepted connection without a hard concurrency cap**; the default `BaseHTTPRequestHandler.log_message` recorded request lines, including attacker-provided URL queries and possible MAC/tokens, in journal stderr. A local or deliberate LAN test could consume resources with many stalled sockets or leak untrusted URL strings to status logs.
+
+**Implemented:** `BoundedStatusHTTPServer(ThreadingHTTPServer)` with a **nonblocking `BoundedSemaphore(8)`** for maximum eight simultaneous request worker threads; other accepted connections are closed (never queued as unlimited work). HTTP accept backlog capped at eight; every accepted socket gets a **five-second read timeout**. Slots are released both after normal/failed processing and after unexpected thread-start failure; workers are daemon threads. `Handler.log_message` discards request URL, query and client strings instead of exposing them to journal. Existing `select_bind_address` explicit loopback/specific RFC1918 bind, manual opt-in for LAN, GET allowlist, read-only API and denied mutation methods are unchanged. This is **NOT authentication** or acceptable public Internet exposure.
+
+**Validation on initial code SHA `f120ccaea9d217b317f2048b52844a9c8206b520`:** [source GitHub Actions #42209328344](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42209328344) **SUCCESS 535/535 Python tests**; source rights ledger still **83 files**, all human-rightsholder, third-party origin and proposed Model C eligibility flags FALSE. Nine new no-port unit tests in `tests/test_web_status.py` exercise bounded concurrent admission, overflow rejection, failure/normal worker slot release, 5-second timeout, timeout setup error close and no query log leakage. Existing startup mock tests now target the bounded class. Four negative/positive synthetic image tests plus new audit guard `status_http_clients_bounded_no_request_logs`. If PR51 final native truly passes expected **68**, PR52 native image target **69** real checks. This docs commit changes HEAD, so must verify exact post-documentation source and independent ARM64 run before claiming the package.
+
+**Open GO/NO-GO gates:** historical AGPL cannot be retroactively switched; future Model C license NOT EFFECTIVE; source ownership/legal review #32; owner-created new independent PRIVATE repo #37 not verified; nine supplier OS copyright notice paths #40; physical Pi4/Edifier audible routing and secure owner claim #2 missing. Draft PRs not merged, no productive deployment, public GitHub release, Gitea installable product, Umbrel changes or permissions changed.
+
+**Next authorized work:** verify PR51 and PR52 exact source/native CI, correct any image guard or test failures, record actual count/artifacts and Workbench evidence. Continue identifying alpha safety issues without exposing LAN features or claiming device hardware/license acceptance.
+
+
+### Verification update — PR51 native ARM64 PASS at exact code/docs SHA
+
+[PR51](https://github.com/RIVANOXcom/rivanox-audiohub/pull/51) SHA `d4fd8053a13618f3f7ad35fb26888288f6586a1d` has now independently passed **522/522 Python tests** ([source #42208450554](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42208450554)) and **68/68 actual native Raspberry Pi image guards** ([ARM64 #42208440878](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42208440878)). Verified XZ/SHA256/four-file temporary **UNVERIFIED / DO NOT DISTRIBUTE** archive [#13497588492](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42208440878/artifacts/13497588492), **605887450 bytes**, expires **2026-12-06T11:20:20Z**. 689 installed packages, 680 copyright file hashes, nine missing file paths, `public_release_ready=false`. This confirms manual LAN receiver bounded PipeWire graph and wpctl command safety **only**, NOT authenticated LAN audio, real speaker sound or rights/release approval.
+
+[PR52](https://github.com/RIVANOXcom/rivanox-audiohub/pull/52) first full code/docs SHA `ed9dbc68ccff2e03f2ae123aa066efc69d794971` source [run #42209656187](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42209656187) **SUCCESS 535/535** Python tests with pending rights 83 files. Independent [native run #42209649230](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42209649230) was in progress at the checkpoint. New `status_http_clients_bounded_no_request_logs` guard target **69** actual checks. **Re-check the final HEAD after this evidence commit**, because branch changes can restart native CI.
 
 **END OF HANDOFF.** If a live run/PR contradicts this document, treat
 the live GitHub evidence as authoritative, reconcile and update this file.

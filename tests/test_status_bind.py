@@ -52,7 +52,7 @@ class StatusBindTests(unittest.TestCase):
                 select_bind_address({"AUDIOHUB_STATUS_BIND_IP": address})
 
     @mock.patch("audiohub.webserver.select_bind_address", return_value="127.0.0.1")
-    @mock.patch("audiohub.webserver.ThreadingHTTPServer")
+    @mock.patch("audiohub.webserver.BoundedStatusHTTPServer")
     def test_web_startup_uses_guarded_loopback_address(self, server, bind):
         webserver.main()
         server.assert_called_once_with(("127.0.0.1", 8765), webserver.Handler)
@@ -60,7 +60,7 @@ class StatusBindTests(unittest.TestCase):
         bind.assert_called_once()
 
     @mock.patch("audiohub.webserver.select_bind_address", side_effect=ValueError("no LAN"))
-    @mock.patch("audiohub.webserver.ThreadingHTTPServer")
+    @mock.patch("audiohub.webserver.BoundedStatusHTTPServer")
     def test_denied_bind_never_opens_socket(self, server, bind):
         with self.assertRaises(ValueError):
             webserver.main()
