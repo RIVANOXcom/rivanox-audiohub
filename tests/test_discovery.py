@@ -148,6 +148,12 @@ class DiscoveryTests(unittest.TestCase):
                     extra=nested)]
         self.assertEqual(pipewire_nodes(raw), [])
 
+    def test_large_preparsed_graph_metadata_fails_before_walk_memory_growth(self):
+        from audiohub.discovery import MAX_PIPEWIRE_GRAPH_VALUES
+        too_many = [0] * (MAX_PIPEWIRE_GRAPH_VALUES + 1)
+        raw = [node(3, "audiohub.music", "Audio/Sink", large=too_many)]
+        self.assertEqual(pipewire_nodes(raw), [])
+
     def test_valid_pipewire_dump_still_selects_usb_and_bluetooth_nodes(self):
         graph = [
             node(3, "alsa_output.usb-Edifier_R600USB", "Audio/Sink"),
