@@ -35,6 +35,12 @@ class RootfsAuditTests(unittest.TestCase):
             "if not self.allowed() or not (",
             'raise Rejected("Untrusted device")',
             "self.authorize_pending(device)",
+            "def AuthorizeService(self, device, uuid):",
+            'if p.Get("org.bluez.Device1", "Trusted"):',
+            'if not p.Get("org.bluez.Device1", "Paired"):',
+            'raise Rejected("Unpaired trusted device")',
+            "return",
+            "def RequestConfirmation(self, device, passkey):",
             "self.deadline = float(BOOT_WINDOW)",
             'self.adapter.Set("org.bluez.Adapter1", "PairableTimeout", dbus.UInt32(BOOT_WINDOW))',
             'self.adapter.Set("org.bluez.Adapter1", "DiscoverableTimeout", dbus.UInt32(BOOT_WINDOW))',
@@ -578,6 +584,38 @@ class RootfsAuditTests(unittest.TestCase):
                 "self.pending_authorizations.get(path)"
             ))
             self.assertFalse(audit.inspect(root)["bluetooth_unpaired_event_revokes_pending_trust"])
+
+
+    def test_trusted_service_requires_paired_guard_in_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            self.assertTrue(audit.inspect(root)[
+                "bluetooth_trusted_service_requires_paired"
+            ])
+
+    def test_trusted_service_missing_paired_guard_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            file = root / "opt/audiohub/src/audiohub/pairing.py"
+            file.write_text(file.read_text().replace(
+                'if not p.Get("org.bluez.Device1", "Paired"):',
+                "if False:"
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "bluetooth_trusted_service_requires_paired"
+            ])
+
+    def test_trusted_service_missing_reject_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            file = root / "opt/audiohub/src/audiohub/pairing.py"
+            file.write_text(file.read_text().replace(
+                'raise Rejected("Unpaired trusted device")',
+                "pass"
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "bluetooth_trusted_service_requires_paired"
+            ])
 
     def test_bluez_cancel_revokes_pending_in_image(self):
         with tempfile.TemporaryDirectory() as tmp:
