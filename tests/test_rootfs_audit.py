@@ -226,6 +226,12 @@ class RootfsAuditTests(unittest.TestCase):
             "meta.st_nlink != 1",
             "stat.S_IMODE(meta.st_mode) & 0o077",
             "MAX_RUNTIME_BYTES + 1",
+            "def _unique_runtime_json_object(pairs):",
+            'raise ValueError("duplicate diagnostic runtime JSON member")',
+            "object_pairs_hook=_unique_runtime_json_object",
+            "def _reject_runtime_json_constant(_value):",
+            "parse_constant=_reject_runtime_json_constant",
+            "except (UnicodeError, ValueError, RecursionError):",
         )))
         for name in ("index.html", "app.js", "styles.css"):
             make("opt/audiohub/web/" + name)
@@ -652,6 +658,47 @@ class RootfsAuditTests(unittest.TestCase):
             ])
 
 
+
+    def test_root_offline_diagnostic_json_parser_guard_present(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            self.assertTrue(audit.inspect(root)[
+                "offline_diag_json_integrity_fail_closed"
+            ])
+
+    def test_missing_offline_duplicate_member_guard_fails_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/src/audiohub/firstboot_diag.py"
+            path.write_text(path.read_text().replace(
+                "object_pairs_hook=_unique_runtime_json_object", "object_pairs_hook=None"
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "offline_diag_json_integrity_fail_closed"
+            ])
+
+    def test_missing_offline_nonfinite_guard_fails_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/src/audiohub/firstboot_diag.py"
+            path.write_text(path.read_text().replace(
+                "parse_constant=_reject_runtime_json_constant", "parse_constant=None"
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "offline_diag_json_integrity_fail_closed"
+            ])
+
+    def test_missing_offline_nested_json_recursion_guard_fails_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/src/audiohub/firstboot_diag.py"
+            path.write_text(path.read_text().replace(
+                "except (UnicodeError, ValueError, RecursionError):",
+                "except (UnicodeError, ValueError):"
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "offline_diag_json_integrity_fail_closed"
+            ])
 
     def test_unbounded_manual_laptop_pw_dump_blocks_image(self):
         with tempfile.TemporaryDirectory() as tmp:
