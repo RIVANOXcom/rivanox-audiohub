@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 
-from .discovery import choose_usb_output, pipewire_nodes, props
+from .discovery import _conflicting_node_ids, choose_usb_output, pipewire_nodes, props
 
 CHANNELS = ("music", "laptop", "tablet")
 MAX_GRAPH_OBJECTS = 8192
@@ -50,6 +50,8 @@ def summarize_links(raw):
     if graph is None:
         return blank
     nodes = pipewire_nodes(graph)
+    if _conflicting_node_ids(nodes):
+        return blank
     usb = choose_usb_output(nodes)
     usb_id = _id(usb.get("id")) if usb is not None else None
     names = {}
