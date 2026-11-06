@@ -156,6 +156,7 @@ class RootfsAuditTests(unittest.TestCase):
             "MAX_PIPEWIRE_JSON_DEPTH = 64",
             "MAX_PIPEWIRE_GRAPH_VALUES = 262144",
             "def _pipewire_graph_shape_bounded(data):",
+            "if len(item) + len(todo) + seen > MAX_PIPEWIRE_GRAPH_VALUES:",
             "return raw if _pipewire_graph_shape_bounded(raw) else None",
             "def _unique_pipewire_members(pairs):",
             "object_pairs_hook=_unique_pipewire_members",
