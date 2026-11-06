@@ -92,6 +92,11 @@ class RootfsAuditTests(unittest.TestCase):
             "validate_options(sender_ip, bind_ip, port, unsafe_lan_test)",
             'parser.add_argument("--unsafe-lan-test", action="store_true"',
             '"10.0.0.0/8"',
+            "from .process_capture import bounded_command_output",
+            'bounded_command_output(("pw-dump",), timeout=5)',
+            '("wpctl", "set-default", str(output["id"])), timeout=5,',
+            "if result is None or result.returncode != 0:",
+            "if selected is None or selected.returncode != 0:",
         )))
         make("opt/audiohub/src/audiohub/network_buffer.py", "\\n".join((
             "MAX_BUFFER_PACKETS = 16",
@@ -607,6 +612,50 @@ class RootfsAuditTests(unittest.TestCase):
                 "offline_diag_runtime_directory_nofollow_private"
             ])
 
+
+
+    def test_unbounded_manual_laptop_pw_dump_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/src/audiohub/network_laptop.py"
+            path.write_text(path.read_text().replace(
+                'bounded_command_output(("pw-dump",), timeout=5)',
+                'subprocess.run(["pw-dump"], capture_output=True)'
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "manual_laptop_pipewire_capture_bounded"
+            ])
+
+    def test_manual_laptop_wpctl_unbounded_capture_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/src/audiohub/network_laptop.py"
+            path.write_text(path.read_text().replace(
+                '("wpctl", "set-default", str(output["id"])), timeout=5,',
+                '("wpctl", "set-default", str(output["id"])),'
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "manual_laptop_pipewire_capture_bounded"
+            ])
+
+    def test_manual_laptop_ignoring_capture_failure_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/src/audiohub/network_laptop.py"
+            path.write_text(path.read_text().replace(
+                "if result is None or result.returncode != 0:",
+                "if result.returncode != 0:"
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "manual_laptop_pipewire_capture_bounded"
+            ])
+
+    def test_manual_laptop_bounded_pipewire_guard_passes_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            self.assertTrue(audit.inspect(root)[
+                "manual_laptop_pipewire_capture_bounded"
+            ])
 
     def test_unchecked_status_web_listener_prevents_image_export(self):
         with tempfile.TemporaryDirectory() as tmp:

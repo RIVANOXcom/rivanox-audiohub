@@ -49,6 +49,8 @@ These decisions capture user-confirmed requirements and current engineering arch
 
 | ADR-033 | Privileged first-boot diagnostic must refuse symlinked ancestor runtime paths and nonprivate/foreign-owned status files before observing health. | Draft [PR #50](https://github.com/RIVANOXcom/rivanox-audiohub/pull/50); code source 512 tests PASS; final ARM64 validation pending | All absolute path components opened with O_NOFOLLOW; private final UID/mode and bounded regular status required, unsafe paths give stale status. Does not assert physical audio, owner identity, license or hardware acceptance. |
 
+| ADR-034 | Manually opted-in but unauthenticated laptop Scream UDP receiver must use the same bounded PipeWire subprocess capture as the live supervisor. | Draft [PR #51](https://github.com/RIVANOXcom/rivanox-audiohub/pull/51); initial source CI 522 tests passed, exact native ARM64 pending | Keep 4MiB stdout/5sec deadline, suppress stderr, deny graph or USB default assertion on capture failure; never autostart this insecure receiver. Physical audio and legal/public release gates unchanged. |
+
 ## Engineering observations (not product acceptance)
 
 - Source-level tests and policy checks have succeeded on GitHub Actions.

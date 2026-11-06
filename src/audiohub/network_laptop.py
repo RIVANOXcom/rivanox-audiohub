@@ -15,6 +15,7 @@ import sys
 import time
 
 from .discovery import choose_usb_output, pipewire_nodes, virtual_sinks
+from .process_capture import bounded_command_output
 from .network_buffer import PcmPacketBuffer, ReceiverCounters
 from .source_routes import lan_target
 
@@ -91,34 +92,30 @@ def player_command(target=TARGET):
 
 
 def check_audio_target(target=TARGET):
-    """Fail closed if the intended virtual channel or USB output is missing."""
-    try:
-        result = subprocess.run(
-            ["pw-dump"], capture_output=True, text=True, timeout=5, check=False
-        )
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        raise RuntimeError("PipeWire node inspection failed") from exc
-    if result.returncode != 0:
+    """Require a bounded PipeWire graph and successfully pinned USB output.
+
+    This is an unauthenticated manual LAN experiment: never start or keep
+    playing unless both the exact virtual sink and USB default are verified.
+    Raw command stderr/stdout are never copied into diagnostics on failure.
+    """
+    if target not in ("audiohub.music", "audiohub.laptop", "audiohub.tablet"):
+        raise RuntimeError("Unsupported manual audio target")
+    result = bounded_command_output(("pw-dump",), timeout=5)
+    if result is None or result.returncode != 0:
         raise RuntimeError("PipeWire node inspection failed")
     nodes = pipewire_nodes(result.stdout)
-    if target not in ("audiohub.music", "audiohub.laptop", "audiohub.tablet") or target not in virtual_sinks(nodes):
+    if target not in virtual_sinks(nodes):
         raise RuntimeError("Laptop virtual sink unavailable")
     output = choose_usb_output(nodes)
     if output is None:
         raise RuntimeError("USB audio output unavailable")
-    # AudioHub's EQ filters ultimately play to the system default.
-    # Before opening the manual UDP test socket, reassert only the
-    # currently recognized USB sink; never silently fall back to HDMI.
-    try:
-        selected = subprocess.run(
-            ["wpctl", "set-default", str(output["id"])],
-            capture_output=True, text=True, timeout=5, check=False,
-        )
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        raise RuntimeError("USB output routing not ready") from exc
-    if selected.returncode != 0:
+    # Explicit USB selection only. The bounded helper also rejects broken
+    # commands and kills the process group on timeout or excessive output.
+    selected = bounded_command_output(
+        ("wpctl", "set-default", str(output["id"])), timeout=5,
+    )
+    if selected is None or selected.returncode != 0:
         raise RuntimeError("USB output routing not ready")
-
 
 def close_player(process):
     if process is None:

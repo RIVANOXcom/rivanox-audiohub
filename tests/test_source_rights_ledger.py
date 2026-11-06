@@ -143,8 +143,8 @@ class SourceRightsLedgerTests(unittest.TestCase):
         self.assertEqual(state["latest_legacy_security_change"]["static_file_cap_bytes"], 524288)
         self.assertEqual(state["latest_legacy_security_change"]["anonymized_status_json_cap_bytes"], 32768)
         self.assertTrue(state["latest_legacy_security_change"]["all_path_components_nofollow"])
-        self.assertEqual(state["last_native_verified"]["rootfs_checks_passed"], 65)
-        self.assertEqual(state["last_native_verified"]["run_id"], 42181839470)
+        self.assertEqual(state["last_native_verified"]["rootfs_checks_passed"], 67)
+        self.assertEqual(state["last_native_verified"]["run_id"], 42201589717)
         self.assertFalse(state["next_runtime_state_security_change"]["model_c_effective"])
         self.assertFalse(state["next_runtime_state_security_change"]["physical_device_accepted"])
         self.assertEqual(state["next_runtime_state_security_change"]["expected_rootfs_guard_count"], 58)
@@ -198,6 +198,16 @@ class SourceRightsLedgerTests(unittest.TestCase):
         self.assertFalse(state["next_offline_diagnostic_path_safety_change"]["public_release_ready"])
         self.assertFalse(state["next_offline_diagnostic_path_safety_change"]["model_c_license_effective"])
         self.assertFalse(state["next_offline_diagnostic_path_safety_change"]["hardware_accepted"])
+        self.assertEqual(state["next_laptop_bounded_capture_security_change"]["pr"], 51)
+        self.assertEqual(state["next_laptop_bounded_capture_security_change"]["max_stdout_bytes"], 4194304)
+        self.assertEqual(state["next_laptop_bounded_capture_security_change"]["timeout_seconds_per_command"], 5)
+        self.assertEqual(state["next_laptop_bounded_capture_security_change"]["expected_rootfs_guard_count"], 68)
+        self.assertTrue(state["next_laptop_bounded_capture_security_change"]["bounded_capture_for_pw_dump"])
+        self.assertTrue(state["next_laptop_bounded_capture_security_change"]["bounded_capture_for_wpctl"])
+        self.assertTrue(state["next_laptop_bounded_capture_security_change"]["does_not_autoenable_lan_receiver"])
+        self.assertFalse(state["next_laptop_bounded_capture_security_change"]["model_c_license_effective"])
+        self.assertFalse(state["next_laptop_bounded_capture_security_change"]["public_release_ready"])
+        self.assertFalse(state["next_laptop_bounded_capture_security_change"]["physical_edifier_accepted"])
         self.assertEqual(state["next_bluetooth_agent_trust_security_change"]["pairable_timeout_seconds"], 600)
         self.assertEqual(state["next_bluetooth_agent_trust_security_change"]["discoverable_timeout_seconds"], 600)
         self.assertTrue(state["next_bluetooth_agent_trust_security_change"]["initial_deadline_relative_to_linux_boot"])
@@ -207,7 +217,7 @@ class SourceRightsLedgerTests(unittest.TestCase):
         self.assertFalse(state["last_native_verified"]["public_release_ready"])
         self.assertEqual(
             [item["number"] for item in state["draft_pr_chain"]],
-            [35, 36, 38, 39, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50],
+            [35, 36, 38, 39, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51],
         )
 
     def test_primary_handoff_points_to_authoritative_resume(self):

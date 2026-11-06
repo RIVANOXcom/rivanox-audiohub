@@ -147,3 +147,17 @@ missing or overlarge JSON fail as stale; no identifiers are exported.
 Tests verify valid existing private runtime status remains readable and
 unsupported inputs cannot make a report appear healthy. Offline report
 still means observation ONLY, no authentication, warranty or release.
+
+## Experimental laptop LAN receiver must not buffer unlimited PipeWire output
+
+The source-only, explicitly opted-in, UNAUTHENTICATED Windows Scream UDP
+receiver previously called `subprocess.run(capture_output=True)` for both
+`pw-dump` graph inspection and `wpctl set-default` in periodic readiness
+checks. Draft PR #51 replaces those with the same standard-library bounded
+capture already used by the live supervisor: 4MiB total stdout, 5-second
+command timeout, no shell, discarded stderr, process-group termination on
+failure. Missing/oversized/corrupt graph data prevents `wpctl` or playback;
+failed `wpctl` also denies readiness. The receiver is still disabled
+unless an operator explicitly launches the unsafe LAN experiment. This is
+not cryptographic network peer authentication, a secure consumer service,
+real Edifier sound validation or public release approval.
