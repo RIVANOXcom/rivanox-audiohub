@@ -77,9 +77,23 @@ def _private_dir(path, *, create=False):
     return fd
 
 
+def _unique_route_members(pairs):
+    """No last-wins duplicate keys in private audio routing policy."""
+    seen = {}
+    for key, value in pairs:
+        if key in seen:
+            raise ValueError("Duplicate private audio route member")
+        seen[key] = value
+    return seen
+
+
+def _reject_route_constant(_value):
+    raise ValueError("Non-standard private audio route number")
+
+
 def _read(fd):
     try:
-        handle = os.open(FILENAME, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC,
+        handle = os.open(FILENAME, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW | os.O_CLOEXEC,
                          dir_fd=fd)
     except FileNotFoundError:
         return defaults()
@@ -90,9 +104,18 @@ def _read(fd):
                 or st.st_size > MAX_FILE_BYTES):
             raise PermissionError("Unsafe source route policy file")
         raw = os.read(handle, MAX_FILE_BYTES + 1)
-        if len(raw) > MAX_FILE_BYTES:
-            raise ValueError("Source route file too large")
-        return validate(json.loads(raw.decode("utf-8")))
+        if len(raw) != st.st_size:
+            raise ValueError("Source route file changed during bounded read")
+        try:
+            decoded = json.loads(
+                raw.decode("utf-8"),
+                object_pairs_hook=_unique_route_members,
+                parse_constant=_reject_route_constant,
+            )
+        except (UnicodeError, ValueError, RecursionError):
+            # Do not echo peer addresses, route keys or raw private JSON.
+            raise ValueError("Malformed private source route JSON") from None
+        return validate(decoded)
     finally:
         os.close(handle)
 
