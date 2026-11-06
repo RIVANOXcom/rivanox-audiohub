@@ -119,7 +119,7 @@ class FlexibleRoutingIntegration(unittest.TestCase):
         with self.assertRaises(ValueError):
             network_laptop.player_command("alsa_output.fake-hdmi")
 
-    @mock.patch("audiohub.network_laptop.subprocess.run")
+    @mock.patch("audiohub.network_laptop.bounded_command_output")
     def test_network_manual_route_requires_eq_and_real_usb(self, execute):
         def node(nid, name):
             return {"type": "PipeWire:Interface:Node", "id": nid,
@@ -131,7 +131,8 @@ class FlexibleRoutingIntegration(unittest.TestCase):
             SimpleNamespace(returncode=0, stdout=""),
         ]
         network_laptop.check_audio_target("audiohub.music")
-        self.assertEqual(execute.call_args.args[0], ["wpctl", "set-default", "10"])
+        self.assertEqual(execute.call_args.args[0], ("wpctl", "set-default", "10"))
+        self.assertEqual(execute.call_args.kwargs, {"timeout": 5})
         execute.side_effect = [SimpleNamespace(returncode=0, stdout=json.dumps(graph))]
         with self.assertRaises(RuntimeError):
             network_laptop.check_audio_target("audiohub.tablet")
