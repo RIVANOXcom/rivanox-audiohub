@@ -550,5 +550,16 @@ Next: verify PR65 exact-head source and independent ARM64 83 checks, ZIP/XZ prov
 
 **Blockers/next:** Effective AGPL-3.0-only, 83 source rights ledger records pending, 689 installed OS packages/680 copyright docs/nine unresolved. Physical Pi4+Edifier three concurrent sources, clipping, 24-hour run, secure authenticated owner phone-Wi-Fi and legal release acceptance remain open. Next verify PR66 source/independent ARM64 CI, XZ and ZIP SHA and append Workbench evidence. No merge, installation, deployment or release GO.
 
+
+## AI. 2026-11-06: latest selected preview language wins under asynchronous fetch — Draft PR67
+
+**Mission PAPA-18B8B3C6.** Isolated Draft PR67 branch `wd-papa-18b8b3c6-web-locale-latest-request-20261106` based only on existing Draft PR66 exact SHA `841425fdbcb240fe1c13fa13c6434542c6a2a392`. No parent PR or public main writes. PR66 Source #42247530486 SUCCESS **665/665**, including actual Node.js browser name validator semantics after relocating new tests into the existing rights-ledger-inventoried `tests/test_locales.py`. Parent native ARM64 #42247519470 was not yet verified on PR67 creation, so 84/84 was NOT claimed.
+
+**Concrete AH-004 issue:** `web/app.js setLanguage` fetches five local JSON dictionaries asynchronously. A slow old response could overwrite the user's newer language, DOM `html.lang`, dropdown, saved `audiohub.locale` localStorage and displayed translations; an old failed request could recursively force English fallback after the user selected a different language.
+
+**Change:** Assign monotonically increasing `languageRequestId` to each language request and reject stale completions both on successful fetch and failed-request fallback. Preserve all five languages, existing localization behavior, English fallback for the *latest* genuinely failed request, read-only device API and existing no-HTML DOM rendering. Real Node.js tests in `tests/test_locales.py` extract and execute the shipped `setLanguage` function against deferred promises arriving out-of-order, including a stale failed request. Three synthetic installed-rootfs positive/negative tests and one new native gate `web_preview_latest_language_request_wins` target **85** real native checks only after exact-head independent ARM64 CI.
+
+**Remaining blockers:** Existing source-rights ledger still contains 83 unreviewed files; historical AGPL-3.0-only license effective, future Model C not approved. Nine unresolved OS copyright documents, real Pi4+Edifier audible three-input sound, 24-hour endurance, authenticated owner-phone Wi-Fi, physical and legal release acceptance remain absent. All changes Draft, no merge, installation, deployment, permission changes or public release. Next verify exact-head Source/ARM64 on PR67 and parent PR66 native, ZIP/XZ provenance, log Workbench evidence and continue safe development.
+
 **END OF HANDOFF.** If a live run/PR contradicts this document, treat
 the live GitHub evidence as authoritative, reconcile and update this file.
