@@ -6,6 +6,7 @@ import stat
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
@@ -100,6 +101,66 @@ class SourcePolicyTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             routes.set_lan("music", self.dir)
         self.assertEqual(file.read_text(), "garbage")
+
+    def test_duplicate_top_level_route_keys_fail_closed_without_reset(self):
+        routes.set_mode("manual", self.dir)
+        path = self.dir / routes.FILENAME
+        conflicting = (
+            '{"schema":"audiohub-source-routes/1",'
+            '"mode":"auto","mode":"manual","lan_slot":"laptop","bluetooth":{}}'
+        )
+        path.write_text(conflicting)
+        with self.assertRaises(ValueError):
+            routes.load(self.dir)
+        with self.assertRaises(ValueError):
+            routes.set_lan("tablet", self.dir)
+        self.assertEqual(path.read_text(), conflicting)
+
+    def test_duplicate_bluetooth_address_prevents_last_wins_routing(self):
+        routes.set_mode("manual", self.dir)
+        path = self.dir / routes.FILENAME
+        conflicting = (
+            '{"schema":"audiohub-source-routes/1","mode":"manual",'
+            '"lan_slot":"laptop","bluetooth":{'
+            '"AA:BB:CC:DD:EE:FF":"music",'
+            '"AA:BB:CC:DD:EE:FF":"tablet"}}'
+        )
+        path.write_text(conflicting)
+        with self.assertRaises(ValueError):
+            routes.load(self.dir)
+        self.assertEqual(path.read_text(), conflicting)
+
+    def test_nested_route_json_recursion_cannot_crash_supervisor(self):
+        routes.set_mode("manual", self.dir)
+        path = self.dir / routes.FILENAME
+        body = "[" * 1550 + "0" + "]" * 1550
+        self.assertLess(len(body), routes.MAX_FILE_BYTES)
+        path.write_text(body)
+        with self.assertRaises(ValueError):
+            routes.load(self.dir)
+        self.assertEqual(path.read_text(), body)
+
+    def test_route_fifo_does_not_block_before_regular_file_check(self):
+        if not hasattr(os, "mkfifo"):
+            self.skipTest("Linux FIFO needed")
+        self.dir.mkdir(mode=0o700)
+        os.mkfifo(self.dir / routes.FILENAME)
+        original_open = os.open
+
+        def safe_open(path, flags, *args, **kwargs):
+            if path == routes.FILENAME:
+                self.assertTrue(flags & os.O_NONBLOCK, "FIFO must not block")
+            return original_open(path, flags, *args, **kwargs)
+
+        with mock.patch.object(routes.os, "open", side_effect=safe_open):
+            with self.assertRaises(PermissionError):
+                routes.load(self.dir)
+
+    def test_short_private_route_read_is_rejected_not_routed(self):
+        routes.set_mode("manual", self.dir)
+        with mock.patch.object(routes.os, "read", return_value=b"{}"):
+            with self.assertRaises(ValueError):
+                routes.load(self.dir)
 
     def test_file_symlink_rejected(self):
         self.dir.mkdir(mode=0o700)
