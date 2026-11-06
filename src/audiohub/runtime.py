@@ -7,6 +7,7 @@ multi-device A2DP feasibility are NOT proven without physical acceptance.
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 import secrets
@@ -43,6 +44,8 @@ def run(*args, timeout=8):
 
 
 MAX_RUNTIME_JSON_BYTES = 32 * 1024
+MAX_RUNTIME_JSON_DEPTH = 64
+MAX_RUNTIME_JSON_VALUES = 8192
 
 
 def _private_parent_fd(path, *, create=False):
@@ -81,6 +84,44 @@ def _private_parent_fd(path, *, create=False):
             os.close(fd)
 
 
+def _unique_state_json_members(pairs):
+    """Reject contradictory private JSON keys rather than using last-wins."""
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("Duplicate private AudioHub state member")
+        result[key] = value
+    return result
+
+
+def _reject_state_json_constant(_value):
+    raise ValueError("Nonstandard private AudioHub state number")
+
+
+def _finite_state_json_float(number):
+    value = float(number)
+    if not math.isfinite(value):
+        raise ValueError("Nonfinite private AudioHub state exponent")
+    return value
+
+
+def _private_state_shape_bounded(data):
+    """Bound nesting and breadth even when JSON parses below Python's limit."""
+    seen = 0
+    pending = [(data, 0)]
+    while pending:
+        value, depth = pending.pop()
+        seen += 1
+        if seen > MAX_RUNTIME_JSON_VALUES or depth > MAX_RUNTIME_JSON_DEPTH:
+            return False
+        if type(value) is dict or type(value) is list:
+            if len(value) + len(pending) + seen > MAX_RUNTIME_JSON_VALUES:
+                return False
+            members = value.values() if type(value) is dict else value
+            pending.extend((item, depth + 1) for item in members)
+    return True
+
+
 def read_json(path, fallback):
     """Read only one bounded, private regular JSON file, never symlinks."""
     dirfd = None
@@ -101,9 +142,16 @@ def read_json(path, fallback):
         raw = os.read(filefd, MAX_RUNTIME_JSON_BYTES + 1)
         if len(raw) != st.st_size:
             return fallback
-        value = json.loads(raw.decode("utf-8"))
-        return value if isinstance(value, type(fallback)) else fallback
-    except (OSError, ValueError, TypeError, UnicodeError):
+        value = json.loads(
+            raw.decode("utf-8"),
+            object_pairs_hook=_unique_state_json_members,
+            parse_constant=_reject_state_json_constant,
+            parse_float=_finite_state_json_float,
+        )
+        if type(value) is not type(fallback) or not _private_state_shape_bounded(value):
+            return fallback
+        return value
+    except (OSError, ValueError, TypeError, UnicodeError, RecursionError):
         return fallback
     finally:
         if filefd is not None:

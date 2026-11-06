@@ -172,6 +172,54 @@ class PrivateRuntimeStateTests(unittest.TestCase):
         os.chmod(self.path, 0o600)
         self.assertEqual(read_json(self.path, {"fresh": False}), {"fresh": False})
 
+    def test_duplicate_private_assignment_keys_fail_closed_without_rewriting(self):
+        bad = '{"AA:BB:CC:DD:EE:FF":"music","AA:BB:CC:DD:EE:FF":"tablet"}'
+        self.path.write_text(bad)
+        self.path.chmod(0o600)
+        self.assertEqual(read_json(self.path, {"safe": True}), {"safe": True})
+        self.assertEqual(self.path.read_text(), bad)
+
+    def test_nested_duplicate_private_settings_fail_closed(self):
+        bad = '{"mix":{"music":{"gain":0.4,"gain":0.9}}}'
+        self.path.write_text(bad)
+        self.path.chmod(0o600)
+        self.assertEqual(read_json(self.path, {"safe": False}), {"safe": False})
+
+    def test_nonfinite_private_state_constants_are_refused(self):
+        for number in ("NaN", "Infinity", "-Infinity"):
+            with self.subTest(number=number):
+                self.path.write_text('{"private":' + number + "}")
+                self.path.chmod(0o600)
+                self.assertEqual(read_json(self.path, {"blocked": True}), {"blocked": True})
+
+    def test_float_exponent_overflow_is_refused_in_unknown_settings(self):
+        for number in ("1e999", "-1e999"):
+            with self.subTest(number=number):
+                self.path.write_text('{"untrusted":' + number + "}")
+                self.path.chmod(0o600)
+                self.assertEqual(read_json(self.path, {"blocked": True}), {"blocked": True})
+
+    def test_valid_but_deep_private_settings_cannot_crash_supervisor(self):
+        records = (
+            '{"next":' * 120 + '0' + '}' * 120,
+            '[' * 1300 + '0' + ']' * 1300,
+        )
+        for body in records:
+            with self.subTest(prefix=body[:10]):
+                self.assertLess(len(body), MAX_RUNTIME_JSON_BYTES)
+                self.path.write_text(body)
+                self.path.chmod(0o600)
+                self.assertEqual(read_json(self.path, {"fallback": True}),
+                                 {"fallback": True})
+
+    def test_finite_numeric_private_state_still_roundtrips(self):
+        source = '{"usb_output":true,"ignored":1.25e2}'
+        self.path.write_text(source)
+        self.path.chmod(0o600)
+        self.assertEqual(read_json(self.path, {}), {
+            "usb_output": True, "ignored": 125.0,
+        })
+
     def test_malformed_type_returns_fallback(self):
         self.path.write_text("[1,2,3]")
         os.chmod(self.path, 0o600)

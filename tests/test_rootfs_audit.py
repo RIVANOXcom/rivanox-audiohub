@@ -61,6 +61,16 @@ class RootfsAuditTests(unittest.TestCase):
         runtime_path = root / "opt/audiohub/src/audiohub/runtime.py"
         runtime_path.write_text(runtime_path.read_text() + "\n".join((
             "MAX_RUNTIME_JSON_BYTES = 32 * 1024",
+            "MAX_RUNTIME_JSON_DEPTH = 64",
+            "MAX_RUNTIME_JSON_VALUES = 8192",
+            "def _unique_state_json_members(pairs):",
+            "object_pairs_hook=_unique_state_json_members",
+            "parse_constant=_reject_state_json_constant",
+            "parse_float=_finite_state_json_float",
+            "math.isfinite(value)",
+            "def _private_state_shape_bounded(data):",
+            "not _private_state_shape_bounded(value)",
+            "except (OSError, ValueError, TypeError, UnicodeError, RecursionError):",
             "def _private_parent_fd(path, *, create=False):",
             "os.O_NOFOLLOW", "os.O_NONBLOCK",
             "os.O_EXCL", "secrets.token_hex(12)",
@@ -1247,6 +1257,47 @@ class RootfsAuditTests(unittest.TestCase):
                 "object_pairs_hook=_unique_profile_members", "object_pairs_hook=None"
             ))
             self.assertFalse(audit.inspect(root)["input_profile_config_strict_nonblocking_read"])
+
+    def test_installed_runtime_strict_settings_json_guard_present(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            self.assertTrue(audit.inspect(root)[
+                "runtime_settings_assignments_json_fail_closed"
+            ])
+
+    def test_duplicate_runtime_settings_parser_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            f = root / "opt/audiohub/src/audiohub/runtime.py"
+            f.write_text(f.read_text().replace(
+                "object_pairs_hook=_unique_state_json_members",
+                "object_pairs_hook=None"
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "runtime_settings_assignments_json_fail_closed"
+            ])
+
+    def test_missing_runtime_depth_guard_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            f = root / "opt/audiohub/src/audiohub/runtime.py"
+            f.write_text(f.read_text().replace(
+                "not _private_state_shape_bounded(value)", "False"
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "runtime_settings_assignments_json_fail_closed"
+            ])
+
+    def test_runtime_nonfinite_state_parser_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            f = root / "opt/audiohub/src/audiohub/runtime.py"
+            f.write_text(f.read_text().replace(
+                "parse_float=_finite_state_json_float", "parse_float=None"
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "runtime_settings_assignments_json_fail_closed"
+            ])
 
     def test_missing_flexible_source_plan_blocks_alpha_image(self):
         with tempfile.TemporaryDirectory() as tmp:
