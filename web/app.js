@@ -32,6 +32,7 @@
     tablet: { volume: 50, mute: false, bass: 0, mid: 0, treble: 0 }
   };
   let words = {};
+  let languageRequestId = 0;
   let deviceHealth = null;
   const byId = id => document.getElementById(id);
   const tr = key => words[key] || key;
@@ -169,6 +170,8 @@
     renderHardwareStatus();
   }
   async function setLanguage(language) {
+    // Late locale replies must not overwrite newer user choices.
+    const requestId = ++languageRequestId;
     if (!LANGUAGES.includes(language)) language = "en";
     let data;
     try {
@@ -176,11 +179,13 @@
       if (!response.ok) throw new Error("Locale unavailable");
       data = await response.json();
     } catch (_) {
+      if (requestId !== languageRequestId) return;
       if (language !== "en") return setLanguage("en");
       words = { tagline: "All your audio. One place." };
       translate();
       return;
     }
+    if (requestId !== languageRequestId) return;
     words = data;
     document.documentElement.lang = language;
     byId("language").value = language;

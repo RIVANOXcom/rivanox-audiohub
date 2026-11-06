@@ -313,6 +313,10 @@ class RootfsAuditTests(unittest.TestCase):
             r"/[\p{C}<>]/u.test(name)",
             "Array.from(name).length > 32",
             "title.textContent = tr(key)",
+            "let languageRequestId = 0;",
+            "const requestId = ++languageRequestId;",
+            "if (requestId !== languageRequestId) return;",
+            "if (requestId !== languageRequestId) return;",
         )))
         data = {f"k{n}": "test" for n in range(30)}
         for lang in audit.LANGUAGES:
@@ -1317,6 +1321,37 @@ class RootfsAuditTests(unittest.TestCase):
             ))
             self.assertFalse(audit.inspect(root)[
                 "web_preview_input_name_unicode_controls_safe"
+            ])
+
+    def test_web_latest_language_selection_guard_in_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            self.assertTrue(audit.inspect(root)[
+                "web_preview_latest_language_request_wins"
+            ])
+
+    def test_missing_locale_generation_token_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            file = root / "opt/audiohub/web/app.js"
+            file.write_text(file.read_text().replace(
+                "const requestId = ++languageRequestId;",
+                "const requestId = 0;"
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "web_preview_latest_language_request_wins"
+            ])
+
+    def test_one_stale_locale_reply_guard_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            file = root / "opt/audiohub/web/app.js"
+            file.write_text(file.read_text().replace(
+                "if (requestId !== languageRequestId) return;",
+                "if (requestId === 0) return;", 1
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "web_preview_latest_language_request_wins"
             ])
 
     def test_missing_client_only_rename_blocks_image_export(self):

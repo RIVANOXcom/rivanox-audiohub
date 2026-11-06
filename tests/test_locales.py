@@ -67,5 +67,70 @@ assert.equal(validName(3), null);
         self.assertEqual(result.returncode, 0, result.stderr)
 
 
+def preview_language_loader_source():
+    source = PREVIEW.read_text(encoding="utf-8")
+    start = source.index("  async function setLanguage(language) {")
+    end = source.index('\n  }\n  byId("language")', start) + len("\n  }")
+    return source[start:end]
+
+
+class BrowserLocaleRaceTests(unittest.TestCase):
+    def test_both_success_and_fallback_have_stale_request_guards(self):
+        source = PREVIEW.read_text(encoding="utf-8")
+        self.assertIn("let languageRequestId = 0;", source)
+        body = preview_language_loader_source()
+        self.assertIn("const requestId = ++languageRequestId;", body)
+        self.assertEqual(body.count("if (requestId !== languageRequestId) return;"), 2)
+
+    @unittest.skipUnless(shutil.which("node"), "Node.js runtime unavailable")
+    def test_real_async_locale_race_and_stale_failure(self):
+        setup = r'''
+const assert = require("node:assert/strict");
+const LANGUAGES = ["en", "de", "es", "fr", "it"];
+const document = {documentElement: {lang: "en"}};
+const dropdown = {value: "en"};
+const byId = id => {assert.equal(id, "language"); return dropdown;};
+const localStorage = {value: null, setItem(k, v) {this.value = [k, v];}};
+const translated = [];
+let words = {};
+let languageRequestId = 0;
+const translate = () => {translated.push([document.documentElement.lang, words.tagline]);};
+const pending = {};
+const fetch = uri => new Promise((resolve, reject) => {pending[uri] = {resolve, reject};});
+'''
+        check = r'''
+async function verify() {
+  const slow = setLanguage("de");
+  const fast = setLanguage("it");
+  pending["./locales/it.json"].resolve({ok: true, json: async () => ({tagline: "Italiano"})});
+  await fast;
+  pending["./locales/de.json"].resolve({ok: true, json: async () => ({tagline: "Deutsch"})});
+  await slow;
+  assert.equal(document.documentElement.lang, "it");
+  assert.equal(dropdown.value, "it");
+  assert.equal(words.tagline, "Italiano");
+  assert.deepEqual(localStorage.value, ["audiohub.locale", "it"]);
+  assert.deepEqual(translated, [["it", "Italiano"]]);
+
+  const staleFailure = setLanguage("es");
+  const latest = setLanguage("fr");
+  pending["./locales/es.json"].reject(new Error("temporary translation failure"));
+  await staleFailure;
+  assert.equal(pending["./locales/en.json"], undefined);
+  pending["./locales/fr.json"].resolve({ok: true, json: async () => ({tagline: "Français"})});
+  await latest;
+  assert.equal(document.documentElement.lang, "fr");
+  assert.equal(dropdown.value, "fr");
+  assert.equal(words.tagline, "Français");
+  assert.deepEqual(localStorage.value, ["audiohub.locale", "fr"]);
+}
+verify().catch(e => {console.error(e); process.exitCode = 1;});
+'''
+        program = setup + "\n" + preview_language_loader_source() + "\n" + check
+        result = subprocess.run(["node", "-e", program], capture_output=True,
+                                text=True, timeout=15, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()
