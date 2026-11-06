@@ -368,6 +368,27 @@ class SourceRightsLedgerTests(unittest.TestCase):
         self.assertNotIn("93e637276d5fc772a4b06f7848aacdeddfddaf17", guide)
         self.assertNotIn("13522368901", guide)
         self.assertNotIn("42255968531", guide)
+        # The label and actual destination must identify the SAME Draft PR.
+        self.assertIn(
+            "[PR75](https://github.com/RIVANOXcom/rivanox-audiohub/pull/75)", guide
+        )
+        self.assertNotIn(
+            "[PR75](https://github.com/RIVANOXcom/rivanox-audiohub/pull/70)", guide
+        )
+        self.assertIn("native image-build run ID is #42305548510", guide)
+        self.assertIn("deliberately pinned", guide)
+
+    def test_backlog_pi4_operator_action_uses_pinned_verified_guide(self):
+        backlog = (ROOT / "docs/ENGINEERING-BACKLOG.md").read_text()
+        line = next(
+            line for line in backlog.splitlines()
+            if line.startswith("| AUDIO-01 / AH-009 |")
+        )
+        self.assertIn("FIRST-PI-ALPHA-TEST.md", line)
+        self.assertIn("42305548510", line)
+        self.assertIn("13546207449", line)
+        self.assertIn("separate human decision", line)
+        self.assertNotIn("13433476966", line)
 
     def test_three_source_lab_links_to_same_verified_nonrelease_image(self):
         lab = (ROOT / "docs/THREE-SOURCE-LAB-ACCEPTANCE.md").read_text()
