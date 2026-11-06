@@ -162,6 +162,10 @@ class PairingAgent(dbus.service.Object):
             "org.freedesktop.DBus.Properties"
         )
         if p.Get("org.bluez.Device1", "Trusted"):
+            # BlueZ trust may survive an unpair; trust alone must not grant
+            # a profile service to a currently unpaired device.
+            if not p.Get("org.bluez.Device1", "Paired"):
+                raise Rejected("Unpaired trusted device")
             return
         # Open discovery is not sufficient authorization for services.
         now = time.monotonic()
