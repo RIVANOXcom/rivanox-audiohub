@@ -348,6 +348,32 @@ def inspect(root: Path) -> dict[str, bool]:
         )
     except OSError:
         checks["laptop_manual_receiver_packaged"] = False
+    # This optional unauthenticated LAN receiver must never reintroduce
+    # unbounded pw-dump/wpctl stderr or stdout after the live runtime and
+    # hardware preflight were moved to the safe bounded process reader.
+    try:
+        laptop_source = (source / "network_laptop.py").read_text()
+        capture_source = (source / "process_capture.py").read_text()
+        checks["manual_laptop_pipewire_capture_bounded"] = all(
+            token in laptop_source for token in (
+                "from .process_capture import bounded_command_output",
+                'bounded_command_output(("pw-dump",), timeout=5)',
+                '("wpctl", "set-default", str(output["id"])), timeout=5,',
+                "if result is None or result.returncode != 0:",
+                "if selected is None or selected.returncode != 0:",
+            )
+        ) and not any(token in laptop_source for token in (
+            "capture_output=True", "subprocess.run(", "shell=True",
+        )) and all(
+            token in capture_source for token in (
+                "MAX_COMMAND_STDOUT_BYTES = 4 * 1024 * 1024",
+                "selectors.DefaultSelector()",
+                "stderr=subprocess.DEVNULL",
+                "start_new_session=True",
+            )
+        )
+    except OSError:
+        checks["manual_laptop_pipewire_capture_bounded"] = False
     systemd_paths = (
         root / "etc/systemd/system", root / "etc/systemd/user",
     )
