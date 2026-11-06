@@ -175,3 +175,14 @@ only to local IPv4 loopback unless an engineer explicitly opts into an
 unsafe specific RFC1918 interface. The GET/API remains read-only; the
 new controls are resource safety and privacy improvements, NOT authentication
 or permission to expose the preview to the Internet.
+
+## Read-only status JSON private file identity
+
+The web listener already prevented symlink traversal and bounded JSON
+reads, but did not check whether status JSON was authored by the expected
+service UID, placed inside a private runtime directory, had group/world
+access or multiple hardlinks. Draft PR53 adds these requirements for
+`read_public_status` ONLY; ordinary root-owned HTML/JavaScript assets stay
+world-readable. A suspicious file now produces an anonymized stale/no-audio
+status instead of presenting forged fresh health. The same-UID processes
+are still not cryptographically authenticated; no release or owner signoff.
