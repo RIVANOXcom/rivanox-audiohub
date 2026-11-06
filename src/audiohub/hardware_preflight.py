@@ -7,8 +7,8 @@ changes device state, stores output, records peer IDs, or enables LAN audio.
 from __future__ import annotations
 
 import json
-import subprocess
 
+from .process_capture import bounded_command_output
 from .discovery import pipewire_nodes
 from .audio_graph import summarize_links
 
@@ -89,11 +89,8 @@ def inspect_topology(raw, *, query_ok=True):
 
 def probe():
     """Use an argv-only, bounded, nonprivileged PipeWire read command."""
-    try:
-        result = subprocess.run(
-            ["pw-dump"], capture_output=True, text=True, check=False, timeout=5
-        )
-    except (OSError, subprocess.TimeoutExpired):
+    result = bounded_command_output(("pw-dump",), timeout=5)
+    if result is None:
         return inspect_topology(None, query_ok=False)
     return inspect_topology(
         result.stdout if result.returncode == 0 else None,
