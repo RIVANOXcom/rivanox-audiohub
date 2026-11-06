@@ -203,3 +203,7 @@ boot-relative deadline so agent restarts cannot reopen a fresh full
 `0852894bde8504606cfdc32252a3c5c075c5771a` source run
 42125422399 SUCCESS **441 tests**. Current native rootfs target **61**
 requires exact final build; no physical Bluetooth or owner-claiming pass.
+
+## 2026-11-06: bounded real PipeWire snapshots — Draft PR #47
+
+The existing audio runtime and offline manual hardware preflight both invoked `subprocess.run(capture_output=True)` on `pw-dump`, which could allocate arbitrarily large output on a RAM-constrained Pi. New helper `src/audiohub/process_capture.py` enforces a **4MiB stdout cap** with 64KiB streaming reads, subprocess timeout, no shell and process-group cleanup; stderr is not collected. Both `runtime.run()` and `hardware_preflight.probe()` use it. Discovery rejects graph snapshots over 4MiB/8192 objects. Added live-process, parser and rootfs tests; source-rights ledger now 81 pending files. Image guard `pipewire_stdout_bounded_no_shell` raises total target **61 -> 62** after real native validation. Current public AGPL stays unchanged, future Model C remains ineffective. See [PR #47](https://github.com/RIVANOXcom/rivanox-audiohub/pull/47) and canonical section O.

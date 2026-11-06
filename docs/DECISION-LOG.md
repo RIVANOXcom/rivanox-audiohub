@@ -41,6 +41,8 @@ These decisions capture user-confirmed requirements and current engineering arch
 
 | ADR-029 | Bounded BlueZ Pairable/Discoverable timeouts and boot-relative authorization windows are mandatory for the legacy headless pairing service. | Draft [PR #46](https://github.com/RIVANOXcom/rivanox-audiohub/pull/46), 441 source tests PASS at code SHA; native ARM64 and device validation required | Official BlueZ semantics: zero timeout means infinite. Both Adapter1 expiry values set to 600 seconds, adapter closed before initial authorization, monotonic deadline counted from system boot rather than agent restart. Still not cryptographic owner claiming. |
 
+| ADR-030 | Limit untrusted PipeWire process output before it can exhaust Raspberry Pi memory, and parse only bounded graphs. | Draft [PR #47](https://github.com/RIVANOXcom/rivanox-audiohub/pull/47); exact-head source and ARM64 image checks required | 4 MiB stdout, 8192 graph objects, selector-based incremental capture, no shell, timeout and process-group kill on overload; untrusted stderr not logged. Ownership, physical sound, legal permissions and public release remain gated. |
+
 ## Engineering observations (not product acceptance)
 
 - Source-level tests and policy checks have succeeded on GitHub Actions.
