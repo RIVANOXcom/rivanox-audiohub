@@ -639,6 +639,19 @@ def inspect(root: Path) -> dict[str, bool]:
         )
     except OSError:
         checks["web_preview_input_name_unicode_controls_safe"] = False
+    # Stale async locale completions must never overwrite a newer user
+    # language selection or trigger an obsolete English fallback.
+    try:
+        preview = (root / "opt/audiohub/web/app.js").read_text()
+        checks["web_preview_latest_language_request_wins"] = all(
+            token in preview for token in (
+                "let languageRequestId = 0;",
+                "const requestId = ++languageRequestId;",
+                "if (requestId !== languageRequestId) return;",
+            )
+        ) and preview.count("if (requestId !== languageRequestId) return;") >= 2
+    except OSError:
+        checks["web_preview_latest_language_request_wins"] = False
     # Physical input rebinding cannot originate from public status or
     # unauthenticated LAN packets. A private local policy must reserve the
     # manual LAN slot and keep Bluetooth streams off that same EQ input.
