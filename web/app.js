@@ -34,6 +34,7 @@
   let words = {};
   let languageRequestId = 0;
   let deviceHealth = null;
+  let statusRequestId = 0;
   const byId = id => document.getElementById(id);
   const tr = key => words[key] || key;
   const displayName = channel => previewLabels[channel] || tr("input" + SLOT_INDEX[channel]);
@@ -153,12 +154,16 @@
       : tr("speakerState");
   }
   async function readDeviceStatus() {
+    // Only the most recent poll may update health or its visible state.
+    const requestId = ++statusRequestId;
     try {
       const response = await fetch("./api/status", {cache: "no-store"});
       if (!response.ok) throw new Error("Status unavailable");
       const json = await response.json();
+      if (requestId !== statusRequestId) return;
       deviceHealth = json && typeof json === "object" ? json : null;
     } catch (_) {
+      if (requestId !== statusRequestId) return;
       deviceHealth = null;
     }
     renderHardwareStatus();
