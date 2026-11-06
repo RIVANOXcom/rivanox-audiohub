@@ -80,6 +80,8 @@ def inspect(root: Path) -> dict[str, bool]:
     # conflicting BT profiles cannot choose an arbitrary first/last node.
     try:
         discovery = (source / "discovery.py").read_text()
+        preflight = (source / "hardware_preflight.py").read_text()
+        graph = (source / "audio_graph.py").read_text()
         checks["pipewire_node_identity_ambiguity_fails_closed"] = all(
             marker in discovery for marker in (
                 "def _conflicting_node_ids(nodes):",
@@ -90,6 +92,8 @@ def inspect(root: Path) -> dict[str, bool]:
                 "ambiguous.add(name)",
                 "return {} if ambiguous else found",
             )
+        ) and "_conflicting_node_ids(nodes)" in preflight and (
+            "_conflicting_node_ids(nodes)" in graph
         )
     except OSError:
         checks["pipewire_node_identity_ambiguity_fails_closed"] = False
