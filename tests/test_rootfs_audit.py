@@ -212,6 +212,15 @@ class RootfsAuditTests(unittest.TestCase):
             "if _conflicting_node_ids(nodes):",
             "conflicted.add(name_mac)",
             'return [source for source in result if source["address"] not in conflicted]',
+            "def bluetooth_sources(nodes):",
+            'for field in ("api.bluez5.address", "device.address"):',
+            "if field not in value:",
+            "stated = value[field]",
+            "type(stated) is not str",
+            "_MAC.fullmatch(stated) is None",
+            "stated.upper() != name_mac",
+            "if address_conflict:",
+            "def virtual_sinks(nodes):",
             "ambiguous.add(name)",
             "return {} if ambiguous else found",
         )))
@@ -766,6 +775,37 @@ class RootfsAuditTests(unittest.TestCase):
             ))
             self.assertFalse(audit.inspect(root)[
                 "pipewire_node_identity_ambiguity_fails_closed"
+            ])
+
+
+    def test_bluetooth_dual_address_guard_in_installed_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            self.assertTrue(audit.inspect(root)[
+                "bluetooth_dual_address_metadata_agrees"
+            ])
+
+    def test_bluetooth_single_property_only_guard_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            file = root / "opt/audiohub/src/audiohub/discovery.py"
+            file.write_text(file.read_text().replace(
+                'for field in ("api.bluez5.address", "device.address"):',
+                'for field in ("api.bluez5.address",):'
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "bluetooth_dual_address_metadata_agrees"
+            ])
+
+    def test_bluetooth_missing_conflict_comparison_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            file = root / "opt/audiohub/src/audiohub/discovery.py"
+            file.write_text(file.read_text().replace(
+                "stated.upper() != name_mac", "False"
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "bluetooth_dual_address_metadata_agrees"
             ])
 
     def test_shared_pipewire_json_guard_in_image(self):
