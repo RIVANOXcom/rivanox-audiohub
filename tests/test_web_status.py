@@ -336,6 +336,29 @@ class ReadonlyWebFileBoundaryTests(unittest.TestCase):
                 self.assertFalse(report["usb_connected"])
                 self.assertEqual(report["active_routes"], 0)
 
+    def test_overflowing_json_exponents_cannot_claim_fresh_web_status(self):
+        for number in ("1e999", "-1e999", "9.99e9999"):
+            with self.subTest(number=number):
+                self.status.write_text(
+                    '{"updated_at":100,"usb_output":true,"extra":' + number + "}"
+                )
+                self.status.chmod(0o600)
+                report = read_public_status(path=self.status, now=101)
+                self.assertFalse(report["fresh"])
+                self.assertFalse(report["usb_connected"])
+                self.assertEqual(report["active_routes"], 0)
+
+    def test_finite_json_exponent_in_unknown_field_is_safe(self):
+        self.status.write_text(
+            '{"updated_at":100,"usb_output":true,"extra":1.25e2}'
+        )
+        self.status.chmod(0o600)
+        report = read_public_status(path=self.status, now=101)
+        self.assertTrue(report["fresh"])
+        self.assertTrue(report["usb_connected"])
+        self.assertEqual(set(report), PUBLIC_FIELDS)
+        self.assertNotIn("extra", report)
+
     def test_missing_status_is_stale(self):
         self.assertFalse(read_public_status(path=self.status)["fresh"])
 
