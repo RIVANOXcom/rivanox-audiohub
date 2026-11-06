@@ -10,6 +10,7 @@ import json
 
 from .process_capture import bounded_command_output
 from .discovery import _conflicting_node_ids, bluetooth_sources, pipewire_nodes
+from .discovery import choose_usb_output, virtual_sinks
 from .audio_graph import summarize_links
 
 CHANNELS = ("music", "laptop", "tablet")
@@ -25,7 +26,7 @@ def _properties(node):
 
 
 def _valid_node_id(value):
-    return isinstance(value, int) and not isinstance(value, bool) and value > 0
+    return type(value) is int and 0 < value <= 2**31 - 1
 
 
 def inspect_topology(raw, *, query_ok=True):
@@ -35,8 +36,10 @@ def inspect_topology(raw, *, query_ok=True):
     output purposely contains no name, MAC, serial, source IP, or raw log line.
     """
     nodes = pipewire_nodes(raw) if query_ok else []
-    logical_counts = dict.fromkeys(CHANNELS, 0)
-    edifier = 0
+    # Use the same virtual sink selector as the production routing loop.
+    # A visible name with an invalid PipeWire ID is not a usable EQ target.
+    routable = virtual_sinks(nodes)
+    edifier_ids = []
     # Report only eligible, uniquely identified capture nodes. A raw node
     # name prefix is not proof that the routing supervisor would accept it.
     bluetooth = len(bluetooth_sources(nodes))
@@ -48,20 +51,20 @@ def inspect_topology(raw, *, query_ok=True):
         name = props.get("node.name")
         if not isinstance(name, str):
             continue
-        if media_class == "Audio/Sink":
-            for channel in CHANNELS:
-                if name == "audiohub." + channel:
-                    logical_counts[channel] += 1
-            if name.startswith("alsa_output.usb-"):
-                details = " ".join(
-                    str(props.get(field, ""))
-                    for field in ("node.name", "node.description", "device.product.name")
-                ).lower()
-                if "edifier" in details:
-                    edifier += 1
+        if media_class == "Audio/Sink" and name.startswith("alsa_output.usb-"):
+            details = " ".join(
+                str(props.get(field, ""))
+                for field in ("node.name", "node.description", "device.product.name")
+            ).lower()
+            if "edifier" in details:
+                edifier_ids.append(node["id"])
 
-    logical = {name: logical_counts[name] == 1 for name in CHANNELS}
-    usb = edifier == 1
+    logical = {name: "audiohub." + name in routable for name in CHANNELS}
+    # The diagnostic must not report readiness for an Edifier sink which the
+    # shipping router would refuse or choose differently (ambiguous USB).
+    selected_usb = choose_usb_output(nodes)
+    usb = (len(edifier_ids) == 1 and selected_usb is not None
+           and selected_usb.get("id") == edifier_ids[0])
     # Even a fully present topology is only a *prerequisite* to hands-on tests.
     topology_ready = bool(query_ok and usb and all(logical.values())
                           and not _conflicting_node_ids(nodes))
