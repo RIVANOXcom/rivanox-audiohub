@@ -224,7 +224,8 @@ def inspect(root: Path) -> dict[str, bool]:
         # must fail closed, rather than throw out of the alpha status handler.
         checks["status_malformed_inputs_fail_closed"] = all(
             mark in webserver for mark in (
-                'json.loads(body.decode("utf-8"))',
+                "decoded = json.loads(",
+                'body.decode("utf-8")',
                 "except (UnicodeError, ValueError, RecursionError):",
                 "path = urlsplit(self.path).path",
                 "except ValueError:",
