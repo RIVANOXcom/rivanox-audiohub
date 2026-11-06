@@ -137,7 +137,7 @@ def inspect(root: Path) -> dict[str, bool]:
     try:
         discovery_source = (source / "discovery.py").read_text()
         start = discovery_source.index("def bluetooth_sources(nodes):")
-        end = discovery_source.index("\ndef virtual_sinks(nodes):", start)
+        end = discovery_source.index("def virtual_sinks(nodes):", start)
         bt_source = discovery_source[start:end]
         checks["bluetooth_dual_address_metadata_agrees"] = all(
             mark in bt_source for mark in (
