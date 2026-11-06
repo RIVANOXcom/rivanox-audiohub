@@ -129,6 +129,12 @@
       "base": "wd-papa-20261106-private-status-file-identity",
       "head": "wd-papa-20261106-status-parser-failclosed",
       "verified_head_sha": null
+    },
+    {
+      "number": 55,
+      "base": "wd-papa-20261106-status-parser-failclosed",
+      "head": "wd-papa-20261106-strict-status-json-integrity",
+      "verified_head_sha": null
     }
   ],
   "last_native_verified": {
@@ -449,5 +455,23 @@
     "public_release_ready": false,
     "model_c_license_effective": false,
     "physical_edifier_accepted": false
+  },
+  "next_status_json_integrity_change": {
+    "pr": 55,
+    "parent_pr": 54,
+    "branch": "wd-papa-20261106-strict-status-json-integrity",
+    "problem": "Python json.loads silently selects duplicate JSON object members and accepts non-standard NaN/Infinity, so private but corrupted status files can report false fresh health",
+    "unique_json_members_enforced": true,
+    "nested_duplicates_rejected": true,
+    "nonfinite_numeric_constants_rejected": true,
+    "unknown_fields_still_redacted": true,
+    "status_stale_on_invalid_json": true,
+    "expected_native_rootfs_guard_count": 72,
+    "source_rights_ledger_file_count": 83,
+    "source_ci_pending": true,
+    "native_ci_pending": true,
+    "public_release_ready": false,
+    "model_c_license_effective": false,
+    "hardware_accepted": false
   }
 }
