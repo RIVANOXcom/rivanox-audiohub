@@ -106,7 +106,7 @@ class NetworkLaptopTests(unittest.TestCase):
         self.assertIn("--raw", command)
         self.assertEqual(command[-1], "-")
 
-    @mock.patch("audiohub.network_laptop.subprocess.run")
+    @mock.patch("audiohub.network_laptop.bounded_command_output")
     def test_audio_target_requires_both_sink_and_usb(self, run):
         found = [
             node(5, "audiohub.laptop", "Audio/Sink"),
@@ -115,7 +115,9 @@ class NetworkLaptopTests(unittest.TestCase):
         run.return_value = subprocess.CompletedProcess(["pw-dump"], 0, json.dumps(found), "")
         laptop.check_audio_target()
         self.assertEqual(run.call_count, 2)
-        self.assertEqual(run.call_args.args[0], ["wpctl", "set-default", "10"])
+        self.assertEqual(run.call_args.args[0], ("wpctl", "set-default", "10"))
+        self.assertEqual(run.call_args.kwargs, {"timeout": 5})
+        self.assertEqual(run.call_args_list[0].args[0], ("pw-dump",))
         run.return_value = subprocess.CompletedProcess(["pw-dump"], 0, json.dumps(found[:1]), "")
         with self.assertRaisesRegex(RuntimeError, "USB"):
             laptop.check_audio_target()
@@ -126,7 +128,7 @@ class NetworkLaptopTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             laptop.check_audio_target()
 
-    @mock.patch("audiohub.network_laptop.subprocess.run")
+    @mock.patch("audiohub.network_laptop.bounded_command_output")
     def test_missing_usb_default_selection_denies_laptop_audio(self, run):
         found = [
             node(5, "audiohub.laptop", "Audio/Sink"),
@@ -139,6 +141,82 @@ class NetworkLaptopTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "routing not ready"):
             laptop.check_audio_target()
         self.assertEqual(run.call_count, 2)
+
+    @mock.patch("audiohub.network_laptop.bounded_command_output")
+    def test_oversized_pipewire_capture_rejects_before_usb_mutation(self, command):
+        # The shared 4 MiB/5 s reader returns None on oversized output,
+        # invalid UTF-8, missing executable, or timeout.
+        command.return_value = None
+        with self.assertRaisesRegex(RuntimeError, "inspection failed"):
+            laptop.check_audio_target()
+        command.assert_called_once_with(("pw-dump",), timeout=5)
+
+    @mock.patch("audiohub.network_laptop.bounded_command_output")
+    def test_corrupt_or_failed_graph_never_runs_wpctl(self, command):
+        for result in (
+            subprocess.CompletedProcess(("pw-dump",), 17, "", ""),
+            subprocess.CompletedProcess(("pw-dump",), 0, "{not json", ""),
+            subprocess.CompletedProcess(("pw-dump",), 0, "[]", ""),
+        ):
+            with self.subTest(result=result.returncode, stdout=result.stdout):
+                command.reset_mock()
+                command.return_value = result
+                with self.assertRaises(RuntimeError):
+                    laptop.check_audio_target()
+                command.assert_called_once_with(("pw-dump",), timeout=5)
+
+    @mock.patch("audiohub.network_laptop.bounded_command_output")
+    def test_ambiguous_virtual_sink_denies_usb_mutation(self, command):
+        graph = [
+            node(5, "audiohub.laptop", "Audio/Sink"),
+            node(6, "audiohub.laptop", "Audio/Sink"),
+            node(10, "alsa_output.usb-Edifier_R600USB", "Audio/Sink"),
+        ]
+        command.return_value = subprocess.CompletedProcess(
+            ("pw-dump",), 0, json.dumps(graph), ""
+        )
+        with self.assertRaisesRegex(RuntimeError, "virtual sink unavailable"):
+            laptop.check_audio_target()
+        command.assert_called_once_with(("pw-dump",), timeout=5)
+
+    @mock.patch("audiohub.network_laptop.bounded_command_output")
+    def test_duplicate_usb_node_id_denies_usb_mutation(self, command):
+        graph = [
+            node(5, "audiohub.laptop", "Audio/Sink"),
+            node(5, "alsa_output.usb-Edifier_R600USB", "Audio/Sink"),
+        ]
+        command.return_value = subprocess.CompletedProcess(
+            ("pw-dump",), 0, json.dumps(graph), ""
+        )
+        with self.assertRaises(RuntimeError):
+            laptop.check_audio_target()
+        command.assert_called_once_with(("pw-dump",), timeout=5)
+
+    @mock.patch("audiohub.network_laptop.bounded_command_output")
+    def test_wpctl_bounded_capture_failure_refuses_startup(self, command):
+        graph = [
+            node(5, "audiohub.laptop", "Audio/Sink"),
+            node(10, "alsa_output.usb-Edifier_R600USB", "Audio/Sink"),
+        ]
+        command.side_effect = [
+            subprocess.CompletedProcess(("pw-dump",), 0, json.dumps(graph), ""),
+            None,  # capped/timeout/failure; cannot assert default selection
+        ]
+        with self.assertRaisesRegex(RuntimeError, "routing not ready"):
+            laptop.check_audio_target()
+        self.assertEqual(command.call_count, 2)
+        self.assertEqual(command.call_args_list[1].args[0],
+                         ("wpctl", "set-default", "10"))
+        self.assertEqual(command.call_args_list[1].kwargs, {"timeout": 5})
+
+    def test_manual_receiver_cannot_buffer_unbounded_pw_dump(self):
+        code = (Path(__file__).resolve().parents[1] /
+                "src/audiohub/network_laptop.py").read_text()
+        self.assertIn("from .process_capture import bounded_command_output", code)
+        self.assertIn('bounded_command_output(("pw-dump",), timeout=5)', code)
+        self.assertIn('bounded_command_output(', code)
+        self.assertNotIn("capture_output=True", code)
+        self.assertNotIn("subprocess.run(", code)
 
     @mock.patch("audiohub.network_laptop.check_audio_target")
     @mock.patch("audiohub.network_laptop.subprocess.Popen")
