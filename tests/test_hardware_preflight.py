@@ -103,23 +103,23 @@ class HardwarePreflightTests(unittest.TestCase):
                        "alsa_output.usb-EDIFIER", "bluez_input.", "device.serial"):
             self.assertNotIn(secret, raw)
 
-    @mock.patch("audiohub.hardware_preflight.subprocess.run")
+    @mock.patch("audiohub.hardware_preflight.bounded_command_output")
     def test_query_uses_timeout_no_shell_and_no_file_writes(self, run):
         run.return_value = subprocess.CompletedProcess(["pw-dump"], 0,
                                                         json.dumps(topology()), "")
         report = preflight.probe()
         self.assertTrue(report["checks"]["pipewire_inspection_succeeded"])
         run.assert_called_once_with(
-            ["pw-dump"], capture_output=True, text=True, check=False, timeout=5
+            ("pw-dump",), timeout=5
         )
 
-    @mock.patch("audiohub.hardware_preflight.subprocess.run",
-                side_effect=subprocess.TimeoutExpired(["pw-dump"], 5))
+    @mock.patch("audiohub.hardware_preflight.bounded_command_output",
+                return_value=None)
     def test_timeout_returns_incomplete_report(self, run):
         self.assertEqual(preflight.probe()["topology_preflight"], "incomplete")
 
-    @mock.patch("audiohub.hardware_preflight.subprocess.run",
-                side_effect=OSError("no executable"))
+    @mock.patch("audiohub.hardware_preflight.bounded_command_output",
+                return_value=None)
     def test_missing_pipewire_utility_is_safe(self, run):
         report = preflight.probe()
         self.assertFalse(report["checks"]["pipewire_inspection_succeeded"])
