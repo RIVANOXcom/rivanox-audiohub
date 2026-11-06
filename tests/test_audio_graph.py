@@ -136,6 +136,18 @@ class LinkEvidenceTests(unittest.TestCase):
                 self.assertFalse(observed["inspection_available"])
                 self.assertFalse(observed["release_ready"])
 
+    def test_already_parsed_nested_link_metadata_is_not_topology_evidence(self):
+        nested = 0
+        for _ in range(100):
+            nested = {"x": nested}
+        raw = graph() + [{
+            "type": "PipeWire:Interface:Link",
+            "info": {"output-node-id": 31, "input-node-id": 10, "extra": nested}
+        }]
+        observed = summarize_links(raw)
+        self.assertFalse(observed["inspection_available"])
+        self.assertFalse(observed["eq_output_to_usb_direct_link"]["music"])
+
     def test_malformed_and_oversized_snapshots_never_pass(self):
         for raw in (None, {}, "oops", False, ["bad"], [None],
                     [{"type": "PipeWire:Interface:Link", "info": {"output-node-id": "31"}}],
