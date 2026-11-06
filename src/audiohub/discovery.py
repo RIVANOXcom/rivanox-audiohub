@@ -14,6 +14,8 @@ _BLUEZ_NAME = re.compile(r"bluez_input\.([0-9A-Fa-f_]{17})(?:\.[a-zA-Z0-9_.:-]{1
 _CHANNEL_NAMES = frozenset(("audiohub.music", "audiohub.laptop", "audiohub.tablet"))
 MAX_PIPEWIRE_GRAPH_BYTES = 4 * 1024 * 1024
 MAX_PIPEWIRE_GRAPH_OBJECTS = 8192
+MAX_PIPEWIRE_JSON_DEPTH = 64
+MAX_PIPEWIRE_GRAPH_VALUES = 262144
 
 
 def _unique_pipewire_members(pairs):
@@ -38,6 +40,22 @@ def _finite_pipewire_float(number):
     return value
 
 
+def _pipewire_graph_shape_bounded(data):
+    """Bound nesting and aggregate values without recursive Python traversal."""
+    seen = 0
+    todo = [(data, 0)]
+    while todo:
+        item, depth = todo.pop()
+        seen += 1
+        if seen > MAX_PIPEWIRE_GRAPH_VALUES or depth > MAX_PIPEWIRE_JSON_DEPTH:
+            return False
+        if type(item) is dict:
+            todo.extend((value, depth + 1) for value in item.values())
+        elif type(item) is list:
+            todo.extend((value, depth + 1) for value in item)
+    return True
+
+
 def _parse_pipewire_graph(raw):
     """Bound and validate exactly one shared Node/Link graph snapshot."""
     if type(raw) is str:
@@ -52,7 +70,9 @@ def _parse_pipewire_graph(raw):
             )
         except (UnicodeError, TypeError, ValueError, RecursionError):
             return None
-    return raw if type(raw) is list and len(raw) <= MAX_PIPEWIRE_GRAPH_OBJECTS else None
+    if type(raw) is not list or len(raw) > MAX_PIPEWIRE_GRAPH_OBJECTS:
+        return None
+    return raw if _pipewire_graph_shape_bounded(raw) else None
 
 
 def pipewire_nodes(raw):
