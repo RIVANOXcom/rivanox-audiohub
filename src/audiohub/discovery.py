@@ -171,11 +171,20 @@ def bluetooth_sources(nodes):
         if match is None:
             continue
         name_mac = match.group(1).replace("_", ":").upper()
-        property_mac = value.get("api.bluez5.address") or value.get("device.address")
-        if property_mac is not None:
-            if (type(property_mac) is not str or _MAC.fullmatch(property_mac) is None
-                    or property_mac.upper() != name_mac):
+        # BlueZ metadata can expose both address properties. Any stated
+        # address must agree with the source node name; never mask a
+        # contradictory or malformed value by selecting one with "or".
+        address_conflict = False
+        for field in ("api.bluez5.address", "device.address"):
+            if field not in value:
                 continue
+            stated = value[field]
+            if (type(stated) is not str or _MAC.fullmatch(stated) is None
+                    or stated.upper() != name_mac):
+                address_conflict = True
+                break
+        if address_conflict:
+            continue
         if name_mac in seen:
             conflicted.add(name_mac)
             continue
