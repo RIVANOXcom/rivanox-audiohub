@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 import stat
+import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -69,6 +70,9 @@ def public_status(status, *, now=None):
 
 STATIC_MAX_BYTES = 512 * 1024
 STATUS_MAX_BYTES = 32 * 1024
+MAX_STATUS_CLIENTS = 8
+CLIENT_READ_TIMEOUT_SECONDS = 5
+
 
 
 def _bounded_regular_bytes(path, limit):
@@ -136,9 +140,58 @@ def read_public_status(*, path=None, now=None):
     return public_status(decoded, now=now)
 
 
+class BoundedStatusHTTPServer(ThreadingHTTPServer):
+    """Cap untrusted status-preview requests without authenticating anyone.
+
+    A ThreadingHTTPServer otherwise allocates one thread per accepted socket.
+    The alpha UI defaults to loopback; explicit insecure LAN opt-in still
+    must not permit unlimited threads or indefinitely stalled clients.
+    """
+    daemon_threads = True
+    request_queue_size = MAX_STATUS_CLIENTS
+
+    def __init__(self, address, handler):
+        self._client_slots = threading.BoundedSemaphore(MAX_STATUS_CLIENTS)
+        super().__init__(address, handler)
+
+    def get_request(self):
+        conn, addr = super().get_request()
+        try:
+            conn.settimeout(CLIENT_READ_TIMEOUT_SECONDS)
+        except (OSError, ValueError):
+            conn.close()
+            raise
+        return conn, addr
+
+    def process_request(self, request, client_address):
+        if not self._client_slots.acquire(blocking=False):
+            self.shutdown_request(request)
+            return
+        try:
+            super().process_request(request, client_address)
+        except BaseException:
+            self._client_slots.release()
+            raise
+
+    def process_request_thread(self, request, client_address):
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self._client_slots.release()
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "AudioHub-Preview"
     sys_version = ""
+
+    def log_message(self, format, *args):
+        """Never log raw HTTP paths, query strings, or guessed peer IDs.
+
+        BaseHTTPRequestHandler would otherwise echo an attacker-controlled
+        request line to the systemd journal. This alpha service has no
+        authenticated request audit trail and must not collect such values.
+        """
+        return None
 
     def respond(self, code, content, content_type):
         self.send_response(code)
@@ -181,7 +234,7 @@ def main():
     # No owner-claim mechanism exists yet: keep unauthenticated alpha status
     # local to the Pi unless an engineer explicitly opts into a specific
     # private IPv4 interface for an isolated manual development test.
-    server = ThreadingHTTPServer((select_bind_address(), 8765), Handler)
+    server = BoundedStatusHTTPServer((select_bind_address(), 8765), Handler)
     server.daemon_threads = True
     server.serve_forever(poll_interval=0.5)
 
