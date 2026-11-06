@@ -210,6 +210,9 @@ class RootfsAuditTests(unittest.TestCase):
             "watchdog.cancel()",
             "request.shutdown(socket.SHUT_RDWR)",
             "def handle_error(self, request, client_address):",
+            "def _finite_status_json_float(number):",
+            "math.isfinite(value)",
+            "parse_float=_finite_status_json_float",
         )))
         make("opt/audiohub/src/audiohub/firstboot_diag.py",
              'OUTPUT_NAME = "AUDIOHUB-TEST-REPORT.json"\\n'
@@ -232,6 +235,9 @@ class RootfsAuditTests(unittest.TestCase):
             "def _reject_runtime_json_constant(_value):",
             "parse_constant=_reject_runtime_json_constant",
             "except (UnicodeError, ValueError, RecursionError):",
+            "def _finite_runtime_json_float(number):",
+            "math.isfinite(value)",
+            "parse_float=_finite_runtime_json_float",
         )))
         for name in ("index.html", "app.js", "styles.css"):
             make("opt/audiohub/web/" + name)
@@ -939,6 +945,35 @@ class RootfsAuditTests(unittest.TestCase):
             ))
             self.assertFalse(audit.inspect(root)[
                 "status_http_total_lifetime_and_peer_error_privacy"
+            ])
+
+    def test_json_exponent_integrity_guards_both_installed_readers(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            self.assertTrue(audit.inspect(root)[
+                "status_and_offline_json_finite_exponent_guard"
+            ])
+
+    def test_missing_web_exponent_guard_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/src/audiohub/webserver.py"
+            path.write_text(path.read_text().replace(
+                "parse_float=_finite_status_json_float", "parse_float=None"
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "status_and_offline_json_finite_exponent_guard"
+            ])
+
+    def test_missing_root_diagnostic_exponent_guard_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/src/audiohub/firstboot_diag.py"
+            path.write_text(path.read_text().replace(
+                "parse_float=_finite_runtime_json_float", "parse_float=None"
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "status_and_offline_json_finite_exponent_guard"
             ])
 
     def test_unchecked_status_web_listener_prevents_image_export(self):
