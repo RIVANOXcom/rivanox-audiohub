@@ -188,15 +188,21 @@
       "number": 64,
       "base": "wd-papa-18b8b3c6-pairing-cancel-revocation-20261106",
       "head": "wd-papa-18b8b3c6-private-config-ancestor-nofollow-20261106",
+      "verified_head_sha": "68fc744aded8956d87985773e1b51d8568f7b7ac"
+    },
+    {
+      "number": 65,
+      "base": "wd-papa-18b8b3c6-private-config-ancestor-nofollow-20261106",
+      "head": "wd-papa-18b8b3c6-bluetooth-unpaired-token-revocation-20261106",
       "verified_head_sha": null
     }
   ],
   "last_native_verified": {
-    "run_id": 42238617371,
-    "source_sha": "1b8a51dc2916662c3871af5285152593a0c6a928",
+    "run_id": 42240817288,
+    "source_sha": "68fc744aded8956d87985773e1b51d8568f7b7ac",
     "conclusion": "success",
-    "python_tests": 639,
-    "rootfs_checks_passed": 81,
+    "python_tests": 651,
+    "rootfs_checks_passed": 82,
     "installed_packages": 689,
     "architecture_counts": {
       "arm64": 538,
@@ -209,11 +215,12 @@
       "doc_alias_target_link": 8,
       "copyright_file_missing": 1
     },
-    "artifact_id": 13515246192,
+    "artifact_id": 13515841887,
     "artifact_unverified": true,
-    "artifact_expiry": "2026-12-06T15:05:41Z",
+    "artifact_expiry": "2026-12-06T15:24:13Z",
     "public_release_ready": false,
-    "artifact_zip_sha256": "9aaf1d40d5083c3f3996ec4cfa6a93eaf1237a23980ebb8abf6b92614b357ea8"
+    "artifact_zip_sha256": "4418bc861cc684c3b297729c17906150e9631ce1789b8f6e2c8563722614b14b",
+    "run_attempt": 2
   },
   "open_issues": [
     {
@@ -762,9 +769,37 @@
     "source_rights_ledger_file_count": 83,
     "new_native_image_guards": 1,
     "expected_native_rootfs_guard_count": 82,
+    "source_ci_pending": false,
+    "native_ci_pending": false,
+    "hardware_accepted": false,
+    "model_c_license_effective": false,
+    "public_release_ready": false,
+    "source_run_id": 42240906184,
+    "native_run_id": 42240817288,
+    "native_run_attempt": 2,
+    "verified_sha": "68fc744aded8956d87985773e1b51d8568f7b7ac",
+    "source_tests_passed": 651,
+    "native_checks_passed": 82,
+    "unverified_artifact_id": 13515841887
+  },
+  "next_bluez_unpaired_event_pending_trust_revocation": {
+    "job": "PAPA-18B8B3C6",
+    "pr": 65,
+    "parent_pr": 64,
+    "branch": "wd-papa-18b8b3c6-bluetooth-unpaired-token-revocation-20261106",
+    "issue": "BlueZ Paired=False or invalidated Paired property can indicate unsuccessful pairing without Agent1.Cancel; previously PairingAgent.changed returned without clearing a pending 45-second token, risking a late Paired=True event trusting an already unpaired device.",
+    "revoke_device_pending_token_on_paired_false": true,
+    "revoke_device_pending_token_on_paired_invalidation": true,
+    "other_device_and_unrelated_properties_preserved": true,
+    "requires_new_explicit_authorization_after_unpair": true,
+    "original_boot_deadline_unchanged": true,
+    "source_rights_ledger_file_count": 83,
+    "new_native_image_guards": 1,
+    "expected_native_rootfs_guard_count": 83,
     "source_ci_pending": true,
     "native_ci_pending": true,
     "hardware_accepted": false,
+    "owner_authenticated": false,
     "model_c_license_effective": false,
     "public_release_ready": false
   }
