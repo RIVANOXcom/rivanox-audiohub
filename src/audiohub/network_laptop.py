@@ -239,6 +239,9 @@ def serve(sender_ip, bind_ip, port, *, unsafe_lan_test=False, prefill_packets=1,
                         if player.stdin is None:
                             raise RuntimeError("Audio output pipe unavailable")
                         os.set_blocking(player.stdin.fileno(), False)
+                        # Start the no-progress deadline before the first PCM write:
+                        # a blocked pipe with zero successful writes must not live forever.
+                        last_written_at = now
                         next_health_check = now + HEALTH_CHECK_SECONDS
                         counters.player_started += 1
                     except (OSError, RuntimeError):
