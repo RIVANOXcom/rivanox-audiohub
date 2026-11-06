@@ -317,6 +317,11 @@ class RootfsAuditTests(unittest.TestCase):
             "const requestId = ++languageRequestId;",
             "if (requestId !== languageRequestId) return;",
             "if (requestId !== languageRequestId) return;",
+            'if (language !== "en") return setLanguage("en");',
+            'data = { tagline: "All your audio. One place." };',
+            "document.documentElement.lang = language;",
+            'byId("language").value = language;',
+            'localStorage.setItem("audiohub.locale", language)',
         )))
         data = {f"k{n}": "test" for n in range(30)}
         for lang in audit.LANGUAGES:
@@ -1352,6 +1357,48 @@ class RootfsAuditTests(unittest.TestCase):
             ))
             self.assertFalse(audit.inspect(root)[
                 "web_preview_latest_language_request_wins"
+            ])
+
+
+    def test_english_fallback_metadata_gate_present_in_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            self.assertTrue(audit.inspect(root)[
+                "web_preview_english_fallback_metadata_consistent"
+            ])
+
+    def test_fallback_using_old_early_return_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/web/app.js"
+            path.write_text(path.read_text().replace(
+                'data = { tagline: "All your audio. One place." };',
+                'words = { tagline: "All your audio. One place." };'
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "web_preview_english_fallback_metadata_consistent"
+            ])
+
+    def test_fallback_missing_html_locale_update_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/web/app.js"
+            path.write_text(path.read_text().replace(
+                "document.documentElement.lang = language;", ""
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "web_preview_english_fallback_metadata_consistent"
+            ])
+
+    def test_fallback_missing_persisted_locale_update_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/web/app.js"
+            path.write_text(path.read_text().replace(
+                'localStorage.setItem("audiohub.locale", language)', ""
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "web_preview_english_fallback_metadata_consistent"
             ])
 
     def test_missing_client_only_rename_blocks_image_export(self):
