@@ -869,3 +869,34 @@ SUCCESS 732/732, Workbench #3140. No physical Pi4+Edifier audible
 3-input/two A2DP/24h or phone-owner WiFi proof; effective AGPL-3.0-only,
 83 rights and nine OS copyright gaps, legal/CEO release GO absent.
 All PRs Draft/unmerged, no SD flash/install/merge/deploy/rights change.
+
+
+## 2026-11-07: Draft PR82 — nofollow/bounded built-image EQ audit
+
+PAPA MissionPilot WD_JOB PAPA-18B8B3C6 / AH-006, AH-007 and
+AH-009. New isolated Draft PR82 stacks exactly on unchanged Draft
+PR81 HEAD a77535f00bc61b9d8581d90f82bb776e4cc46216. The pre-export rootfs inspector
+scripts/audit_rootfs.py previously used eq.read_text() and eq.stat()
+on a predictable configuration path. On an untrusted staging tree this
+followed a final or ancestor symlink outside the image and could block
+forever on a FIFO or consume unbounded input from a very large file;
+a staged hardlink was not rejected. New _read_private_eq_config
+walks every directory relative to an O_NOFOLLOW-opened image root
+with dirfd O_DIRECTORY|O_NOFOLLOW, opens the file O_NONBLOCK|
+O_NOFOLLOW, requires a single-link regular file with 1..64 KiB
+content, bounded complete read and valid UTF-8. One new installed
+rootfs audit gate eq_rootfs_nofollow_regular_singlelink_bounded;
+existing EQ virtual-sink and writable-mode checks fail closed when
+the guarded read fails. Source tests cover correct image fixture,
+final symlink, ancestor symlink, FIFO, hardlink, oversized file and
+invalid UTF-8. Native target 97 gates only upon a complete
+independent exact-head ARM64 run. Parent PR81 Source #42312900435
+SUCCESS 739/739, native ARM64 #42312864729 SUCCESS actual 96/96;
+image SHA256 855e7575cf3895905296499d48292aec85157ff8d08f9d19690f4498d466db22,
+GitHub UNVERIFIED_ALPHA-only ZIP artifact #13549581822
+SHA256 f0a3cd47ef69bee18e567dba060e2452d817a965b408a79dc43e428391679f85,
+Workbench #3143. This is build-time packaging inspection, NOT
+physical Pi4/Edifier hardware proof, 2 A2DP/3-way sound, 24h soak,
+owner WiFi/security, legal or CEO approval. Effective AGPL-3.0-only,
+83 source rights and nine OS notices remain pending; no install,
+flash, merge, deploy, permissions change or official release GO.

@@ -34,6 +34,46 @@ SERVICES = {
 REQUIRED_BINARIES = ("python3", "pw-dump", "pw-loopback", "pw-cat", "wpctl", "bluetoothctl")
 
 
+MAX_EQ_AUDIT_BYTES = 64 * 1024
+EQ_CONFIG_PATH = "home/audiohub/.config/pipewire/pipewire.conf.d/90-audiohub-eq.conf"
+
+
+def _read_private_eq_config(root: Path):
+    """Read only a bounded regular EQ file inside the actual image rootfs.
+
+    A pre-export audit must not follow a file or directory symlink into the
+    builder's host filesystem or block on a FIFO. Hardlinks are also rejected.
+    Return (decoded text, mode) or None; never expose raw content on failure.
+    """
+    directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
+    file_flags = os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW | os.O_CLOEXEC
+    fd = None
+    eqfd = None
+    try:
+        fd = os.open(root, directory_flags)
+        parts = Path(EQ_CONFIG_PATH).parts
+        for component in parts[:-1]:
+            nextfd = os.open(component, directory_flags, dir_fd=fd)
+            os.close(fd)
+            fd = nextfd
+        eqfd = os.open(parts[-1], file_flags, dir_fd=fd)
+        info = os.fstat(eqfd)
+        if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
+                or not 0 < info.st_size <= MAX_EQ_AUDIT_BYTES):
+            return None
+        raw = os.read(eqfd, MAX_EQ_AUDIT_BYTES + 1)
+        if len(raw) != info.st_size:
+            return None
+        return raw.decode("utf-8"), info.st_mode
+    except (OSError, UnicodeError):
+        return None
+    finally:
+        if eqfd is not None:
+            os.close(eqfd)
+        if fd is not None:
+            os.close(fd)
+
+
 def inspect(root: Path) -> dict[str, bool]:
     """Return named checks with no secrets or identifying information."""
     if not root.is_dir():
@@ -1029,17 +1069,20 @@ def inspect(root: Path) -> dict[str, bool]:
         )
     except OSError:
         checks["eq_setup_concurrent_create_cleanup_safe"] = False
-    eq = root / "home/audiohub/.config/pipewire/pipewire.conf.d/90-audiohub-eq.conf"
-    try:
-        config = eq.read_text()
+    # The image checker itself must be safe against symlinks and special
+    # files in an untrusted staging tree (even when the runtime writer is safe).
+    eq_snapshot = _read_private_eq_config(root)
+    checks["eq_rootfs_nofollow_regular_singlelink_bounded"] = eq_snapshot is not None
+    if eq_snapshot is None:
+        checks["independent_eq_virtual_sinks"] = False
+        checks["eq_not_world_writable"] = False
+    else:
+        config, mode = eq_snapshot
         checks["independent_eq_virtual_sinks"] = all(
             'node.name = "audiohub.' + channel + '"' in config
             for channel in CHANNELS
         ) and config.count("libpipewire-module-filter-chain") == len(CHANNELS)
-        checks["eq_not_world_writable"] = not bool(eq.stat().st_mode & (stat.S_IWGRP | stat.S_IWOTH))
-    except OSError:
-        checks["independent_eq_virtual_sinks"] = False
-        checks["eq_not_world_writable"] = False
+        checks["eq_not_world_writable"] = not bool(mode & (stat.S_IWGRP | stat.S_IWOTH))
     try:
         bluetooth_unit = (root / SERVICES["bluetooth"][0]).read_text()
         checks["bluetooth_no_admin_api"] = "audiohub.webserver" not in bluetooth_unit
