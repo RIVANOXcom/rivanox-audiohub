@@ -197,6 +197,12 @@ class RootfsAuditTests(unittest.TestCase):
             "except (UnicodeError, ValueError, RecursionError):",
             "path = urlsplit(self.path).path",
             "except ValueError:",
+            "def _unique_json_object(pairs):",
+            "if key in result:",
+            'raise ValueError("duplicate status JSON member")',
+            "object_pairs_hook=_unique_json_object",
+            "def _reject_json_constant(_value):",
+            "parse_constant=_reject_json_constant",
         )))
         make("opt/audiohub/src/audiohub/firstboot_diag.py",
              'OUTPUT_NAME = "AUDIOHUB-TEST-REPORT.json"\\n'
@@ -795,6 +801,37 @@ class RootfsAuditTests(unittest.TestCase):
             ))
             self.assertFalse(audit.inspect(root)[
                 "status_malformed_inputs_fail_closed"
+            ])
+
+    def test_strict_status_json_guard_present_in_installed_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            self.assertTrue(audit.inspect(root)[
+                "status_json_unique_keys_and_finite_numbers_only"
+            ])
+
+    def test_missing_duplicate_json_member_guard_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/src/audiohub/webserver.py"
+            path.write_text(path.read_text().replace(
+                "object_pairs_hook=_unique_json_object",
+                "object_pairs_hook=None"
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "status_json_unique_keys_and_finite_numbers_only"
+            ])
+
+    def test_missing_nonfinite_json_guard_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/src/audiohub/webserver.py"
+            path.write_text(path.read_text().replace(
+                "parse_constant=_reject_json_constant",
+                "parse_constant=None"
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "status_json_unique_keys_and_finite_numbers_only"
             ])
 
     def test_unchecked_status_web_listener_prevents_image_export(self):
