@@ -633,6 +633,12 @@
     "native_ci_pending": true,
     "hardware_accepted": false,
     "model_c_license_effective": false,
-    "public_release_ready": false
+    "public_release_ready": false,
+    "max_json_depth": 64,
+    "max_graph_values": 262144,
+    "iterative_shape_scan": true,
+    "reject_wide_graph_before_stack_growth": true,
+    "source_test_methods_added": 10,
+    "synthetic_rootfs_test_methods_added": 5
   }
 }
