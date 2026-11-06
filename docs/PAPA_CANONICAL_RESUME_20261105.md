@@ -442,5 +442,15 @@ PR48 adds an installed `manual_acceptance.py` source check and independent no-re
 
 **Validation next:** exact-head source CI then independent ARM64 73 checks, bundle SHA256/XZ provenance, Workbench update and next safe maintenance step. This is security hardening of unreleased alpha only.
 
+## Y. 2026-11-06: strict private JSON in privileged offline SD diagnostic — Draft PR57
+
+**New isolated Draft PR57:** branch `wd-papa-20261106-offline-diag-json-integrity` stacked on Draft PR56 exact parent SHA `1e666234b307a249e593b0e5a99b523ccf4af060`, without altering main or any parent branch. Root-owned `audiohub.firstboot_diag` consumes up to 4 KiB of private audiohub-user runtime JSON and writes a redacted, explicitly UNVERIFIED SD report. Unlike the recently hardened web status JSON reader, its `json.loads` accepted duplicate member names, nonstandard NaN/Infinity and could raise an unhandled RecursionError for deeply nested yet size-bounded JSON. Such malformed snapshots must not create false healthy USB diagnostics or break the offline agent.
+
+**Implementation:** Reject duplicate members recursively via `object_pairs_hook`, reject non-finite numeric constants via `parse_constant` and treat RecursionError as malformed. Status becomes stale/no USB/zero routes; no identifying fields in errors or reports. Private UID/mode/nlink checks, O_NOFOLLOW traversals, offline-only service sandbox, seven snapshot schedule and existing release gates stay unchanged. Four real negative diagnostic unit tests and four negative/positive installed rootfs audit tests enforce new gate `offline_diag_json_integrity_fail_closed` (expected 74 image checks **only after independent native verification**). No new source files; source rights ledger 83 pending, effective AGPL-3.0-only, Model C not approved.
+
+**Known ancestry:** PR55 corrected head `e7e8751ef1841c148274a2f85aefc950c2219fbb`, source CI #42220634968 SUCCESS 559/559. PR56 head `1e666234b307a249e593b0e5a99b523ccf4af060`, source CI #42220925947 SUCCESS 568/568. Native ARM64 #42220627734 and #42220895650 were pending during PR57 initiation; verify final outcomes independently. Latest previously verified PR54 source #42219045806 552/552 and ARM64 #42219039337 71/71, temporary UNVERIFIED artifact #13502838048. No physical Pi4/Edifier acceptance, rights/licensing approval, owner/phone security signoff, merge, deployment or public release.
+
+**Next:** verify exact final PR55/PR56 native CI, PR57 own source and ARM64 74/74, record Workbench findings and continue safe development. No official release GO.
+
 **END OF HANDOFF.** If a live run/PR contradicts this document, treat
 the live GitHub evidence as authoritative, reconcile and update this file.
