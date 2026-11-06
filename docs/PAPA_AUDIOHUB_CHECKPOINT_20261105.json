@@ -164,7 +164,7 @@
       "number": 60,
       "base": "wd-papa-18b8b3c6-private-route-config-parse-guard-20261106",
       "head": "wd-papa-18b8b3c6-pipewire-json-identity-guard-20261106",
-      "verified_head_sha": null
+      "verified_head_sha": "3ff954883f6dc254b19a61928883f94e6c1d4f3f"
     },
     {
       "number": 61,
@@ -174,11 +174,11 @@
     }
   ],
   "last_native_verified": {
-    "run_id": 42231178394,
-    "source_sha": "0f27789f8b6ce1984e4a818f65bf9ce095b5a38d",
+    "run_id": 42233681180,
+    "source_sha": "3ff954883f6dc254b19a61928883f94e6c1d4f3f",
     "conclusion": "success",
-    "python_tests": 599,
-    "rootfs_checks_passed": 77,
+    "python_tests": 614,
+    "rootfs_checks_passed": 78,
     "installed_packages": 689,
     "architecture_counts": {
       "arm64": 538,
@@ -191,11 +191,11 @@
       "doc_alias_target_link": 8,
       "copyright_file_missing": 1
     },
-    "artifact_id": 13508977757,
+    "artifact_id": 13511741029,
     "artifact_unverified": true,
-    "artifact_expiry": "2026-12-06T14:16:49Z",
+    "artifact_expiry": "2026-12-06T14:32:52Z",
     "public_release_ready": false,
-    "artifact_zip_sha256": "f611a1b41165a591642f7f321a085bd605d4d46f8fc13df311377232977ce123"
+    "artifact_zip_sha256": "cb8daada90a0c56def4dcbcfc60b6ad7debc3034e38787682f49c58dd50dfdf8"
   },
   "open_issues": [
     {
@@ -635,8 +635,8 @@
     "new_native_image_guards": 1,
     "expected_native_rootfs_guard_count": 78,
     "source_rights_ledger_file_count": 83,
-    "source_ci_pending": true,
-    "native_ci_pending": true,
+    "source_ci_pending": false,
+    "native_ci_pending": false,
     "hardware_accepted": false,
     "model_c_license_effective": false,
     "public_release_ready": false,
@@ -645,7 +645,13 @@
     "iterative_shape_scan": true,
     "reject_wide_graph_before_stack_growth": true,
     "source_test_methods_added": 10,
-    "synthetic_rootfs_test_methods_added": 5
+    "synthetic_rootfs_test_methods_added": 5,
+    "source_run_id": 42233692882,
+    "native_run_id": 42233681180,
+    "source_tests_passed": 614,
+    "native_checks_passed": 78,
+    "verified_sha": "3ff954883f6dc254b19a61928883f94e6c1d4f3f",
+    "unverified_artifact_id": 13511741029
   },
   "next_supervisor_private_state_decoder_integrity": {
     "job": "PAPA-18B8B3C6",

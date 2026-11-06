@@ -480,7 +480,7 @@ PR48 adds an installed `manual_acceptance.py` source check and independent no-re
 
 **Tests and gate:** Ten direct unit tests for duplicate Node/Link keys, NaN/Infinity, exponent overflow, overnested graphs and safe preflight behavior, plus five synthetic rootfs regressions, and one new native image gate `pipewire_nodes_and_links_strict_shared_json_snapshot`, expected **78** rootfs checks only if independent exact-head native ARM64 CI passes. Source rights ledger stays 83 unreviewed files; AGPL-3.0-only remains effective, future Model C requires explicit legal clearance; real Pi4+Edifier audio, owner/phone Wi-Fi authentication and 24h endurance remain unaccepted. No release, merge, permissions change, install, payment or deployment.
 
-**Next:** verify exact PR60 final Source CI and native ARM64 78/78, image provenance and ZIP hash, append Workbench evidence and continue safe isolated engineering without release GO.
+**PR60 independent native result now verified (subsequent checkpoint):** exact HEAD `3ff954883f6dc254b19a61928883f94e6c1d4f3f`, source #42233692882 614/614 SUCCESS, independent ARM64 #42233681180 78/78 actual rootfs checks SUCCESS, unverified image XZ checksum and bundle integrity both PASS. Temporary GitHub artifact #13511741029 ZIP size 605530653 bytes, SHA256 `cb8daada90a0c56def4dcbcfc60b6ad7debc3034e38787682f49c58dd50dfdf8`, expires 2026-12-06. Workbench append only; public main unchanged. **Next:** Verify new Draft PR61 exact HEAD source and independent ARM64 79 expected checks, append Workbench evidence and continue safe isolated engineering without release GO.
 
 ## AC. 2026-11-06: strict supervisor-private settings and BT assignment JSON — Draft PR61
 
