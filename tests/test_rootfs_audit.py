@@ -1,6 +1,7 @@
 """Pre-export image root filesystem checks fail closed before publishing an artifact."""
 import importlib.util
 import json
+import os
 import stat
 import tempfile
 import unittest
@@ -2056,6 +2057,60 @@ class RootfsAuditTests(unittest.TestCase):
             link.unlink()
             link.symlink_to("/etc/systemd/system/nonexistent.service")
             self.assertFalse(audit.inspect(root)["bluetooth_enabled"])
+
+
+    def test_rootfs_eq_file_must_be_nofollow_regular_singlelink_bounded(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            self.assertTrue(audit.inspect(root)[
+                "eq_rootfs_nofollow_regular_singlelink_bounded"
+            ])
+
+    def test_rootfs_eq_final_symlink_must_not_be_followed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            eq = root / audit.EQ_CONFIG_PATH
+            real = root / "attacker-controlled-eq.conf"
+            eq.rename(real)
+            eq.symlink_to(real)
+            checks = audit.inspect(root)
+            self.assertFalse(checks["eq_rootfs_nofollow_regular_singlelink_bounded"])
+            self.assertFalse(checks["independent_eq_virtual_sinks"])
+            self.assertFalse(checks["eq_not_world_writable"])
+
+    def test_rootfs_eq_symlink_ancestor_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            parent = (root / audit.EQ_CONFIG_PATH).parent
+            saved = parent.with_name("old-eq-dir")
+            parent.rename(saved)
+            parent.symlink_to(saved, target_is_directory=True)
+            checks = audit.inspect(root)
+            self.assertFalse(checks["eq_rootfs_nofollow_regular_singlelink_bounded"])
+            self.assertFalse(checks["independent_eq_virtual_sinks"])
+
+    def test_rootfs_eq_fifo_and_hardlink_are_rejected_without_blocking(self):
+        for kind in ("fifo", "hardlink"):
+            with self.subTest(kind=kind), tempfile.TemporaryDirectory() as tmp:
+                root = self.root(tmp)
+                eq = root / audit.EQ_CONFIG_PATH
+                if kind == "fifo":
+                    eq.unlink()
+                    os.mkfifo(eq)
+                else:
+                    os.link(eq, root / "duplicate-eq-hardlink")
+                checks = audit.inspect(root)
+                self.assertFalse(checks["eq_rootfs_nofollow_regular_singlelink_bounded"])
+                self.assertFalse(checks["independent_eq_virtual_sinks"])
+
+    def test_rootfs_eq_oversize_and_invalid_utf8_are_rejected(self):
+        for content in (b"x" * (audit.MAX_EQ_AUDIT_BYTES + 1), b"\\xff\\xfe"):
+            with self.subTest(size=len(content)), tempfile.TemporaryDirectory() as tmp:
+                root = self.root(tmp)
+                (root / audit.EQ_CONFIG_PATH).write_bytes(content)
+                checks = audit.inspect(root)
+                self.assertFalse(checks["eq_rootfs_nofollow_regular_singlelink_bounded"])
+                self.assertFalse(checks["independent_eq_virtual_sinks"])
 
     def test_missing_eq_fails_closed_and_writes_report(self):
         with tempfile.TemporaryDirectory() as tmp:
