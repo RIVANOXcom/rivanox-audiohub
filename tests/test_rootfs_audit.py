@@ -220,6 +220,8 @@ class RootfsAuditTests(unittest.TestCase):
             "_MAC.fullmatch(stated) is None",
             "stated.upper() != name_mac",
             "if address_conflict:",
+            "if name_mac in seen:",
+            "seen.add(name_mac)",
             "def virtual_sinks(nodes):",
             "ambiguous.add(name)",
             "return {} if ambiguous else found",
@@ -806,6 +808,39 @@ class RootfsAuditTests(unittest.TestCase):
             ))
             self.assertFalse(audit.inspect(root)[
                 "bluetooth_dual_address_metadata_agrees"
+            ])
+
+
+    def test_duplicate_bluetooth_mac_prechecked_in_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            self.assertTrue(audit.inspect(root)[
+                "bluetooth_duplicate_mac_checked_before_metadata"
+            ])
+
+    def test_duplicate_bluetooth_mac_checked_too_late_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/src/audiohub/discovery.py"
+            content = path.read_text()
+            # Simulate an unsafe audit ordering without changing token count.
+            content = content.replace("if name_mac in seen:", "SWAPPED_GUARD")
+            content = content.replace("if address_conflict:", "if name_mac in seen:")
+            content = content.replace("SWAPPED_GUARD", "if address_conflict:")
+            path.write_text(content)
+            self.assertFalse(audit.inspect(root)[
+                "bluetooth_duplicate_mac_checked_before_metadata"
+            ])
+
+    def test_duplicate_bluetooth_seen_record_missing_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/src/audiohub/discovery.py"
+            path.write_text(path.read_text().replace(
+                "seen.add(name_mac)", "pass"
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "bluetooth_duplicate_mac_checked_before_metadata"
             ])
 
     def test_shared_pipewire_json_guard_in_image(self):
