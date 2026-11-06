@@ -593,3 +593,30 @@ no physical hardware acceptance or official release. Current AGPL-3.0-only,
 83 source-rights reviews, nine OS notices, secure phone owner authentication,
 Pi4/Edifier real three-source sound and 24h soak remain pending.
 Never merge/deploy/install/pay/permission-change/release without approval.
+
+
+## 2026-11-06: Draft PR73 — count duplicate BlueZ identities before metadata filtering
+
+PAPA MissionPilot PAPA-18B8B3C6, AH-002/AH-007. Isolated Draft PR73
+stacks on PR72 exact `8171070e2d284831f327ab25f8123e240556cb87` and changes no parent or main.
+Follow-up source defect in discovery.bluetooth_sources: even with the
+new dual-address metadata check, a badly formed first profile sharing
+a MAC with a later valid profile was skipped before adding its MAC to
+the seen-set. The remaining profile could then be routed although
+two different PipeWire source nodes claim that Bluetooth identity.
+Fix moves duplicate-MAC detection and seen.add(name_mac) immediately
+after validated BlueZ node-name parsing, before optional metadata
+verification. Any second same-MAC candidate (in either order) vetoes
+the entire address; a separate valid sender remains available.
+Includes real runtime-source tests for both orderings and unaffected
+unrelated MAC, a native rootfs guard
+bluetooth_duplicate_mac_checked_before_metadata and three synthetic
+positive/adversarial checks. Native target 90 installed gates only
+after independent exact-head ARM64 successful job evidence.
+Parent PR72 source #42259523558 SUCCESS 694/694; independent native
+ARM64 #42259511222 was still in progress when this follow-up started,
+so no 89/89 image/artifact claim yet. No hardware Pi4/Edifier tests,
+secure Bluetooth cryptographic ownership, two A2DP simultaneous,
+24h or authenticated phone WiFi proof. Effective AGPL-3.0-only,
+83 rights pending, 9 OS copyright gaps. Draft/unmerged and no
+release, permission changes, deployment, install or GO.
