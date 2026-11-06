@@ -75,6 +75,25 @@ def inspect(root: Path) -> dict[str, bool]:
         )
     except OSError:
         checks["pipewire_stdout_bounded_no_shell"] = False
+    # The offline diagnostic runs as root. It must never follow symlinked
+    # ancestors into an untrusted user-controlled runtime JSON directory.
+    try:
+        offline_source = (source / "firstboot_diag.py").read_text()
+        checks["offline_diag_runtime_directory_nofollow_private"] = all(
+            token in offline_source for token in (
+                "def _read_runtime(path, user_id):",
+                'os.open("/", flags)',
+                "os.O_DIRECTORY | os.O_NOFOLLOW",
+                "os.open(component, flags, dir_fd=dirfd)",
+                "parent.st_uid != user_id",
+                "stat.S_IMODE(parent.st_mode) & 0o077",
+                "meta.st_nlink != 1",
+                "stat.S_IMODE(meta.st_mode) & 0o077",
+                "MAX_RUNTIME_BYTES + 1",
+            )
+        )
+    except OSError:
+        checks["offline_diag_runtime_directory_nofollow_private"] = False
     # PipeWire Node IDs and virtual sink identities must be unique before
     # wpctl set-default or pw-loopback can use them. Duplicate records or
     # conflicting BT profiles cannot choose an arbitrary first/last node.
