@@ -6,6 +6,7 @@ import stat
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/"src"))
@@ -74,6 +75,62 @@ class InputProfiles(unittest.TestCase):
         path.chmod(0o644)
         with self.assertRaises(PermissionError):
             p.load_labels(self.root)
+
+    def test_duplicate_private_profile_fields_are_refused_without_reset(self):
+        p.set_label("music", "TV", self.root)
+        path = self.root / p.FILENAME
+        ambiguous = (
+            '{"schema":"audiohub-input-labels/1","labels":{'
+            '"music":"Display 1","music":"Display 2",'
+            '"laptop":"Display 3","tablet":"Display 4"}}'
+        )
+        path.write_text(ambiguous)
+        with self.assertRaises(ValueError):
+            p.load_labels(self.root)
+        with self.assertRaises(ValueError):
+            p.set_label("music", "Changed", self.root)
+        self.assertEqual(path.read_text(), ambiguous)
+
+    def test_duplicate_root_profile_schema_rejected(self):
+        p.set_label("music", "TV", self.root)
+        path = self.root / p.FILENAME
+        path.write_text(
+            '{"schema":"outdated","schema":"audiohub-input-labels/1",'
+            '"labels":{"music":"TV","laptop":"PC","tablet":"Phone"}}'
+        )
+        with self.assertRaises(ValueError):
+            p.load_labels(self.root)
+
+    def test_nested_profile_json_recursion_returns_controlled_value_error(self):
+        p.set_label("music", "TV", self.root)
+        path = self.root / p.FILENAME
+        document = "[" * 1010 + "0" + "]" * 1010
+        self.assertLess(len(document), p.MAX_BYTES)
+        path.write_text(document)
+        with self.assertRaises(ValueError):
+            p.load_labels(self.root)
+
+    def test_profile_fifo_never_blocks_before_regular_file_validation(self):
+        if not hasattr(os, "mkfifo"):
+            self.skipTest("Linux FIFO needed")
+        self.root.mkdir(mode=0o700)
+        os.mkfifo(self.root / p.FILENAME)
+        original_open = os.open
+
+        def guarded_open(path, flags, *args, **kwargs):
+            if path == p.FILENAME:
+                self.assertTrue(flags & os.O_NONBLOCK, "FIFO must not block")
+            return original_open(path, flags, *args, **kwargs)
+
+        with mock.patch.object(p.os, "open", side_effect=guarded_open):
+            with self.assertRaises(PermissionError):
+                p.load_labels(self.root)
+
+    def test_short_profile_read_fails_closed(self):
+        p.set_label("music", "TV", self.root)
+        with mock.patch.object(p.os, "read", return_value=b"{}"):
+            with self.assertRaises(ValueError):
+                p.load_labels(self.root)
 
     def test_web_remains_preview_without_post_api(self):
         js=(ROOT/"web/app.js").read_text()
