@@ -191,6 +191,13 @@ class RootfsAuditTests(unittest.TestCase):
              "stat.S_IMODE(info.st_mode) & 0o077\\n"
              "private_owner=os.geteuid()\\n"
              "_bounded_regular_bytes(WEBROOT / filename, STATIC_MAX_BYTES)\\n")
+        web_fixture = root / "opt/audiohub/src/audiohub/webserver.py"
+        web_fixture.write_text(web_fixture.read_text() + "\\n".join((
+            'json.loads(body.decode("utf-8"))',
+            "except (UnicodeError, ValueError, RecursionError):",
+            "path = urlsplit(self.path).path",
+            "except ValueError:",
+        )))
         make("opt/audiohub/src/audiohub/firstboot_diag.py",
              'OUTPUT_NAME = "AUDIOHUB-TEST-REPORT.json"\\n'
              '"pipewire_links_inspected"\\n'
@@ -758,6 +765,36 @@ class RootfsAuditTests(unittest.TestCase):
             root = self.root(tmp)
             self.assertTrue(audit.inspect(root)[
                 "status_runtime_private_owner_and_hardlink_guard"
+            ])
+
+    def test_malformed_status_inputs_have_installed_image_guard(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            self.assertTrue(audit.inspect(root)[
+                "status_malformed_inputs_fail_closed"
+            ])
+
+    def test_missing_deep_json_failure_guard_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/src/audiohub/webserver.py"
+            path.write_text(path.read_text().replace(
+                "except (UnicodeError, ValueError, RecursionError):",
+                "except (UnicodeError, ValueError):"
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "status_malformed_inputs_fail_closed"
+            ])
+
+    def test_missing_url_parsing_failure_guard_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/src/audiohub/webserver.py"
+            path.write_text(path.read_text().replace(
+                "except ValueError:", "except LookupError:"
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "status_malformed_inputs_fail_closed"
             ])
 
     def test_unchecked_status_web_listener_prevents_image_export(self):
