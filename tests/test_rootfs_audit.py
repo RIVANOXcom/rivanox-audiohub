@@ -153,6 +153,10 @@ class RootfsAuditTests(unittest.TestCase):
         make("opt/audiohub/src/audiohub/discovery.py", "\\n".join((
             "MAX_PIPEWIRE_GRAPH_BYTES = 4 * 1024 * 1024",
             "MAX_PIPEWIRE_GRAPH_OBJECTS = 8192",
+            "MAX_PIPEWIRE_JSON_DEPTH = 64",
+            "MAX_PIPEWIRE_GRAPH_VALUES = 262144",
+            "def _pipewire_graph_shape_bounded(data):",
+            "return raw if _pipewire_graph_shape_bounded(raw) else None",
             "def _unique_pipewire_members(pairs):",
             "object_pairs_hook=_unique_pipewire_members",
             "parse_constant=_reject_pipewire_constant",
@@ -657,6 +661,18 @@ class RootfsAuditTests(unittest.TestCase):
             file = root / "opt/audiohub/src/audiohub/audio_graph.py"
             file.write_text(file.read_text().replace(
                 "graph = _parse_pipewire_graph(raw)", "graph = json.loads(raw)"
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "pipewire_nodes_and_links_strict_shared_json_snapshot"
+            ])
+
+    def test_missing_pipewire_graph_depth_guard_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            file = root / "opt/audiohub/src/audiohub/discovery.py"
+            file.write_text(file.read_text().replace(
+                "return raw if _pipewire_graph_shape_bounded(raw) else None",
+                "return raw"
             ))
             self.assertFalse(audit.inspect(root)[
                 "pipewire_nodes_and_links_strict_shared_json_snapshot"
