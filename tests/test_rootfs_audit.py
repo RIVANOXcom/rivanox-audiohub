@@ -26,6 +26,9 @@ class RootfsAuditTests(unittest.TestCase):
             "def authorized_pairing_signal(",
             "def authorize_pending(self, device):",
             "self.pending_authorizations.pop(path, None)",
+            'if ((invalidated and "Paired" in invalidated)',
+            'or ("Paired" in change and not change["Paired"])):',
+            'if not change.get("Paired"):',
             'bus_name="org.bluez"',
             'device.Get("org.bluez.Device1", "Paired")',
             "if not self.allowed() or not (",
@@ -497,6 +500,41 @@ class RootfsAuditTests(unittest.TestCase):
             self.assertFalse(audit.inspect(root)[
                 "bluetooth_trust_requires_agent_authorization"
             ])
+
+    def test_unpaired_event_token_purge_guard_in_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            self.assertTrue(audit.inspect(root)["bluetooth_unpaired_event_revokes_pending_trust"])
+
+    def test_false_paired_does_not_revoke_token_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            file = root / "opt/audiohub/src/audiohub/pairing.py"
+            file.write_text(file.read_text().replace(
+                'or ("Paired" in change and not change["Paired"])):',
+                'or ("Paired" in change and False)):'
+            ))
+            self.assertFalse(audit.inspect(root)["bluetooth_unpaired_event_revokes_pending_trust"])
+
+    def test_missing_paired_invalidation_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            file = root / "opt/audiohub/src/audiohub/pairing.py"
+            file.write_text(file.read_text().replace(
+                'if ((invalidated and "Paired" in invalidated)',
+                'if ((invalidated and False)'
+            ))
+            self.assertFalse(audit.inspect(root)["bluetooth_unpaired_event_revokes_pending_trust"])
+
+    def test_missing_device_specific_token_revocation_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            file = root / "opt/audiohub/src/audiohub/pairing.py"
+            file.write_text(file.read_text().replace(
+                "self.pending_authorizations.pop(path, None)",
+                "self.pending_authorizations.get(path)"
+            ))
+            self.assertFalse(audit.inspect(root)["bluetooth_unpaired_event_revokes_pending_trust"])
 
     def test_bluez_cancel_revokes_pending_in_image(self):
         with tempfile.TemporaryDirectory() as tmp:

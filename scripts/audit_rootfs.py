@@ -375,6 +375,23 @@ def inspect(root: Path) -> dict[str, bool]:
         ) and "self.authorize_pending(device)" in pairing_source
     except OSError:
         checks["bluetooth_trust_requires_agent_authorization"] = False
+    # BlueZ Device1.Paired=False or property invalidation may arrive
+    # without Agent1.Cancel; revoke the specific pending trust token.
+    try:
+        pairing_source = (source / "pairing.py").read_text()
+        changed_body = pairing_source.split(
+            "def changed(self, interface, change, invalidated, path=None):", 1
+        )[1].split("@dbus.service.method", 1)[0]
+        checks["bluetooth_unpaired_event_revokes_pending_trust"] = all(
+            marker in changed_body for marker in (
+                'if ((invalidated and "Paired" in invalidated)',
+                'or ("Paired" in change and not change["Paired"])):',
+                "self.pending_authorizations.pop(path, None)",
+                'if not change.get("Paired"):',
+            )
+        )
+    except (OSError, IndexError):
+        checks["bluetooth_unpaired_event_revokes_pending_trust"] = False
     # BlueZ Agent1.Cancel has no device argument. A canceled pairing must
     # revoke all pending one-use trust tokens, not just close the UI.
     try:
