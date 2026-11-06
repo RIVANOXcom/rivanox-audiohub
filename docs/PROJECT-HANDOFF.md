@@ -564,3 +564,32 @@ change has NO new native build/image proof, no physical Pi4/Edifier
 performance proof, no release or operator install authority. Existing
 83 source rights and nine OS notices pending, no secured phone WiFi or
 24h/three-source acceptance. Source CI for PR71 must be independently checked.
+
+
+## 2026-11-06: Draft PR72 — BlueZ dual-address metadata disagreement fails closed
+
+PAPA MissionPilot PAPA-18B8B3C6, AH-002/AH-005. Isolated Draft PR72
+stacks only on PR71 exact 79e5e03a28043bc582fa2bacfea56edd2a3947de, leaving all parents and main unchanged.
+Source discovery.bluetooth_sources previously used
+`value.get("api.bluez5.address") or value.get("device.address")`.
+When both metadata fields existed, this only verified the first truthy
+value. A conflicting second MAC, or empty/None primary combined with
+a matching secondary, could still admit the BlueZ capture source.
+New fail-closed matching checks both optional fields when present;
+any malformed value or contradiction with the node-name MAC drops
+only the affected source. Missing optional fields remain supported.
+Existing no-duplicate-node-ID and no-duplicate-BT-source protections
+remain unchanged. Added three source unit tests including conflicting,
+empty/None, both valid and single-field forms; installed rootfs check
+bluetooth_dual_address_metadata_agrees with positive and two adversarial
+synthetic fixtures; expected native 89/89 only after exact-head ARM64
+SUCCESS. This only validates source identity consistency; MAC addresses
+are NOT cryptographic owner identification. Initial pairing and secure
+phone/Wi-Fi claim remain unverified.
+PR71 source GitHub Actions #42258149227 SUCCESS 688/688 at HEAD 79e5e03a28043bc582fa2bacfea56edd2a3947de.
+Parent PR70 source #42256023645 SUCCESS 686/686 and native ARM64
+#42255968531 SUCCESS 88/88; unverified alpha artifact #13522368901,
+no physical hardware acceptance or official release. Current AGPL-3.0-only,
+83 source-rights reviews, nine OS notices, secure phone owner authentication,
+Pi4/Edifier real three-source sound and 24h soak remain pending.
+Never merge/deploy/install/pay/permission-change/release without approval.
