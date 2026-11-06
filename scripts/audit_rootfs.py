@@ -213,6 +213,23 @@ def inspect(root: Path) -> dict[str, bool]:
         )
     except OSError:
         checks["hardware_preflight_only_counts_valid_bt_sources"] = False
+    # Read-only topology must agree with the real production USB/EQ target
+    # selection, or a misleading "ready for manual test" could be shown.
+    try:
+        preflight = (source / "hardware_preflight.py").read_text()
+        checks["hardware_preflight_uses_routable_usb_eq_targets"] = all(
+            marker in preflight for marker in (
+                "from .discovery import choose_usb_output, virtual_sinks",
+                "routable = virtual_sinks(nodes)",
+                'logical = {name: "audiohub." + name in routable for name in CHANNELS}',
+                "selected_usb = choose_usb_output(nodes)",
+                "selected_usb.get(\"id\") == edifier_ids[0]",
+                "0 < value <= 2**31 - 1",
+                '"release_ready": False',
+            )
+        ) and "logical_counts" not in preflight and "usb = edifier == 1" not in preflight
+    except OSError:
+        checks["hardware_preflight_uses_routable_usb_eq_targets"] = False
     # No operator-only "hardware check" may quietly grant legal, owner or
     # stable-image approval from detected topology or typed responses.
     try:
