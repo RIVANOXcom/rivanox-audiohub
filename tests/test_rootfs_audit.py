@@ -204,6 +204,14 @@ class RootfsAuditTests(unittest.TestCase):
             '"persisted": False',
             '"operator_observations": observations',
             'MAX_INPUT_ATTEMPTS = 3',
+            'def _consistent_read_only_preflight(report):',
+            'type(report.get("schema_version")) is not int',
+            'report.get("assessment") == "topology_only_not_hardware_acceptance"',
+            'checks.get("pipewire_inspection_succeeded") is True',
+            'checks.get("edifier_usb_sink_unique") is True',
+            'set(sinks) == {"music", "laptop", "tablet"}',
+            'gates.get(gate) == "unverified"',
+            'ready = _consistent_read_only_preflight(preflight)',
         )))
         make("opt/audiohub/src/audiohub/hardware_preflight.py",
              'from .audio_graph import summarize_links\\n'
@@ -802,6 +810,36 @@ class RootfsAuditTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = self.root(tmp)
             self.assertTrue(audit.inspect(root)["pipewire_stdout_bounded_no_shell"])
+
+
+    def test_manual_operator_checks_require_consistent_preflight_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            self.assertTrue(audit.inspect(root)["manual_operator_preflight_consistency"])
+
+    def test_manual_operator_unverified_hardware_guard_cannot_be_removed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/src/audiohub/manual_acceptance.py"
+            path.write_text(path.read_text().replace(
+                'gates.get(gate) == "unverified"',
+                'bool(gates.get(gate))'
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "manual_operator_preflight_consistency"
+            ])
+
+    def test_manual_operator_ready_flag_alone_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/src/audiohub/manual_acceptance.py"
+            path.write_text(path.read_text().replace(
+                'ready = _consistent_read_only_preflight(preflight)',
+                'ready = preflight.get("topology_preflight") == "ready_for_manual_test"'
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "manual_operator_preflight_consistency"
+            ])
 
     def test_manual_observation_cannot_mark_hardware_approved(self):
         with tempfile.TemporaryDirectory() as tmp:
