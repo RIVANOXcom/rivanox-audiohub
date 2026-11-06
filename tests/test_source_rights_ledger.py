@@ -144,7 +144,7 @@ class SourceRightsLedgerTests(unittest.TestCase):
         self.assertEqual(state["latest_legacy_security_change"]["anonymized_status_json_cap_bytes"], 32768)
         self.assertTrue(state["latest_legacy_security_change"]["all_path_components_nofollow"])
         self.assertEqual(state["last_native_verified"]["rootfs_checks_passed"], 70)
-        self.assertEqual(state["last_native_verified"]["run_id"], 42208440878)
+        self.assertEqual(state["last_native_verified"]["run_id"], 42210825401)
         self.assertFalse(state["next_runtime_state_security_change"]["model_c_effective"])
         self.assertFalse(state["next_runtime_state_security_change"]["physical_device_accepted"])
         self.assertEqual(state["next_runtime_state_security_change"]["expected_rootfs_guard_count"], 58)
