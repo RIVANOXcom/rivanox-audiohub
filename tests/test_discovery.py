@@ -140,6 +140,14 @@ class DiscoveryTests(unittest.TestCase):
                 )
                 self.assertEqual(pipewire_nodes(raw), [])
 
+    def test_already_parsed_deep_graph_is_also_rejected_without_recursion(self):
+        nested = 0
+        for _ in range(100):
+            nested = [nested]
+        raw = [node(3, "alsa_output.usb-Edifier_R600USB", "Audio/Sink",
+                    extra=nested)]
+        self.assertEqual(pipewire_nodes(raw), [])
+
     def test_valid_pipewire_dump_still_selects_usb_and_bluetooth_nodes(self):
         graph = [
             node(3, "alsa_output.usb-Edifier_R600USB", "Audio/Sink"),
