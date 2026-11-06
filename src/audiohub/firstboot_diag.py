@@ -8,6 +8,7 @@ hardware acceptance report. No network/socket/DBus/Bluetooth writes.
 from __future__ import annotations
 
 import json
+import math
 import os
 from pathlib import Path
 import pwd
@@ -42,6 +43,14 @@ def _unique_runtime_json_object(pairs):
 def _reject_runtime_json_constant(_value):
     """Non-RFC NaN and Infinity cannot represent trusted health."""
     raise ValueError("non-finite diagnostic runtime JSON")
+
+
+def _finite_runtime_json_float(number):
+    """Reject RFC-style exponents that overflow the host float range."""
+    value = float(number)
+    if not math.isfinite(value):
+        raise ValueError("non-finite diagnostic runtime JSON exponent")
+    return value
 
 
 def _read_runtime(path, user_id):
@@ -88,6 +97,7 @@ def _read_runtime(path, user_id):
                 raw.decode("utf-8"),
                 object_pairs_hook=_unique_runtime_json_object,
                 parse_constant=_reject_runtime_json_constant,
+                parse_float=_finite_runtime_json_float,
             )
         except (UnicodeError, ValueError, RecursionError):
             return None

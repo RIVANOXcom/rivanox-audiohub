@@ -8,6 +8,7 @@ handlers without first completing the secure device-ownership design.
 from __future__ import annotations
 
 import json
+import math
 import os
 import socket
 import stat
@@ -159,6 +160,14 @@ def _reject_json_constant(_value):
     raise ValueError("non-finite status JSON number")
 
 
+def _finite_status_json_float(number):
+    """A valid JSON exponent can overflow Python float to Infinity."""
+    value = float(number)
+    if not math.isfinite(value):
+        raise ValueError("non-finite status JSON exponent")
+    return value
+
+
 def read_public_status(*, path=None, now=None):
     """Read a bounded, non-symlinked runtime state file, never raw secrets."""
     body = _bounded_regular_bytes(
@@ -172,6 +181,7 @@ def read_public_status(*, path=None, now=None):
             body.decode("utf-8"),
             object_pairs_hook=_unique_json_object,
             parse_constant=_reject_json_constant,
+            parse_float=_finite_status_json_float,
         )
     except (UnicodeError, ValueError, RecursionError):
         # Deeply nested but size-bounded JSON must not crash a status handler.

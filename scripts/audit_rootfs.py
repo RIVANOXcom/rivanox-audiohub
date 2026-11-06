@@ -271,6 +271,23 @@ def inspect(root: Path) -> dict[str, bool]:
                 "parse_constant=_reject_json_constant",
             )
         )
+        # Python json.loads accepts 1e999 as float('inf') even when
+        # NaN/Infinity tokens are rejected via parse_constant. Both the
+        # web status and root-owned boot diagnostic must reject overflow.
+        offline_diag_source = (source / "firstboot_diag.py").read_text()
+        checks["status_and_offline_json_finite_exponent_guard"] = all(
+            token in webserver for token in (
+                "def _finite_status_json_float(number):",
+                "math.isfinite(value)",
+                "parse_float=_finite_status_json_float",
+            )
+        ) and all(
+            token in offline_diag_source for token in (
+                "def _finite_runtime_json_float(number):",
+                "math.isfinite(value)",
+                "parse_float=_finite_runtime_json_float",
+            )
+        )
         checks["status_service_no_unsafe_lan_opt_in"] = (
             "AUDIOHUB_UNSAFE_STATUS_LAN" not in status_unit
             and "AUDIOHUB_STATUS_BIND_IP" not in status_unit
@@ -284,6 +301,7 @@ def inspect(root: Path) -> dict[str, bool]:
         checks["status_runtime_private_owner_and_hardlink_guard"] = False
         checks["status_malformed_inputs_fail_closed"] = False
         checks["status_json_unique_keys_and_finite_numbers_only"] = False
+        checks["status_and_offline_json_finite_exponent_guard"] = False
         checks["status_http_total_lifetime_and_peer_error_privacy"] = False
     # BlueZ's PropertiesChanged signal is not a license to mark arbitrary
     # neighbors as Trusted. Ensure the installed agent requires a short-lived
