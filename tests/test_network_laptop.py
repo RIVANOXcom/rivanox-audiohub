@@ -1,5 +1,6 @@
 """Source-only tests for the manual, unauthenticated LAN audio prototype."""
 import json
+import socket
 import sys
 import subprocess
 import unittest
@@ -297,6 +298,37 @@ class NetworkLaptopTests(unittest.TestCase):
         self.assertEqual(check_target.call_count, 3)
         close_player.assert_any_call(process)
         self.assertEqual(write.call_count, 1)
+
+
+    @mock.patch("audiohub.network_laptop.check_audio_target")
+    @mock.patch("audiohub.network_laptop.close_player")
+    @mock.patch("audiohub.network_laptop.os.write", side_effect=BlockingIOError)
+    @mock.patch("audiohub.network_laptop.os.set_blocking")
+    @mock.patch("audiohub.network_laptop.subprocess.Popen")
+    @mock.patch("audiohub.network_laptop.time.monotonic",
+                side_effect=[100.0, 100.0, 100.0, 106.0, 107.0])
+    @mock.patch("audiohub.network_laptop.socket.socket")
+    def test_first_pcm_write_always_blocked_still_stops_idle_player(
+        self, sock, clock, popen, set_blocking, write, close_player, check_target
+    ):
+        """Without startup deadline, zero successful PCM writes stall forever."""
+        receiver = sock.return_value.__enter__.return_value
+        receiver.recvfrom.side_effect = [
+            (packet(), ("192.168.1.10", 4010)),
+            socket.timeout(),
+            KeyboardInterrupt(),
+        ]
+        process = popen.return_value
+        process.stdin.fileno.return_value = 42
+        process.poll.return_value = None
+        with self.assertRaises(KeyboardInterrupt):
+            laptop.serve("192.168.1.10", "127.0.0.1", 4010,
+                         unsafe_lan_test=True)
+        # The five-second timeout must stop the blocked process and discard
+        # stale PCM rather than retry the same unsent packet indefinitely.
+        self.assertEqual(write.call_count, 1)
+        close_player.assert_called_once_with(process)
+        self.assertEqual(popen.call_count, 1)
 
 
 if __name__ == "__main__":
