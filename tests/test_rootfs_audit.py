@@ -322,6 +322,16 @@ class RootfsAuditTests(unittest.TestCase):
             "document.documentElement.lang = language;",
             'byId("language").value = language;',
             'localStorage.setItem("audiohub.locale", language)',
+            "let statusRequestId = 0;",
+            "  async function readDeviceStatus() {",
+            "const requestId = ++statusRequestId;",
+            'fetch("./api/status", {cache: "no-store"})',
+            "if (requestId !== statusRequestId) return;",
+            "if (requestId !== statusRequestId) return;",
+            'deviceHealth = json && typeof json === "object" ? json : null;',
+            "deviceHealth = null;",
+            "renderHardwareStatus();",
+            "  function translate()",
         )))
         data = {f"k{n}": "test" for n in range(30)}
         for lang in audit.LANGUAGES:
@@ -1399,6 +1409,48 @@ class RootfsAuditTests(unittest.TestCase):
             ))
             self.assertFalse(audit.inspect(root)[
                 "web_preview_english_fallback_metadata_consistent"
+            ])
+
+
+    def test_status_generation_guard_present_in_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            self.assertTrue(audit.inspect(root)[
+                "web_preview_latest_status_poll_wins"
+            ])
+
+    def test_missing_status_request_generation_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/web/app.js"
+            path.write_text(path.read_text().replace(
+                "const requestId = ++statusRequestId;", "const requestId = 0;"
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "web_preview_latest_status_poll_wins"
+            ])
+
+    def test_missing_one_stale_status_guard_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/web/app.js"
+            path.write_text(path.read_text().replace(
+                "if (requestId !== statusRequestId) return;",
+                "if (requestId === 0) return;", 1
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "web_preview_latest_status_poll_wins"
+            ])
+
+    def test_missing_status_render_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/web/app.js"
+            path.write_text(path.read_text().replace(
+                "renderHardwareStatus();", ""
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "web_preview_latest_status_poll_wins"
             ])
 
     def test_missing_client_only_rename_blocks_image_export(self):
