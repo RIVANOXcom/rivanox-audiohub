@@ -158,15 +158,21 @@
       "number": 59,
       "base": "wd-papa-20261106-finite-exponent-status-json",
       "head": "wd-papa-18b8b3c6-private-route-config-parse-guard-20261106",
+      "verified_head_sha": "0f27789f8b6ce1984e4a818f65bf9ce095b5a38d"
+    },
+    {
+      "number": 60,
+      "base": "wd-papa-18b8b3c6-private-route-config-parse-guard-20261106",
+      "head": "wd-papa-18b8b3c6-pipewire-json-identity-guard-20261106",
       "verified_head_sha": null
     }
   ],
   "last_native_verified": {
-    "run_id": 42222648342,
-    "source_sha": "4118dbc16fd8fc9e7d03f9c2c80395767d267111",
+    "run_id": 42231178394,
+    "source_sha": "0f27789f8b6ce1984e4a818f65bf9ce095b5a38d",
     "conclusion": "success",
-    "python_tests": 583,
-    "rootfs_checks_passed": 75,
+    "python_tests": 599,
+    "rootfs_checks_passed": 77,
     "installed_packages": 689,
     "architecture_counts": {
       "arm64": 538,
@@ -179,11 +185,11 @@
       "doc_alias_target_link": 8,
       "copyright_file_missing": 1
     },
-    "artifact_id": 13505195599,
+    "artifact_id": 13508977757,
     "artifact_unverified": true,
-    "artifact_expiry": "2026-12-06T13:13:53Z",
+    "artifact_expiry": "2026-12-06T14:16:49Z",
     "public_release_ready": false,
-    "artifact_zip_sha256": "768bc5322d7a1300ecc89a6a72695c26b3cf604a1e823323c92dcaa4a4d2bbd4"
+    "artifact_zip_sha256": "f611a1b41165a591642f7f321a085bd605d4d46f8fc13df311377232977ce123"
   },
   "open_issues": [
     {
@@ -593,6 +599,35 @@
     "existing_routing_and_ownership_policy_unchanged": true,
     "new_native_image_guards": 2,
     "expected_native_rootfs_guard_count": 77,
+    "source_rights_ledger_file_count": 83,
+    "source_ci_pending": false,
+    "native_ci_pending": false,
+    "hardware_accepted": false,
+    "model_c_license_effective": false,
+    "public_release_ready": false,
+    "source_run_id": 42231228004,
+    "native_run_id": 42231178394,
+    "source_tests_passed": 599,
+    "native_checks_passed": 77,
+    "verified_sha": "0f27789f8b6ce1984e4a818f65bf9ce095b5a38d",
+    "unverified_artifact_id": 13508977757
+  },
+  "next_pipewire_graph_json_integrity_change": {
+    "job": "PAPA-18B8B3C6",
+    "pr": 60,
+    "parent_pr": 59,
+    "branch": "wd-papa-18b8b3c6-pipewire-json-identity-guard-20261106",
+    "problem": "PipeWire node and EQ Link readers used different JSON decoder paths, allowing last-wins duplicate Node identity/Link endpoint fields, nonfinite numeric metadata, and unhandled recursion for deeply nested but size-bounded pw-dump; can crash runtime inspection or wrongly report audio topology links",
+    "node_and_link_parser_shared": true,
+    "duplicate_members_rejected_recursively": true,
+    "nonfinite_constants_and_overflow_rejected": true,
+    "deep_json_errors_fail_closed": true,
+    "max_graph_bytes": 4194304,
+    "max_graph_objects": 8192,
+    "source_discovery_and_link_summary_fail_closed": true,
+    "release_ready_never_inferred_from_topology": true,
+    "new_native_image_guards": 1,
+    "expected_native_rootfs_guard_count": 78,
     "source_rights_ledger_file_count": 83,
     "source_ci_pending": true,
     "native_ci_pending": true,
