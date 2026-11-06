@@ -62,6 +62,29 @@ class RecoveryTests(unittest.TestCase):
         self.assertFalse(two.terminated)
 
     @mock.patch("audiohub.runtime.subprocess.Popen")
+    def test_duplicate_virtual_sinks_stop_existing_managed_route(self, popen):
+        from audiohub.discovery import virtual_sinks
+        process = FakeProcess()
+        popen.return_value = process
+        supervisor = self.supervisor()
+        source = self.source("bluez_input.first")
+        supervisor._route(source, {"audiohub.music": 20})
+        self.assertEqual(popen.call_count, 1)
+        ambiguous = [
+            {"id": 20, "type": "PipeWire:Interface:Node",
+             "info": {"props": {"node.name": "audiohub.music",
+                                 "media.class": "Audio/Sink"}}},
+            {"id": 21, "type": "PipeWire:Interface:Node",
+             "info": {"props": {"node.name": "audiohub.music",
+                                 "media.class": "Audio/Sink"}}},
+        ]
+        self.assertEqual(virtual_sinks(ambiguous), {})
+        supervisor._route(source, virtual_sinks(ambiguous))
+        self.assertTrue(process.terminated)
+        self.assertEqual(supervisor.loopbacks, {})
+        self.assertEqual(popen.call_count, 1)
+
+    @mock.patch("audiohub.runtime.subprocess.Popen")
     def test_disconnected_sink_stops_managed_routes(self, popen):
         proc = FakeProcess()
         popen.return_value = proc
