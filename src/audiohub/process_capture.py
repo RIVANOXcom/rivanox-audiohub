@@ -66,7 +66,7 @@ def bounded_command_output(argv, *, timeout=8, max_bytes=MAX_COMMAND_STDOUT_BYTE
             decoded = output.decode("utf-8")
         except UnicodeDecodeError:
             return None
-        result = subprocess.CompletedProcess(tuple(argv), returncode, decoded, "")
+        result = subprocess.CompletedProcess(("<audiohub-local-command>",), returncode, decoded, "")
         success = True
         return result
     except (OSError, subprocess.TimeoutExpired, ValueError):
