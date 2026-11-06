@@ -408,3 +408,7 @@ New isolated stacked Draft PR58, branch `wd-papa-20261106-finite-exponent-status
 ## 2026-11-06: PAPA-18B8B3C6 Draft PR59 private config hardening
 
 Offline input names and source route policy readers now use O_NONBLOCK for unsafe FIFO leaf files, require full fstat-sized bounded reads and reject duplicated or over-nested JSON. Ten real no-hardware tests, six synthetic rootfs tests and two new native checks, 77 expected only after CI. PR57 source 576/576 native 74/74 SUCCESS, PR58 source 583/583 native 75/75 SUCCESS, Workbench #2996/#2997. All stacked PRs remain draft, main unmodified. No hardware/legal/owner authentication signoff or release GO. Canonical section AA.
+
+## 2026-11-06: PAPA-18B8B3C6 Draft PR60 common PipeWire JSON guard
+
+Draft PR60 branch `wd-papa-18b8b3c6-pipewire-json-identity-guard-20261106` stacked exclusively on PR59 exact SHA `0f27789f8b6ce1984e4a818f65bf9ce095b5a38d`. Both USB/BT discovery and EQ/USB Link observations now share the same bounded, duplicate-key-rejecting, finite-number and deep-JSON fail-closed PipeWire parser. Seven no-hardware unit tests and four synthetic rootfs tests add one native guard (expected **78**, not confirmed until CI). PR59 source #42231228004 599/599 PASS and native #42231178394 77/77 PASS, test ZIP #13508977757 (605495982 bytes; sha256 f611a1b41165a591642f7f321a085bd605d4d46f8fc13df311377232977ce123). Workbench evidence #2999. All Draft, no physical Pi4/Edifier, ownership, licensing or public product release GO. Canonical section AB.
