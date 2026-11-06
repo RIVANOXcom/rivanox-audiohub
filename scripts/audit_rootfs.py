@@ -230,6 +230,18 @@ def inspect(root: Path) -> dict[str, bool]:
                 "except ValueError:",
             )
         )
+        # Private owner-authored JSON may still contain duplicate keys or
+        # Python-only NaN/Infinity constants. Refuse the complete snapshot.
+        checks["status_json_unique_keys_and_finite_numbers_only"] = all(
+            mark in webserver for mark in (
+                "def _unique_json_object(pairs):",
+                "if key in result:",
+                "raise ValueError(\"duplicate status JSON member\")",
+                "object_pairs_hook=_unique_json_object",
+                "def _reject_json_constant(_value):",
+                "parse_constant=_reject_json_constant",
+            )
+        )
         checks["status_service_no_unsafe_lan_opt_in"] = (
             "AUDIOHUB_UNSAFE_STATUS_LAN" not in status_unit
             and "AUDIOHUB_STATUS_BIND_IP" not in status_unit
@@ -242,6 +254,7 @@ def inspect(root: Path) -> dict[str, bool]:
         checks["status_http_clients_bounded_no_request_logs"] = False
         checks["status_runtime_private_owner_and_hardlink_guard"] = False
         checks["status_malformed_inputs_fail_closed"] = False
+        checks["status_json_unique_keys_and_finite_numbers_only"] = False
     # BlueZ's PropertiesChanged signal is not a license to mark arbitrary
     # neighbors as Trusted. Ensure the installed agent requires a short-lived
     # explicit authorization callback, verifies real BlueZ paired state and
