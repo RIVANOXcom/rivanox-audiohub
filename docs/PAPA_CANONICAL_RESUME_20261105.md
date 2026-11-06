@@ -482,5 +482,15 @@ PR48 adds an installed `manual_acceptance.py` source check and independent no-re
 
 **Next:** verify exact PR60 final Source CI and native ARM64 78/78, image provenance and ZIP hash, append Workbench evidence and continue safe isolated engineering without release GO.
 
+## AC. 2026-11-06: strict supervisor-private settings and BT assignment JSON — Draft PR61
+
+**Mission PAPA-18B8B3C6.** New independent Draft PR61 on branch `wd-papa-18b8b3c6-runtime-private-json-integrity-20261106`, based on exact PR60 parent SHA `3ff954883f6dc254b19a61928883f94e6c1d4f3f`, not touching parents or public main. PR60 exact-head Source GitHub Actions #42233692882 **SUCCESS 614/614**; independent native ARM64 #42233681180 was still pending at the start of PR61; expected 78 image checks, and no release or package claims until verified.
+
+**Specific defect:** `audiohub.runtime.read_json` reads owner-private bounded files (`settings.json`, `device-channels.json`) used by the actual Bluetooth supervisor. Its JSON decoder still accepted duplicate keys with last-wins semantics, nonstandard NaN/Infinity, and valid 1e999 float overflow, and could propagate RecursionError on deeply nested but 32KiB-bounded JSON. This is a separate operational trust boundary from previously fixed read-only web/diagnostic configuration readers. A conflicting file can rewrite perceived source-to-EQ assignments or break startup, so it must fail closed to the supplied typed fallback.
+
+**Implementation:** Preserve the existing absolute private path, nofollow directory traversal, UID/file mode/nlink, O_NONBLOCK, exact-length read and 32KiB size limits. Add recursive duplicate-member rejection, nonfinite literal and exponent rejection and explicit non-recursive shape scan capped at **64 levels / 8192 values**. Catch decoding recursion and type errors, return an unchanged caller-supplied fallback, never mutate or expose invalid JSON. Legitimate finite numeric metadata, private atomic writes and the existing three-input routing constraints remain intact. Six no-hardware runtime-state regression tests plus four synthetic rootfs audits; new installed-image guard `runtime_settings_assignments_json_fail_closed` targets **79** total only after independent native ARM64 proof. Source rights ledger remains 83 pending; AGPL-3.0-only remains in force, future Model C not effective; no hardware/audio/24h acceptance, owner authenticated phone Wi-Fi, third-party rights clearance, merges, deployments or releases.
+
+**Next:** exact-head source/native CI for PR61, reconcile PR60 pending native 78 checks, append Workbench evidence. NO-GO until independent operator/hardware/legal acceptance.
+
 **END OF HANDOFF.** If a live run/PR contradicts this document, treat
 the live GitHub evidence as authoritative, reconcile and update this file.

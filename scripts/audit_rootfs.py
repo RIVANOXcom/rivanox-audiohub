@@ -198,6 +198,27 @@ def inspect(root: Path) -> dict[str, bool]:
         ) and 'path.with_suffix(".tmp")' not in runtime_security
     except OSError:
         checks["runtime_private_state_nofollow_atomic"] = False
+    # User-owned settings and BT mapping files are parsed by the real
+    # supervisor, not just read-only status paths. No contradictory keys,
+    # nonfinite numbers or deep but size-bounded JSON may influence routing.
+    try:
+        private_runtime = (source / "runtime.py").read_text()
+        checks["runtime_settings_assignments_json_fail_closed"] = all(
+            token in private_runtime for token in (
+                "MAX_RUNTIME_JSON_DEPTH = 64",
+                "MAX_RUNTIME_JSON_VALUES = 8192",
+                "def _unique_state_json_members(pairs):",
+                "object_pairs_hook=_unique_state_json_members",
+                "parse_constant=_reject_state_json_constant",
+                "parse_float=_finite_state_json_float",
+                "math.isfinite(value)",
+                "def _private_state_shape_bounded(data):",
+                "not _private_state_shape_bounded(value)",
+                "except (OSError, ValueError, TypeError, UnicodeError, RecursionError):",
+            )
+        )
+    except OSError:
+        checks["runtime_settings_assignments_json_fail_closed"] = False
     # An unexpected supervisor exception must stop all managed audio routes;
     # systemd must kill the entire service cgroup if cleanup itself fails.
     try:

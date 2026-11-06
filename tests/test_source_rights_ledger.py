@@ -278,6 +278,13 @@ class SourceRightsLedgerTests(unittest.TestCase):
         self.assertTrue(state["next_pipewire_graph_json_integrity_change"]["node_and_link_parser_shared"])
         self.assertTrue(state["next_pipewire_graph_json_integrity_change"]["deep_json_errors_fail_closed"])
         self.assertFalse(state["next_pipewire_graph_json_integrity_change"]["public_release_ready"])
+        self.assertEqual(state["next_supervisor_private_state_decoder_integrity"]["pr"], 61)
+        self.assertEqual(state["next_supervisor_private_state_decoder_integrity"]["parent_pr"], 60)
+        self.assertEqual(state["next_supervisor_private_state_decoder_integrity"]["max_private_json_depth"], 64)
+        self.assertEqual(state["next_supervisor_private_state_decoder_integrity"]["max_private_json_values"], 8192)
+        self.assertEqual(state["next_supervisor_private_state_decoder_integrity"]["expected_native_rootfs_guard_count"], 79)
+        self.assertTrue(state["next_supervisor_private_state_decoder_integrity"]["duplicate_keys_rejected_at_any_depth"])
+        self.assertFalse(state["next_supervisor_private_state_decoder_integrity"]["public_release_ready"])
         self.assertEqual(state["next_bluetooth_agent_trust_security_change"]["pairable_timeout_seconds"], 600)
         self.assertEqual(state["next_bluetooth_agent_trust_security_change"]["discoverable_timeout_seconds"], 600)
         self.assertTrue(state["next_bluetooth_agent_trust_security_change"]["initial_deadline_relative_to_linux_boot"])
@@ -287,7 +294,7 @@ class SourceRightsLedgerTests(unittest.TestCase):
         self.assertFalse(state["last_native_verified"]["public_release_ready"])
         self.assertEqual(
             [item["number"] for item in state["draft_pr_chain"]],
-            [35, 36, 38, 39, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60],
+            [35, 36, 38, 39, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61],
         )
 
     def test_primary_handoff_points_to_authoritative_resume(self):

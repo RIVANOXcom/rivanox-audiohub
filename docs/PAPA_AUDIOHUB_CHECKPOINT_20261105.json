@@ -165,6 +165,12 @@
       "base": "wd-papa-18b8b3c6-private-route-config-parse-guard-20261106",
       "head": "wd-papa-18b8b3c6-pipewire-json-identity-guard-20261106",
       "verified_head_sha": null
+    },
+    {
+      "number": 61,
+      "base": "wd-papa-18b8b3c6-pipewire-json-identity-guard-20261106",
+      "head": "wd-papa-18b8b3c6-runtime-private-json-integrity-20261106",
+      "verified_head_sha": null
     }
   ],
   "last_native_verified": {
@@ -640,5 +646,29 @@
     "reject_wide_graph_before_stack_growth": true,
     "source_test_methods_added": 10,
     "synthetic_rootfs_test_methods_added": 5
+  },
+  "next_supervisor_private_state_decoder_integrity": {
+    "job": "PAPA-18B8B3C6",
+    "pr": 61,
+    "parent_pr": 60,
+    "branch": "wd-papa-18b8b3c6-runtime-private-json-integrity-20261106",
+    "problem": "Supervisor.settings.json and device-channels.json share read_json() with permissive last-wins duplicate JSON keys, NaN/Infinity, exponent overflow and potential RecursionError, despite proper private file UID/mode/nlink/no-follow gates",
+    "supervisor_private_config_fail_closed": true,
+    "duplicate_keys_rejected_at_any_depth": true,
+    "nonfinite_numeric_literals_and_exponents_refused": true,
+    "deeply_nested_but_valid_json_refused": true,
+    "max_private_json_bytes": 32768,
+    "max_private_json_depth": 64,
+    "max_private_json_values": 8192,
+    "unchanged_private_file_ownership_checks": true,
+    "unchanged_effective_license": "AGPL-3.0-only",
+    "source_rights_ledger_file_count": 83,
+    "expected_native_rootfs_guard_count": 79,
+    "new_native_image_guards": 1,
+    "source_ci_pending": true,
+    "native_ci_pending": true,
+    "hardware_accepted": false,
+    "model_c_license_effective": false,
+    "public_release_ready": false
   }
 }
