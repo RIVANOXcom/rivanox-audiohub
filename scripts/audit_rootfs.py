@@ -626,6 +626,19 @@ def inspect(root: Path) -> dict[str, bool]:
         ) and "input_profiles" not in webserver
     except OSError:
         checks["editable_names_offline_no_public_api"] = False
+    # Preview input labels must use a real ECMAScript Unicode category
+    # escape (one slash), not a literal backslash/p/C character class.
+    # Mirror the local Python model: reject control/format/bidi/markup.
+    try:
+        preview = (root / "opt/audiohub/web/app.js").read_text()
+        checks["web_preview_input_name_unicode_controls_safe"] = (
+            r"/[\p{C}<>]/u.test(name)" in preview
+            and r"/[\\p{C}<>]/u.test(name)" not in preview
+            and "Array.from(name).length > 32" in preview
+            and "title.textContent = tr(key)" in preview
+        )
+    except OSError:
+        checks["web_preview_input_name_unicode_controls_safe"] = False
     # Physical input rebinding cannot originate from public status or
     # unauthenticated LAN packets. A private local policy must reserve the
     # manual LAN slot and keep Bluetooth streams off that same EQ input.

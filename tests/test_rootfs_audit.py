@@ -310,6 +310,9 @@ class RootfsAuditTests(unittest.TestCase):
             "audiohub.preview.input-labels.v1",
             "localStorage.setItem",
             "nameInput.addEventListener",
+            r"/[\p{C}<>]/u.test(name)",
+            "Array.from(name).length > 32",
+            "title.textContent = tr(key)",
         )))
         data = {f"k{n}": "test" for n in range(30)}
         for lang in audit.LANGUAGES:
@@ -1286,6 +1289,35 @@ class RootfsAuditTests(unittest.TestCase):
             root = self.root(tmp)
             (root / "opt/audiohub/src/audiohub/input_profiles.py").unlink()
             self.assertFalse(audit.inspect(root)["editable_names_offline_no_public_api"])
+
+    def test_web_preview_input_name_unicode_guard_present(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            self.assertTrue(audit.inspect(root)[
+                "web_preview_input_name_unicode_controls_safe"
+            ])
+
+    def test_double_escaped_preview_unicode_class_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            file = root / "opt/audiohub/web/app.js"
+            file.write_text(file.read_text().replace(
+                r"/[\p{C}<>]/u.test(name)", r"/[\\p{C}<>]/u.test(name)"
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "web_preview_input_name_unicode_controls_safe"
+            ])
+
+    def test_removed_preview_unicode_validation_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            file = root / "opt/audiohub/web/app.js"
+            file.write_text(file.read_text().replace(
+                r"/[\p{C}<>]/u.test(name)", "/[<>]/u.test(name)"
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "web_preview_input_name_unicode_controls_safe"
+            ])
 
     def test_missing_client_only_rename_blocks_image_export(self):
         with tempfile.TemporaryDirectory() as tmp:

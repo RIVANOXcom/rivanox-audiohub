@@ -539,5 +539,16 @@ All PRs remain Draft/unmerged. Current license AGPL-3.0-only, proposed Model C n
 
 Next: verify PR65 exact-head source and independent ARM64 83 checks, ZIP/XZ provenance and append Workbench evidence.
 
+
+## AH. 2026-11-06: match preview input name Unicode rules to local policy — Draft PR66
+
+**PAPA-18B8B3C6.** New isolated Draft PR66 branch `wd-papa-18b8b3c6-web-input-name-unicode-20261106`, stacked only on exact parent PR65 `28e9051002763bf2c6e7fe42964da15957e90d91`, leaving earlier PRs and public main unchanged. Parent source #42244433763 **660/660 PASS** and independent native ARM64 #42244418082 **83/83 real installed rootfs checks PASS**, XZ image checksum and bundle integrity PASS. Temporary UNVERIFIED_ALPHA_TEST_ONLY ZIP #13517474987, size 605717413 bytes, SHA256 `bdea2c879d9316883fe880363edd38cd012998832572fc32cede627cdc681599`, expires 2026-12-06T15:43:05Z. Workbench #3040. No official release or physical device acceptance.
+
+**Actual AH-004 usability/security defect, reproduced under Node:** Browser preview `validName` used the regex `/[\\p{C}<>]/u` with two backslashes. In JavaScript this matches literal backslash, p, C and braces instead of Unicode category C. It rejects legitimate names `Laptop`/`PC Audio`, while accepting embedded `\u0001` controls or bidi direction controls; this contradicts the authoritative offline `input_profiles.validate_name` using Python `unicodedata.category(char).startswith("C")` and banning markup angle brackets. The preview is read-only with no authenticated device mutation endpoint, but should not store misleading preferences or display invisible controls.
+
+**Fix:** Correct ECMAScript Unicode character-class property escape to a **single backslash** `/[\p{C}<>]/u`. Keep the 32-Unicode-codepoint length guard, escaped DOM textContent, client-local storage only, existing five-language behavior and no device/network write API. Add actual Node.js runtime tests of the **extracted shipping validName function** for allowed normal names including p/C, Unicode controls, bidi and markup rejection, length limits and emojis, plus synthetic installed-rootfs positive/negative guards requiring the corrected browser regex; one new native image gate `web_preview_input_name_unicode_controls_safe`, target **84** actual rootfs checks only after exact-head native ARM64 proof.
+
+**Blockers/next:** Effective AGPL-3.0-only, 83 source rights ledger records pending, 689 installed OS packages/680 copyright docs/nine unresolved. Physical Pi4+Edifier three concurrent sources, clipping, 24-hour run, secure authenticated owner phone-Wi-Fi and legal release acceptance remain open. Next verify PR66 source/independent ARM64 CI, XZ and ZIP SHA and append Workbench evidence. No merge, installation, deployment or release GO.
+
 **END OF HANDOFF.** If a live run/PR contradicts this document, treat
 the live GitHub evidence as authoritative, reconcile and update this file.

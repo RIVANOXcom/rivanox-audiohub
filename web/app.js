@@ -13,7 +13,7 @@
     if (typeof raw !== "string") return null;
     const name = raw.trim();
     // Mirror the device-local model. User-controlled content is NEVER HTML.
-    if (!name || Array.from(name).length > 32 || /[\\p{C}<>]/u.test(name)) return null;
+    if (!name || Array.from(name).length > 32 || /[\p{C}<>]/u.test(name)) return null;
     return name;
   };
   try {
