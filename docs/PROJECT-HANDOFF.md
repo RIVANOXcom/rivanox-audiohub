@@ -507,3 +507,37 @@ owner phone Wi-Fi and legal approval still absent. Draft/unmerged, no release,
 install, payment, permission or deployment. Validate the exact commit CI,
 ARM64 image checksum/XZ/provenance and temporary test artifact before
 claiming completeness; no public release GO.
+
+
+## 2026-11-06: Draft PR70 — bound initial PCM write stalls in manual LAN input
+
+PAPA MissionPilot WD_JOB PAPA-18B8B3C6. New independent Draft stacked on
+PR69 exact source `cb4a1ea8401a1b7188f6a225c3ea0cdbed943be6`. Parent PR69 verified
+source GitHub Actions #42254353060 SUCCESS 682/682 and native ARM64
+#42254345229 SUCCESS actual 87/87 installed rootfs checks, image SHA256
+32c8ea5c95fe89e776d5c23baf3ac37724aab75fbc9751612cede41669eadbcd,
+bundle/XZ PASS. Temporary test-only artifact #13523395208 ZIP SHA256
+0bc96922a53a90c37ae081787eaff68ad7ba5eaae50f5af9c671b7ec5cccfc96;
+PAPA Workbench evidence #3071. Parents and main unchanged.
+
+AH-002 / AH-007 tangible manual LAN audio bug: when every nonblocking
+os.write(pw-cat stdin) raises BlockingIOError from the first packet, the
+receiver previously never assigns last_written_at. Its IDLE_SECONDS=5
+teardown condition requires last_written_at != None, so an alive, blocked
+player is never retired in the absence of further valid input and the old
+PCM can remain queued. Minimal fix establishes that 5-second progress
+deadline immediately upon successful player creation and nonblocking fd
+configuration. Real source tests mock UDP input, player, monotonic clock and
+blocked os.write to assert one attempted write, one teardown, no stale replay.
+The existing successful-write path continues to refresh the deadline.
+Native rootfs adds manual_lan_first_pcm_write_stall_bounded; expected 88 guards
+only after independent native ARM64 SUCCESS.
+
+The Scream UDP manual receiver remains DISABLED on boot; it is still
+unauthenticated and IP spoofable, needs explicit --unsafe-lan-test,
+private non-wildcard IPv4 binding and verified USB/PipeWire sink. Nothing
+enables it in systemd/web or authorizes it for consumer use. Historical
+AGPL-3.0-only remains effective, 83 source-rights rows pending and nine
+OS copyright/notice gaps unresolved; Pi4+Edifier actual audible three-way
+mixing, secured phone-owner WiFi, 24h durability and legal clearance absent.
+No release-GO, merge, deploy, installation, permissions or payment.
