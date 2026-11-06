@@ -412,6 +412,20 @@ def inspect(root: Path) -> dict[str, bool]:
         ) and "self.authorize_pending(device)" in pairing_source
     except OSError:
         checks["bluetooth_trust_requires_agent_authorization"] = False
+    # BlueZ Device1.Trusted may survive unpairing. Reject unpaired trusted
+    # devices instead of treating stale trust as unconditional A2DP authority.
+    try:
+        agent = (source / "pairing.py").read_text()
+        start = agent.index("def AuthorizeService(self, device, uuid):")
+        end = agent.index("def RequestConfirmation(self, device, passkey):", start)
+        service = agent[start:end]
+        trusted = service.index('if p.Get("org.bluez.Device1", "Trusted"):')
+        paired = service.index('if not p.Get("org.bluez.Device1", "Paired"):', trusted)
+        denied = service.index('raise Rejected("Unpaired trusted device")', paired)
+        allowed = service.index("return", denied)
+        checks["bluetooth_trusted_service_requires_paired"] = trusted < paired < denied < allowed
+    except (OSError, ValueError):
+        checks["bluetooth_trusted_service_requires_paired"] = False
     # BlueZ Device1.Paired=False or property invalidation may arrive
     # without Agent1.Cancel; revoke the specific pending trust token.
     try:
