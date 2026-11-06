@@ -120,11 +120,11 @@
     }
   ],
   "last_native_verified": {
-    "run_id": 42201589717,
-    "source_sha": "275089e3d511e0d6c8fb68e601a9001b13b382b6",
+    "run_id": 42208440878,
+    "source_sha": "d4fd8053a13618f3f7ad35fb26888288f6586a1d",
     "conclusion": "success",
-    "python_tests": 512,
-    "rootfs_checks_passed": 67,
+    "python_tests": 522,
+    "rootfs_checks_passed": 68,
     "installed_packages": 689,
     "architecture_counts": {
       "arm64": 538,
@@ -137,9 +137,9 @@
       "doc_alias_target_link": 8,
       "copyright_file_missing": 1
     },
-    "artifact_id": 13494264314,
+    "artifact_id": 13497588492,
     "artifact_unverified": true,
-    "artifact_expiry": "2026-12-06T10:27:02Z",
+    "artifact_expiry": "2026-12-06T11:20:20Z",
     "public_release_ready": false
   },
   "open_issues": [
@@ -178,8 +178,8 @@
     "do not silently merge stacked draft PRs"
   ],
   "last_source_rights_ci_verified": {
-    "run_id": 42209328344,
-    "commit_sha": "f120ccaea9d217b317f2048b52844a9c8206b520",
+    "run_id": 42209656187,
+    "commit_sha": "ed9dbc68ccff2e03f2ae123aa066efc69d794971",
     "outcome": "success",
     "python_tests": 535,
     "source_rights_ledger_file_count": 83
@@ -350,7 +350,7 @@
     "initial_source_sha": "a4872f0bd66f38e48c1fe24a9f23304d68f76ced",
     "initial_source_ci_run_id": 42208006876,
     "initial_source_tests_passed": 522,
-    "status": "initial code SHA source SUCCESS; exact post-docs source and native ARM64 NOT YET VERIFIED",
+    "status": "Source 522/522 and actual native 68/68 image checks PASS at PR51 SHA d4fd8053a13618f3f7ad35fb26888288f6586a1d",
     "original_defect": "unauthenticated but manual-only Scream UDP receiver still used unbounded subprocess.run capture_output=True in PipeWire inspection and USB default assertion",
     "max_stdout_bytes": 4194304,
     "timeout_seconds_per_command": 5,
@@ -374,7 +374,7 @@
       "conclusion": "success",
       "tests": 535
     },
-    "status": "initial code source CI SUCCESS; exact post-docs source and ARM64 native pending",
+    "status": "Source 535/535 PASS PR52 initial full code/docs SHA ed9dbc68ccff2e03f2ae123aa066efc69d794971; independent ARM64 exact new HEAD pending",
     "original_defect": "unbounded ThreadingHTTPServer worker count and BaseHTTPRequestHandler raw URL query request logging",
     "max_concurrent_clients": 8,
     "client_read_timeout_seconds": 5,
@@ -386,6 +386,13 @@
     "source_rights_ledger_file_count": 83,
     "public_release_ready": false,
     "model_c_license_effective": false,
-    "hardware_accepted": false
+    "hardware_accepted": false,
+    "full_code_docs_ci": {
+      "run_id": 42209656187,
+      "sha": "ed9dbc68ccff2e03f2ae123aa066efc69d794971",
+      "tests": 535,
+      "conclusion": "success"
+    },
+    "native_run_pending_validation": 42209649230
   }
 }

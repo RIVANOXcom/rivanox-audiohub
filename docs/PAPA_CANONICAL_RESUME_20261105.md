@@ -396,5 +396,12 @@ PR48 adds an installed `manual_acceptance.py` source check and independent no-re
 
 **Next authorized work:** verify PR51 and PR52 exact source/native CI, correct any image guard or test failures, record actual count/artifacts and Workbench evidence. Continue identifying alpha safety issues without exposing LAN features or claiming device hardware/license acceptance.
 
+
+### Verification update — PR51 native ARM64 PASS at exact code/docs SHA
+
+[PR51](https://github.com/RIVANOXcom/rivanox-audiohub/pull/51) SHA `d4fd8053a13618f3f7ad35fb26888288f6586a1d` has now independently passed **522/522 Python tests** ([source #42208450554](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42208450554)) and **68/68 actual native Raspberry Pi image guards** ([ARM64 #42208440878](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42208440878)). Verified XZ/SHA256/four-file temporary **UNVERIFIED / DO NOT DISTRIBUTE** archive [#13497588492](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42208440878/artifacts/13497588492), **605887450 bytes**, expires **2026-12-06T11:20:20Z**. 689 installed packages, 680 copyright file hashes, nine missing file paths, `public_release_ready=false`. This confirms manual LAN receiver bounded PipeWire graph and wpctl command safety **only**, NOT authenticated LAN audio, real speaker sound or rights/release approval.
+
+[PR52](https://github.com/RIVANOXcom/rivanox-audiohub/pull/52) first full code/docs SHA `ed9dbc68ccff2e03f2ae123aa066efc69d794971` source [run #42209656187](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42209656187) **SUCCESS 535/535** Python tests with pending rights 83 files. Independent [native run #42209649230](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42209649230) was in progress at the checkpoint. New `status_http_clients_bounded_no_request_logs` guard target **69** actual checks. **Re-check the final HEAD after this evidence commit**, because branch changes can restart native CI.
+
 **END OF HANDOFF.** If a live run/PR contradicts this document, treat
 the live GitHub evidence as authoritative, reconcile and update this file.
