@@ -192,6 +192,20 @@ def inspect(root: Path) -> dict[str, bool]:
                 "stat.S_ISREG", "read_public_status()",
             )
         )
+        # The status JSON is audiohub-user-owned runtime state, unlike
+        # root-owned publicly readable HTML/JS. Only the private status
+        # reader must enforce UID, private directory mode, and nlink=1.
+        checks["status_runtime_private_owner_and_hardlink_guard"] = all(
+            mark in webserver for mark in (
+                "def _bounded_regular_bytes(path, limit, *, private_owner=None):",
+                "parent.st_uid != private_owner",
+                "stat.S_IMODE(parent.st_mode) & 0o077",
+                "info.st_uid != private_owner",
+                "info.st_nlink != 1",
+                "stat.S_IMODE(info.st_mode) & 0o077",
+                "private_owner=os.geteuid()",
+            )
+        ) and "_bounded_regular_bytes(WEBROOT / filename, STATIC_MAX_BYTES)" in webserver
         checks["status_http_clients_bounded_no_request_logs"] = all(
             mark in webserver for mark in (
                 "MAX_STATUS_CLIENTS = 8",
@@ -216,6 +230,7 @@ def inspect(root: Path) -> dict[str, bool]:
         checks["status_service_no_unsafe_lan_opt_in"] = False
         checks["status_static_and_state_files_nofollow_bounded"] = False
         checks["status_http_clients_bounded_no_request_logs"] = False
+        checks["status_runtime_private_owner_and_hardlink_guard"] = False
     # BlueZ's PropertiesChanged signal is not a license to mark arbitrary
     # neighbors as Trusted. Ensure the installed agent requires a short-lived
     # explicit authorization callback, verifies real BlueZ paired state and
