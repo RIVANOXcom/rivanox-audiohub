@@ -193,7 +193,8 @@ class RootfsAuditTests(unittest.TestCase):
              "_bounded_regular_bytes(WEBROOT / filename, STATIC_MAX_BYTES)\\n")
         web_fixture = root / "opt/audiohub/src/audiohub/webserver.py"
         web_fixture.write_text(web_fixture.read_text() + "\\n".join((
-            'json.loads(body.decode("utf-8"))',
+            "decoded = json.loads(",
+            'body.decode("utf-8")',
             "except (UnicodeError, ValueError, RecursionError):",
             "path = urlsplit(self.path).path",
             "except ValueError:",
@@ -777,6 +778,18 @@ class RootfsAuditTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = self.root(tmp)
             self.assertTrue(audit.inspect(root)[
+                "status_malformed_inputs_fail_closed"
+            ])
+
+    def test_json_decoder_body_marker_required_in_installed_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/src/audiohub/webserver.py"
+            path.write_text(path.read_text().replace(
+                'body.decode("utf-8")',
+                'body.decode("latin-1")'
+            ))
+            self.assertFalse(audit.inspect(root)[
                 "status_malformed_inputs_fail_closed"
             ])
 
