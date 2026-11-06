@@ -194,15 +194,21 @@
       "number": 65,
       "base": "wd-papa-18b8b3c6-private-config-ancestor-nofollow-20261106",
       "head": "wd-papa-18b8b3c6-bluetooth-unpaired-token-revocation-20261106",
+      "verified_head_sha": "28e9051002763bf2c6e7fe42964da15957e90d91"
+    },
+    {
+      "number": 66,
+      "base": "wd-papa-18b8b3c6-bluetooth-unpaired-token-revocation-20261106",
+      "head": "wd-papa-18b8b3c6-web-input-name-unicode-20261106",
       "verified_head_sha": null
     }
   ],
   "last_native_verified": {
-    "run_id": 42240817288,
-    "source_sha": "68fc744aded8956d87985773e1b51d8568f7b7ac",
+    "run_id": 42244418082,
+    "source_sha": "28e9051002763bf2c6e7fe42964da15957e90d91",
     "conclusion": "success",
-    "python_tests": 651,
-    "rootfs_checks_passed": 82,
+    "python_tests": 660,
+    "rootfs_checks_passed": 83,
     "installed_packages": 689,
     "architecture_counts": {
       "arm64": 538,
@@ -215,12 +221,12 @@
       "doc_alias_target_link": 8,
       "copyright_file_missing": 1
     },
-    "artifact_id": 13515841887,
+    "artifact_id": 13517474987,
     "artifact_unverified": true,
-    "artifact_expiry": "2026-12-06T15:24:13Z",
+    "artifact_expiry": "2026-12-06T15:43:05Z",
     "public_release_ready": false,
-    "artifact_zip_sha256": "4418bc861cc684c3b297729c17906150e9631ce1789b8f6e2c8563722614b14b",
-    "run_attempt": 2
+    "artifact_zip_sha256": "bdea2c879d9316883fe880363edd38cd012998832572fc32cede627cdc681599",
+    "run_attempt": 1
   },
   "open_issues": [
     {
@@ -796,6 +802,34 @@
     "source_rights_ledger_file_count": 83,
     "new_native_image_guards": 1,
     "expected_native_rootfs_guard_count": 83,
+    "source_ci_pending": false,
+    "native_ci_pending": false,
+    "hardware_accepted": false,
+    "owner_authenticated": false,
+    "model_c_license_effective": false,
+    "public_release_ready": false,
+    "source_run_id": 42244433763,
+    "native_run_id": 42244418082,
+    "source_tests_passed": 660,
+    "native_checks_passed": 83,
+    "verified_sha": "28e9051002763bf2c6e7fe42964da15957e90d91",
+    "unverified_artifact_id": 13517474987
+  },
+  "next_web_preview_input_name_unicode_validation": {
+    "job": "PAPA-18B8B3C6",
+    "pr": 66,
+    "parent_pr": 65,
+    "branch": "wd-papa-18b8b3c6-web-input-name-unicode-20261106",
+    "defect": "Web preview validName uses double-escaped /[\\\\p{C}<>]/u: treats p and C as banned name characters yet accepts embedded ASCII controls and Unicode bidi format controls, mismatching offline input_profiles.validate_name",
+    "single_backslash_unicode_property_escape": true,
+    "real_browser_js_semantics_tested_with_node": true,
+    "control_and_format_unicode_rejected": true,
+    "regular_name_characters_remain_permitted": true,
+    "character_length_32_codepoints_preserved": true,
+    "preview_only_and_no_device_write_api": true,
+    "new_native_image_guards": 1,
+    "expected_native_rootfs_guard_count": 84,
+    "source_rights_ledger_file_count": 83,
     "source_ci_pending": true,
     "native_ci_pending": true,
     "hardware_accepted": false,
