@@ -455,6 +455,28 @@ def inspect(root: Path) -> dict[str, bool]:
     except OSError:
         checks["bluetooth_input_role_configured"] = False
         checks["managed_eq_routing_and_usb_gate"] = False
+    # Master gain attenuation and source muting must be applied to the
+    # actual USB/PipeWire nodes before new managed sources are admitted.
+    # A failed or missing wpctl result must tear down running routes.
+    try:
+        mixer_source = (source / "mixer.py").read_text()
+        runtime_source = (source / "runtime.py").read_text()
+        mixer_at = mixer_source.index("def volume_commands(settings, sink_ids, output_id=None):")
+        master_at = mixer_source.index("if output_id is not None:", mixer_at)
+        channel_at = mixer_source.index("for channel in CHANNELS:", mixer_at)
+        poll_at = runtime_source.index("    def poll(self):")
+        control_at = runtime_source.index("for args in volume_commands(", poll_at)
+        route_at = runtime_source.index("self._route(sources if", poll_at)
+        checks["mixer_master_gain_verified_before_managed_routes"] = (
+            master_at < channel_at
+            and control_at < route_at
+            and "applied = run(*args)" in runtime_source
+            and "if applied is None or applied.returncode != 0:" in runtime_source
+            and 'raise RuntimeError("AudioHub mixer control failed")' in runtime_source
+            and "self._stop_all_managed_routes()" in runtime_source
+        )
+    except (OSError, ValueError):
+        checks["mixer_master_gain_verified_before_managed_routes"] = False
     # Image must ship the already reviewed AH-003 conservative
     # 3-channel gain budget; source runtime settings cannot silently
     # restore an unbounded master volume.

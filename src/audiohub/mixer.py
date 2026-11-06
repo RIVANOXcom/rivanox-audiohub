@@ -142,12 +142,14 @@ def volume_commands(settings, sink_ids, output_id=None):
     """Return argv lists; commands are *not* executed here."""
     settings = patch_settings(defaults(), settings)
     commands = []
+    # Apply the conservative master gain before per-input volume/unmute.
+    # A failed master command must never leave a newly admitted source live.
+    if output_id is not None:
+        commands.append(["wpctl", "set-volume", str(int(output_id)), str(effective_master_gain(settings))])
     for channel in CHANNELS:
         if channel not in sink_ids:
             continue
         node_id = str(int(sink_ids[channel]))
         commands.append(["wpctl", "set-volume", node_id, str(settings[channel]["volume"] / 100)])
         commands.append(["wpctl", "set-mute", node_id, "1" if settings[channel]["mute"] else "0"])
-    if output_id is not None:
-        commands.append(["wpctl", "set-volume", str(int(output_id)), str(effective_master_gain(settings))])
     return commands

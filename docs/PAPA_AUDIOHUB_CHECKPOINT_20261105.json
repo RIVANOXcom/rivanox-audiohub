@@ -171,6 +171,12 @@
       "base": "wd-papa-18b8b3c6-pipewire-json-identity-guard-20261106",
       "head": "wd-papa-18b8b3c6-runtime-private-json-integrity-20261106",
       "verified_head_sha": null
+    },
+    {
+      "number": 62,
+      "base": "wd-papa-18b8b3c6-runtime-private-json-integrity-20261106",
+      "head": "wd-papa-18b8b3c6-mixer-control-failclosed-20261106",
+      "verified_head_sha": null
     }
   ],
   "last_native_verified": {
@@ -671,6 +677,26 @@
     "source_rights_ledger_file_count": 83,
     "expected_native_rootfs_guard_count": 79,
     "new_native_image_guards": 1,
+    "source_ci_pending": true,
+    "native_ci_pending": true,
+    "hardware_accepted": false,
+    "model_c_license_effective": false,
+    "public_release_ready": false
+  },
+  "next_mixer_command_delivery_failclosed_change": {
+    "job": "PAPA-18B8B3C6",
+    "pr": 62,
+    "parent_pr": 61,
+    "branch": "wd-papa-18b8b3c6-mixer-control-failclosed-20261106",
+    "defect": "Live supervisor invokes per-input wpctl set-volume/mute before master attenuation, ignores missing/nonzero command results and can admit or keep Bluetooth routes while hardware volume safety limits are not applied",
+    "conservative_master_gain_programmed_first": true,
+    "mixer_control_exit_status_verified": true,
+    "new_managed_routes_started_after_mixer_success": true,
+    "existing_routes_stopped_on_mixer_failure": true,
+    "existing_loopback_service_and_no_public_write_preserved": true,
+    "expected_native_rootfs_guard_count": 80,
+    "new_native_image_guards": 1,
+    "source_rights_ledger_file_count": 83,
     "source_ci_pending": true,
     "native_ci_pending": true,
     "hardware_accepted": false,

@@ -42,6 +42,19 @@ class MixerTests(unittest.TestCase):
         self.assertFalse(any(isinstance(command, str) for command in commands))
 
 
+    def test_master_attenuation_is_applied_before_source_unmute(self):
+        state = defaults()
+        state["master"] = 100
+        for channel in CHANNELS:
+            state[channel]["volume"] = 100
+        commands = volume_commands(state, {"music": 17, "tablet": 19}, 25)
+        self.assertEqual(commands[0][:3], ["wpctl", "set-volume", "25"])
+        self.assertEqual(commands[0][3], str(effective_master_gain(state)))
+        self.assertTrue(all(args[:3] != ["wpctl", "set-mute", "17"]
+                            for args in commands[:1]))
+        self.assertLess(commands.index(commands[0]),
+                        commands.index(["wpctl", "set-volume", "17", "1.0"]))
+
     def test_three_full_scale_inputs_have_one_third_gain_budget(self):
         settings = defaults()
         settings["master"] = 100

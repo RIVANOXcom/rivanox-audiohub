@@ -42,7 +42,13 @@ class RootfsAuditTests(unittest.TestCase):
             '"--capture", source',
             '"--playback", "audiohub." + channel',
             'usb_ready = bool(selected and selected.returncode == 0)',
-            'self._route(sources if self.route_policy_valid else [],',
+            "    def poll(self):",
+            "for args in volume_commands(",
+            "applied = run(*args)",
+            "if applied is None or applied.returncode != 0:",
+            'raise RuntimeError("AudioHub mixer control failed")',
+            "self._stop_all_managed_routes()",
+            'self._route(sources if self.route_policy_valid else [],'
             'sinks if (usb_ready and self.route_policy_valid) else {})',
         )))
         make("etc/wireplumber/wireplumber.conf.d/90-audiohub.conf", "\\n".join((
@@ -56,6 +62,9 @@ class RootfsAuditTests(unittest.TestCase):
             "def effective_master_gain(settings):",
             "return min(1.0, 1.0 / worst_case)",
             "str(effective_master_gain(settings))",
+            "def volume_commands(settings, sink_ids, output_id=None):",
+            "if output_id is not None:",
+            "for channel in CHANNELS:",
         )))
         # Minimum installed runtime private-state read/write safety markers.
         runtime_path = root / "opt/audiohub/src/audiohub/runtime.py"
@@ -1297,6 +1306,49 @@ class RootfsAuditTests(unittest.TestCase):
             ))
             self.assertFalse(audit.inspect(root)[
                 "runtime_settings_assignments_json_fail_closed"
+            ])
+
+    def test_installed_mixer_master_first_guard_present(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            self.assertTrue(audit.inspect(root)[
+                "mixer_master_gain_verified_before_managed_routes"
+            ])
+
+    def test_master_gain_order_regression_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/src/audiohub/mixer.py"
+            path.write_text(path.read_text().replace(
+                "if output_id is not None:", "if False:"
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "mixer_master_gain_verified_before_managed_routes"
+            ])
+
+    def test_unchecked_wpctl_control_result_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/src/audiohub/runtime.py"
+            path.write_text(path.read_text().replace(
+                "if applied is None or applied.returncode != 0:", "if False:"
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "mixer_master_gain_verified_before_managed_routes"
+            ])
+
+    def test_routing_before_mixer_programming_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/src/audiohub/runtime.py"
+            body = path.read_text()
+            before = body.replace(
+                "for args in volume_commands(",
+                "self._route(sources if\nfor args in volume_commands("
+            )
+            path.write_text(before)
+            self.assertFalse(audit.inspect(root)[
+                "mixer_master_gain_verified_before_managed_routes"
             ])
 
     def test_missing_flexible_source_plan_blocks_alpha_image(self):

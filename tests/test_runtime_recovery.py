@@ -11,6 +11,8 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from audiohub.runtime import STATE, Supervisor, MAX_RUNTIME_JSON_BYTES, atomic_json, read_json
+from audiohub.mixer import defaults as mixer_defaults
+from audiohub.source_routes import defaults as route_defaults
 
 
 class FakeProcess:
@@ -284,6 +286,118 @@ class SupervisorFailClosedTests(unittest.TestCase):
         s.loopbacks = {}
         s.retry_state = {"first": ("node", 123, 2)}
         return s
+
+    def _poll_mixer_case(self, supervisor, outcome, events, stored=None):
+        """No PipeWire, audio process or real hardware is accessed."""
+        from contextlib import ExitStack
+
+        def simulated_run(*args, **kwargs):
+            events.append(("command", args))
+            if args[:2] == ("wpctl", "set-volume") and args[2] == "10":
+                if outcome == "master_missing":
+                    return None
+            if args[:2] == ("wpctl", "set-mute") and outcome == "mute_rejected":
+                return subprocess.CompletedProcess(args, 9, "", "")
+            return subprocess.CompletedProcess(args, 0, "[]", "")
+
+        supervisor.settings = mixer_defaults()
+        supervisor.route_plan = route_defaults()
+        supervisor.assignments = {}
+        supervisor.route_policy_valid = True
+        supervisor.last_default = None
+        with ExitStack() as stack:
+            stack.enter_context(mock.patch("audiohub.runtime.run", side_effect=simulated_run))
+            stack.enter_context(mock.patch("audiohub.runtime.pipewire_nodes", return_value=[]))
+            stack.enter_context(mock.patch("audiohub.runtime.choose_usb_output", return_value={"id": 10}))
+            stack.enter_context(mock.patch("audiohub.runtime.bluetooth_sources", return_value=[]))
+            stack.enter_context(mock.patch("audiohub.runtime.virtual_sinks", return_value={
+                "audiohub.music": 20, "audiohub.laptop": 21, "audiohub.tablet": 22,
+            }))
+            stack.enter_context(mock.patch("audiohub.runtime.summarize_links", return_value={
+                "links_inspected": 0,
+                "eq_output_to_usb_direct_link": {
+                    "music": False, "laptop": False, "tablet": False,
+                },
+            }))
+            stack.enter_context(mock.patch("audiohub.runtime.load_routes", return_value=route_defaults()))
+            stack.enter_context(mock.patch(
+                "audiohub.runtime.read_json",
+                return_value=mixer_defaults() if stored is None else stored,
+            ))
+            persistence = stack.enter_context(mock.patch("audiohub.runtime.atomic_json"))
+            routing = stack.enter_context(mock.patch.object(
+                supervisor, "_route", side_effect=lambda *_: events.append(("route",)),
+            ))
+            completed = supervisor.poll_safely()
+        return completed, routing, persistence
+
+    def test_master_volume_failure_stops_existing_audio_and_never_routes(self):
+        supervisor = self.instance()
+        active = FakeProcess()
+        supervisor.loopbacks = {
+            "PRIVATE": ("bluez_input.known", "audiohub.music", active)
+        }
+        events = []
+        ok, routing, saved = self._poll_mixer_case(supervisor, "master_missing", events)
+        self.assertFalse(ok)
+        self.assertTrue(active.terminated)
+        self.assertEqual(supervisor.loopbacks, {})
+        routing.assert_not_called()
+        saved.assert_not_called()
+        self.assertIn(("command", ("wpctl", "set-default", "10")), events)
+        self.assertTrue(any(e[0] == "command" and e[1][:3] ==
+                            ("wpctl", "set-volume", "10") for e in events))
+
+    def test_rejected_per_input_mute_fails_closed_and_stops_routes(self):
+        supervisor = self.instance()
+        active = FakeProcess()
+        supervisor.loopbacks = {
+            "PRIVATE": ("bluez_input.known", "audiohub.music", active)
+        }
+        events = []
+        ok, routing, saved = self._poll_mixer_case(supervisor, "mute_rejected", events)
+        self.assertFalse(ok)
+        self.assertTrue(active.terminated)
+        routing.assert_not_called()
+        saved.assert_not_called()
+        master_index = next(i for i, e in enumerate(events)
+                            if e[0] == "command" and e[1][:3] ==
+                            ("wpctl", "set-volume", "10"))
+        mute_index = next(i for i, e in enumerate(events)
+                          if e[0] == "command" and e[1][:2] ==
+                          ("wpctl", "set-mute"))
+        self.assertLess(master_index, mute_index)
+
+    def test_mixer_commands_complete_before_new_sources_are_routed(self):
+        supervisor = self.instance()
+        events = []
+        ok, routing, saved = self._poll_mixer_case(supervisor, "ok", events)
+        self.assertTrue(ok)
+        routing.assert_called_once()
+        saved.assert_called_once()
+        master_index = next(i for i, e in enumerate(events)
+                            if e[0] == "command" and e[1][:3] ==
+                            ("wpctl", "set-volume", "10"))
+        route_index = next(i for i, e in enumerate(events) if e[0] == "route")
+        self.assertLess(master_index, route_index)
+        self.assertTrue(all(e[0] != "command" for e in events[route_index + 1:]))
+
+    def test_invalid_mixer_setting_cannot_leave_active_audio_running(self):
+        supervisor = self.instance()
+        active = FakeProcess()
+        supervisor.loopbacks = {
+            "PRIVATE": ("bluez_input.known", "audiohub.music", active)
+        }
+        events = []
+        ok, routing, saved = self._poll_mixer_case(
+            supervisor, "ok", events, stored={"master": float("nan")},
+        )
+        self.assertFalse(ok)
+        self.assertTrue(active.terminated)
+        routing.assert_not_called()
+        saved.assert_not_called()
+        self.assertFalse(any(e[0] == "command" and
+                             e[1][:2] == ("wpctl", "set-volume") for e in events))
 
     def test_failed_cycle_terminates_each_active_audio_route(self):
         s = self.instance()
