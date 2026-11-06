@@ -109,6 +109,60 @@ class DiscoveryTests(unittest.TestCase):
         graph = [node(8, "alsa_output.usb-USB_Audio", "Audio/Sink")]
         self.assertEqual(choose_usb_output(graph)["id"], 8)
 
+    def test_duplicate_node_identity_or_metadata_json_is_rejected(self):
+        # Last-wins JSON must not bypass global Node-ID conflict detection.
+        records = (
+            '[{"type":"PipeWire:Interface:Node","id":1,"id":9,'
+            '"info":{"props":{"node.name":"audiohub.music",'
+            '"media.class":"Audio/Sink"}}}]',
+            '[{"type":"PipeWire:Interface:Node","id":9,'
+            '"info":{"props":{"node.name":"audiohub.music",'
+            '"node.name":"alsa_output.usb-Edifier_R600USB",'
+            '"media.class":"Audio/Sink"}}}]',
+        )
+        for raw in records:
+            with self.subTest(raw=raw[:54]):
+                self.assertEqual(pipewire_nodes(raw), [])
+
+    def test_pipewire_graph_nonfinite_literals_and_exponents_are_rejected(self):
+        for numeric in ("NaN", "Infinity", "-Infinity", "1e999", "-1e999"):
+            with self.subTest(numeric=numeric):
+                raw = ('[{"type":"PipeWire:Interface:Node","id":1,'
+                       '"info":{"props":{"extra":' + numeric + '}}}]')
+                self.assertEqual(pipewire_nodes(raw), [])
+
+    def test_nested_size_bounded_pipewire_metadata_fails_without_crash(self):
+        for nesting in ("[" * 1500 + "0" + "]" * 1500,
+                        '{"x":' * 650 + "0" + "}" * 650):
+            with self.subTest(nesting=nesting[:10]):
+                raw = '[{"type":"PipeWire:Interface:Node","id":1,' + (
+                    '"info":{"props":{"nested":' + nesting + '}}}]'
+                )
+                self.assertEqual(pipewire_nodes(raw), [])
+
+    def test_already_parsed_deep_graph_is_also_rejected_without_recursion(self):
+        nested = 0
+        for _ in range(100):
+            nested = [nested]
+        raw = [node(3, "alsa_output.usb-Edifier_R600USB", "Audio/Sink",
+                    extra=nested)]
+        self.assertEqual(pipewire_nodes(raw), [])
+
+    def test_large_preparsed_graph_metadata_fails_before_walk_memory_growth(self):
+        from audiohub.discovery import MAX_PIPEWIRE_GRAPH_VALUES
+        too_many = [0] * (MAX_PIPEWIRE_GRAPH_VALUES + 1)
+        raw = [node(3, "audiohub.music", "Audio/Sink", large=too_many)]
+        self.assertEqual(pipewire_nodes(raw), [])
+
+    def test_valid_pipewire_dump_still_selects_usb_and_bluetooth_nodes(self):
+        graph = [
+            node(3, "alsa_output.usb-Edifier_R600USB", "Audio/Sink"),
+            node(4, "bluez_input.AA_BB_CC_DD_EE_FF.0", "Audio/Source"),
+        ]
+        decoded = pipewire_nodes(json.dumps(graph))
+        self.assertEqual(choose_usb_output(decoded)["id"], 3)
+        self.assertEqual(len(bluetooth_sources(decoded)), 1)
+
     def test_invalid_pipewire_dump_is_safe(self):
         self.assertEqual(pipewire_nodes("bad JSON"), [])
         self.assertEqual(pipewire_nodes('{"anything": 1}'), [])

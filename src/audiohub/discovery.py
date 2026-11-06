@@ -6,6 +6,7 @@ No discovery result constitutes device ownership or a physical sound test.
 from __future__ import annotations
 
 import json
+import math
 import re
 
 _MAC = re.compile(r"(?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}\Z")
@@ -13,21 +14,73 @@ _BLUEZ_NAME = re.compile(r"bluez_input\.([0-9A-Fa-f_]{17})(?:\.[a-zA-Z0-9_.:-]{1
 _CHANNEL_NAMES = frozenset(("audiohub.music", "audiohub.laptop", "audiohub.tablet"))
 MAX_PIPEWIRE_GRAPH_BYTES = 4 * 1024 * 1024
 MAX_PIPEWIRE_GRAPH_OBJECTS = 8192
+MAX_PIPEWIRE_JSON_DEPTH = 64
+MAX_PIPEWIRE_GRAPH_VALUES = 262144
 
 
-def pipewire_nodes(raw):
-    # Reject overlarge or malformed snapshots before iterating nodes.
+def _unique_pipewire_members(pairs):
+    """Duplicate Node IDs, Link endpoints, or metadata keys are ambiguous."""
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("Duplicate PipeWire JSON member")
+        result[key] = value
+    return result
+
+
+def _reject_pipewire_constant(_value):
+    raise ValueError("Non-standard PipeWire JSON constant")
+
+
+def _finite_pipewire_float(number):
+    """Even standard JSON exponents can overflow to non-finite floats."""
+    value = float(number)
+    if not math.isfinite(value):
+        raise ValueError("PipeWire JSON exponent overflow")
+    return value
+
+
+def _pipewire_graph_shape_bounded(data):
+    """Bound nesting and aggregate values without recursive Python traversal."""
+    seen = 0
+    todo = [(data, 0)]
+    while todo:
+        item, depth = todo.pop()
+        seen += 1
+        if seen > MAX_PIPEWIRE_GRAPH_VALUES or depth > MAX_PIPEWIRE_JSON_DEPTH:
+            return False
+        if type(item) is dict or type(item) is list:
+            # Check breadth before allocating an attacker-sized traversal stack.
+            if len(item) + len(todo) + seen > MAX_PIPEWIRE_GRAPH_VALUES:
+                return False
+            values = item.values() if type(item) is dict else item
+            todo.extend((value, depth + 1) for value in values)
+    return True
+
+
+def _parse_pipewire_graph(raw):
+    """Bound and validate exactly one shared Node/Link graph snapshot."""
     if type(raw) is str:
         try:
             if len(raw.encode("utf-8")) > MAX_PIPEWIRE_GRAPH_BYTES:
-                return []
-        except UnicodeError:
-            return []
-    try:
-        data = json.loads(raw) if type(raw) is str else raw
-    except (TypeError, ValueError):
-        return []
-    if type(data) is not list or len(data) > MAX_PIPEWIRE_GRAPH_OBJECTS:
+                return None
+            raw = json.loads(
+                raw,
+                object_pairs_hook=_unique_pipewire_members,
+                parse_constant=_reject_pipewire_constant,
+                parse_float=_finite_pipewire_float,
+            )
+        except (UnicodeError, TypeError, ValueError, RecursionError):
+            return None
+    if type(raw) is not list or len(raw) > MAX_PIPEWIRE_GRAPH_OBJECTS:
+        return None
+    return raw if _pipewire_graph_shape_bounded(raw) else None
+
+
+def pipewire_nodes(raw):
+    # Node selection and EQ Link observation must reject the same bad input.
+    data = _parse_pipewire_graph(raw)
+    if data is None:
         return []
     return [
         obj for obj in data

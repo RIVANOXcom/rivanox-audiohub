@@ -8,9 +8,8 @@ capture. No raw node metadata, addresses, MACs or port IDs escape the summary.
 """
 from __future__ import annotations
 
-import json
-
-from .discovery import _conflicting_node_ids, choose_usb_output, pipewire_nodes, props
+from .discovery import (_conflicting_node_ids, _parse_pipewire_graph,
+                        choose_usb_output, pipewire_nodes, props)
 
 CHANNELS = ("music", "laptop", "tablet")
 MAX_GRAPH_OBJECTS = 8192
@@ -21,14 +20,9 @@ def _id(value):
 
 
 def _parse(raw):
-    if type(raw) is str:
-        try:
-            raw = json.loads(raw)
-        except (ValueError, TypeError):
-            return None
-    if type(raw) is not list or len(raw) > MAX_GRAPH_OBJECTS:
-        return None
-    return raw
+    # Never parse links more permissively than their companion Node IDs.
+    graph = _parse_pipewire_graph(raw)
+    return graph if graph is not None and len(graph) <= MAX_GRAPH_OBJECTS else None
 
 
 def summarize_links(raw):
