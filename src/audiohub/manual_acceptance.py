@@ -41,13 +41,41 @@ def _answer(prompt, message):
     return "not_tested"
 
 
+def _consistent_read_only_preflight(report):
+    """Only a complete, internally consistent topology summary can prompt.
+
+    A caller-provided ready flag alone is never evidence of USB or PipeWire
+    readiness. Even a valid summary is NOT evidence of audible hardware.
+    """
+    if type(report) is not dict or type(report.get("schema_version")) is not int:
+        return False
+    checks = report.get("checks")
+    if type(checks) is not dict:
+        return False
+    sinks = checks.get("virtual_sink_unique")
+    gates = report.get("hardware_gates")
+    if type(sinks) is not dict or type(gates) is not dict:
+        return False
+    return (
+        report["schema_version"] == 1
+        and report.get("assessment") == "topology_only_not_hardware_acceptance"
+        and report.get("topology_preflight") == "ready_for_manual_test"
+        and report.get("release_ready") is False
+        and checks.get("pipewire_inspection_succeeded") is True
+        and checks.get("edifier_usb_sink_unique") is True
+        and set(sinks) == {"music", "laptop", "tablet"}
+        and all(sinks[channel] is True for channel in ("music", "laptop", "tablet"))
+        and all(gates.get(gate) == "unverified" for gate in (
+            "speaker_audible", "three_simultaneous_sources",
+            "per_channel_isolation", "mix_clipping",
+            "wifi_owner_security", "endurance_24h",
+        ))
+    )
+
+
 def observe(preflight, *, ask=input):
     """No automatic audio assertion is possible from PipeWire metadata."""
-    ready = (
-        type(preflight) is dict
-        and preflight.get("topology_preflight") == "ready_for_manual_test"
-        and preflight.get("release_ready") is False
-    )
+    ready = _consistent_read_only_preflight(preflight)
     observations = {
         gate: _answer(ask, question) if ready else "not_tested"
         for gate, question in GATES
