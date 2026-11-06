@@ -60,9 +60,23 @@ def _safe_dir(path):
     return fd
 
 
+def _unique_profile_members(pairs):
+    """Reject contradictory local display-name snapshots, at every depth."""
+    seen = {}
+    for key, value in pairs:
+        if key in seen:
+            raise ValueError("Duplicate private input profile member")
+        seen[key] = value
+    return seen
+
+
+def _reject_profile_constant(_value):
+    raise ValueError("Non-standard private input profile number")
+
+
 def _read_labels(dirfd):
     try:
-        fd = os.open(FILENAME, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=dirfd)
+        fd = os.open(FILENAME, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=dirfd)
     except FileNotFoundError:
         return DEFAULT_NAMES.copy()
     try:
@@ -73,9 +87,17 @@ def _read_labels(dirfd):
                 or meta.st_size > MAX_BYTES):
             raise PermissionError("Invalid input-labels file ownership or size")
         data = os.read(fd, MAX_BYTES + 1)
-        if len(data) > MAX_BYTES:
-            raise ValueError("Input labels exceed size limit")
-        parsed = json.loads(data.decode("utf-8"))
+        if len(data) != meta.st_size:
+            raise ValueError("Input profile changed during bounded read")
+        try:
+            parsed = json.loads(
+                data.decode("utf-8"),
+                object_pairs_hook=_unique_profile_members,
+                parse_constant=_reject_profile_constant,
+            )
+        except (UnicodeError, ValueError, RecursionError):
+            # No local name, device or secret is copied into error text.
+            raise ValueError("Malformed private input profile JSON") from None
         if type(parsed) is not dict or set(parsed) != {"schema", "labels"}:
             raise ValueError("Invalid input-labels data")
         if parsed["schema"] != SCHEMA:
