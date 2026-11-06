@@ -142,7 +142,8 @@ def virtual_sinks(nodes):
         value = props(item)
         name = value.get("node.name")
         ident = _id(item)
-        if value.get("media.class") == "Audio/Sink" and name in _CHANNEL_NAMES and ident is not None:
+        if (value.get("media.class") == "Audio/Sink" and type(name) is str
+                and name in _CHANNEL_NAMES and ident is not None):
             if name in found:
                 ambiguous.add(name)
             else:
