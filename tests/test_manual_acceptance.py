@@ -8,7 +8,26 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from audiohub import manual_acceptance as manual
 
-READY = {"topology_preflight": "ready_for_manual_test", "release_ready": False}
+READY = {
+    "schema_version": 1,
+    "assessment": "topology_only_not_hardware_acceptance",
+    "topology_preflight": "ready_for_manual_test",
+    "release_ready": False,
+    "checks": {
+        "pipewire_inspection_succeeded": True,
+        "edifier_usb_sink_unique": True,
+        "virtual_sink_unique": {"music": True, "laptop": True, "tablet": True},
+        "bluetooth_source_count": 1,
+    },
+    "hardware_gates": {
+        "speaker_audible": "unverified",
+        "three_simultaneous_sources": "unverified",
+        "per_channel_isolation": "unverified",
+        "mix_clipping": "unverified",
+        "wifi_owner_security": "unverified",
+        "endurance_24h": "unverified",
+    },
+}
 INCOMPLETE = {"topology_preflight": "incomplete", "release_ready": False}
 
 
@@ -94,6 +113,74 @@ class OfflineHardwareAcceptanceTests(unittest.TestCase):
                 self.assertEqual(manual.observe(preflight, ask=question)["preflight"],
                                  "incomplete")
         question.assert_not_called()
+
+
+    def test_bare_ready_flag_without_real_prerequisites_never_prompts(self):
+        question = mock.Mock(side_effect=AssertionError("prompted without proof"))
+        result = manual.observe({
+            "topology_preflight": "ready_for_manual_test",
+            "release_ready": False,
+        }, ask=question)
+        question.assert_not_called()
+        self.assertEqual(result["preflight"], "incomplete")
+        self.assertFalse(result["all_questions_answered_observed"])
+
+    def test_contradictory_topology_checks_never_prompt(self):
+        question = mock.Mock(side_effect=AssertionError("prompted despite contradiction"))
+        for key, field, value in (
+            ("checks", "pipewire_inspection_succeeded", False),
+            ("checks", "edifier_usb_sink_unique", False),
+            ("checks", "virtual_sink_unique", {"music": True, "laptop": False,
+                                                "tablet": True}),
+            ("checks", "virtual_sink_unique", {"music": True, "laptop": True,
+                                                "tablet": True, "extra": True}),
+        ):
+            import copy
+            report = copy.deepcopy(READY)
+            report[key][field] = value
+            with self.subTest(field=field, value=repr(value)):
+                self.assertEqual(
+                    manual.observe(report, ask=question)["preflight"], "incomplete"
+                )
+        question.assert_not_called()
+
+    def test_invalid_preflight_schema_and_claimed_hardware_success_fail_closed(self):
+        question = mock.Mock(side_effect=AssertionError("prompted despite bad schema"))
+        for edit in (
+            {"schema_version": True},
+            {"schema_version": 2},
+            {"assessment": "hardware_accepted"},
+            {"hardware_gates": {"speaker_audible": "observed"}},
+            {"release_ready": True},
+            {"checks": []},
+        ):
+            import copy
+            report = copy.deepcopy(READY)
+            report.update(edit)
+            with self.subTest(edit=repr(edit)):
+                self.assertEqual(
+                    manual.observe(report, ask=question)["preflight"], "incomplete"
+                )
+        question.assert_not_called()
+
+    def test_consistent_real_preflight_report_allows_prompts_but_never_signoff(self):
+        from audiohub import hardware_preflight
+        def n(number, name, kind, **other):
+            return {"id": number, "type": "PipeWire:Interface:Node",
+                    "info": {"props": {"node.name": name,
+                                       "media.class": kind, **other}}}
+        topology = [
+            n(1, "alsa_output.usb-Edifier_R600USB", "Audio/Sink"),
+            n(2, "audiohub.music", "Audio/Sink"),
+            n(3, "audiohub.laptop", "Audio/Sink"),
+            n(4, "audiohub.tablet", "Audio/Sink"),
+        ]
+        report = hardware_preflight.inspect_topology(topology)
+        self.assertEqual(report["topology_preflight"], "ready_for_manual_test")
+        answers = manual.observe(report, ask=lambda _: "yes")
+        self.assertTrue(answers["all_questions_answered_observed"])
+        self.assertFalse(answers["hardware_accepted"])
+        self.assertFalse(answers["release_ready"])
 
     def test_all_observation_fields_have_fixed_nonidentifying_names(self):
         result = manual.observe(READY, ask=lambda prompt: "skip")
