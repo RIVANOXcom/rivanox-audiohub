@@ -166,12 +166,23 @@ class RootfsAuditTests(unittest.TestCase):
              'values.get("AUDIOHUB_UNSAFE_STATUS_LAN") != "YES"\\n')
         make("opt/audiohub/src/audiohub/webserver.py",
              "from .status_bind import select_bind_address\\n"
-             "ThreadingHTTPServer((select_bind_address(), 8765), Handler)\\n"
+             "BoundedStatusHTTPServer((select_bind_address(), 8765), Handler)\\n"
              "def do_POST(self):\\nRead-only preview\\n"
              "STATIC_MAX_BYTES = 512 * 1024\\n"
              "STATUS_MAX_BYTES = 32 * 1024\\n"
              "os.O_NOFOLLOW\\nos.O_NONBLOCK\\nstat.S_ISREG\\n"
-             "read_public_status()\\n")
+             "read_public_status()\\n"
+            "MAX_STATUS_CLIENTS = 8\\n"
+            "CLIENT_READ_TIMEOUT_SECONDS = 5\\n"
+            "class BoundedStatusHTTPServer(ThreadingHTTPServer):\\n"
+            "threading.BoundedSemaphore(MAX_STATUS_CLIENTS)\\n"
+            "self._client_slots.acquire(blocking=False)\\n"
+            "self.shutdown_request(request)\\n"
+            "def process_request_thread(self, request, client_address):\\n"
+            "self._client_slots.release()\\n"
+            "conn.settimeout(CLIENT_READ_TIMEOUT_SECONDS)\\n"
+            "def log_message(self, format, *args):\\n"
+            "server = BoundedStatusHTTPServer(\\n")
         make("opt/audiohub/src/audiohub/firstboot_diag.py",
              'OUTPUT_NAME = "AUDIOHUB-TEST-REPORT.json"\\n'
              '"pipewire_links_inspected"\\n'
@@ -655,6 +666,49 @@ class RootfsAuditTests(unittest.TestCase):
             root = self.root(tmp)
             self.assertTrue(audit.inspect(root)[
                 "manual_laptop_pipewire_capture_bounded"
+            ])
+
+
+    def test_unbounded_status_http_workers_block_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/src/audiohub/webserver.py"
+            path.write_text(path.read_text().replace(
+                "self._client_slots.acquire(blocking=False)",
+                "unbounded_worker_start(request)"
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "status_http_clients_bounded_no_request_logs"
+            ])
+
+    def test_unlimited_http_client_timeout_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/src/audiohub/webserver.py"
+            path.write_text(path.read_text().replace(
+                "conn.settimeout(CLIENT_READ_TIMEOUT_SECONDS)", "pass"
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "status_http_clients_bounded_no_request_logs"
+            ])
+
+    def test_raw_request_access_logging_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/src/audiohub/webserver.py"
+            path.write_text(path.read_text().replace(
+                "def log_message(self, format, *args):",
+                "def access_log_path(self, format, *args):"
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "status_http_clients_bounded_no_request_logs"
+            ])
+
+    def test_bounded_and_private_webserver_image_guard_passes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            self.assertTrue(audit.inspect(root)[
+                "status_http_clients_bounded_no_request_logs"
             ])
 
     def test_unchecked_status_web_listener_prevents_image_export(self):
