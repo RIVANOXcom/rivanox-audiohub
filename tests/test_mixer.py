@@ -35,6 +35,41 @@ class MixerTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             patch_settings(defaults(), {"music": {"mute": 1}})
 
+
+    def test_volume_targets_refuse_bool_float_string_negative_or_oversize_id(self):
+        for invalid in (True, False, 1.75, "17", -1, 2**31, None):
+            with self.subTest(kind="channel", value=repr(invalid)):
+                with self.assertRaises(ValueError):
+                    volume_commands(defaults(), {"music": invalid}, 25)
+        for invalid in (True, False, 25.1, "25", -1, 2**31):
+            with self.subTest(kind="output", value=repr(invalid)):
+                with self.assertRaises(ValueError):
+                    volume_commands(defaults(), {"music": 17}, invalid)
+
+    def test_volume_targets_refuse_duplicates_or_unknown_channel(self):
+        for targets, output in (
+            ({"music": 10, "laptop": 10}, 25),
+            ({"music": 25}, 25),
+            ({"unexpected": 17}, 25),
+            ({"music": 17}, 17),
+        ):
+            with self.subTest(targets=repr(targets), output=output):
+                with self.assertRaises(ValueError):
+                    volume_commands(defaults(), targets, output)
+        with self.assertRaises(ValueError):
+            volume_commands(defaults(), [17], 25)
+
+    def test_volume_targets_accept_exact_pi_pipewire_id_boundaries(self):
+        cmds = volume_commands(defaults(), {"music": 0, "laptop": 2**31 - 1}, 25)
+        self.assertIn(["wpctl", "set-volume", "0", "0.65"], cmds)
+        self.assertIn(["wpctl", "set-volume", str(2**31 - 1), "0.5"], cmds)
+        self.assertEqual(cmds[0][:3], ["wpctl", "set-volume", "25"])
+
+    def test_volume_targets_without_physical_output_are_still_local_only(self):
+        cmds = volume_commands(defaults(), {"music": 17}, None)
+        self.assertEqual(cmds[0], ["wpctl", "set-volume", "17", "0.65"])
+        self.assertFalse(any(x[2] == "None" for x in cmds))
+
     def test_volume_commands_are_argv(self):
         commands = volume_commands(defaults(), {"music": 17, "laptop": 18}, 25)
         self.assertIn(["wpctl", "set-volume", "17", "0.65"], commands)
