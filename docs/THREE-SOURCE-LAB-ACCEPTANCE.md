@@ -7,6 +7,10 @@ source-IP checks are spoofable. Neither the Windows driver nor admin login
 are installed/configured by AudioHub. **Do not connect this unclaimed
 prototype to a household, workplace, internet-routed or production LAN**.
 
+**No network listener during boot:** the unauthenticated Windows UDP
+receiver stays disabled unless an operator explicitly starts it on a
+separate isolated test LAN. Never expose it on a trusted network.
+
 Source-only and image CI tests are no substitute for actual Raspberry Pi4
 plus Edifier R600USB speaker tests. No official release or claim of a
 working three-source appliance exists.
