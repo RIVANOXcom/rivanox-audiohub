@@ -114,7 +114,15 @@ class PairingAgent(dbus.service.Object):
     def changed(self, interface, change, invalidated, path=None):
         if interface != "org.bluez.Device1" or not isinstance(change, dict):
             return
-        if not change.get("Paired") or path is None:
+        if path is None:
+            return
+        # An explicit unpair or invalidated Paired property may arrive without
+        # Agent1.Cancel. Revoke only this device's in-flight trust token.
+        if ((invalidated and "Paired" in invalidated)
+                or ("Paired" in change and not change["Paired"])):
+            self.pending_authorizations.pop(path, None)
+            return
+        if not change.get("Paired"):
             return
         try:
             now = time.monotonic()

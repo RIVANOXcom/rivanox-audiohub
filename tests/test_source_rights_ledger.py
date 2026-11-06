@@ -143,8 +143,8 @@ class SourceRightsLedgerTests(unittest.TestCase):
         self.assertEqual(state["latest_legacy_security_change"]["static_file_cap_bytes"], 524288)
         self.assertEqual(state["latest_legacy_security_change"]["anonymized_status_json_cap_bytes"], 32768)
         self.assertTrue(state["latest_legacy_security_change"]["all_path_components_nofollow"])
-        self.assertEqual(state["last_native_verified"]["rootfs_checks_passed"], 81)
-        self.assertEqual(state["last_native_verified"]["run_id"], 42238617371)
+        self.assertEqual(state["last_native_verified"]["rootfs_checks_passed"], 82)
+        self.assertEqual(state["last_native_verified"]["run_id"], 42240817288)
         self.assertFalse(state["next_runtime_state_security_change"]["model_c_effective"])
         self.assertFalse(state["next_runtime_state_security_change"]["physical_device_accepted"])
         self.assertEqual(state["next_runtime_state_security_change"]["expected_rootfs_guard_count"], 58)
@@ -303,6 +303,12 @@ class SourceRightsLedgerTests(unittest.TestCase):
         self.assertTrue(state["next_local_config_ancestor_symlink_fd_walk"]["all_ancestors_opened_componentwise_nofollow"])
         self.assertTrue(state["next_local_config_ancestor_symlink_fd_walk"]["create_directories_relative_to_safe_fds"])
         self.assertFalse(state["next_local_config_ancestor_symlink_fd_walk"]["public_release_ready"])
+        self.assertEqual(state["next_bluez_unpaired_event_pending_trust_revocation"]["pr"], 65)
+        self.assertEqual(state["next_bluez_unpaired_event_pending_trust_revocation"]["parent_pr"], 64)
+        self.assertEqual(state["next_bluez_unpaired_event_pending_trust_revocation"]["expected_native_rootfs_guard_count"], 83)
+        self.assertTrue(state["next_bluez_unpaired_event_pending_trust_revocation"]["revoke_device_pending_token_on_paired_false"])
+        self.assertTrue(state["next_bluez_unpaired_event_pending_trust_revocation"]["revoke_device_pending_token_on_paired_invalidation"])
+        self.assertFalse(state["next_bluez_unpaired_event_pending_trust_revocation"]["public_release_ready"])
         self.assertEqual(state["next_bluetooth_agent_trust_security_change"]["pairable_timeout_seconds"], 600)
         self.assertEqual(state["next_bluetooth_agent_trust_security_change"]["discoverable_timeout_seconds"], 600)
         self.assertTrue(state["next_bluetooth_agent_trust_security_change"]["initial_deadline_relative_to_linux_boot"])
@@ -312,7 +318,7 @@ class SourceRightsLedgerTests(unittest.TestCase):
         self.assertFalse(state["last_native_verified"]["public_release_ready"])
         self.assertEqual(
             [item["number"] for item in state["draft_pr_chain"]],
-            [35, 36, 38, 39, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64],
+            [35, 36, 38, 39, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65],
         )
 
     def test_primary_handoff_points_to_authoritative_resume(self):

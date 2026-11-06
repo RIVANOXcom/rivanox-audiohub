@@ -290,6 +290,49 @@ class AgentCallbackAuthorizationTests(unittest.TestCase):
         self.agent.RequestAuthorization(self.DEVICE)
         self.agent.AuthorizeService(self.DEVICE, "audio")
 
+    def test_unpaired_false_event_revokes_trust_token(self):
+        self.agent.RequestAuthorization(self.DEVICE)
+        self.agent.changed("org.bluez.Device1", {"Paired": False}, [], self.DEVICE)
+        self.assertNotIn(self.DEVICE, self.agent.pending_authorizations)
+        self.paired = 1
+        self.agent.changed("org.bluez.Device1", {"Paired": True}, [], self.DEVICE)
+        self.assertFalse(self.properties[self.DEVICE].trusted)
+
+    def test_paired_property_invalidation_revokes_trust_token(self):
+        self.agent.RequestConfirmation(self.DEVICE, 123456)
+        self.agent.changed("org.bluez.Device1", {}, ["Paired"], self.DEVICE)
+        self.assertEqual(self.agent.pending_authorizations, {})
+        self.paired = 1
+        self.agent.changed("org.bluez.Device1", {"Paired": True}, [], self.DEVICE)
+        self.assertFalse(self.properties[self.DEVICE].trusted)
+
+    def test_unpair_does_not_revoke_another_device(self):
+        self.agent.RequestAuthorization(self.DEVICE)
+        self.agent.RequestAuthorization(self.SECOND)
+        self.agent.changed("org.bluez.Device1", {"Paired": False}, [], self.SECOND)
+        self.assertIn(self.DEVICE, self.agent.pending_authorizations)
+        self.assertNotIn(self.SECOND, self.agent.pending_authorizations)
+        self.agent.AuthorizeService(self.DEVICE, "audio")
+
+    def test_unrelated_device_property_preserves_valid_pending_request(self):
+        self.agent.RequestAuthorization(self.DEVICE)
+        self.agent.changed("org.bluez.Device1", {"Connected": False}, [], self.DEVICE)
+        self.assertIn(self.DEVICE, self.agent.pending_authorizations)
+        self.paired = 1
+        self.agent.changed("org.bluez.Device1", {"Paired": True}, [], self.DEVICE)
+        self.assertTrue(self.properties[self.DEVICE].trusted)
+
+    def test_explicit_fresh_request_after_unpair_is_eligible(self):
+        self.agent.RequestAuthorization(self.DEVICE)
+        self.agent.changed("org.bluez.Device1", {"Paired": False}, [], self.DEVICE)
+        with self.assertRaises(self.ns["Rejected"]):
+            self.agent.AuthorizeService(self.DEVICE, "audio")
+        self.agent.RequestAuthorization(self.DEVICE)
+        self.paired = 1
+        self.agent.changed("org.bluez.Device1", {"Paired": True}, [], self.DEVICE)
+        self.assertTrue(self.properties[self.DEVICE].trusted)
+        self.assertEqual(self.agent.deadline, 700.0)
+
     def test_release_clears_pending_and_discovery(self):
         self.agent.RequestAuthorization(self.DEVICE)
         self.agent.Release()

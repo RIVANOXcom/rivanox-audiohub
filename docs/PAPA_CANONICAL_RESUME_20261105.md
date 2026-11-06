@@ -524,5 +524,20 @@ PR48 adds an installed `manual_acceptance.py` source check and independent no-re
 
 **Next:** PR64 exact-head source and ARM64 82 guards, ZIP/XZ provenance and Workbench evidence. No public release; hardware Pi4/Edifier, real 3-source audio/24h, owner/phone Wi-Fi and licensing remain unaccepted, effective AGPL-3.0-only unchanged.
 
+
+## AG. 2026-11-06: revoke Bluetooth trust token on unpair or invalidation — Draft PR65
+
+PAPA-18B8B3C6. New isolated Draft PR65 branch wd-papa-18b8b3c6-bluetooth-unpaired-token-revocation-20261106, based only on parent Draft PR64 exact SHA 68fc744aded8956d87985773e1b51d8568f7b7ac; no parent or main changes.
+
+Verified parent: Source #42240906184 651/651 PASS; ARM64 #42240817288 attempt 1 failed at image export due /dev/loop0p2 device already present after rootfs 82/82 passed; attempt 2 job #127972748680 SUCCESS at same SHA with real rootfs 82/82, XZ checksum and bundle integrity PASS. Temporary unverified GitHub test artifact #13515841887, ZIP 605546323 bytes, SHA256 4418bc861cc684c3b297729c17906150e9631ce1789b8f6e2c8563722614b14b, expires 2026-12-06T15:24:13Z. Workbench evidence #3031. NOT a released or physically validated image.
+
+AH-005 defect: BlueZ may report Device1.Paired=False or invalidate the Paired property after a failed/unpaired attempt without Agent1.Cancel(). The PairingAgent.changed method previously ignored this and retained its device-specific 45-second one-use authorization. A subsequent Paired=True before TTL expiry could then set an already unpaired or canceled device Trusted.
+
+Fix: Handle explicit Paired=False and Paired property invalidation before positive pairing signals; remove the pending token only for that exact device path. Preserve other devices, unrelated Changed notifications, the original ten-minute boot deadline, and fresh explicit pairing request behavior. No new hardware, network, or service privileges. Five no-Pi mocked DBus callback tests plus four synthetic installed rootfs audit tests; new guard bluetooth_unpaired_event_revokes_pending_trust expected native count 83 ONLY after real exact-head CI evidence.
+
+All PRs remain Draft/unmerged. Current license AGPL-3.0-only, proposed Model C not approved. Rights ledger 83 unreviewed files and 9 missing OS copyright files/aliases. Physical Pi4+Edifier audible three-source/24h and secure authenticated phone/owner Wi-Fi signoff remain unresolved. No payment, merge, install, deployment, permissions or release-GO.
+
+Next: verify PR65 exact-head source and independent ARM64 83 checks, ZIP/XZ provenance and append Workbench evidence.
+
 **END OF HANDOFF.** If a live run/PR contradicts this document, treat
 the live GitHub evidence as authoritative, reconcile and update this file.
