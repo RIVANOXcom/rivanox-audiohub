@@ -98,6 +98,17 @@ class HardwarePreflightTests(unittest.TestCase):
         report = preflight.inspect_topology(json.dumps(data))
         self.assertEqual(report["topology_preflight"], "ready_for_manual_test")
 
+    def test_ambiguous_json_node_fields_do_not_falsely_complete_preflight(self):
+        valid = json.dumps(topology())
+        # Contradictory numeric Node ID in a single JSON object:
+        # no last-wins normalization may produce topology-ready evidence.
+        malformed = valid.replace('"id": 12', '"id": 999, "id": 12', 1)
+        self.assertNotEqual(valid, malformed)
+        result = preflight.inspect_topology(malformed)
+        self.assertEqual(result["topology_preflight"], "incomplete")
+        self.assertFalse(result["release_ready"])
+        self.assertFalse(result["link_observation"]["inspection_available"])
+
     def test_invalid_dump_and_failed_query_cannot_pass(self):
         for raw in (None, "", "malformed json", "{}", "[]"):
             with self.subTest(raw=raw):
