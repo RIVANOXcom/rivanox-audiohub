@@ -122,15 +122,21 @@
       "number": 53,
       "base": "wd-papa-20261106-bounded-status-http-workers-privacy",
       "head": "wd-papa-20261106-private-status-file-identity",
+      "verified_head_sha": "53e49521bc8fd24a3c622cd07c944c5ccced4287"
+    },
+    {
+      "number": 54,
+      "base": "wd-papa-20261106-private-status-file-identity",
+      "head": "wd-papa-20261106-status-parser-failclosed",
       "verified_head_sha": null
     }
   ],
   "last_native_verified": {
-    "run_id": 42208440878,
-    "source_sha": "d4fd8053a13618f3f7ad35fb26888288f6586a1d",
+    "run_id": 42210825401,
+    "source_sha": "53e49521bc8fd24a3c622cd07c944c5ccced4287",
     "conclusion": "success",
-    "python_tests": 522,
-    "rootfs_checks_passed": 68,
+    "python_tests": 547,
+    "rootfs_checks_passed": 70,
     "installed_packages": 689,
     "architecture_counts": {
       "arm64": 538,
@@ -143,10 +149,11 @@
       "doc_alias_target_link": 8,
       "copyright_file_missing": 1
     },
-    "artifact_id": 13497588492,
+    "artifact_id": 13499596254,
     "artifact_unverified": true,
-    "artifact_expiry": "2026-12-06T11:20:20Z",
-    "public_release_ready": false
+    "artifact_expiry": "2026-12-06T11:38:59Z",
+    "public_release_ready": false,
+    "artifact_zip_sha256": "243c812f7ad6e407c31f926bcf1729a8993b2f4c2397e6df33c01adf972ca9da"
   },
   "open_issues": [
     {
@@ -411,7 +418,7 @@
       "conclusion": "success",
       "python_tests": 547
     },
-    "status": "initial code source 547/547 tests PASS; final exact-head source and native ARM64 pending",
+    "status": "exact-head source 547/547 and independent ARM64 70/70 SUCCESS at PR53 SHA 53e49521bc8fd24a3c622cd07c944c5ccced4287",
     "prior_defect": "read-only status web UI trusted group/world-readable, foreign-owned or hardlinked runtime status JSON, unlike privileged offline diagnostic",
     "private_owner_required": true,
     "private_parent_directory_required": true,
@@ -420,6 +427,25 @@
     "stale_no_health_on_invalid_status": true,
     "expected_native_rootfs_guard_count": 70,
     "source_rights_ledger_file_count": 83,
+    "public_release_ready": false,
+    "model_c_license_effective": false,
+    "physical_edifier_accepted": false,
+    "verified_exact_head_sha": "53e49521bc8fd24a3c622cd07c944c5ccced4287",
+    "source_run_id": 42210835227,
+    "native_run_id": 42210825401,
+    "temp_artifact_id": 13499596254
+  },
+  "next_status_malformed_input_failclosed_change": {
+    "pr": 54,
+    "parent_pr": 53,
+    "branch": "wd-papa-20261106-status-parser-failclosed",
+    "prior_defect": "deeply nested size-bounded private status JSON raises uncaught RecursionError and malformed absolute URL raises uncaught ValueError from urlsplit",
+    "nested_json_fail_closed": true,
+    "malformed_request_target_returns_404": true,
+    "read_only_status_api_preserved": true,
+    "expected_native_rootfs_guard_count": 71,
+    "source_rights_ledger_file_count": 83,
+    "initial_ci_pending": true,
     "public_release_ready": false,
     "model_c_license_effective": false,
     "physical_edifier_accepted": false

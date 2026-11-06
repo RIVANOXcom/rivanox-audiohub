@@ -272,6 +272,30 @@ class ReadonlyWebFileBoundaryTests(unittest.TestCase):
         self.assertFalse(result["usb_connected"])
         self.assertNotIn("PRIVATE_WIFI_PASSWORD", json.dumps(result))
 
+    def test_deep_nested_runtime_json_is_stale_not_a_handler_crash(self):
+        # Under STATUS_MAX_BYTES, but beyond the JSON decoder recursion cap.
+        documents = (
+            "[" * 5000 + "0" + "]" * 5000,
+            '{"k":' * 3000 + "0" + "}" * 3000,
+        )
+        for document in documents:
+            with self.subTest(kind=document[0]):
+                self.status.write_text(document)
+                self.status.chmod(0o600)
+                report = read_public_status(path=self.status, now=101)
+                self.assertEqual(set(report), PUBLIC_FIELDS)
+                self.assertFalse(report["fresh"])
+                self.assertFalse(report["usb_connected"])
+                self.assertEqual(report["active_routes"], 0)
+
+    def test_malformed_absolute_http_targets_are_safe_404(self):
+        for target in ("http://[broken/path", "http://[::1"):
+            with self.subTest(target=target):
+                code, body, mime = self._request(target)
+                self.assertEqual(code, 404)
+                self.assertEqual(body, b"Not found")
+                self.assertIn("text/plain", mime)
+
     def test_missing_status_is_stale(self):
         self.assertFalse(read_public_status(path=self.status)["fresh"])
 

@@ -152,7 +152,8 @@ def read_public_status(*, path=None, now=None):
         return public_status({}, now=now)
     try:
         decoded = json.loads(body.decode("utf-8"))
-    except (UnicodeError, ValueError):
+    except (UnicodeError, ValueError, RecursionError):
+        # Deeply nested but size-bounded JSON must not crash a status handler.
         decoded = {}
     return public_status(decoded, now=now)
 
@@ -224,7 +225,13 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(content)
 
     def do_GET(self):
-        path = urlsplit(self.path).path
+        try:
+            path = urlsplit(self.path).path
+        except ValueError:
+            # Invalid absolute request targets (such as malformed IPv6) are
+            # never valid allowlisted routes and must not crash the worker.
+            self.respond(404, b"Not found", "text/plain; charset=utf-8")
+            return
         if path == "/api/status":
             body = json.dumps(read_public_status(), separators=(",", ":")).encode()
             self.respond(200, body, "application/json; charset=utf-8")
