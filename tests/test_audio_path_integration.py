@@ -396,6 +396,82 @@ class EqSetupFileSafetyTests(unittest.TestCase):
                 self.assertEqual(target.read_text(), content)
                 self.assertEqual(list(target.parent.iterdir()), [target])
 
+
+    def test_eq_setup_tolerates_a_concurrent_private_directory_creation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = self.home(tmp)
+            original_mkdir = os.mkdir
+            collided = []
+
+            def other_instance_creates_dir(path, mode=0o777, *, dir_fd=None):
+                if dir_fd is not None and not collided:
+                    original_mkdir(path, mode=mode, dir_fd=dir_fd)
+                    collided.append(path)
+                    raise FileExistsError("created concurrently")
+                return original_mkdir(path, mode=mode, dir_fd=dir_fd)
+
+            with (mock.patch.object(Path, "home", return_value=home),
+                  mock.patch.object(eq_setup.os, "mkdir",
+                                    side_effect=other_instance_creates_dir)):
+                eq_setup.main()
+            self.assertEqual(len(collided), 1)
+            self.assertTrue(self.config(home).is_file())
+
+    def test_eq_setup_raced_symlink_directory_stays_denied(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = self.home(tmp)
+            outside = Path(tmp) / "not-a-pipewire-config"
+            outside.mkdir(mode=0o700)
+
+            def another_process_inserts_symlink(path, mode=0o777, *, dir_fd=None):
+                os.symlink(str(outside), path, dir_fd=dir_fd)
+                raise FileExistsError("symlink created concurrently")
+
+            with (mock.patch.object(Path, "home", return_value=home),
+                  mock.patch.object(eq_setup.os, "mkdir",
+                                    side_effect=another_process_inserts_symlink)):
+                with self.assertRaises(OSError):
+                    eq_setup.main()
+            self.assertEqual(list(outside.iterdir()), [])
+
+    def test_eq_failed_write_preserves_old_eq_file_and_removes_temp(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = self.home(tmp)
+            with mock.patch.object(Path, "home", return_value=home):
+                eq_setup.main()
+                path = self.config(home)
+                prior = path.read_bytes()
+                with mock.patch.object(eq_setup.os, "write",
+                                       side_effect=OSError("EQ write interrupted")):
+                    with self.assertRaisesRegex(OSError, "EQ write interrupted"):
+                        eq_setup.main()
+            self.assertEqual(path.read_bytes(), prior)
+            self.assertEqual(list(path.parent.iterdir()), [path])
+
+    def test_eq_cleanup_failure_never_masks_write_error_or_leaks_dir_fd(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = self.home(tmp)
+            opened = []
+            original_open = eq_setup._safe_eq_parent_fd
+
+            def track_dir_fd(target):
+                fd = original_open(target)
+                opened.append(fd)
+                return fd
+
+            with (mock.patch.object(Path, "home", return_value=home),
+                  mock.patch.object(eq_setup, "_safe_eq_parent_fd",
+                                    side_effect=track_dir_fd),
+                  mock.patch.object(eq_setup.os, "write",
+                                    side_effect=OSError("original write failure")),
+                  mock.patch.object(eq_setup.os, "unlink",
+                                    side_effect=PermissionError("cleanup failed"))):
+                with self.assertRaisesRegex(OSError, "original write failure"):
+                    eq_setup.main()
+            self.assertEqual(len(opened), 1)
+            with self.assertRaises(OSError):
+                os.fstat(opened[0])
+
     def test_eq_setup_refuses_final_symlink_without_clobbering_target(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = self.home(tmp)

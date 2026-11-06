@@ -35,6 +35,11 @@ class RootfsAuditTests(unittest.TestCase):
             "os.fsync(out)",
             "os.replace(temp, target.name, src_dir_fd=dirfd, dst_dir_fd=dirfd)",
             "os.fsync(dirfd)",
+            "except FileExistsError:",
+            "nextfd = os.open(component, flags, dir_fd=fd)",
+            "except OSError:",
+            "os.unlink(temp, dir_fd=dirfd)",
+            "finally:\n            os.close(dirfd)",
         )))
         make("opt/audiohub/src/audiohub/pairing.py", "\n".join((
             "AUTHORIZATION_TTL = 45",
@@ -483,6 +488,36 @@ class RootfsAuditTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = self.root(tmp)
             self.assertTrue(audit.inspect(root)["eq_setup_private_atomic_nofollow"])
+
+
+    def test_eq_setup_concurrent_creation_cleanup_guard_present(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            self.assertTrue(audit.inspect(root)[
+                "eq_setup_concurrent_create_cleanup_safe"
+            ])
+
+    def test_eq_setup_unhandled_concurrent_directory_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/src/audiohub/eq_setup.py"
+            path.write_text(path.read_text().replace(
+                "except FileExistsError:", "except FileNotFoundError:"
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "eq_setup_concurrent_create_cleanup_safe"
+            ])
+
+    def test_eq_setup_cleanup_file_error_leaks_directory_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/src/audiohub/eq_setup.py"
+            path.write_text(path.read_text().replace(
+                "except OSError:", "except FileNotFoundError:"
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "eq_setup_concurrent_create_cleanup_safe"
+            ])
 
     def test_eq_setup_final_symlink_following_blocks_image(self):
         with tempfile.TemporaryDirectory() as tmp:
