@@ -122,3 +122,15 @@ pairs devices nor drives audio. Reports cannot flip the existing false
 hardware, ownership, commercial license or release flags, even if every
 answer is yes. This does not replace independent Pi4 device testing.
 See docs/HARDWARE-OBSERVATION-RUNBOOK.md.
+
+## PipeWire duplicate routing identity refusal (legacy alpha)
+
+The original `virtual_sinks()` silently overwrote repeated virtual sink
+names and `bluetooth_sources()` accepted the first valid candidate MAC
+profile. Draft PR #49 now refuses globally repeated PipeWire Node IDs,
+duplicate virtual mixer sink names and repeated Bluetooth source addresses;
+the existing supervisor stops its managed players when it cannot trust
+virtual sinks. The read-only hardware topology and graph-link report also
+refuse positive evidence when Node IDs collide. Tests include malformed
+node metadata and legitimate distinct addresses. This is source/in-image
+safety maintenance, not a completed Pi4/Edifier physical audio test.

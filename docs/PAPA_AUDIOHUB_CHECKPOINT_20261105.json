@@ -93,14 +93,20 @@
       "base": "wd-papa-20261106-bounded-pipewire-process-output",
       "head": "wd-papa-20261106-offline-hardware-acceptance-checklist",
       "verified_head_sha": null
+    },
+    {
+      "number": 49,
+      "base": "wd-papa-20261106-offline-hardware-acceptance-checklist",
+      "head": "wd-papa-20261106-failclosed-pipewire-identity-ambiguity",
+      "verified_head_sha": null
     }
   ],
   "last_native_verified": {
-    "run_id": 42180343356,
-    "source_sha": "24dec6ed2ecde427ff606b77b900620f36cb6469",
+    "run_id": 42181839470,
+    "source_sha": "aeafb0b06cc781c8470b502fe1ecf3484084696f",
     "conclusion": "success",
-    "python_tests": 460,
-    "rootfs_checks_passed": 63,
+    "python_tests": 481,
+    "rootfs_checks_passed": 65,
     "installed_packages": 689,
     "architecture_counts": {
       "arm64": 538,
@@ -113,9 +119,9 @@
       "doc_alias_target_link": 8,
       "copyright_file_missing": 1
     },
-    "artifact_id": 13485144050,
+    "artifact_id": 13485629030,
     "artifact_unverified": true,
-    "artifact_expiry": "2026-12-06T07:29:20Z",
+    "artifact_expiry": "2026-12-06T07:43:50Z",
     "public_release_ready": false
   },
   "open_issues": [
@@ -154,11 +160,11 @@
     "do not silently merge stacked draft PRs"
   ],
   "last_source_rights_ci_verified": {
-    "run_id": 42125422399,
-    "commit_sha": "0852894bde8504606cfdc32252a3c5c075c5771a",
+    "run_id": 42200344244,
+    "commit_sha": "27d13828011a50fff9cd7b664a508e2ffe76ce89",
     "outcome": "success",
-    "python_tests": 441,
-    "source_rights_ledger_file_count": 79
+    "python_tests": 500,
+    "source_rights_ledger_file_count": 83
   },
   "latest_legacy_security_change": {
     "pr": 43,
@@ -257,7 +263,7 @@
     "pr": 48,
     "source_module": "src/audiohub/manual_acceptance.py",
     "operator_runbook": "docs/HARDWARE-OBSERVATION-RUNBOOK.md",
-    "status": "DRAFT; exact-head source and native ARM64 CI not yet verified",
+    "status": "Source CI PASS 481/481 and ARM64 native PASS 65/65 on parent PR48 exact SHA; physical hardware still UNVERIFIED",
     "topology_only_precondition": true,
     "operator_freetext_stored": false,
     "operator_manual_prompt_count": 6,
@@ -275,5 +281,24 @@
       "conclusion": "success"
     },
     "initial_native_run_id": 42181376193
+  },
+  "next_pipewire_identity_safety_change": {
+    "pr": 49,
+    "source_code_verified_sha": "27d13828011a50fff9cd7b664a508e2ffe76ce89",
+    "source_ci_run_id": 42200344244,
+    "source_tests_passed": 500,
+    "source_rights_ledger_file_count": 83,
+    "branch": "wd-papa-20261106-failclosed-pipewire-identity-ambiguity",
+    "original_defect": "first/last wins for duplicate Bluetooth source MAC / virtual mixer sink and repeated PipeWire Node IDs",
+    "status": "source CI PASS on code SHA; exact final docs SHA and ARM64 image MUST be rechecked",
+    "global_node_ids_checked": true,
+    "duplicate_logical_sink_disables_all_routes": true,
+    "duplicate_bluetooth_mac_discarded": true,
+    "preflight_requires_unique_nodes": true,
+    "graph_link_does_not_claim_ambiguous_connection": true,
+    "expected_rootfs_guard_count": 66,
+    "hardware_accepted": false,
+    "commercial_model_c_approved": false,
+    "public_release_ready": false
   }
 }
