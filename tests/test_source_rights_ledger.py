@@ -143,8 +143,8 @@ class SourceRightsLedgerTests(unittest.TestCase):
         self.assertEqual(state["latest_legacy_security_change"]["static_file_cap_bytes"], 524288)
         self.assertEqual(state["latest_legacy_security_change"]["anonymized_status_json_cap_bytes"], 32768)
         self.assertTrue(state["latest_legacy_security_change"]["all_path_components_nofollow"])
-        self.assertEqual(state["last_native_verified"]["rootfs_checks_passed"], 59)
-        self.assertEqual(state["last_native_verified"]["run_id"], 42121261961)
+        self.assertEqual(state["last_native_verified"]["rootfs_checks_passed"], 61)
+        self.assertEqual(state["last_native_verified"]["run_id"], 42125593262)
         self.assertFalse(state["next_runtime_state_security_change"]["model_c_effective"])
         self.assertFalse(state["next_runtime_state_security_change"]["physical_device_accepted"])
         self.assertEqual(state["next_runtime_state_security_change"]["expected_rootfs_guard_count"], 58)
@@ -165,6 +165,14 @@ class SourceRightsLedgerTests(unittest.TestCase):
         self.assertFalse(state["next_bluetooth_agent_trust_security_change"]["hardware_acceptance"])
         self.assertFalse(state["next_bluetooth_agent_trust_security_change"]["model_c_effective"])
         self.assertFalse(state["next_bluetooth_agent_trust_security_change"]["public_release_authorized"])
+        self.assertEqual(state["next_pipewire_stdout_security_change"]["pr"], 47)
+        self.assertEqual(state["next_pipewire_stdout_security_change"]["max_stdout_bytes"], 4194304)
+        self.assertEqual(state["next_pipewire_stdout_security_change"]["expected_rootfs_guard_count"], 62)
+        self.assertTrue(state["next_pipewire_stdout_security_change"]["uses_incremental_selector_read"])
+        self.assertFalse(state["next_pipewire_stdout_security_change"]["human_source_rights_approved"])
+        self.assertFalse(state["next_pipewire_stdout_security_change"]["commercial_model_c_approved"])
+        self.assertFalse(state["next_pipewire_stdout_security_change"]["hardware_accepted"])
+        self.assertFalse(state["next_pipewire_stdout_security_change"]["public_release_authorized"])
         self.assertEqual(state["next_bluetooth_agent_trust_security_change"]["pairable_timeout_seconds"], 600)
         self.assertEqual(state["next_bluetooth_agent_trust_security_change"]["discoverable_timeout_seconds"], 600)
         self.assertTrue(state["next_bluetooth_agent_trust_security_change"]["initial_deadline_relative_to_linux_boot"])
@@ -174,7 +182,7 @@ class SourceRightsLedgerTests(unittest.TestCase):
         self.assertFalse(state["last_native_verified"]["public_release_ready"])
         self.assertEqual(
             [item["number"] for item in state["draft_pr_chain"]],
-            [35, 36, 38, 39, 41, 42, 43, 44, 45, 46],
+            [35, 36, 38, 39, 41, 42, 43, 44, 45, 46, 47],
         )
 
     def test_primary_handoff_points_to_authoritative_resume(self):

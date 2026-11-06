@@ -94,3 +94,18 @@ instead of a fresh timeout on every systemd restart. This is a defense in
 depth for the alpha guest pairing window, **not** secure authenticated
 owner enrollment. Confirm exact native run + real device behavior before
 enabling general availability.
+
+## Bounded PipeWire process output (legacy ALPHA safety maintenance)
+
+The original `runtime.run()` and offline `hardware_preflight.probe()`
+used `subprocess.run(capture_output=True)` to acquire arbitrary `pw-dump`
+text, with no stdout byte cap. Draft [PR #47](https://github.com/RIVANOXcom/rivanox-audiohub/pull/47)
+uses `selectors` for bounded incremental capture (4MiB max), requires a
+strict process timeout, kills its own process group when rejected, launches
+with an argv list and `shell=False`, discards stderr to avoid leaking
+Bluetooth/USB IDs, and refuses invalid UTF-8. The graph parser also caps
+object count at 8192. An oversized or broken query yields no trusted
+readout; playback routing continues to fail closed. The native Pi image
+must pass the new pre-export security guard in addition to unit tests.
+These are NOT proofs of real audible playback, secure ownership, legal
+rights or stable product readiness.

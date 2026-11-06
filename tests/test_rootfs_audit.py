@@ -70,6 +70,8 @@ class RootfsAuditTests(unittest.TestCase):
             "def poll_safely(self):",
             "self._stop_all_managed_routes()",
             "self.poll_safely()",
+            "from .process_capture import bounded_command_output",
+            "bounded_command_output(args, timeout=timeout)",
         )))
         audio_runtime = root / "opt/audiohub/src/audiohub/runtime.py"
         audio_runtime.write_text(audio_runtime.read_text() +
@@ -112,7 +114,21 @@ class RootfsAuditTests(unittest.TestCase):
             '"release_ready": False',
         )))
         make("opt/audiohub/src/audiohub/hardware_preflight.py",
-             "from .audio_graph import summarize_links")
+             'from .audio_graph import summarize_links\\n'
+             'bounded_command_output(("pw-dump",), timeout=5)')
+        make("opt/audiohub/src/audiohub/process_capture.py", "\\n".join((
+            "MAX_COMMAND_STDOUT_BYTES = 4 * 1024 * 1024",
+            "selectors.DefaultSelector()",
+            "max_bytes + 1 - len(output)",
+            "start_new_session=True",
+            "shell=False",
+            "os.killpg(",
+            "stderr=subprocess.DEVNULL",
+        )))
+        make("opt/audiohub/src/audiohub/discovery.py", "\\n".join((
+            "MAX_PIPEWIRE_GRAPH_BYTES = 4 * 1024 * 1024",
+            "MAX_PIPEWIRE_GRAPH_OBJECTS = 8192",
+        )))
         make("opt/audiohub/src/audiohub/input_profiles.py", "\\n".join((
             'SLOTS = ("music", "laptop", "tablet")',
             "MAX_NAME_CHARS = 32",
@@ -384,6 +400,37 @@ class RootfsAuditTests(unittest.TestCase):
             self.assertTrue(audit.inspect(root)[
                 "bluetooth_pairable_discoverable_timers_bounded"
             ])
+
+    def test_missing_bounded_capture_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/src/audiohub/process_capture.py"
+            path.write_text(path.read_text().replace(
+                "selectors.DefaultSelector()", "unbounded-communicate"
+            ))
+            self.assertFalse(audit.inspect(root)["pipewire_stdout_bounded_no_shell"])
+
+    def test_runtime_direct_unbounded_capture_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/src/audiohub/runtime.py"
+            path.write_text(path.read_text().replace(
+                "bounded_command_output(args, timeout=timeout)",
+                "subprocess.run(args, capture_output=True)"
+            ))
+            self.assertFalse(audit.inspect(root)["pipewire_stdout_bounded_no_shell"])
+
+    def test_missing_preflight_limit_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/src/audiohub/hardware_preflight.py"
+            path.write_text("subprocess.run(['pw-dump'], capture_output=True)")
+            self.assertFalse(audit.inspect(root)["pipewire_stdout_bounded_no_shell"])
+
+    def test_real_bound_and_graph_limits_are_present_in_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            self.assertTrue(audit.inspect(root)["pipewire_stdout_bounded_no_shell"])
 
     def test_unchecked_status_web_listener_prevents_image_export(self):
         with tempfile.TemporaryDirectory() as tmp:

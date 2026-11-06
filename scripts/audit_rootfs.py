@@ -40,8 +40,41 @@ def inspect(root: Path) -> dict[str, bool]:
         return {"rootfs_exists": False}
     checks: dict[str, bool] = {}
     source = root / "opt/audiohub/src/audiohub"
-    for name in ("__init__.py", "runtime.py", "pairing.py", "mixer.py", "webserver.py", "status_bind.py", "firstboot_diag.py", "network_laptop.py", "network_buffer.py", "input_profiles.py", "source_routes.py", "audio_graph.py", "hardware_preflight.py"):
+    for name in ("__init__.py", "runtime.py", "pairing.py", "mixer.py", "webserver.py", "status_bind.py", "firstboot_diag.py", "network_laptop.py", "network_buffer.py", "input_profiles.py", "source_routes.py", "audio_graph.py", "hardware_preflight.py", "process_capture.py"):
         checks["source_" + name] = (source / name).is_file()
+    # Polling PipeWire must not allocate arbitrarily large stdout or
+    # include raw metadata in logs and auxiliary reports.
+    try:
+        capture_source = (source / "process_capture.py").read_text()
+        runtime_source = (source / "runtime.py").read_text()
+        preflight_source = (source / "hardware_preflight.py").read_text()
+        discovery_source = (source / "discovery.py").read_text()
+        checks["pipewire_stdout_bounded_no_shell"] = all(
+            marker in capture_source for marker in (
+                "MAX_COMMAND_STDOUT_BYTES = 4 * 1024 * 1024",
+                "selectors.DefaultSelector()",
+                "max_bytes + 1 - len(output)",
+                "start_new_session=True",
+                "shell=False",
+                "os.killpg(",
+                "stderr=subprocess.DEVNULL",
+            )
+        ) and all(
+            marker in runtime_source for marker in (
+                "from .process_capture import bounded_command_output",
+                "bounded_command_output(args, timeout=timeout)",
+            )
+        ) and (
+            'bounded_command_output(("pw-dump",), timeout=5)'
+            in preflight_source
+        ) and all(
+            marker in discovery_source for marker in (
+                "MAX_PIPEWIRE_GRAPH_BYTES = 4 * 1024 * 1024",
+                "MAX_PIPEWIRE_GRAPH_OBJECTS = 8192",
+            )
+        )
+    except OSError:
+        checks["pipewire_stdout_bounded_no_shell"] = False
     # Runtime's private state must never follow attacker-controlled links,
     # write through a fixed .tmp name, or accept unbounded JSON.
     try:

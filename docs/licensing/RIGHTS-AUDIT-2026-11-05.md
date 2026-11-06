@@ -123,3 +123,7 @@ recorded 689 packages / 631 copyright hashes / 58 unresolved copyright
 paths, then **FAILED** at missing `deploy/ROOTFS-PACKAGES.json`.
 No inventory-containing test ZIP or legal sign-off resulted. Human
 license review and corrected image export remain mandatory.
+
+### 2026-11-06 new source-rights files under review
+
+Draft PR #47 adds `src/audiohub/process_capture.py` and `tests/test_process_capture.py`, so the fail-closed provenance inventory now lists **81** application/source/CI/test files (previously 79), with every rightsholder, third-party similarity and Model C eligibility assertion still **FALSE**. Adding a ledger entry is not a legal approval. Refer to [PAPA canonical resume](../PAPA_CANONICAL_RESUME_20261105.md) section O for exact PR/CI state.

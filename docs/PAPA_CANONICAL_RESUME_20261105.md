@@ -148,7 +148,7 @@ bash -n build-image.sh
 ```text
 PAPA / RIVANOX AUDIOHUB WEITER — CANONICAL RESUME
 Read first:
-https://github.com/RIVANOXcom/rivanox-audiohub/blob/wd-papa-20261105-bluetooth-trust-authorization-gate/docs/PAPA_CANONICAL_RESUME_20261105.md
+https://github.com/RIVANOXcom/rivanox-audiohub/blob/wd-papa-20261106-bounded-pipewire-process-output/docs/PAPA_CANONICAL_RESUME_20261105.md
 Project PAPA Workbench: PJ2611-0001:R001.
 Verify LIVE repo, PR #46/#45/#44 stacked heads, exact source and ARM64 CI, and open issues before changing anything.
 The public main and historical source remain AGPL-3.0-only; Model C
@@ -298,6 +298,19 @@ review, and Pi4 + Edifier audible/hardware acceptance is open.
 **Prior exact source CI #42124897548** passed 434 tests at initial docs checkpoint SHA \`8341d2a7709c10d2810462f7a4455b51ac5b8adf\`; superseded by the later 441 tests at code SHA above. Additional checkpoint/docs edits may supersede this SHA; always verify latest exact-head Actions run and artifact before stating final success.
 
 **Remaining limits:** still NoInputNoOutput experimental pairing, no cryptographically authenticated owner-claiming, no manual physical verification of BlueZ callbacks, no Pi4/Edifier loudspeaker acceptance, no effective Model C commercial license, no complete third-party OS permission review, no public image Release. Public AGPL recipients retain their rights.
+
+
+## O. 2026-11-06: bounded PipeWire process output and topology parsing — Draft PR #47
+
+**Verified parent:** [Draft PR #46](https://github.com/RIVANOXcom/rivanox-audiohub/pull/46) exact SHA `c37f309ec42b5a29e8254b76bf57f4f2ff21a1c9`. [Source run #42125603821](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42125603821) **SUCCESS 441/441 tests**, and [native ARM64 run #42125593262](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42125593262) **SUCCESS 61/61 real rootfs guards**, rootfs 689 dpkg packages (538 arm64, 151 all), 680 copyright hashes / 9 unresolved file paths. Four-file **UNVERIFIED / DO NOT DISTRIBUTE** ZIP [artifact #13461790759](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42125593262/artifacts/13461790759), size 605817619 bytes, expires **2026-12-05T23:03:39Z**. `public_release_ready=false`; no physical Pi, legal or owner acceptance.
+
+**New [Draft PR #47](https://github.com/RIVANOXcom/rivanox-audiohub/pull/47)** branch `wd-papa-20261106-bounded-pipewire-process-output`, based on PR46. Existing legacy AGPL code used `subprocess.run(...capture_output=True)` for `pw-dump` in both the live audio supervisor and hardware preflight. This buffered untrusted metadata without a byte limit in Raspberry Pi RAM, despite a timeout. A malformed or high-volume PipeWire graph could degrade/stall playback or exhaust memory.
+
+**Implemented:** a reviewed, pure-standard-library `src/audiohub/process_capture.py` helper launches argv-only subprocesses with `shell=False`, discards stderr to avoid accidental hardware/peer identifier exposure, incrementally reads stdout using `selectors.DefaultSelector` in 64 KiB chunks, caps the decoded stdout at **4 MiB**, rejects invalid UTF-8 and out-of-range/invalid arguments, respects the overall process timeout, and kills the dedicated subprocess process group on rejection. `runtime.run()` and the read-only `hardware_preflight.probe()` both use this bounded helper; `discovery.pipewire_nodes()` refuses snapshots above **4 MiB** or **8192 objects**. Large or unsafe readings are treated as **no trustworthy output**: the existing runtime USB route safety rules must continue to fail closed.
+
+**Validation:** added live child-process regression tests in `tests/test_process_capture.py`, parser tests in `tests/test_discovery.py`, updated preflight mock tests and four new real-rootfs guard negative/positive tests. New `scripts/audit_rootfs.py` check `pipewire_stdout_bounded_no_shell` requires the actual installed capture helper and both runtime/preflight call sites. **Expected native image check total 62** only if verified against the exact final PR47 SHA (PR46 verified 61). Added two new files to the pending-review rights ledger, now **81 files** with ALL ownership/third-party/Model C eligibility assertions FALSE. No license has been switched.
+
+**Next new-chat action:** verify LIVE PR47 HEAD and exact source + ARM64 Actions outcomes, fix any test/image failures, record final guard count, expiration and provenance. Only source CI and actual native image evidence may be marked PASS; no physical Edifier sound/no commercial rights. Open owner/private repo issue #37, legal issue #32, Raspberry Pi third-party license issue #40, hardware issue #2. Keep all stacked PRs DRAFT, public AGPL main unchanged, no official GitHub Release.
 
 **END OF HANDOFF.** If a live run/PR contradicts this document, treat
 the live GitHub evidence as authoritative, reconcile and update this file.
