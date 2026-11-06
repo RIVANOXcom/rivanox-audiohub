@@ -48,6 +48,45 @@ class HardwarePreflightTests(unittest.TestCase):
         self.assertFalse(report["release_ready"])
         self.assertTrue(all(x == "unverified" for x in report["hardware_gates"].values()))
 
+
+    def test_invalid_bluetooth_secondary_address_is_not_reported_as_eligible(self):
+        nodes = topology()
+        nodes[4] = make_node(
+            30, "bluez_input.AA_BB_CC_DD_EE_FF.0", "Audio/Source",
+            **{"api.bluez5.address": "AA:BB:CC:DD:EE:FF",
+               "device.address": "11:22:33:44:55:66"}
+        )
+        report = preflight.inspect_topology(nodes)
+        self.assertEqual(report["checks"]["bluetooth_source_count"], 0)
+        self.assertFalse(report["release_ready"])
+        self.assertNotIn("AA:BB", json.dumps(report))
+
+    def test_duplicate_bluetooth_identity_not_counted_for_operator(self):
+        nodes = topology()
+        nodes.append(make_node(
+            31, "bluez_input.AA_BB_CC_DD_EE_FF.1", "Audio/Source",
+            **{"device.address": "INVALID-MAC"}
+        ))
+        self.assertEqual(preflight.inspect_topology(nodes)["checks"][
+            "bluetooth_source_count"
+        ], 0)
+        nodes.append(make_node(
+            32, "bluez_input.11_22_33_44_55_66.0", "Audio/Source",
+            **{"device.address": "11:22:33:44:55:66"}
+        ))
+        self.assertEqual(preflight.inspect_topology(nodes)["checks"][
+            "bluetooth_source_count"
+        ], 1)
+
+    def test_bluetooth_prefixed_nondevice_node_is_not_an_audio_source(self):
+        nodes = topology()[:4] + [make_node(
+            99, "bluez_input.not_a_device", "Audio/Source",
+        )]
+        report = preflight.inspect_topology(nodes)
+        self.assertEqual(report["checks"]["bluetooth_source_count"], 0)
+        self.assertTrue(all(value == "unverified"
+                            for value in report["hardware_gates"].values()))
+
     def test_missing_laptop_channel_blocks_preflight(self):
         data = [node for node in topology() if node.get("id") != 21]
         report = preflight.inspect_topology(data)
