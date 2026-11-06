@@ -673,7 +673,7 @@ def inspect(root: Path) -> dict[str, bool]:
     try:
         preview = (root / "opt/audiohub/web/app.js").read_text()
         start = preview.index("  async function readDeviceStatus() {")
-        end = preview.index("\n  function translate()", start)
+        end = preview.index("  function translate()", start)
         reader = preview[start:end]
         checks["web_preview_latest_status_poll_wins"] = (
             "let statusRequestId = 0;" in preview
