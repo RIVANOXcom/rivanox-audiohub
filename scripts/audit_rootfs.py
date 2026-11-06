@@ -977,7 +977,22 @@ def inspect(root: Path) -> dict[str, bool]:
         ) and "target.write_text(" not in eq_setup_source
     except OSError:
         checks["eq_setup_private_atomic_nofollow"] = False
-    eq = root / "home/audiohub/.config/pipewire/pipewire.conf.d/90-audiohub-eq.conf"
+    # Parallel local setup may race directory creation; cleanup errors
+    # must never leak descriptors or conceal the original EQ write failure.
+    try:
+        eq_setup_source = (source / "eq_setup.py").read_text()
+        checks["eq_setup_concurrent_create_cleanup_safe"] = all(
+            marker in eq_setup_source for marker in (
+                "except FileExistsError:",
+                "nextfd = os.open(component, flags, dir_fd=fd)",
+                "except OSError:",
+                "os.unlink(temp, dir_fd=dirfd)",
+                "finally:\n            os.close(dirfd)",
+            )
+        )
+    except OSError:
+        checks["eq_setup_concurrent_create_cleanup_safe"] = False
+    eq = root / "home/audiohub/.config/pipewire/pipewire.conf.d/90-audiohub-eq.conf
     try:
         config = eq.read_text()
         checks["independent_eq_virtual_sinks"] = all(
