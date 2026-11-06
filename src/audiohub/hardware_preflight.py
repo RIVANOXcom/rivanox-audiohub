@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 
 from .process_capture import bounded_command_output
-from .discovery import _conflicting_node_ids, pipewire_nodes
+from .discovery import _conflicting_node_ids, bluetooth_sources, pipewire_nodes
 from .audio_graph import summarize_links
 
 CHANNELS = ("music", "laptop", "tablet")
@@ -37,7 +37,9 @@ def inspect_topology(raw, *, query_ok=True):
     nodes = pipewire_nodes(raw) if query_ok else []
     logical_counts = dict.fromkeys(CHANNELS, 0)
     edifier = 0
-    bluetooth = 0
+    # Report only eligible, uniquely identified capture nodes. A raw node
+    # name prefix is not proof that the routing supervisor would accept it.
+    bluetooth = len(bluetooth_sources(nodes))
     for node in nodes:
         if not _valid_node_id(node.get("id")):
             continue
@@ -57,8 +59,6 @@ def inspect_topology(raw, *, query_ok=True):
                 ).lower()
                 if "edifier" in details:
                     edifier += 1
-        if media_class == "Audio/Source" and name.startswith("bluez_input."):
-            bluetooth += 1
 
     logical = {name: logical_counts[name] == 1 for name in CHANNELS}
     usb = edifier == 1

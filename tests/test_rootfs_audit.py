@@ -188,7 +188,11 @@ class RootfsAuditTests(unittest.TestCase):
         make("opt/audiohub/src/audiohub/hardware_preflight.py",
              'from .audio_graph import summarize_links\\n'
              'bounded_command_output(("pw-dump",), timeout=5)\\n'
-             '_conflicting_node_ids(nodes)')
+             '_conflicting_node_ids(nodes)\\n'
+             'from .discovery import _conflicting_node_ids, bluetooth_sources, pipewire_nodes\\n'
+             'bluetooth = len(bluetooth_sources(nodes))\\n'
+             '"bluetooth_source_count": bluetooth\\n'
+             '"release_ready": False')
         make("opt/audiohub/src/audiohub/process_capture.py", "\\n".join((
             "MAX_COMMAND_STDOUT_BYTES = 4 * 1024 * 1024",
             "selectors.DefaultSelector()",
@@ -761,6 +765,38 @@ class RootfsAuditTests(unittest.TestCase):
                 "manual_hardware_observation_not_auto_approval"
             ])
 
+
+
+    def test_hardware_preflight_validated_bluetooth_count_guard_present(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            self.assertTrue(audit.inspect(root)[
+                "hardware_preflight_only_counts_valid_bt_sources"
+            ])
+
+    def test_naive_bluetooth_prefix_count_blocks_native_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            file = root / "opt/audiohub/src/audiohub/hardware_preflight.py"
+            file.write_text(file.read_text().replace(
+                "bluetooth = len(bluetooth_sources(nodes))",
+                'bluetooth = sum("bluez_input." in name for name in names)'
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "hardware_preflight_only_counts_valid_bt_sources"
+            ])
+
+    def test_preflight_hardware_release_approval_blocks_native_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            file = root / "opt/audiohub/src/audiohub/hardware_preflight.py"
+            file.write_text(file.read_text().replace(
+                '"release_ready": False',
+                '"release_ready": True',
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "hardware_preflight_only_counts_valid_bt_sources"
+            ])
 
     def test_missing_duplicate_node_id_detection_blocks_image(self):
         with tempfile.TemporaryDirectory() as tmp:
