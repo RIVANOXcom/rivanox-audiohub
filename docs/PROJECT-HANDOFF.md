@@ -768,3 +768,39 @@ authenticated owner phone WiFi missing, effective AGPL-3.0-only,
 83 source-rights files and nine OS copyright paths pending legal/CEO
 review. Never merge, deploy, install, change permissions or release
 without express authorization.
+
+
+## 2026-11-06: Draft PR79 — manual operator preflight cannot trust a bare ready flag
+
+PAPA MissionPilot PAPA-18B8B3C6, AH-009. Independent isolated Draft
+PR79 stacks only on exact unchanged PR78 93a173f33c631f02a13123481d225a1b248d3968, never
+changing previous PRs or main. Manual offline hardware observation
+previously prompted when passed only two top-level booleans,
+topology_preflight=ready_for_manual_test and release_ready=False,
+even if the expected PipeWire read, unique Edifier USB output, three
+virtual EQ sinks, schema version and unverified hardware fields were
+missing or contradicted each other. This could falsely present an
+incomplete diagnostic as ready to ask the operator for an observation.
+The new _consistent_read_only_preflight requires the exact non-approving
+schema/assessment, real boolean readiness for PipeWire read and unique
+Edifier, exactly three unique EQ sinks and all hardware gates marked
+unverified; a bare ready flag now yields an incomplete report without
+asking manual questions. Real synthetic healthy topology still permits
+manual questions, but hardware_accepted, owner authentication,
+redistribution/legal approval, persistence and release_ready remain
+False unconditionally. Source unit tests include malformed/forged
+partial schemas, contradictory source metadata and a real generated
+preflight record. One new installed-rootfs guard
+manual_operator_preflight_consistency plus two adversarial rootfs
+regressions, expected native 95/95 only after real exact-head ARM64
+success. Parent PR78 Source #42309283107 SUCCESS 724/724, native
+ARM64 #42309276971 SUCCESS 94/94 real installed rootfs; image
+SHA256 1ab132773f05d898c0556a8677b5ff2c70d6ed5114411925a8422d4e0dc2c5dc,
+temporary GitHub test-only ZIP artifact #13547578820 SHA256
+b9b50907a053f754333de661fa4e323dfc9691102b38302ffd54ccfc3ddf23ed,
+Workbench #3138. All physical Pi4/Edifier 2-BT/3-source sound and
+24h trials, secured phone-owner WiFi and legal/CEO release authorization
+still absent. 83 source-rights records and 9 missing OS copyright
+files need human/legal review; effective AGPL-3.0-only, Model C not
+approved. No deploy, install, network enrollment, merge, permission
+change, payment or release/GO.
