@@ -128,21 +128,27 @@
       "number": 54,
       "base": "wd-papa-20261106-private-status-file-identity",
       "head": "wd-papa-20261106-status-parser-failclosed",
-      "verified_head_sha": null
+      "verified_head_sha": "f08aa400f25a1307368c41adb79504fec059c4a3"
     },
     {
       "number": 55,
       "base": "wd-papa-20261106-status-parser-failclosed",
       "head": "wd-papa-20261106-strict-status-json-integrity",
       "verified_head_sha": null
+    },
+    {
+      "number": 56,
+      "base": "wd-papa-20261106-strict-status-json-integrity",
+      "head": "wd-papa-20261106-status-http-total-deadline-privacy",
+      "verified_head_sha": null
     }
   ],
   "last_native_verified": {
-    "run_id": 42210825401,
-    "source_sha": "53e49521bc8fd24a3c622cd07c944c5ccced4287",
+    "run_id": 42219039337,
+    "source_sha": "f08aa400f25a1307368c41adb79504fec059c4a3",
     "conclusion": "success",
-    "python_tests": 547,
-    "rootfs_checks_passed": 70,
+    "python_tests": 552,
+    "rootfs_checks_passed": 71,
     "installed_packages": 689,
     "architecture_counts": {
       "arm64": 538,
@@ -155,11 +161,11 @@
       "doc_alias_target_link": 8,
       "copyright_file_missing": 1
     },
-    "artifact_id": 13499596254,
+    "artifact_id": 13502838048,
     "artifact_unverified": true,
-    "artifact_expiry": "2026-12-06T11:38:59Z",
+    "artifact_expiry": "2026-12-06T12:45:50Z",
     "public_release_ready": false,
-    "artifact_zip_sha256": "243c812f7ad6e407c31f926bcf1729a8993b2f4c2397e6df33c01adf972ca9da"
+    "artifact_zip_sha256": "d7eaa30e4e06220daa33d989617dcd0bd681d16b6b06dc0b860cdd9f7182232d"
   },
   "open_issues": [
     {
@@ -451,10 +457,15 @@
     "read_only_status_api_preserved": true,
     "expected_native_rootfs_guard_count": 71,
     "source_rights_ledger_file_count": 83,
-    "initial_ci_pending": true,
+    "initial_ci_pending": false,
     "public_release_ready": false,
     "model_c_license_effective": false,
-    "physical_edifier_accepted": false
+    "physical_edifier_accepted": false,
+    "status": "exact-head PR54 source 552/552 and independent native 71/71 image checks SUCCESS",
+    "source_run_id": 42219045806,
+    "native_run_id": 42219039337,
+    "verified_sha": "f08aa400f25a1307368c41adb79504fec059c4a3",
+    "temporary_artifact_id": 13502838048
   },
   "next_status_json_integrity_change": {
     "pr": 55,
@@ -473,5 +484,24 @@
     "public_release_ready": false,
     "model_c_license_effective": false,
     "hardware_accepted": false
+  },
+  "next_status_http_total_lifetime_privacy_change": {
+    "pr": 56,
+    "parent_pr": 55,
+    "branch": "wd-papa-20261106-status-http-total-deadline-privacy",
+    "prior_defect": "Five-second per-receive timeout can be continually refreshed by drip-fed bytes; inherited BaseServer.handle_error prints traceback and client address into unauthenticated service logs",
+    "max_concurrent_clients": 8,
+    "socket_read_timeout_seconds": 5,
+    "absolute_connection_lifetime_seconds": 15,
+    "total_deadline_watchdog_cancels_and_releases_slot": true,
+    "expired_connection_shutdown": true,
+    "handler_errors_do_not_log_peer": true,
+    "expected_native_rootfs_guard_count": 73,
+    "source_rights_ledger_file_count": 83,
+    "source_ci_pending": true,
+    "native_ci_pending": true,
+    "public_release_ready": false,
+    "model_c_license_effective": false,
+    "physical_edifier_accepted": false
   }
 }
