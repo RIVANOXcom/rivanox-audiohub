@@ -176,7 +176,9 @@ class PairingAgent(dbus.service.Object):
 
     @dbus.service.method("org.bluez.Agent1", in_signature="", out_signature="")
     def Cancel(self):
-        pass
+        # BlueZ canceled the current agent request; no device path is given.
+        # Revoke all pending trust tokens so a delayed Paired event is inert.
+        self.pending_authorizations.clear()
 
 
 def main():

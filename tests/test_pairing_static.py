@@ -264,6 +264,32 @@ class AgentCallbackAuthorizationTests(unittest.TestCase):
         with self.assertRaises(self.ns["Rejected"]):
             self.agent.RequestAuthorization(self.DEVICE)
 
+    def test_cancel_revokes_both_outstanding_authorizations(self):
+        self.agent.RequestAuthorization(self.DEVICE)
+        self.agent.RequestAuthorization(self.SECOND)
+        self.assertEqual(len(self.agent.pending_authorizations), 2)
+        self.agent.Cancel()
+        self.assertEqual(self.agent.pending_authorizations, {})
+        self.assertTrue(self.agent.initial_pairing_allowed)
+        self.agent.Cancel()
+        self.assertEqual(self.agent.pending_authorizations, {})
+
+    def test_canceled_pairing_signal_never_trusts_device(self):
+        self.agent.RequestConfirmation(self.DEVICE, 123456)
+        self.agent.Cancel()
+        self.paired = 1
+        self.agent.changed("org.bluez.Device1", {"Paired": True}, [], self.DEVICE)
+        self.assertFalse(self.properties[self.DEVICE].trusted)
+        self.assertEqual(self.agent.pending_authorizations, {})
+
+    def test_canceled_untrusted_service_requires_new_authorization(self):
+        self.agent.RequestAuthorization(self.DEVICE)
+        self.agent.Cancel()
+        with self.assertRaises(self.ns["Rejected"]):
+            self.agent.AuthorizeService(self.DEVICE, "audio")
+        self.agent.RequestAuthorization(self.DEVICE)
+        self.agent.AuthorizeService(self.DEVICE, "audio")
+
     def test_release_clears_pending_and_discovery(self):
         self.agent.RequestAuthorization(self.DEVICE)
         self.agent.Release()
