@@ -142,6 +142,21 @@ def _bounded_regular_bytes(path, limit, *, private_owner=None):
             os.close(directory)
 
 
+def _unique_json_object(pairs):
+    """Reject ambiguous status snapshots with repeated object member names."""
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("duplicate status JSON member")
+        result[key] = value
+    return result
+
+
+def _reject_json_constant(_value):
+    """RFC 8259 has no NaN or Infinity; never accept them as health data."""
+    raise ValueError("non-finite status JSON number")
+
+
 def read_public_status(*, path=None, now=None):
     """Read a bounded, non-symlinked runtime state file, never raw secrets."""
     body = _bounded_regular_bytes(
@@ -151,7 +166,11 @@ def read_public_status(*, path=None, now=None):
     if body is None:
         return public_status({}, now=now)
     try:
-        decoded = json.loads(body.decode("utf-8"))
+        decoded = json.loads(
+            body.decode("utf-8"),
+            object_pairs_hook=_unique_json_object,
+            parse_constant=_reject_json_constant,
+        )
     except (UnicodeError, ValueError, RecursionError):
         # Deeply nested but size-bounded JSON must not crash a status handler.
         decoded = {}
