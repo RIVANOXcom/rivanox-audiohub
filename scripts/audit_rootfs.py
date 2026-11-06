@@ -668,6 +668,29 @@ def inspect(root: Path) -> dict[str, bool]:
     except OSError:
         checks["source_route_config_strict_nonblocking_read"] = False
         checks["input_profile_config_strict_nonblocking_read"] = False
+    # O_NOFOLLOW only secures the final component of a single os.open(path).
+    # Private route and label access must use a descriptor walk from "/" so
+    # an ancestor alias cannot redirect local read or atomic profile writes.
+    try:
+        routes_source = (source / "source_routes.py").read_text()
+        profile_source = (source / "input_profiles.py").read_text()
+        required = (
+            'dirfd = os.open("/", flags)',
+            'for component in path.parts[1:]:',
+            'nextfd = os.open(component, flags, dir_fd=dirfd)',
+            'if ".." in path.parts:',
+            'os.mkdir(component, mode=0o700, dir_fd=dirfd)',
+            'if dirfd is not None:',
+        )
+        checks["private_config_ancestor_symlink_fd_walk"] = (
+            all(marker in routes_source for marker in required)
+            and all(marker in profile_source for marker in required)
+            and "dirfd = _safe_dir(directory, create=True)" in profile_source
+            and "directory.mkdir(parents=True" not in profile_source
+            and "path.mkdir(parents=True" not in routes_source
+        )
+    except OSError:
+        checks["private_config_ancestor_symlink_fd_walk"] = False
     # A green rootfs audit must not regress to name-only audio topology
     # assertions. The runtime must extract actual, bounded PipeWire Link
     # node IDs and report only aggregate counts on the offline SD card.
