@@ -134,27 +134,33 @@
       "number": 55,
       "base": "wd-papa-20261106-status-parser-failclosed",
       "head": "wd-papa-20261106-strict-status-json-integrity",
-      "verified_head_sha": null
+      "verified_head_sha": "e7e8751ef1841c148274a2f85aefc950c2219fbb"
     },
     {
       "number": 56,
       "base": "wd-papa-20261106-strict-status-json-integrity",
       "head": "wd-papa-20261106-status-http-total-deadline-privacy",
-      "verified_head_sha": null
+      "verified_head_sha": "1e666234b307a249e593b0e5a99b523ccf4af060"
     },
     {
       "number": 57,
       "base": "wd-papa-20261106-status-http-total-deadline-privacy",
       "head": "wd-papa-20261106-offline-diag-json-integrity",
       "verified_head_sha": null
+    },
+    {
+      "number": 58,
+      "base": "wd-papa-20261106-offline-diag-json-integrity",
+      "head": "wd-papa-20261106-finite-exponent-status-json",
+      "verified_head_sha": null
     }
   ],
   "last_native_verified": {
-    "run_id": 42219039337,
-    "source_sha": "f08aa400f25a1307368c41adb79504fec059c4a3",
+    "run_id": 42220895650,
+    "source_sha": "1e666234b307a249e593b0e5a99b523ccf4af060",
     "conclusion": "success",
-    "python_tests": 552,
-    "rootfs_checks_passed": 71,
+    "python_tests": 568,
+    "rootfs_checks_passed": 73,
     "installed_packages": 689,
     "architecture_counts": {
       "arm64": 538,
@@ -167,11 +173,11 @@
       "doc_alias_target_link": 8,
       "copyright_file_missing": 1
     },
-    "artifact_id": 13502838048,
+    "artifact_id": 13504166490,
     "artifact_unverified": true,
-    "artifact_expiry": "2026-12-06T12:45:50Z",
+    "artifact_expiry": "2026-12-06T12:59:36Z",
     "public_release_ready": false,
-    "artifact_zip_sha256": "d7eaa30e4e06220daa33d989617dcd0bd681d16b6b06dc0b860cdd9f7182232d"
+    "artifact_zip_sha256": "c8224ba3a11e7217c26d804e21b6b6c20e384b25be0e9bd4afcc153e791baf98"
   },
   "open_issues": [
     {
@@ -485,11 +491,16 @@
     "status_stale_on_invalid_json": true,
     "expected_native_rootfs_guard_count": 72,
     "source_rights_ledger_file_count": 83,
-    "source_ci_pending": true,
-    "native_ci_pending": true,
+    "source_ci_pending": false,
+    "native_ci_pending": false,
     "public_release_ready": false,
     "model_c_license_effective": false,
-    "hardware_accepted": false
+    "hardware_accepted": false,
+    "verified_sha": "e7e8751ef1841c148274a2f85aefc950c2219fbb",
+    "source_run_id": 42220634968,
+    "native_run_id": 42220627734,
+    "native_checks_passed": 72,
+    "unverified_artifact_id": 13502859856
   },
   "next_status_http_total_lifetime_privacy_change": {
     "pr": 56,
@@ -504,11 +515,16 @@
     "handler_errors_do_not_log_peer": true,
     "expected_native_rootfs_guard_count": 73,
     "source_rights_ledger_file_count": 83,
-    "source_ci_pending": true,
-    "native_ci_pending": true,
+    "source_ci_pending": false,
+    "native_ci_pending": false,
     "public_release_ready": false,
     "model_c_license_effective": false,
-    "physical_edifier_accepted": false
+    "physical_edifier_accepted": false,
+    "verified_sha": "1e666234b307a249e593b0e5a99b523ccf4af060",
+    "source_run_id": 42220925947,
+    "native_run_id": 42220895650,
+    "native_checks_passed": 73,
+    "unverified_artifact_id": 13504166490
   },
   "next_offline_diag_json_integrity_change": {
     "pr": 57,
@@ -521,11 +537,30 @@
     "stale_report_without_usb_health_on_bad_json": true,
     "expected_native_rootfs_guard_count": 74,
     "source_rights_ledger_file_count": 83,
-    "source_ci_pending": true,
+    "source_ci_pending": false,
     "native_ci_pending": true,
     "physical_pi4_edifier_accepted": false,
     "legal_redistribution_approved": false,
     "model_c_license_effective": false,
-    "public_release_ready": false
+    "public_release_ready": false,
+    "source_run_id": 42221984592,
+    "source_tests_passed": 576
+  },
+  "next_json_exponent_finite_overflow_change": {
+    "pr": 58,
+    "parent_pr": 57,
+    "branch": "wd-papa-20261106-finite-exponent-status-json",
+    "problem": "Python json.loads parse_constant rejects explicit NaN/Infinity but valid syntax 1e999 and -1e999 silently overflows to float infinity",
+    "web_status_finite_float_parse_required": true,
+    "root_offline_diag_finite_float_parse_required": true,
+    "valid_finite_float_unchanged": true,
+    "malformed_json_yields_stale_no_usb_health": true,
+    "expected_native_rootfs_guard_count": 75,
+    "source_rights_ledger_file_count": 83,
+    "source_ci_pending": true,
+    "native_ci_pending": true,
+    "public_release_ready": false,
+    "physical_edifier_accepted": false,
+    "model_c_license_effective": false
   }
 }
