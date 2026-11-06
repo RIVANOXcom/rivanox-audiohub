@@ -63,7 +63,8 @@ def inspect_topology(raw, *, query_ok=True):
     logical = {name: logical_counts[name] == 1 for name in CHANNELS}
     usb = edifier == 1
     # Even a fully present topology is only a *prerequisite* to hands-on tests.
-    topology_ready = bool(query_ok and usb and all(logical.values())\n                          and not _conflicting_node_ids(nodes))
+    topology_ready = bool(query_ok and usb and all(logical.values())
+                          and not _conflicting_node_ids(nodes))
     return {
         "schema_version": 1,
         "assessment": "topology_only_not_hardware_acceptance",
