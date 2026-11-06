@@ -477,3 +477,33 @@ release signoff unverified. NO release/merge/deployment/install/permission
 or payment authority. Native/source results for this follow-up must be
 independently verified and recorded before treating its test artifact as
 built; do not claim product GO from passing CI.
+
+
+## 2026-11-06: Draft PR69 — latest read-only hardware status poll must win
+
+PAPA MissionPilot WD_JOB PAPA-18B8B3C6; AH-007, isolated branch
+`wd-papa-18b8b3c6-web-status-latest-response-20261106` stacked on exact PR68 HEAD
+`75c260a98814195440352a03b280926779fe1d9d` without altering its branch or public main.
+PR68 source GitHub Actions #42252541742 SUCCESS 676/676 tests. Native ARM64
+#42252489072 was still in progress when this change was prepared, so PR68
+86/86 rootfs audit and its artifact were NOT yet claimed.
+
+Concrete defect: read-only web/app.js polls ./api/status every five seconds;
+older slow fetch failures or JSON parsing successes can complete after a newer
+poll and revert displayed USB health. Added monotonic statusRequestId per poll
+and stale-generation checks after asynchronous JSON decoding as well as in
+the catch branch, before any deviceHealth or DOM change. Real Node.js
+deferred-promise tests use the extracted shipping status poller to cover
+out-of-order success, stale error, stale JSON decode, and latest error.
+Existing status-only API, loopback default, 5-second refresh and privacy
+remain unchanged; no network control or device writes introduced.
+
+Added synthetic installed rootfs positive/negative checks and new image
+gate web_preview_latest_status_poll_wins, expected native count 87 only
+when exact-head independent ARM64 SUCCESS. Current effective license remains
+AGPL-3.0-only, 83 rights-reviewed source files still PENDING, nine copyright
+notice gaps, physical Pi4/Edifier three-source audio, 24-hour soak, secured
+owner phone Wi-Fi and legal approval still absent. Draft/unmerged, no release,
+install, payment, permission or deployment. Validate the exact commit CI,
+ARM64 image checksum/XZ/provenance and temporary test artifact before
+claiming completeness; no public release GO.

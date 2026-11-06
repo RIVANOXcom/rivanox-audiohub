@@ -668,6 +668,24 @@ def inspect(root: Path) -> dict[str, bool]:
         ) and 'words = { tagline: "All your audio. One place." };' not in preview
     except OSError:
         checks["web_preview_english_fallback_metadata_consistent"] = False
+    # Slow or failed read-only status polling may not replace newer health
+    # results, even when JSON decoding itself completes out of order.
+    try:
+        preview = (root / "opt/audiohub/web/app.js").read_text()
+        start = preview.index("  async function readDeviceStatus() {")
+        end = preview.index("  function translate()", start)
+        reader = preview[start:end]
+        checks["web_preview_latest_status_poll_wins"] = (
+            "let statusRequestId = 0;" in preview
+            and "const requestId = ++statusRequestId;" in reader
+            and reader.count("if (requestId !== statusRequestId) return;") == 2
+            and 'fetch("./api/status", {cache: "no-store"})' in reader
+            and "deviceHealth = json && typeof json === \"object\" ? json : null;" in reader
+            and "deviceHealth = null;" in reader
+            and "renderHardwareStatus();" in reader
+        )
+    except (OSError, ValueError):
+        checks["web_preview_latest_status_poll_wins"] = False
     # Physical input rebinding cannot originate from public status or
     # unauthenticated LAN packets. A private local policy must reserve the
     # manual LAN slot and keep Bluetooth streams off that same EQ input.
