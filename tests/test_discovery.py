@@ -30,6 +30,46 @@ class DiscoveryTests(unittest.TestCase):
         sources = bluetooth_sources(nodes)
         self.assertEqual(sources[0]["address"], "AA:BB:CC:DD:EE:FF")
 
+
+    def test_both_agreeing_bluetooth_metadata_addresses_are_valid(self):
+        source = node(
+            3, "bluez_input.AA_BB_CC_DD_EE_FF.0", "Audio/Source",
+            **{"api.bluez5.address": "aa:bb:cc:dd:ee:ff",
+               "device.address": "AA:BB:CC:DD:EE:FF"}
+        )
+        self.assertEqual(
+            [entry["address"] for entry in bluetooth_sources([source])],
+            ["AA:BB:CC:DD:EE:FF"],
+        )
+
+    def test_conflicting_bluetooth_metadata_properties_fail_closed(self):
+        # A correct primary address must not mask the contradictory secondary.
+        base = {"api.bluez5.address": "AA:BB:CC:DD:EE:FF",
+                "device.address": "11:22:33:44:55:66"}
+        scenarios = (
+            base,
+            {"api.bluez5.address": "", "device.address": "AA:BB:CC:DD:EE:FF"},
+            {"api.bluez5.address": None, "device.address": "AA:BB:CC:DD:EE:FF"},
+            {"api.bluez5.address": 0, "device.address": "AA:BB:CC:DD:EE:FF"},
+            {"api.bluez5.address": "AA:BB:CC:DD:EE:FF", "device.address": []},
+        )
+        for properties in scenarios:
+            with self.subTest(properties=repr(properties)):
+                found = bluetooth_sources([
+                    node(7, "bluez_input.AA_BB_CC_DD_EE_FF.0",
+                         "Audio/Source", **properties)
+                ])
+                self.assertEqual(found, [])
+
+    def test_optional_single_bluetooth_address_property_remains_supported(self):
+        for field in ("api.bluez5.address", "device.address"):
+            source = node(
+                8, "bluez_input.AA_BB_CC_DD_EE_FF.0", "Audio/Source",
+                **{field: "AA:BB:CC:DD:EE:FF"}
+            )
+            with self.subTest(field=field):
+                self.assertEqual(len(bluetooth_sources([source])), 1)
+
     def test_oversized_json_text_and_graph_are_refused(self):
         from audiohub.discovery import (MAX_PIPEWIRE_GRAPH_BYTES,
                                         MAX_PIPEWIRE_GRAPH_OBJECTS)
