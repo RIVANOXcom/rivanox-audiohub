@@ -735,3 +735,36 @@ nine OS notice gaps still pending, effective AGPL-3.0-only; legal/
 CEO release approval and physical Pi4/Edifier three simultaneous
 inputs, owner WiFi and 24-hour test NOT VERIFIED. No GO/merge/release,
 installation/deploy or permission changes. Keep changes Draft only.
+
+
+## 2026-11-06: Draft PR78 — concurrent EQ setup and error-cleanup resilience
+
+PAPA MissionPilot WD_JOB PAPA-18B8B3C6 / AH-003, AH-007.
+This isolated Draft PR78 stacks on verified Draft PR77
+d0dabf0ebdcb4dd5482577a29951834d4b2a58eb without altering parents or main.
+PR77's atomic EQ installer hardened the file target but still used
+os.mkdir() without handling FileExistsError after a concurrent local
+instance created a missing PipeWire config directory. This benign
+race could stop startup; the corrected path catches EEXIST and
+still reopens with O_DIRECTORY|O_NOFOLLOW, refusing raced symlinks.
+Additionally, a failure to unlink an interrupted exclusive temporary
+EQ file could override the original write error and skip os.close()
+of the directory descriptor. An inner finally guarantees close, and
+cleanup OSError is safely ignored while retaining the primary failure.
+Real temporary-filesystem tests simulate EEXIST directory creation,
+a malicious raced symlink, interrupted EQ write preserving the
+prior valid config, and unlink failure with original error preserved
+plus closed file descriptor. Adds installed-rootfs guard
+eq_setup_concurrent_create_cleanup_safe and three positive/negative
+synthetic fixtures, target 94 actual checks only upon successful native
+ARM64 CI. Prior PR77 Source #42307551376 SUCCESS 717/717 and
+native ARM64 #42307509559 SUCCESS actual 93/93, image SHA256
+7a5e42b5dd8c1eaa5b8da39229db15d8cd6a948c282ba9c1b24f4ece2bb16b1c,
+temporary test artifact #13547800628 ZIP SHA256
+81662ef0273ceaa36ff614b080ade5a3c6012e26d4bad3b5d4698f2d670e807c,
+Workbench evidence #3136. No new official release or hardware
+acceptance; physical Pi4+Edifier multi-input and 24h still untested,
+authenticated owner phone WiFi missing, effective AGPL-3.0-only,
+83 source-rights files and nine OS copyright paths pending legal/CEO
+review. Never merge, deploy, install, change permissions or release
+without express authorization.
