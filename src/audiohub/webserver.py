@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import socket
 import stat
 import threading
 import time
@@ -72,6 +73,7 @@ STATIC_MAX_BYTES = 512 * 1024
 STATUS_MAX_BYTES = 32 * 1024
 MAX_STATUS_CLIENTS = 8
 CLIENT_READ_TIMEOUT_SECONDS = 5
+CLIENT_MAX_LIFETIME_SECONDS = 15
 
 
 
@@ -210,10 +212,32 @@ class BoundedStatusHTTPServer(ThreadingHTTPServer):
             self._client_slots.release()
             raise
 
-    def process_request_thread(self, request, client_address):
+    @staticmethod
+    def _expire_client(request):
+        # Receive timeouts alone are renewed by slow byte-by-byte senders.
+        # Shutdown interrupts a blocked readline without echoing peer data.
         try:
+            request.shutdown(socket.SHUT_RDWR)
+        except (OSError, ValueError):
+            pass
+
+    def handle_error(self, request, client_address):
+        # BaseServer's default writes the peer address plus traceback to
+        # stderr/systemd. The unauthenticated alpha preview stores neither.
+        return None
+
+    def process_request_thread(self, request, client_address):
+        # One bounded watchdog per admitted connection. It is cancelled
+        # on every exit; a stalled slow sender cannot hold a slot forever.
+        watchdog = threading.Timer(
+            CLIENT_MAX_LIFETIME_SECONDS, self._expire_client, args=(request,)
+        )
+        watchdog.daemon = True
+        try:
+            watchdog.start()
             super().process_request_thread(request, client_address)
         finally:
+            watchdog.cancel()
             self._client_slots.release()
 
 

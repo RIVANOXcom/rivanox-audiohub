@@ -1,6 +1,7 @@
 """Read-only web API and deployment safety tests."""
 import json
 import os
+import socket
 import sys
 import threading
 from http.server import ThreadingHTTPServer
@@ -15,6 +16,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from audiohub.webserver import (ALLOWED, PUBLIC_FIELDS, Handler,
                                 BoundedStatusHTTPServer, MAX_STATUS_CLIENTS,
                                 CLIENT_READ_TIMEOUT_SECONDS,
+                                CLIENT_MAX_LIFETIME_SECONDS,
                                 STATIC_MAX_BYTES, STATUS_MAX_BYTES,
                                 _bounded_regular_bytes, public_status,
                                 read_public_status)
@@ -423,6 +425,57 @@ class BoundedStatusHTTPResourceTests(unittest.TestCase):
         with mock.patch("sys.stderr") as sink:
             handler.log_message('%s GET /api/status?token=%s',
                                 "CLIENT_MAC_AA_BB_CC_DD_EE_FF", "TOP-SECRET")
+        sink.write.assert_not_called()
+
+    def test_total_client_lifetime_is_fixed_in_addition_to_recv_timeout(self):
+        self.assertEqual(CLIENT_MAX_LIFETIME_SECONDS, 15)
+        self.assertEqual(CLIENT_READ_TIMEOUT_SECONDS, 5)
+        self.assertLessEqual(CLIENT_MAX_LIFETIME_SECONDS, 3 * CLIENT_READ_TIMEOUT_SECONDS)
+
+    def test_expired_slow_client_socket_is_shutdown_without_peer_logging(self):
+        server = self.server()
+        conn = mock.Mock()
+        server._expire_client(conn)
+        conn.shutdown.assert_called_once_with(socket.SHUT_RDWR)
+        conn.shutdown.side_effect = OSError("already closed")
+        server._expire_client(conn)  # Never re-raise teardown failures.
+
+    def test_worker_starts_and_cancels_total_lifetime_watchdog(self):
+        server = self.server()
+        client = mock.Mock()
+        peer = ("127.0.0.1", 12345)
+        self.assertTrue(server._client_slots.acquire(blocking=False))
+        timer = mock.Mock()
+        with mock.patch("audiohub.webserver.threading.Timer", return_value=timer) as factory, mock.patch.object(
+            ThreadingHTTPServer, "process_request_thread"
+        ) as handler:
+            server.process_request_thread(client, peer)
+            handler.assert_called_once_with(client, peer)
+        factory.assert_called_once()
+        self.assertEqual(factory.call_args.args[0], 15)
+        self.assertEqual(factory.call_args.kwargs["args"], (client,))
+        self.assertTrue(timer.daemon)
+        timer.start.assert_called_once_with()
+        timer.cancel.assert_called_once_with()
+        self.assertTrue(server._client_slots.acquire(blocking=False))
+
+    def test_watchdog_start_failure_still_releases_worker_slot(self):
+        server = self.server()
+        self.assertTrue(server._client_slots.acquire(blocking=False))
+        timer = mock.Mock()
+        timer.start.side_effect = RuntimeError("no timer thread")
+        with mock.patch("audiohub.webserver.threading.Timer", return_value=timer):
+            with self.assertRaisesRegex(RuntimeError, "no timer"):
+                server.process_request_thread(mock.Mock(), ("127.0.0.1", 8765))
+        timer.cancel.assert_called_once_with()
+        self.assertTrue(server._client_slots.acquire(blocking=False))
+
+    def test_generic_handler_exceptions_do_not_log_peer_identifiers(self):
+        server = self.server()
+        with mock.patch("sys.stderr") as sink:
+            server.handle_error(
+                mock.Mock(), ("192.168.1.42", "PRIVATE-DEVICE-MAC")
+            )
         sink.write.assert_not_called()
 
     def test_existing_readonly_handler_routes_are_unmodified(self):

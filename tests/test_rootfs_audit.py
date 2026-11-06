@@ -204,6 +204,12 @@ class RootfsAuditTests(unittest.TestCase):
             "object_pairs_hook=_unique_json_object",
             "def _reject_json_constant(_value):",
             "parse_constant=_reject_json_constant",
+            "CLIENT_MAX_LIFETIME_SECONDS = 15",
+            "threading.Timer(",
+            "watchdog.start()",
+            "watchdog.cancel()",
+            "request.shutdown(socket.SHUT_RDWR)",
+            "def handle_error(self, request, client_address):",
         )))
         make("opt/audiohub/src/audiohub/firstboot_diag.py",
              'OUTPUT_NAME = "AUDIOHUB-TEST-REPORT.json"\\n'
@@ -845,6 +851,47 @@ class RootfsAuditTests(unittest.TestCase):
             ))
             self.assertFalse(audit.inspect(root)[
                 "status_json_unique_keys_and_finite_numbers_only"
+            ])
+
+    def test_total_client_lifetime_guard_present_in_installed_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            self.assertTrue(audit.inspect(root)[
+                "status_http_total_lifetime_and_peer_error_privacy"
+            ])
+
+    def test_missing_total_lifetime_watchdog_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/src/audiohub/webserver.py"
+            path.write_text(path.read_text().replace(
+                "watchdog.start()", "pass"
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "status_http_total_lifetime_and_peer_error_privacy"
+            ])
+
+    def test_missing_timeout_shutdown_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/src/audiohub/webserver.py"
+            path.write_text(path.read_text().replace(
+                "request.shutdown(socket.SHUT_RDWR)", "pass"
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "status_http_total_lifetime_and_peer_error_privacy"
+            ])
+
+    def test_unsanitized_server_error_handler_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/src/audiohub/webserver.py"
+            path.write_text(path.read_text().replace(
+                "def handle_error(self, request, client_address):",
+                "def handle_unprotected_error(self, request, client_address):"
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "status_http_total_lifetime_and_peer_error_privacy"
             ])
 
     def test_unchecked_status_web_listener_prevents_image_export(self):
