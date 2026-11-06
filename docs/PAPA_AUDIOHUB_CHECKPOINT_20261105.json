@@ -17,7 +17,7 @@
   "official_release_count_at_capture": 0,
   "source_rights_ledger": {
     "path": "docs/licensing/SOURCE-RIGHTS-LEDGER.json",
-    "file_count": 81,
+    "file_count": 83,
     "all_reviewed": false
   },
   "canonical_resume": "docs/PAPA_CANONICAL_RESUME_20261105.md",
@@ -86,6 +86,12 @@
       "number": 47,
       "base": "wd-papa-20261105-bluetooth-trust-authorization-gate",
       "head": "wd-papa-20261106-bounded-pipewire-process-output",
+      "verified_head_sha": null
+    },
+    {
+      "number": 48,
+      "base": "wd-papa-20261106-bounded-pipewire-process-output",
+      "head": "wd-papa-20261106-offline-hardware-acceptance-checklist",
       "verified_head_sha": null
     }
   ],
@@ -246,5 +252,21 @@
     "commercial_model_c_approved": false,
     "hardware_accepted": false,
     "public_release_authorized": false
+  },
+  "next_manual_hardware_observation": {
+    "pr": 48,
+    "source_module": "src/audiohub/manual_acceptance.py",
+    "operator_runbook": "docs/HARDWARE-OBSERVATION-RUNBOOK.md",
+    "status": "DRAFT; exact-head source and native ARM64 CI not yet verified",
+    "topology_only_precondition": true,
+    "operator_freetext_stored": false,
+    "operator_manual_prompt_count": 6,
+    "all_yes_can_never_approve_hardware": true,
+    "hardware_accepted": false,
+    "ownership_authenticated": false,
+    "legal_redistribution_approved": false,
+    "model_c_license_effective": false,
+    "release_ready": false,
+    "expected_native_rootfs_guard_count": 63
   }
 }

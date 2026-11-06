@@ -148,7 +148,7 @@ bash -n build-image.sh
 ```text
 PAPA / RIVANOX AUDIOHUB WEITER — CANONICAL RESUME
 Read first:
-https://github.com/RIVANOXcom/rivanox-audiohub/blob/wd-papa-20261106-bounded-pipewire-process-output/docs/PAPA_CANONICAL_RESUME_20261105.md
+https://github.com/RIVANOXcom/rivanox-audiohub/blob/wd-papa-20261106-offline-hardware-acceptance-checklist/docs/PAPA_CANONICAL_RESUME_20261105.md
 Project PAPA Workbench: PJ2611-0001:R001.
 Verify LIVE repo, PR #46/#45/#44 stacked heads, exact source and ARM64 CI, and open issues before changing anything.
 The public main and historical source remain AGPL-3.0-only; Model C
@@ -311,6 +311,21 @@ review, and Pi4 + Edifier audible/hardware acceptance is open.
 **Validation:** added live child-process regression tests in `tests/test_process_capture.py`, parser tests in `tests/test_discovery.py`, updated preflight mock tests and four new real-rootfs guard negative/positive tests. New `scripts/audit_rootfs.py` check `pipewire_stdout_bounded_no_shell` requires the actual installed capture helper and both runtime/preflight call sites. **Expected native image check total 62** only if verified against the exact final PR47 SHA (PR46 verified 61). Added two new files to the pending-review rights ledger, now **81 files** with ALL ownership/third-party/Model C eligibility assertions FALSE. No license has been switched.
 
 **Next new-chat action:** verify LIVE PR47 HEAD and exact source + ARM64 Actions outcomes, fix any test/image failures, record final guard count, expiration and provenance. Only source CI and actual native image evidence may be marked PASS; no physical Edifier sound/no commercial rights. Open owner/private repo issue #37, legal issue #32, Raspberry Pi third-party license issue #40, hardware issue #2. Keep all stacked PRs DRAFT, public AGPL main unchanged, no official GitHub Release.
+
+
+## P. 2026-11-06: offline human-observed Pi4/Edifier test harness — Draft PR #48
+
+**Parent** [Draft PR #47](https://github.com/RIVANOXcom/rivanox-audiohub/pull/47) exact code SHA `24dec6ed2ecde427ff606b77b900620f36cb6469` source [run #42180349159](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42180349159) **SUCCESS 460/460 Python tests**; it introduces bounded PipeWire capture. Parent independent native ARM64 [#42180343356](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42180343356) was in progress when this branch was opened; **do not claim parent 62/62 native PASS until live checked**. PR46's parent native run #42125593262 independently passed 61/61 guards. Current public main AGPL unchanged.
+
+**New [Draft PR #48](https://github.com/RIVANOXcom/rivanox-audiohub/pull/48)**, branch `wd-papa-20261106-offline-hardware-acceptance-checklist` stacked on PR47 (not main). This is a **legacy AGPL developer diagnostic**, NOT a new commercially restricted Model C product feature.
+
+**Why:** Existing read-only `hardware_preflight.py` could identify expected Edifier USB and three PipeWire virtual sinks but could NOT prove any audible audio, successful three-input mixing, per-channel mute/EQ, safe USB removal or prolonged reliability. No source CI/native build can hear speakers or confirm physical behavior. The new manual harness `src/audiohub/manual_acceptance.py` runs **only when invoked by a person at a local Pi console** as `python3 -m audiohub.manual_acceptance`. It first calls the topology preflight; when prerequisites are incomplete it emits a small diagnostic and asks no questions. When ready it prompts for six deliberately physical observations (audible USB speakers, three-input mixing, channel isolation, USB unplug failsafe, clipping, independent 24h endurance). Answers accepted are ONLY `yes/no/skip`; free-form text, addresses/serials/passwords are discarded; three attempts max and EOF/Ctrl-C yields not tested. Output is bounded-schema privacy-safe JSON to stdout ONLY, no files, network, pairing, system state changes, or automatic audio generation. [English local Pi runbook](HARDWARE-OBSERVATION-RUNBOOK.md) gives exact execution commands and bench safety notes.
+
+**Critical release gate:** Even if the human says yes to all six, `hardware_accepted=false`, `ownership_authenticated=false`, `legal_redistribution_approved=false`, `model_c_license_effective=false`, `release_ready=false`, and `persisted=false`. Human statements are observations, NOT independent certification or real device acceptance, legal rights, owner provisioning or image release approval.
+
+**Validation:** 17 unit/CLI privacy/regression tests in `tests/test_manual_acceptance.py`, four actual image-rootfs guard tests in `tests/test_rootfs_audit.py`. New rootfs guard `manual_hardware_observation_not_auto_approval` expected to raise PR47's target **62 to 63** only after a successful native image run on PR48's final HEAD. Adds two rights-pending files (new module and test), from 81 to **83 checked-in source/test/CI files**, all approvals FALSE. Rootfs build must include manual_acceptance.py, and CI must fail when code could mark hardware or release automatically. Check latest source and native ARM64 CI and collect real Pi bench operator results separately.
+
+**Still BLOCKED:** physical Pi4 + Edifier R600USB independent acceptance issue #2; vendor OS notice/rights issue #40 (nine copyright paths incl. raspberrypi-net-mods), licensor/Model C legal issue #32, new empty private owner-created future Model C repo issue #37. No public GitHub Release or main merge, no AGPL history changes, no user ownership claims.
 
 **END OF HANDOFF.** If a live run/PR contradicts this document, treat
 the live GitHub evidence as authoritative, reconcile and update this file.
