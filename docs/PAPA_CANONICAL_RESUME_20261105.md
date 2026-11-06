@@ -426,5 +426,13 @@ PR48 adds an installed `manual_acceptance.py` source check and independent no-re
 
 **Verification:** Run PR54 exact-head source and native ARM64 CI, inspect counts and temporary artifact before calling source/image tests PASS. If either fails, fix in this branch only; do not claim hardware or product release GO. No merges, deploys, owner permission changes or Gitea/Umbrel installations.
 
+## W. 2026-11-06: strict duplicate-key and finite-number status JSON — Draft PR55
+
+**Parent:** [Draft PR54](https://github.com/RIVANOXcom/rivanox-audiohub/pull/54) exact head `f08aa400f25a1307368c41adb79504fec059c4a3`, source [run #42219045806](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42219045806) **SUCCESS 552/552**. Independent ARM64 [#42219039337](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42219039337) was still running at the start of this step, so 71 actual image checks and its artifact cannot yet be claimed. Parent PR53 SHA `53e49521bc8fd24a3c622cd07c944c5ccced4287` last verified native 70/70.
+
+**New isolated Draft PR55:** branch `wd-papa-20261106-strict-status-json-integrity`, stacked solely on exact PR54 head. Python's default `json.loads` silently resolves repeated object members to the last value and accepts non-standard `NaN`/`Infinity` numeric literals. A size-bounded, private-UID status file with inconsistent or corrupted health fields could therefore appear fresh. Keep the existing 32 KiB private nofollow / UID / hardlink / ownership checks, but pass `object_pairs_hook=_unique_json_object` and `parse_constant=_reject_json_constant` and use the existing ValueError catch to report anonymous stale/no USB health. Reject duplicates recursively, even in ignored metadata, and never include keys or secrets in exceptions or logs. Three real negative test methods and three synthetic rootfs guard tests, with new image guard `status_json_unique_keys_and_finite_numbers_only`, target **72** checks only when independent exact-head native ARM64 CI proves them. Five locales, static assets, no public mutations, loopback default, existing client caps and access-log privacy unchanged. Rights ledger remains 83 unreviewed files, legacy AGPL-3.0-only remains effective, Model C not activated.
+
+**Validation:** Exact-head source CI then independently verify native ARM64 image and SHA256/XZ provenance if generated; no automatic release/installation or CI-as-hardware certification. Preserve all existing PRs/main; update PAPA Workbench evidence when verified.
+
 **END OF HANDOFF.** If a live run/PR contradicts this document, treat
 the live GitHub evidence as authoritative, reconcile and update this file.
