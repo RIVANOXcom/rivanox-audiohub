@@ -247,6 +247,13 @@ class SourceRightsLedgerTests(unittest.TestCase):
         self.assertEqual(state["next_status_http_total_lifetime_privacy_change"]["expected_native_rootfs_guard_count"], 73)
         self.assertTrue(state["next_status_http_total_lifetime_privacy_change"]["handler_errors_do_not_log_peer"])
         self.assertFalse(state["next_status_http_total_lifetime_privacy_change"]["public_release_ready"])
+        self.assertEqual(state["next_offline_diag_json_integrity_change"]["pr"], 57)
+        self.assertEqual(state["next_offline_diag_json_integrity_change"]["parent_pr"], 56)
+        self.assertEqual(state["next_offline_diag_json_integrity_change"]["expected_native_rootfs_guard_count"], 74)
+        self.assertTrue(state["next_offline_diag_json_integrity_change"]["reject_duplicate_fields_at_any_depth"])
+        self.assertTrue(state["next_offline_diag_json_integrity_change"]["reject_nonfinite_numbers"])
+        self.assertTrue(state["next_offline_diag_json_integrity_change"]["reject_json_recursion_errors"])
+        self.assertFalse(state["next_offline_diag_json_integrity_change"]["public_release_ready"])
         self.assertEqual(state["next_bluetooth_agent_trust_security_change"]["pairable_timeout_seconds"], 600)
         self.assertEqual(state["next_bluetooth_agent_trust_security_change"]["discoverable_timeout_seconds"], 600)
         self.assertTrue(state["next_bluetooth_agent_trust_security_change"]["initial_deadline_relative_to_linux_boot"])
@@ -256,7 +263,7 @@ class SourceRightsLedgerTests(unittest.TestCase):
         self.assertFalse(state["last_native_verified"]["public_release_ready"])
         self.assertEqual(
             [item["number"] for item in state["draft_pr_chain"]],
-            [35, 36, 38, 39, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56],
+            [35, 36, 38, 39, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57],
         )
 
     def test_primary_handoff_points_to_authoritative_resume(self):
