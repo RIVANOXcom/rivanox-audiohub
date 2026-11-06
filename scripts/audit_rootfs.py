@@ -670,6 +670,25 @@ def inspect(root: Path) -> dict[str, bool]:
         )
     except OSError:
         checks["conservative_mix_gain_installed"] = False
+    # Source/router IDs come from PipeWire metadata; volume controls must
+    # never coerce booleans/floats/strings or reuse one ID for two targets.
+    try:
+        mixer = (source / "mixer.py").read_text()
+        checks["mixer_wpctl_target_ids_strict_unique"] = all(
+            marker in mixer for marker in (
+                "def _validated_wpctl_targets(sink_ids, output_id):",
+                "MAX_PIPEWIRE_NODE_ID = 2**31 - 1",
+                "type(sink_ids) is not dict",
+                "type(output_id) is not int",
+                "type(node_id) is not int",
+                "node_id in used",
+                "sink_ids = _validated_wpctl_targets(sink_ids, output_id)",
+                "node_id = str(sink_ids[channel])",
+                "str(output_id), str(effective_master_gain(settings))",
+            )
+        ) and "str(int(sink_ids[channel]))" not in mixer
+    except OSError:
+        checks["mixer_wpctl_target_ids_strict_unique"] = False
     # An unauthenticated legacy LAN PCM receiver may be shipped as source
     # ONLY for deliberate bench testing. It must never bind a socket or
     # register a service during image boot. This deliberately does not
