@@ -109,3 +109,16 @@ readout; playback routing continues to fail closed. The native Pi image
 must pass the new pre-export security guard in addition to unit tests.
 These are NOT proofs of real audible playback, secure ownership, legal
 rights or stable product readiness.
+
+## Physical hardware observation is NOT automatic acceptance (legacy alpha)
+
+Draft PR #48 adds `audiohub.manual_acceptance`, an offline local-console
+checklist for real Edifier USB sound, multi-input mixing, channel isolation,
+USB unplug failsafe, clipping and a separate 24-hour endurance test. It
+asks only after the non-mutating PipeWire topology preflight succeeds.
+Answers are fixed yes/no/skip values; user-entered text/identifiers are
+discarded; it writes no files, starts no network listeners and neither
+pairs devices nor drives audio. Reports cannot flip the existing false
+hardware, ownership, commercial license or release flags, even if every
+answer is yes. This does not replace independent Pi4 device testing.
+See docs/HARDWARE-OBSERVATION-RUNBOOK.md.

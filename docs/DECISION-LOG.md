@@ -43,6 +43,8 @@ These decisions capture user-confirmed requirements and current engineering arch
 
 | ADR-030 | Limit untrusted PipeWire process output before it can exhaust Raspberry Pi memory, and parse only bounded graphs. | Draft [PR #47](https://github.com/RIVANOXcom/rivanox-audiohub/pull/47); exact-head source and ARM64 image checks required | 4 MiB stdout, 8192 graph objects, selector-based incremental capture, no shell, timeout and process-group kill on overload; untrusted stderr not logged. Ownership, physical sound, legal permissions and public release remain gated. |
 
+| ADR-031 | Separate machine-checkable PipeWire topology from human-observed Pi4/Edifier audio behavior and never automatically grant a hardware or release signoff. | Draft [PR #48](https://github.com/RIVANOXcom/rivanox-audiohub/pull/48), exact-head source and native CI pending | Offline interactive local operator only, fixed yes/no/skip data, no identifiers or file/network changes, six physical observations, permanent hardware_accepted=false and public_release_ready=false; independent legal/owner/hardware acceptance remain required. |
+
 ## Engineering observations (not product acceptance)
 
 - Source-level tests and policy checks have succeeded on GitHub Actions.

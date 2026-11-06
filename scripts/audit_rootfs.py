@@ -40,7 +40,7 @@ def inspect(root: Path) -> dict[str, bool]:
         return {"rootfs_exists": False}
     checks: dict[str, bool] = {}
     source = root / "opt/audiohub/src/audiohub"
-    for name in ("__init__.py", "runtime.py", "pairing.py", "mixer.py", "webserver.py", "status_bind.py", "firstboot_diag.py", "network_laptop.py", "network_buffer.py", "input_profiles.py", "source_routes.py", "audio_graph.py", "hardware_preflight.py", "process_capture.py"):
+    for name in ("__init__.py", "runtime.py", "pairing.py", "mixer.py", "webserver.py", "status_bind.py", "firstboot_diag.py", "network_laptop.py", "network_buffer.py", "input_profiles.py", "source_routes.py", "audio_graph.py", "hardware_preflight.py", "process_capture.py", "manual_acceptance.py"):
         checks["source_" + name] = (source / name).is_file()
     # Polling PipeWire must not allocate arbitrarily large stdout or
     # include raw metadata in logs and auxiliary reports.
@@ -75,6 +75,25 @@ def inspect(root: Path) -> dict[str, bool]:
         )
     except OSError:
         checks["pipewire_stdout_bounded_no_shell"] = False
+    # No operator-only "hardware check" may quietly grant legal, owner or
+    # stable-image approval from detected topology or typed responses.
+    try:
+        manual = (source / "manual_acceptance.py").read_text()
+        checks["manual_hardware_observation_not_auto_approval"] = all(
+            token in manual for token in (
+                'from .hardware_preflight import probe',
+                '"hardware_accepted": False',
+                '"ownership_authenticated": False',
+                '"legal_redistribution_approved": False',
+                '"model_c_license_effective": False',
+                '"release_ready": False',
+                '"persisted": False',
+                '"operator_observations": observations',
+                'MAX_INPUT_ATTEMPTS = 3',
+            )
+        ) and 'import socket' not in manual and 'write_text(' not in manual
+    except OSError:
+        checks["manual_hardware_observation_not_auto_approval"] = False
     # Runtime's private state must never follow attacker-controlled links,
     # write through a fixed .tmp name, or accept unbounded JSON.
     try:

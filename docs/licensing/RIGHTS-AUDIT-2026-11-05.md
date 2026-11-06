@@ -127,3 +127,7 @@ license review and corrected image export remain mandatory.
 ### 2026-11-06 new source-rights files under review
 
 Draft PR #47 adds `src/audiohub/process_capture.py` and `tests/test_process_capture.py`, so the fail-closed provenance inventory now lists **81** application/source/CI/test files (previously 79), with every rightsholder, third-party similarity and Model C eligibility assertion still **FALSE**. Adding a ledger entry is not a legal approval. Refer to [PAPA canonical resume](../PAPA_CANONICAL_RESUME_20261105.md) section O for exact PR/CI state.
+
+### 2026-11-06 noncommercial developer diagnostics pending rights review
+
+Draft PR #48 adds `src/audiohub/manual_acceptance.py` and `tests/test_manual_acceptance.py` to the legacy AGPL test/diagnostic suite. Pending-rights ledger now covers **83** checked-in source/test/build/CI files. An entry means only provenance and future commercial Model C eligibility STILL REQUIRE HUMAN REVIEW; no ownership or redistribution permission is inferred. The manual harness always sets release_ready and legal_redistribution_approved FALSE; even all-positive subjective hardware answers do not create rights.

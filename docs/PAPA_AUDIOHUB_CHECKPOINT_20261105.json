@@ -17,7 +17,7 @@
   "official_release_count_at_capture": 0,
   "source_rights_ledger": {
     "path": "docs/licensing/SOURCE-RIGHTS-LEDGER.json",
-    "file_count": 81,
+    "file_count": 83,
     "all_reviewed": false
   },
   "canonical_resume": "docs/PAPA_CANONICAL_RESUME_20261105.md",
@@ -87,14 +87,20 @@
       "base": "wd-papa-20261105-bluetooth-trust-authorization-gate",
       "head": "wd-papa-20261106-bounded-pipewire-process-output",
       "verified_head_sha": null
+    },
+    {
+      "number": 48,
+      "base": "wd-papa-20261106-bounded-pipewire-process-output",
+      "head": "wd-papa-20261106-offline-hardware-acceptance-checklist",
+      "verified_head_sha": null
     }
   ],
   "last_native_verified": {
-    "run_id": 42125593262,
-    "source_sha": "c37f309ec42b5a29e8254b76bf57f4f2ff21a1c9",
+    "run_id": 42180343356,
+    "source_sha": "24dec6ed2ecde427ff606b77b900620f36cb6469",
     "conclusion": "success",
-    "python_tests": 441,
-    "rootfs_checks_passed": 61,
+    "python_tests": 460,
+    "rootfs_checks_passed": 63,
     "installed_packages": 689,
     "architecture_counts": {
       "arm64": 538,
@@ -107,9 +113,9 @@
       "doc_alias_target_link": 8,
       "copyright_file_missing": 1
     },
-    "artifact_id": 13461790759,
+    "artifact_id": 13485144050,
     "artifact_unverified": true,
-    "artifact_expiry": "2026-12-05T23:03:39Z",
+    "artifact_expiry": "2026-12-06T07:29:20Z",
     "public_release_ready": false
   },
   "open_issues": [
@@ -233,7 +239,7 @@
   },
   "next_pipewire_stdout_security_change": {
     "pr": 47,
-    "status": "SOURCE and native exact-head CI not verified at documentation commit",
+    "status": "Source 460 and native ARM64 63 actual guards passed on PR47 SHA 24dec6ed2ecde427ff606b77b900620f36cb6469",
     "defect": "Unbounded subprocess.run(capture_output=True) for pw-dump in runtime and manual hardware preflight",
     "max_stdout_bytes": 4194304,
     "max_graph_objects": 8192,
@@ -241,10 +247,33 @@
     "kill_process_group_on_failure": true,
     "stderr_discards_identifiers": true,
     "legacy_agpl_maintained": true,
-    "expected_rootfs_guard_count": 62,
+    "expected_rootfs_guard_count": 63,
     "human_source_rights_approved": false,
     "commercial_model_c_approved": false,
     "hardware_accepted": false,
     "public_release_authorized": false
+  },
+  "next_manual_hardware_observation": {
+    "pr": 48,
+    "source_module": "src/audiohub/manual_acceptance.py",
+    "operator_runbook": "docs/HARDWARE-OBSERVATION-RUNBOOK.md",
+    "status": "DRAFT; exact-head source and native ARM64 CI not yet verified",
+    "topology_only_precondition": true,
+    "operator_freetext_stored": false,
+    "operator_manual_prompt_count": 6,
+    "all_yes_can_never_approve_hardware": true,
+    "hardware_accepted": false,
+    "ownership_authenticated": false,
+    "legal_redistribution_approved": false,
+    "model_c_license_effective": false,
+    "release_ready": false,
+    "expected_native_rootfs_guard_count": 65,
+    "initial_source_ci": {
+      "run_id": 42181382213,
+      "sha": "0c07dcfa5fccb83db9b276f2b14c11ef45db8d53",
+      "tests": 481,
+      "conclusion": "success"
+    },
+    "initial_native_run_id": 42181376193
   }
 }

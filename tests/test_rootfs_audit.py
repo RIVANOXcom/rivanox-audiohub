@@ -113,6 +113,17 @@ class RootfsAuditTests(unittest.TestCase):
             '"input-node-id"',
             '"release_ready": False',
         )))
+        make("opt/audiohub/src/audiohub/manual_acceptance.py", "\\n".join((
+            'from .hardware_preflight import probe',
+            '"hardware_accepted": False',
+            '"ownership_authenticated": False',
+            '"legal_redistribution_approved": False',
+            '"model_c_license_effective": False',
+            '"release_ready": False',
+            '"persisted": False',
+            '"operator_observations": observations',
+            'MAX_INPUT_ATTEMPTS = 3',
+        )))
         make("opt/audiohub/src/audiohub/hardware_preflight.py",
              'from .audio_graph import summarize_links\\n'
              'bounded_command_output(("pw-dump",), timeout=5)')
@@ -431,6 +442,44 @@ class RootfsAuditTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = self.root(tmp)
             self.assertTrue(audit.inspect(root)["pipewire_stdout_bounded_no_shell"])
+
+    def test_manual_observation_cannot_mark_hardware_approved(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            source = root / "opt/audiohub/src/audiohub/manual_acceptance.py"
+            source.write_text(source.read_text().replace(
+                '"hardware_accepted": False', '"hardware_accepted": True'
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "manual_hardware_observation_not_auto_approval"
+            ])
+
+    def test_manual_observation_cannot_mark_release_ready(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            source = root / "opt/audiohub/src/audiohub/manual_acceptance.py"
+            source.write_text(source.read_text().replace(
+                '"release_ready": False', '"release_ready": True'
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "manual_hardware_observation_not_auto_approval"
+            ])
+
+    def test_manual_observation_cannot_start_network_or_write_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            source = root / "opt/audiohub/src/audiohub/manual_acceptance.py"
+            source.write_text(source.read_text() + "\\nimport socket\\n")
+            self.assertFalse(audit.inspect(root)[
+                "manual_hardware_observation_not_auto_approval"
+            ])
+
+    def test_verified_manual_observation_guard_present(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            self.assertTrue(audit.inspect(root)[
+                "manual_hardware_observation_not_auto_approval"
+            ])
 
     def test_unchecked_status_web_listener_prevents_image_export(self):
         with tempfile.TemporaryDirectory() as tmp:
