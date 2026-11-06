@@ -180,6 +180,27 @@ class DiagnosticTests(unittest.TestCase):
                 self.assertEqual(snapshot["runtime_status"], "unavailable_or_stale")
                 self.assertFalse(snapshot["usb_audio_detected"])
 
+    def test_overflow_json_exponents_fail_closed_in_root_offline_report(self):
+        for number in ("1e999", "-1e999", "9.99e9999"):
+            with self.subTest(number=number):
+                self.runtime.write_text(
+                    '{"updated_at":100,"usb_output":true,"extra":' + number + "}"
+                )
+                self.runtime.chmod(0o600)
+                snapshot = diag.sample(self.runtime, self.uid, now=101)
+                self.assertEqual(snapshot["runtime_status"], "unavailable_or_stale")
+                self.assertFalse(snapshot["usb_audio_detected"])
+
+    def test_finite_json_exponent_keeps_legitimate_offline_health(self):
+        self.runtime.write_text(
+            '{"updated_at":100,"usb_output":true,"extra":1.25e2}'
+        )
+        self.runtime.chmod(0o600)
+        snapshot = diag.sample(self.runtime, self.uid, now=101)
+        self.assertEqual(snapshot["runtime_status"], "recent")
+        self.assertTrue(snapshot["usb_audio_detected"])
+        self.assertNotIn("extra", snapshot)
+
     def test_runtime_symlink_is_not_followed(self):
         private = self.root / "private"
         private.write_text(json.dumps({"updated_at": 100, "usb_output": True}))
