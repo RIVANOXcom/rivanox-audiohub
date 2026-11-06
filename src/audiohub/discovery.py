@@ -50,8 +50,27 @@ def _id(node):
     return ident if type(ident) is int and 0 <= ident <= 2**31 - 1 else None
 
 
+def _conflicting_node_ids(nodes):
+    """A PipeWire node ID must identify exactly one actual Node object.
+
+    Duplicate records, even with different names or identical properties,
+    are not a reliable routing graph. Refuse the entire affected snapshot.
+    """
+    seen = set()
+    for item in nodes:
+        ident = _id(item)
+        if ident is None:
+            continue
+        if ident in seen:
+            return True
+        seen.add(ident)
+    return False
+
+
 def choose_usb_output(nodes):
     """Select exactly one Edifier or the sole unambiguous USB audio output."""
+    if _conflicting_node_ids(nodes):
+        return None
     sinks = []
     for item in nodes:
         value = props(item)
@@ -83,8 +102,11 @@ def bluetooth_sources(nodes):
     Unknown names or inconsistent addresses are ignored rather than treated
     as new pairing candidates. The MAC is kept only inside the local process.
     """
+    if _conflicting_node_ids(nodes):
+        return []
     result = []
     seen = set()
+    conflicted = set()
     for item in nodes:
         value = props(item)
         name = value.get("node.name")
@@ -102,18 +124,29 @@ def bluetooth_sources(nodes):
                     or property_mac.upper() != name_mac):
                 continue
         if name_mac in seen:
+            conflicted.add(name_mac)
             continue
         seen.add(name_mac)
         result.append({"name": name, "address": name_mac, "id": item["id"]})
-    return result
+    # An address with two eligible BlueZ source nodes is ambiguous.
+    # Neither entry is safe to route; never trust whichever arrived first.
+    return [source for source in result if source["address"] not in conflicted]
 
 
 def virtual_sinks(nodes):
+    if _conflicting_node_ids(nodes):
+        return {}
     found = {}
+    ambiguous = set()
     for item in nodes:
         value = props(item)
         name = value.get("node.name")
         ident = _id(item)
         if value.get("media.class") == "Audio/Sink" and name in _CHANNEL_NAMES and ident is not None:
-            found[name] = ident
-    return found
+            if name in found:
+                ambiguous.add(name)
+            else:
+                found[name] = ident
+    # One duplicate logical name makes the routing graph unreliable.
+    # Dropping all sinks forces the active supervisor to stop managed routes.
+    return {} if ambiguous else found
