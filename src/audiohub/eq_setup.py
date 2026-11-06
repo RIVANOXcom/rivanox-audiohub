@@ -28,7 +28,12 @@ def _safe_eq_parent_fd(target):
             try:
                 nextfd = os.open(component, flags, dir_fd=fd)
             except FileNotFoundError:
-                os.mkdir(component, mode=0o700, dir_fd=fd)
+                try:
+                    os.mkdir(component, mode=0o700, dir_fd=fd)
+                except FileExistsError:
+                    # Another local instance may create the directory first.
+                    # Reopen with O_NOFOLLOW; a raced symlink is still denied.
+                    pass
                 nextfd = os.open(component, flags, dir_fd=fd)
             os.close(fd)
             fd = nextfd
@@ -82,12 +87,15 @@ def main():
         created = False
         os.fsync(dirfd)
     finally:
-        if created:
-            try:
-                os.unlink(temp, dir_fd=dirfd)
-            except FileNotFoundError:
-                pass
-        os.close(dirfd)
+        try:
+            if created:
+                try:
+                    os.unlink(temp, dir_fd=dirfd)
+                except OSError:
+                    # Preserve the original write error even if cleanup fails.
+                    pass
+        finally:
+            os.close(dirfd)
 
 
 if __name__ == "__main__":
