@@ -314,10 +314,12 @@ class AudioPathTests(unittest.TestCase):
         self.assertEqual(virtual_sinks(values), {})
         self.assertIsNone(choose_usb_output(values))
 
-    def test_bluetooth_addresses_are_valid_and_deduplicated(self):
+    def test_bluetooth_addresses_are_valid_and_ambiguous_mac_fails_closed(self):
+        # Two candidate nodes for one MAC are NOT a reliable source;
+        # no arbitrary "first valid" capture is routed. Other phones remain.
         found = bluetooth_sources([bt_node(5), bt_node(6), bt_node(7, PHONE2)])
-        self.assertEqual(len(found), 2)
-        self.assertEqual({x["address"] for x in found}, {PHONE, PHONE2})
+        self.assertEqual(len(found), 1)
+        self.assertEqual({x["address"] for x in found}, {PHONE2})
 
     def test_mismatched_bt_name_address_is_rejected(self):
         mismatch = bt_node()
