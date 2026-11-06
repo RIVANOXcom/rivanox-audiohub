@@ -30,28 +30,56 @@ def _bounded(value, upper):
 
 
 def _read_runtime(path, user_id):
-    """Read bounded, plain, same-UID JSON; never follow a user-controlled link."""
-    try:
-        fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW | os.O_CLOEXEC)
-    except OSError:
+    """Read one private, bounded runtime JSON with no symlinked ancestors.
+
+    This diagnostic runs from a root-owned system unit, while the live
+    runtime file belongs to unprivileged audiohub. Refuse symlinked path
+    components and any public or foreign-owned final state directory
+    before opening its status file. Never export identifiers or raw JSON.
+    """
+    path = Path(path)
+    if (not path.is_absolute() or ".." in path.parts or not path.name
+            or type(user_id) is not int or user_id < 0):
         return None
+    dirfd = None
+    filefd = None
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
     try:
-        meta = os.fstat(fd)
-        if (not stat.S_ISREG(meta.st_mode) or meta.st_uid != user_id
-                or meta.st_nlink != 1 or meta.st_size > MAX_RUNTIME_BYTES):
+        dirfd = os.open("/", flags)
+        for component in path.parent.parts[1:]:
+            nextfd = os.open(component, flags, dir_fd=dirfd)
+            os.close(dirfd)
+            dirfd = nextfd
+        parent = os.fstat(dirfd)
+        if (not stat.S_ISDIR(parent.st_mode) or parent.st_uid != user_id
+                or stat.S_IMODE(parent.st_mode) & 0o077):
             return None
-        raw = os.read(fd, MAX_RUNTIME_BYTES + 1)
-        if len(raw) > MAX_RUNTIME_BYTES:
+        filefd = os.open(
+            path.name,
+            os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW | os.O_CLOEXEC,
+            dir_fd=dirfd,
+        )
+        meta = os.fstat(filefd)
+        if (not stat.S_ISREG(meta.st_mode) or meta.st_uid != user_id
+                or meta.st_nlink != 1
+                or stat.S_IMODE(meta.st_mode) & 0o077
+                or not 0 < meta.st_size <= MAX_RUNTIME_BYTES):
+            return None
+        raw = os.read(filefd, MAX_RUNTIME_BYTES + 1)
+        if len(raw) != meta.st_size:
             return None
         try:
             record = json.loads(raw.decode("utf-8"))
         except (UnicodeError, ValueError):
             return None
         return record if type(record) is dict else None
-    except OSError:
+    except (OSError, TypeError, ValueError):
         return None
     finally:
-        os.close(fd)
+        if filefd is not None:
+            os.close(filefd)
+        if dirfd is not None:
+            os.close(dirfd)
 
 
 def sample(runtime_path, user_id, *, now=None, controller_present=False):
