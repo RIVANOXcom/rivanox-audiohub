@@ -36,6 +36,7 @@ class RootfsAuditTests(unittest.TestCase):
             "os.replace(temp, target.name, src_dir_fd=dirfd, dst_dir_fd=dirfd)",
             "os.fsync(dirfd)",
             "except FileExistsError:",
+            "nextfd = os.open(component, flags, dir_fd=fd)",
             "except OSError:",
             "os.unlink(temp, dir_fd=dirfd)",
             "finally:\n            os.close(dirfd)",
