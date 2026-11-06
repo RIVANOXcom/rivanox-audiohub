@@ -11,14 +11,19 @@ import re
 _MAC = re.compile(r"(?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}\Z")
 _BLUEZ_NAME = re.compile(r"bluez_input\.([0-9A-Fa-f_]{17})(?:\.[a-zA-Z0-9_.:-]{1,32})?\Z")
 _CHANNEL_NAMES = frozenset(("audiohub.music", "audiohub.laptop", "audiohub.tablet"))
+MAX_PIPEWIRE_GRAPH_BYTES = 4 * 1024 * 1024
+MAX_PIPEWIRE_GRAPH_OBJECTS = 8192
 
 
 def pipewire_nodes(raw):
+    # Reject overlarge or malformed snapshots before iterating nodes.
+    if type(raw) is str and len(raw.encode("utf-8")) > MAX_PIPEWIRE_GRAPH_BYTES:
+        return []
     try:
-        data = json.loads(raw) if isinstance(raw, str) else raw
+        data = json.loads(raw) if type(raw) is str else raw
     except (TypeError, ValueError):
         return []
-    if not isinstance(data, list):
+    if type(data) is not list or len(data) > MAX_PIPEWIRE_GRAPH_OBJECTS:
         return []
     return [
         obj for obj in data
