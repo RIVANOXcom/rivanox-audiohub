@@ -2104,7 +2104,7 @@ class RootfsAuditTests(unittest.TestCase):
                 self.assertFalse(checks["independent_eq_virtual_sinks"])
 
     def test_rootfs_eq_oversize_and_invalid_utf8_are_rejected(self):
-        for content in (b"x" * (audit.MAX_EQ_AUDIT_BYTES + 1), b"\\xff\\xfe"):
+        for content in (b"x" * (audit.MAX_EQ_AUDIT_BYTES + 1), b"\xff\xfe"):
             with self.subTest(size=len(content)), tempfile.TemporaryDirectory() as tmp:
                 root = self.root(tmp)
                 (root / audit.EQ_CONFIG_PATH).write_bytes(content)
