@@ -51,6 +51,8 @@ These decisions capture user-confirmed requirements and current engineering arch
 
 | ADR-034 | Manually opted-in but unauthenticated laptop Scream UDP receiver must use the same bounded PipeWire subprocess capture as the live supervisor. | Draft [PR #51](https://github.com/RIVANOXcom/rivanox-audiohub/pull/51); initial source CI 522 tests passed, exact native ARM64 pending | Keep 4MiB stdout/5sec deadline, suppress stderr, deny graph or USB default assertion on capture failure; never autostart this insecure receiver. Physical audio and legal/public release gates unchanged. |
 
+| ADR-035 | Never permit unbounded status HTTP request workers or journal attacker-controlled URLs in the unauthenticated alpha preview. | Draft [PR #52](https://github.com/RIVANOXcom/rivanox-audiohub/pull/52), 535 initial source tests pass; native exact-head pending | Limit simultaneous client threads to 8, five-second read timeout, close excess sockets and suppress default BaseHTTPRequestHandler URL/request logging; preserve read-only loopback default and explicit unsafe LAN opt-in. No owner or legal GO. |
+
 ## Engineering observations (not product acceptance)
 
 - Source-level tests and policy checks have succeeded on GitHub Actions.
