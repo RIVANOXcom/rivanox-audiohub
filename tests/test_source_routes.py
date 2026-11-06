@@ -162,6 +162,38 @@ class SourcePolicyTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 routes.load(self.dir)
 
+    def test_ancestor_symlink_never_redirects_policy_read_or_write(self):
+        actual = self.root / "actual"
+        actual.mkdir()
+        safe = actual / "config"
+        routes.set_mode("manual", safe)
+        before = (safe / routes.FILENAME).read_bytes()
+        (self.root / "linked").symlink_to(actual, target_is_directory=True)
+        redirected = self.root / "linked" / "config"
+        with self.assertRaises(OSError):
+            routes.load(redirected)
+        with self.assertRaises(OSError):
+            routes.set_mode("auto", redirected)
+        self.assertEqual((safe / routes.FILENAME).read_bytes(), before)
+
+    def test_ancestor_symlink_never_redirects_directory_creation(self):
+        actual = self.root / "actual"
+        actual.mkdir()
+        (self.root / "linked").symlink_to(actual, target_is_directory=True)
+        with self.assertRaises(OSError):
+            routes.set_mode("manual", self.root / "linked" / "new")
+        self.assertFalse((actual / "new").exists())
+
+    def test_parent_traversal_component_denied_without_writes(self):
+        with self.assertRaises(ValueError):
+            routes.set_mode("manual", self.root / "folder" / ".." / "outside")
+        self.assertFalse((self.root / "outside").exists())
+
+    def test_existing_normal_nested_directory_still_supported(self):
+        folder = self.root / "regular" / "nested" / "audiohub"
+        routes.set_lan("tablet", folder)
+        self.assertEqual(routes.load(folder)["lan_slot"], "tablet")
+
     def test_file_symlink_rejected(self):
         self.dir.mkdir(mode=0o700)
         private = self.root / "private"

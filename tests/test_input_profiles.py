@@ -61,6 +61,38 @@ class InputProfiles(unittest.TestCase):
             p.set_label("tablet","Radio",self.root)
         self.assertEqual(f.read_text(),"invalid!")
 
+    def test_ancestor_symlink_rejected_for_private_label_read_and_write(self):
+        real = self.root.parent / "actual"
+        real.mkdir()
+        safe = real / "config"
+        p.set_label("music", "Original", safe)
+        before = (safe / p.FILENAME).read_bytes()
+        (self.root.parent / "linked").symlink_to(real, target_is_directory=True)
+        redirected = self.root.parent / "linked" / "config"
+        with self.assertRaises(OSError):
+            p.load_labels(redirected)
+        with self.assertRaises(OSError):
+            p.set_label("music", "Altered", redirected)
+        self.assertEqual((safe / p.FILENAME).read_bytes(), before)
+
+    def test_ancestor_symlink_cannot_create_new_profile_directory(self):
+        real = self.root.parent / "actual"
+        real.mkdir()
+        (self.root.parent / "linked").symlink_to(real, target_is_directory=True)
+        with self.assertRaises(OSError):
+            p.set_label("music", "Altered", self.root.parent / "linked" / "new")
+        self.assertFalse((real / "new").exists())
+
+    def test_profile_parent_traversal_denied_before_creation(self):
+        with self.assertRaises(ValueError):
+            p.set_label("music", "Altered", self.root.parent / "nested" / ".." / "new")
+        self.assertFalse((self.root.parent / "new").exists())
+
+    def test_nested_regular_profile_directories_still_work(self):
+        folder = self.root.parent / "regular" / "nested" / "config"
+        p.set_label("tablet", "Tablet", folder)
+        self.assertEqual(p.load_labels(folder)["tablet"], "Tablet")
+
     def test_symlink_and_world_readable_rejected(self):
         self.root.mkdir(mode=0o700)
         path=self.root/p.FILENAME

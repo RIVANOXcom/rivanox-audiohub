@@ -49,15 +49,38 @@ def validate_labels(labels):
     return normalized
 
 
-def _safe_dir(path):
-    """Open a private directory owned by the effective uid; no symlink dirs."""
+def _safe_dir(path, *, create=False):
+    """Walk every parent without symlinks; only the final leaf must be private."""
+    path = Path(path)
+    if not path.is_absolute():
+        path = Path.cwd() / path
+    if ".." in path.parts:
+        raise ValueError("Input profile directory traversal is prohibited")
     flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
-    fd = os.open(path, flags)
-    st = os.fstat(fd)
-    if st.st_uid != os.geteuid() or stat.S_IMODE(st.st_mode) & 0o077:
-        os.close(fd)
-        raise PermissionError("Profile directory must be owned by caller and private")
-    return fd
+    dirfd = os.open("/", flags)
+    try:
+        for component in path.parts[1:]:
+            try:
+                nextfd = os.open(component, flags, dir_fd=dirfd)
+            except FileNotFoundError:
+                if not create:
+                    raise
+                try:
+                    os.mkdir(component, mode=0o700, dir_fd=dirfd)
+                except FileExistsError:
+                    pass  # A raced directory must still pass O_NOFOLLOW.
+                nextfd = os.open(component, flags, dir_fd=dirfd)
+            os.close(dirfd)
+            dirfd = nextfd
+        st = os.fstat(dirfd)
+        if st.st_uid != os.geteuid() or stat.S_IMODE(st.st_mode) & 0o077:
+            raise PermissionError("Profile directory must be owned by caller and private")
+        result = dirfd
+        dirfd = None
+        return result
+    finally:
+        if dirfd is not None:
+            os.close(dirfd)
 
 
 def _unique_profile_members(pairs):
@@ -131,8 +154,7 @@ def set_label(slot, label, directory=None):
     label = validate_name(label)
     directory = Path(directory) if directory is not None else Path.home() / ".config" / "audiohub"
     # The image normally creates this 0700 directory for the audiohub user.
-    directory.mkdir(parents=True, exist_ok=True, mode=0o700)
-    dirfd = _safe_dir(directory)
+    dirfd = _safe_dir(directory, create=True)
     lockfd = None
     temp_name = None
     try:

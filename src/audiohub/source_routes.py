@@ -67,14 +67,37 @@ def validate(plan):
 
 
 def _private_dir(path, *, create=False):
-    if create:
-        path.mkdir(parents=True, exist_ok=True, mode=0o700)
-    fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
-    st = os.fstat(fd)
-    if st.st_uid != os.geteuid() or stat.S_IMODE(st.st_mode) & 0o077:
-        os.close(fd)
-        raise PermissionError("Route directory must be user-owned and private")
-    return fd
+    """Walk every directory component without following an ancestor symlink."""
+    path = Path(path)
+    if not path.is_absolute():
+        path = Path.cwd() / path
+    if ".." in path.parts:
+        raise ValueError("Route directory traversal is prohibited")
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
+    dirfd = os.open("/", flags)
+    try:
+        for component in path.parts[1:]:
+            try:
+                nextfd = os.open(component, flags, dir_fd=dirfd)
+            except FileNotFoundError:
+                if not create:
+                    raise
+                try:
+                    os.mkdir(component, mode=0o700, dir_fd=dirfd)
+                except FileExistsError:
+                    pass  # Concurrent creation still must pass O_NOFOLLOW.
+                nextfd = os.open(component, flags, dir_fd=dirfd)
+            os.close(dirfd)
+            dirfd = nextfd
+        st = os.fstat(dirfd)
+        if st.st_uid != os.geteuid() or stat.S_IMODE(st.st_mode) & 0o077:
+            raise PermissionError("Route directory must be user-owned and private")
+        result = dirfd
+        dirfd = None
+        return result
+    finally:
+        if dirfd is not None:
+            os.close(dirfd)
 
 
 def _unique_route_members(pairs):

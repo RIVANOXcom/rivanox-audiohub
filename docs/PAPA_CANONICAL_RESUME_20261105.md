@@ -514,5 +514,15 @@ PR48 adds an installed `manual_acceptance.py` source check and independent no-re
 
 **Blockers:** Nine copyright gaps, 83 pending source-rights ledger files, Pi4/Edifier actual sound/three-source routing/24-hour endurance, secure owner phone Wi-Fi, and Model C legal authorization remain open. AGPL-3.0-only remains effective. Next exact-head source/native PR63 tests, image ZIP/XZ provenance and Workbench evidence. No merges, installs, deployment or release-GO.
 
+## AF. 2026-11-06: no-follow every ancestor for offline audio config paths — Draft PR64
+
+**PAPA-18B8B3C6**, new isolated Draft PR64 branch `wd-papa-18b8b3c6-private-config-ancestor-nofollow-20261106`, stacked exclusively on PR63 exact SHA `1b8a51dc2916662c3871af5285152593a0c6a928`; earlier PRs and main untouched. PR63 source #42238689790 **639/639 PASS**, independent native ARM64 #42238617371 **81/81 installed rootfs checks PASS**, XZ checksum and bundle integrity successful. Temporary UNVERIFIED_ALPHA_TEST_ONLY ZIP #13515246192, 605807246 bytes, SHA256 `9aaf1d40d5083c3f3996ec4cfa6a93eaf1237a23980ebb8abf6b92614b357ea8`, expires 2026-12-06. Nine unresolved package copyrights, 83 source-rights entries and all physical/legal gates unchanged.
+
+**Actual defect:** Local-only `source_routes._private_dir` and `input_profiles._safe_dir` used one `os.open(path, O_DIRECTORY|O_NOFOLLOW)`. This protects the final component but does **not** reject a symbolic link in any *ancestor*. The two private user-owned configuration paths could therefore be redirected to an unexpected same-user directory, including atomic writes; `Path.mkdir(parents=True)` created directories *before* checking ancestry. The existing code/comment claimed no-follow directory protection; the implementation did not provide it.
+
+**Fix:** Walk the absolute path from `/` using one `O_NOFOLLOW|O_DIRECTORY` directory FD per component, refuse explicit `..` components and close FDs on error. Secure per-FD `os.mkdir(..., dir_fd=fd)` for missing components during local-only mutations and re-open with no-follow (including concurrent creation), and check final effective user ownership and privacy unchanged. Continue to default missing read-only configurations, support normal nested local directories and atomic writes; no local or remote network authorization expansion. Eight real negative/positive regression tests across both files, four installed-rootfs synthetic tests and one gate `private_config_ancestor_symlink_fd_walk` (expected native **82** only with independent ARM64 verification).
+
+**Next:** PR64 exact-head source and ARM64 82 guards, ZIP/XZ provenance and Workbench evidence. No public release; hardware Pi4/Edifier, real 3-source audio/24h, owner/phone Wi-Fi and licensing remain unaccepted, effective AGPL-3.0-only unchanged.
+
 **END OF HANDOFF.** If a live run/PR contradicts this document, treat
 the live GitHub evidence as authoritative, reconcile and update this file.

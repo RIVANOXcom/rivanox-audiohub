@@ -138,6 +138,12 @@ class RootfsAuditTests(unittest.TestCase):
             "object_pairs_hook=_unique_route_members",
             "parse_constant=_reject_route_constant",
             "except (UnicodeError, ValueError, RecursionError):",
+            'dirfd = os.open("/", flags)',
+            'for component in path.parts[1:]:',
+            'nextfd = os.open(component, flags, dir_fd=dirfd)',
+            'if ".." in path.parts:',
+            'os.mkdir(component, mode=0o700, dir_fd=dirfd)',
+            'if dirfd is not None:',
         )))
         make("opt/audiohub/src/audiohub/audio_graph.py", "\\n".join((
             "_parse_pipewire_graph,",
@@ -206,6 +212,13 @@ class RootfsAuditTests(unittest.TestCase):
             "object_pairs_hook=_unique_profile_members",
             "parse_constant=_reject_profile_constant",
             "except (UnicodeError, ValueError, RecursionError):",
+            'dirfd = os.open("/", flags)',
+            'for component in path.parts[1:]:',
+            'nextfd = os.open(component, flags, dir_fd=dirfd)',
+            'if ".." in path.parts:',
+            'os.mkdir(component, mode=0o700, dir_fd=dirfd)',
+            'if dirfd is not None:',
+            "dirfd = _safe_dir(directory, create=True)",
         )))
         make("opt/audiohub/src/audiohub/status_bind.py",
              'LOOPBACK = "127.0.0.1"\\n'
@@ -1246,6 +1259,49 @@ class RootfsAuditTests(unittest.TestCase):
             web = root / "opt/audiohub/src/audiohub/webserver.py"
             web.write_text(web.read_text().replace("Read-only preview", "owner write API"))
             self.assertFalse(audit.inspect(root)["editable_names_offline_no_public_api"])
+
+    def test_installed_private_config_nofollow_all_parents_guard(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            self.assertTrue(audit.inspect(root)[
+                "private_config_ancestor_symlink_fd_walk"
+            ])
+
+    def test_source_route_direct_path_open_blocks_native_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/src/audiohub/source_routes.py"
+            path.write_text(path.read_text().replace(
+                'dirfd = os.open("/", flags)',
+                "dirfd = os.open(path, flags)"
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "private_config_ancestor_symlink_fd_walk"
+            ])
+
+    def test_input_profile_direct_path_open_blocks_native_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/src/audiohub/input_profiles.py"
+            path.write_text(path.read_text().replace(
+                'nextfd = os.open(component, flags, dir_fd=dirfd)',
+                "nextfd = os.open(path, flags)"
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "private_config_ancestor_symlink_fd_walk"
+            ])
+
+    def test_unprotected_profile_directory_creation_blocks_native_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/src/audiohub/input_profiles.py"
+            path.write_text(path.read_text().replace(
+                "dirfd = _safe_dir(directory, create=True)",
+                "directory.mkdir(parents=True, exist_ok=True)\ndirfd = _safe_dir(directory)"
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "private_config_ancestor_symlink_fd_walk"
+            ])
 
     def test_private_route_config_reader_guard_present(self):
         with tempfile.TemporaryDirectory() as tmp:
