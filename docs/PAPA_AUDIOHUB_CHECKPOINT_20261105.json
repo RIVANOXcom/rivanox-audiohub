@@ -105,14 +105,20 @@
       "base": "wd-papa-20261106-failclosed-pipewire-identity-ambiguity",
       "head": "wd-papa-20261106-offline-diag-runtime-path-nofollow",
       "verified_head_sha": null
+    },
+    {
+      "number": 51,
+      "base": "wd-papa-20261106-offline-diag-runtime-path-nofollow",
+      "head": "wd-papa-20261106-laptop-pipewire-bounded-process",
+      "verified_head_sha": null
     }
   ],
   "last_native_verified": {
-    "run_id": 42181839470,
-    "source_sha": "aeafb0b06cc781c8470b502fe1ecf3484084696f",
+    "run_id": 42201589717,
+    "source_sha": "275089e3d511e0d6c8fb68e601a9001b13b382b6",
     "conclusion": "success",
-    "python_tests": 481,
-    "rootfs_checks_passed": 65,
+    "python_tests": 512,
+    "rootfs_checks_passed": 67,
     "installed_packages": 689,
     "architecture_counts": {
       "arm64": 538,
@@ -125,9 +131,9 @@
       "doc_alias_target_link": 8,
       "copyright_file_missing": 1
     },
-    "artifact_id": 13485629030,
+    "artifact_id": 13494264314,
     "artifact_unverified": true,
-    "artifact_expiry": "2026-12-06T07:43:50Z",
+    "artifact_expiry": "2026-12-06T10:27:02Z",
     "public_release_ready": false
   },
   "open_issues": [
@@ -166,10 +172,10 @@
     "do not silently merge stacked draft PRs"
   ],
   "last_source_rights_ci_verified": {
-    "run_id": 42201349549,
-    "commit_sha": "a362b1630e6001478634d2c1f4f6bfde9814a007",
+    "run_id": 42208006876,
+    "commit_sha": "a4872f0bd66f38e48c1fe24a9f23304d68f76ced",
     "outcome": "success",
-    "python_tests": 512,
+    "python_tests": 522,
     "source_rights_ledger_file_count": 83
   },
   "latest_legacy_security_change": {
@@ -318,7 +324,7 @@
     "parent_pr": 49,
     "parent_native_run_pending_validation": 42200618383,
     "new_native_run_pending_validation": 42201386174,
-    "status": "source CI 512/512 passed on initial code SHA, final exact-head native pending",
+    "status": "Source CI 512 and native ARM64 67 real rootfs checks PASSED exact PR50 SHA 275089e3d511e0d6c8fb68e601a9001b13b382b6",
     "original_defect": "privileged diagnostic followed symlinked parent directories of private runtime JSON",
     "all_directory_components_nofollow": true,
     "private_final_status_directory_required": true,
@@ -330,5 +336,26 @@
     "public_release_ready": false,
     "model_c_license_effective": false,
     "hardware_accepted": false
+  },
+  "next_laptop_bounded_capture_security_change": {
+    "pr": 51,
+    "parent_pr": 50,
+    "branch": "wd-papa-20261106-laptop-pipewire-bounded-process",
+    "initial_source_sha": "a4872f0bd66f38e48c1fe24a9f23304d68f76ced",
+    "initial_source_ci_run_id": 42208006876,
+    "initial_source_tests_passed": 522,
+    "status": "initial code SHA source SUCCESS; exact post-docs source and native ARM64 NOT YET VERIFIED",
+    "original_defect": "unauthenticated but manual-only Scream UDP receiver still used unbounded subprocess.run capture_output=True in PipeWire inspection and USB default assertion",
+    "max_stdout_bytes": 4194304,
+    "timeout_seconds_per_command": 5,
+    "bounded_capture_for_pw_dump": true,
+    "bounded_capture_for_wpctl": true,
+    "does_not_autoenable_lan_receiver": true,
+    "declines_on_failed_command": true,
+    "expected_rootfs_guard_count": 68,
+    "source_rights_ledger_file_count": 83,
+    "model_c_license_effective": false,
+    "public_release_ready": false,
+    "physical_edifier_accepted": false
   }
 }
