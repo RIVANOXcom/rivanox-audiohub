@@ -258,6 +258,23 @@ class AgentCallbackAuthorizationTests(unittest.TestCase):
         self.agent.initial_pairing_allowed = False
         self.agent.AuthorizeService(self.DEVICE, "audio")
 
+
+    def test_trusted_unpaired_device_cannot_authorize_service_after_window(self):
+        self.properties[self.DEVICE].trusted = True
+        self.properties[self.DEVICE].paired = False
+        self.agent.initial_pairing_allowed = False
+        with self.assertRaises(self.ns["Rejected"]):
+            self.agent.AuthorizeService(self.DEVICE, "audio")
+
+    def test_pending_authorization_cannot_override_unpaired_trust(self):
+        self.agent.RequestAuthorization(self.DEVICE)
+        self.properties[self.DEVICE].trusted = True
+        self.properties[self.DEVICE].paired = False
+        with self.assertRaises(self.ns["Rejected"]):
+            self.agent.AuthorizeService(self.DEVICE, "audio")
+        self.properties[self.DEVICE].paired = True
+        self.agent.AuthorizeService(self.DEVICE, "audio")
+
     def test_bluez_down_never_reopens_pairability(self):
         self.fail_bluez = True
         self.assertFalse(self.agent.allowed())
