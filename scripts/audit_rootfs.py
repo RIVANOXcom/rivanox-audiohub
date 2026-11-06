@@ -992,7 +992,7 @@ def inspect(root: Path) -> dict[str, bool]:
         )
     except OSError:
         checks["eq_setup_concurrent_create_cleanup_safe"] = False
-    eq = root / "home/audiohub/.config/pipewire/pipewire.conf.d/90-audiohub-eq.conf
+    eq = root / "home/audiohub/.config/pipewire/pipewire.conf.d/90-audiohub-eq.conf"
     try:
         config = eq.read_text()
         checks["independent_eq_virtual_sinks"] = all(
