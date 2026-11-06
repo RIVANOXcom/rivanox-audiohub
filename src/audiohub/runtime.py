@@ -17,6 +17,7 @@ from pathlib import Path
 
 from .discovery import bluetooth_sources, choose_usb_output, pipewire_nodes, virtual_sinks
 from .audio_graph import summarize_links
+from .process_capture import bounded_command_output
 from .mixer import CHANNELS, defaults, effective_master_gain, patch_settings, volume_commands
 from .source_routes import defaults as default_routes, load as load_routes
 
@@ -36,10 +37,8 @@ _BLUETOOTH_MAC = re.compile(r"(?:[0-9A-F]{2}:){5}[0-9A-F]{2}\Z")
 
 
 def run(*args, timeout=8):
-    try:
-        return subprocess.run(args, capture_output=True, text=True, check=False, timeout=timeout)
-    except (OSError, subprocess.TimeoutExpired):
-        return None
+    # Read at most four MiB; pw-dump is not a trusted memory source.
+    return bounded_command_output(args, timeout=timeout)
 
 
 
