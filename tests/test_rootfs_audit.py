@@ -38,7 +38,7 @@ class RootfsAuditTests(unittest.TestCase):
             "except FileExistsError:",
             "except OSError:",
             "os.unlink(temp, dir_fd=dirfd)",
-            "finally:\\n            os.close(dirfd)",
+            "finally:\n            os.close(dirfd)",
         )))
         make("opt/audiohub/src/audiohub/pairing.py", "\n".join((
             "AUTHORIZATION_TTL = 45",
