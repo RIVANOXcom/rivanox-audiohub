@@ -182,7 +182,15 @@ class RootfsAuditTests(unittest.TestCase):
             "self._client_slots.release()\\n"
             "conn.settimeout(CLIENT_READ_TIMEOUT_SECONDS)\\n"
             "def log_message(self, format, *args):\\n"
-            "server = BoundedStatusHTTPServer(\\n")
+            "server = BoundedStatusHTTPServer(\\n"
+             "def _bounded_regular_bytes(path, limit, *, private_owner=None):\\n"
+             "parent.st_uid != private_owner\\n"
+             "stat.S_IMODE(parent.st_mode) & 0o077\\n"
+             "info.st_uid != private_owner\\n"
+             "info.st_nlink != 1\\n"
+             "stat.S_IMODE(info.st_mode) & 0o077\\n"
+             "private_owner=os.geteuid()\\n"
+             "_bounded_regular_bytes(WEBROOT / filename, STATIC_MAX_BYTES)\\n")
         make("opt/audiohub/src/audiohub/firstboot_diag.py",
              'OUTPUT_NAME = "AUDIOHUB-TEST-REPORT.json"\\n'
              '"pipewire_links_inspected"\\n'
@@ -709,6 +717,47 @@ class RootfsAuditTests(unittest.TestCase):
             root = self.root(tmp)
             self.assertTrue(audit.inspect(root)[
                 "status_http_clients_bounded_no_request_logs"
+            ])
+
+
+    def test_web_runtime_file_owner_guard_required(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/src/audiohub/webserver.py"
+            path.write_text(path.read_text().replace(
+                "info.st_uid != private_owner", "False"
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "status_runtime_private_owner_and_hardlink_guard"
+            ])
+
+    def test_web_runtime_directory_private_mode_guard_required(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/src/audiohub/webserver.py"
+            path.write_text(path.read_text().replace(
+                "stat.S_IMODE(parent.st_mode) & 0o077", "False"
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "status_runtime_private_owner_and_hardlink_guard"
+            ])
+
+    def test_web_runtime_status_hardlink_guard_required(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/src/audiohub/webserver.py"
+            path.write_text(path.read_text().replace(
+                "info.st_nlink != 1", "False"
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "status_runtime_private_owner_and_hardlink_guard"
+            ])
+
+    def test_web_private_status_guard_passes_installed_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            self.assertTrue(audit.inspect(root)[
+                "status_runtime_private_owner_and_hardlink_guard"
             ])
 
     def test_unchecked_status_web_listener_prevents_image_export(self):
