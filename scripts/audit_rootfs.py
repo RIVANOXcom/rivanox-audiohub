@@ -142,6 +142,10 @@ def inspect(root: Path) -> dict[str, bool]:
             marker in discovery_source for marker in (
                 "MAX_PIPEWIRE_GRAPH_BYTES = 4 * 1024 * 1024",
                 "MAX_PIPEWIRE_GRAPH_OBJECTS = 8192",
+                "MAX_PIPEWIRE_JSON_DEPTH = 64",
+                "MAX_PIPEWIRE_GRAPH_VALUES = 262144",
+                "def _pipewire_graph_shape_bounded(data):",
+                "return raw if _pipewire_graph_shape_bounded(raw) else None",
                 "def _unique_pipewire_members(pairs):",
                 "object_pairs_hook=_unique_pipewire_members",
                 "parse_constant=_reject_pipewire_constant",
