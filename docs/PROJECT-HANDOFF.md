@@ -836,3 +836,36 @@ hardware, phone ownership WiFi, legal rights and release gates still
 NOT TESTED/NOT APPROVED. Effective AGPL-3.0-only, 83 source rights
 and nine OS notice gaps remain; no install, SD flash, merge, deploy,
 permissions or release GO.
+
+
+## 2026-11-06: Draft PR81 — align diagnostic USB/EQ readiness with actual router
+
+PAPA MissionPilot PAPA-18B8B3C6, AH-009 / TEST-03.
+New isolated Draft PR81 stacked ONLY on unchanged PR80 exact ee14fd18616b3162ce7fd67ebdd4bb7218a15725.
+Real code mismatch: src/audiohub/hardware_preflight.py counted
+virtual sink labels and a single Edifier-like USB name with weaker
+independent node-ID/selection logic than production
+discovery.virtual_sinks/choose_usb_output. A PipeWire Node ID above
+2**31 - 1 could make operator preflight appear ready even though
+routing rejects it. Two USB sinks plus a long Edifier metadata string
+(outside the router's bounded field prefix) could similarly make
+the diagnostic say ready when the real router finds ambiguous USB
+and selects no output. Updated preflight to use the actual virtual
+sink selector and require the specific Edifier candidate match
+choose_usb_output(nodes), with the same PipeWire Node-ID upper bound,
+while preserving read-only, anonymous, no-approval diagnostics.
+Regression tests include both invalid Node IDs, ambiguous two-USB
+with delayed Edifier string and correct Edifier alongside generic USB.
+Installed rootfs audit adds hardware_preflight_uses_routable_usb_eq_targets
+plus synthetic positive and two adversarial checks; expected 96
+native gates only upon verified new ARM64 exact-head build.
+Parent PR79 Source #42310877204 SUCCESS 731/731 and native
+#42310839466 SUCCESS real installed 95/95 gates; compressed image
+SHA256 1cba9efcc98be95e0c1d3233e23ecbe85b6649773f46624180be68ef10093a56,
+temporary GitHub alpha ZIP #13549325640 sha256
+f96e7a8c935f1961234fceb9e17604bf1e3d5125913eda19dc36ee4e4cbed9d4,
+PAPA Workbench #3141. Parent PR80 docs-only Source #42311210629
+SUCCESS 732/732, Workbench #3140. No physical Pi4+Edifier audible
+3-input/two A2DP/24h or phone-owner WiFi proof; effective AGPL-3.0-only,
+83 rights and nine OS copyright gaps, legal/CEO release GO absent.
+All PRs Draft/unmerged, no SD flash/install/merge/deploy/rights change.

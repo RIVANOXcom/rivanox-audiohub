@@ -101,6 +101,42 @@ class HardwarePreflightTests(unittest.TestCase):
         data.append(make_node(99, "audiohub.tablet", "Audio/Sink"))
         self.assertFalse(preflight.inspect_topology(data)["checks"]["virtual_sink_unique"]["tablet"])
 
+
+    def test_out_of_range_edifier_pipewire_id_not_mistaken_for_output(self):
+        data = topology()
+        data[0] = make_node(2**31, "alsa_output.usb-EDIFIER_R600USB", "Audio/Sink")
+        report = preflight.inspect_topology(data)
+        self.assertFalse(report["checks"]["edifier_usb_sink_unique"])
+        self.assertEqual(report["topology_preflight"], "incomplete")
+        self.assertFalse(report["release_ready"])
+
+    def test_out_of_range_eq_sink_id_must_match_production_route_selector(self):
+        data = topology()
+        data[2] = make_node(2**31, "audiohub.laptop", "Audio/Sink")
+        report = preflight.inspect_topology(data)
+        self.assertFalse(report["checks"]["virtual_sink_unique"]["laptop"])
+        self.assertEqual(report["topology_preflight"], "incomplete")
+
+    def test_two_ambiguous_usb_sinks_not_ready_despite_long_edifier_metadata(self):
+        data = topology()
+        data[0] = make_node(
+            12, "alsa_output.usb-MYSTERY_SPEAKER", "Audio/Sink",
+            **{"node.description": "Z" * 150 + " Edifier"}
+        )
+        data.append(make_node(41, "alsa_output.usb-GENERIC_OUTPUT", "Audio/Sink"))
+        report = preflight.inspect_topology(data)
+        self.assertFalse(report["checks"]["edifier_usb_sink_unique"])
+        self.assertEqual(report["topology_preflight"], "incomplete")
+        self.assertNotIn("Edifier", json.dumps(report))
+
+    def test_unambiguous_edifier_still_selected_with_other_generic_usb(self):
+        data = topology()
+        data.append(make_node(41, "alsa_output.usb-GENERIC_OUTPUT", "Audio/Sink"))
+        report = preflight.inspect_topology(data)
+        self.assertTrue(report["checks"]["edifier_usb_sink_unique"])
+        self.assertEqual(report["topology_preflight"], "ready_for_manual_test")
+        self.assertFalse(report["release_ready"])
+
     def test_unrelated_usb_output_is_not_accepted_as_edifier(self):
         data = topology()
         data[0] = make_node(12, "alsa_output.usb-OTHER_USB", "Audio/Sink")

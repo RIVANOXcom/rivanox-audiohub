@@ -220,6 +220,12 @@ class RootfsAuditTests(unittest.TestCase):
              'from .discovery import _conflicting_node_ids, bluetooth_sources, pipewire_nodes\\n'
              'bluetooth = len(bluetooth_sources(nodes))\\n'
              '"bluetooth_source_count": bluetooth\\n'
+             'from .discovery import choose_usb_output, virtual_sinks\\n'
+             'routable = virtual_sinks(nodes)\\n'
+             'logical = {name: "audiohub." + name in routable for name in CHANNELS}\\n'
+             'selected_usb = choose_usb_output(nodes)\\n'
+             'selected_usb.get("id") == edifier_ids[0]\\n'
+             '0 < value <= 2**31 - 1\\n'
              '"release_ready": False')
         make("opt/audiohub/src/audiohub/process_capture.py", "\\n".join((
             "MAX_COMMAND_STDOUT_BYTES = 4 * 1024 * 1024",
@@ -880,6 +886,38 @@ class RootfsAuditTests(unittest.TestCase):
             ])
 
 
+
+
+    def test_preflight_routing_target_parity_guard_present(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            self.assertTrue(audit.inspect(root)[
+                "hardware_preflight_uses_routable_usb_eq_targets"
+            ])
+
+    def test_preflight_ignoring_actual_usb_router_blocks_native_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/src/audiohub/hardware_preflight.py"
+            path.write_text(path.read_text().replace(
+                "selected_usb = choose_usb_output(nodes)",
+                "selected_usb = nodes[0]"
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "hardware_preflight_uses_routable_usb_eq_targets"
+            ])
+
+    def test_preflight_bypassing_virtual_sink_selector_blocks_native_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/src/audiohub/hardware_preflight.py"
+            path.write_text(path.read_text().replace(
+                "routable = virtual_sinks(nodes)",
+                "routable = {}"
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "hardware_preflight_uses_routable_usb_eq_targets"
+            ])
 
     def test_hardware_preflight_validated_bluetooth_count_guard_present(self):
         with tempfile.TemporaryDirectory() as tmp:
