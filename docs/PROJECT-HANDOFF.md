@@ -704,3 +704,34 @@ exact PR76 HEAD needs to be verified. No real Pi4/Edifier sound/24h,
 auth phone-owner WiFi, human legal signoff (83 source rights, nine
 OS copyright gaps), license Model C transition, release GO, merge,
 permissions, deployment, SD installation or payment.
+
+
+## 2026-11-06: Draft PR77 — atomic nofollow EQ configuration setup
+
+PAPA MissionPilot WD_JOB PAPA-18B8B3C6, AH-003/AH-007. New isolated
+Draft PR77 stacks only on PR76 exact 9427ff931a9ce6d930a65a12eb34da8fb59c2995.
+Original src/audiohub/eq_setup.py called target.write_text() and
+os.chmod() on a predictable path under ~/.config/pipewire. An existing
+file or directory symlink could redirect the write/truncate to another
+audiohub-user file, and hardlinks or concurrent writes could corrupt
+configuration. Replacement uses directory file descriptors and
+O_DIRECTORY/O_NOFOLLOW per component, creates private missing
+directories, checks final private owner/mode, rejects unsafe symlink,
+hardlink, nonregular or publicly accessible target, writes bounded
+generated config with exclusive random temp + mode 0600 + fsync,
+atomically replaces same-directory regular config and fsyncs parent.
+No subprocesses, networking, elevated privileges or consumer API.
+Existing-file real temporary-filesystem regressions cover normal
+private config, repeated atomic writes, final symlink, ancestor
+symlink, hardlink, world-readable file and oversized generated config.
+Adds installed-rootfs gate eq_setup_private_atomic_nofollow and
+positive plus two adversarial synthetic checks; expected 93 native
+checks only after independently verified actual ARM64 build.
+Parent PR76 docs-only Source #42307129756 SUCCESS 709/709
+(Workbench #3134), parent PR75 independently Source #42305591855
+709/709 and native #42305548510 92/92 with image hash and temporary
+test artifact #13546207449 (Workbench #3133). Source rights 83 and
+nine OS notice gaps still pending, effective AGPL-3.0-only; legal/
+CEO release approval and physical Pi4/Edifier three simultaneous
+inputs, owner WiFi and 24-hour test NOT VERIFIED. No GO/merge/release,
+installation/deploy or permission changes. Keep changes Draft only.

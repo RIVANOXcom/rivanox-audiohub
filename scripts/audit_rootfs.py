@@ -954,6 +954,29 @@ def inspect(root: Path) -> dict[str, bool]:
     for binary in REQUIRED_BINARIES:
         path = root / "usr/bin" / binary
         checks["binary_" + binary] = path.exists()
+    # Runtime EQ setup must never follow user-controlled symlinks or
+    # overwrite a hardlinked/unprivileged audio configuration in place.
+    try:
+        eq_setup_source = (source / "eq_setup.py").read_text()
+        checks["eq_setup_private_atomic_nofollow"] = all(
+            marker in eq_setup_source for marker in (
+                "MAX_EQ_CONFIG_BYTES = 64 * 1024",
+                "def _safe_eq_parent_fd(target):",
+                "os.O_DIRECTORY | os.O_NOFOLLOW",
+                "os.mkdir(component, mode=0o700, dir_fd=fd)",
+                "stat.S_IMODE(st.st_mode) & 0o077",
+                "os.stat(target.name, dir_fd=dirfd, follow_symlinks=False)",
+                "not stat.S_ISREG(prior.st_mode)",
+                "prior.st_nlink != 1",
+                "os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW",
+                "secrets.token_hex(12)",
+                "os.fsync(out)",
+                "os.replace(temp, target.name, src_dir_fd=dirfd, dst_dir_fd=dirfd)",
+                "os.fsync(dirfd)",
+            )
+        ) and "target.write_text(" not in eq_setup_source
+    except OSError:
+        checks["eq_setup_private_atomic_nofollow"] = False
     eq = root / "home/audiohub/.config/pipewire/pipewire.conf.d/90-audiohub-eq.conf"
     try:
         config = eq.read_text()

@@ -1,5 +1,8 @@
 """AudioHub: audio path integration regression tests (no device assumed)."""
 import json
+import os
+import stat
+import tempfile
 from pathlib import Path
 import sys
 import unittest
@@ -8,7 +11,7 @@ from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
-from audiohub import runtime
+from audiohub import runtime, eq_setup
 from audiohub.discovery import (
     pipewire_nodes, props, choose_usb_output, bluetooth_sources, virtual_sinks,
 )
@@ -363,6 +366,89 @@ class AudioPathTests(unittest.TestCase):
         self.assertIn("bluez5.media-source-role = input", config)
         self.assertIn("monitor.bluez.rules = [", config)
 
+
+
+class EqSetupFileSafetyTests(unittest.TestCase):
+    """Exercise real local file writes without an actual Pi or PipeWire."""
+
+    def home(self, base):
+        home = Path(base) / "home"
+        home.mkdir(mode=0o700)
+        return home
+
+    def config(self, home):
+        return home / ".config" / "pipewire" / "pipewire.conf.d" / eq_setup.EQ_FILE
+
+    def test_eq_config_creation_and_atomic_repeat_private_no_temporary_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = self.home(tmp)
+            with mock.patch.object(Path, "home", return_value=home):
+                eq_setup.main()
+                target = self.config(home)
+                self.assertTrue(target.is_file())
+                self.assertEqual(stat.S_IMODE(target.stat().st_mode), 0o600)
+                self.assertEqual(stat.S_IMODE(target.parent.stat().st_mode), 0o700)
+                content = target.read_text()
+                self.assertIn('node.name = "audiohub.music"', content)
+                self.assertIn('node.name = "audiohub.laptop"', content)
+                self.assertIn('node.name = "audiohub.tablet"', content)
+                eq_setup.main()
+                self.assertEqual(target.read_text(), content)
+                self.assertEqual(list(target.parent.iterdir()), [target])
+
+    def test_eq_setup_refuses_final_symlink_without_clobbering_target(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = self.home(tmp)
+            target = self.config(home)
+            target.parent.mkdir(parents=True, mode=0o700)
+            secret = home / "private-settings.json"
+            secret.write_text("must stay intact")
+            target.symlink_to(secret)
+            with mock.patch.object(Path, "home", return_value=home):
+                with self.assertRaises(OSError):
+                    eq_setup.main()
+            self.assertEqual(secret.read_text(), "must stay intact")
+            self.assertTrue(target.is_symlink())
+
+    def test_eq_setup_refuses_symlinked_directory_ancestor(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = self.home(tmp)
+            outside = Path(tmp) / "other-directory"
+            outside.mkdir(mode=0o700)
+            (home / ".config").symlink_to(outside, target_is_directory=True)
+            with mock.patch.object(Path, "home", return_value=home):
+                with self.assertRaises(OSError):
+                    eq_setup.main()
+            self.assertEqual(list(outside.iterdir()), [])
+
+    def test_eq_setup_refuses_hardlinked_or_public_destination(self):
+        for kind in ("hardlink", "public"):
+            with self.subTest(kind=kind), tempfile.TemporaryDirectory() as tmp:
+                home = self.home(tmp)
+                target = self.config(home)
+                target.parent.mkdir(parents=True, mode=0o700)
+                original = home / "protected"
+                original.write_text("preserve me")
+                if kind == "hardlink":
+                    os.link(original, target)
+                else:
+                    target.write_text("preserve me")
+                    target.chmod(0o644)
+                with mock.patch.object(Path, "home", return_value=home):
+                    with self.assertRaises(PermissionError):
+                        eq_setup.main()
+                self.assertEqual(original.read_text(), "preserve me")
+                self.assertEqual(target.read_text(), "preserve me")
+
+    def test_eq_setup_rejects_excessive_generated_config_before_file_creation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = self.home(tmp)
+            with (mock.patch.object(Path, "home", return_value=home),
+                  mock.patch.object(eq_setup, "pipewire_filter_config",
+                                    return_value="X" * (eq_setup.MAX_EQ_CONFIG_BYTES + 1))):
+                with self.assertRaises(ValueError):
+                    eq_setup.main()
+            self.assertFalse(self.config(home).exists())
 
 if __name__ == "__main__":
     unittest.main()
