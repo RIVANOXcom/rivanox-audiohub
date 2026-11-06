@@ -232,6 +232,26 @@ def inspect(root: Path) -> dict[str, bool]:
         ) and 'import socket' not in manual and 'write_text(' not in manual
     except OSError:
         checks["manual_hardware_observation_not_auto_approval"] = False
+    # A naked ready flag is insufficient to prompt an operator about
+    # audible Pi4 hardware; demand coherent non-approving PipeWire results.
+    try:
+        manual = (source / "manual_acceptance.py").read_text()
+        checks["manual_operator_preflight_consistency"] = all(
+            marker in manual for marker in (
+                "def _consistent_read_only_preflight(report):",
+                "type(report.get(\"schema_version\")) is not int",
+                'report.get("assessment") == "topology_only_not_hardware_acceptance"',
+                'checks.get("pipewire_inspection_succeeded") is True',
+                'checks.get("edifier_usb_sink_unique") is True',
+                'set(sinks) == {"music", "laptop", "tablet"}',
+                'gates.get(gate) == "unverified"',
+                'ready = _consistent_read_only_preflight(preflight)',
+                '"hardware_accepted": False',
+                '"release_ready": False',
+            )
+        )
+    except OSError:
+        checks["manual_operator_preflight_consistency"] = False
     # Runtime's private state must never follow attacker-controlled links,
     # write through a fixed .tmp name, or accept unbounded JSON.
     try:
