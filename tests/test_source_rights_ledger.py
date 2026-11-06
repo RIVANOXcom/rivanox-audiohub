@@ -143,8 +143,8 @@ class SourceRightsLedgerTests(unittest.TestCase):
         self.assertEqual(state["latest_legacy_security_change"]["static_file_cap_bytes"], 524288)
         self.assertEqual(state["latest_legacy_security_change"]["anonymized_status_json_cap_bytes"], 32768)
         self.assertTrue(state["latest_legacy_security_change"]["all_path_components_nofollow"])
-        self.assertEqual(state["last_native_verified"]["rootfs_checks_passed"], 73)
-        self.assertEqual(state["last_native_verified"]["run_id"], 42220895650)
+        self.assertEqual(state["last_native_verified"]["rootfs_checks_passed"], 75)
+        self.assertEqual(state["last_native_verified"]["run_id"], 42222648342)
         self.assertFalse(state["next_runtime_state_security_change"]["model_c_effective"])
         self.assertFalse(state["next_runtime_state_security_change"]["physical_device_accepted"])
         self.assertEqual(state["next_runtime_state_security_change"]["expected_rootfs_guard_count"], 58)
@@ -260,6 +260,14 @@ class SourceRightsLedgerTests(unittest.TestCase):
         self.assertTrue(state["next_json_exponent_finite_overflow_change"]["web_status_finite_float_parse_required"])
         self.assertTrue(state["next_json_exponent_finite_overflow_change"]["root_offline_diag_finite_float_parse_required"])
         self.assertFalse(state["next_json_exponent_finite_overflow_change"]["public_release_ready"])
+        self.assertEqual(state["next_private_audio_config_safety_change"]["job"], "PAPA-18B8B3C6")
+        self.assertEqual(state["next_private_audio_config_safety_change"]["pr"], 59)
+        self.assertEqual(state["next_private_audio_config_safety_change"]["parent_pr"], 58)
+        self.assertEqual(state["next_private_audio_config_safety_change"]["expected_native_rootfs_guard_count"], 77)
+        self.assertEqual(state["next_private_audio_config_safety_change"]["new_native_image_guards"], 2)
+        self.assertTrue(state["next_private_audio_config_safety_change"]["strict_duplicate_json_object_keys"])
+        self.assertTrue(state["next_private_audio_config_safety_change"]["regular_files_open_nonblocking"])
+        self.assertFalse(state["next_private_audio_config_safety_change"]["public_release_ready"])
         self.assertEqual(state["next_bluetooth_agent_trust_security_change"]["pairable_timeout_seconds"], 600)
         self.assertEqual(state["next_bluetooth_agent_trust_security_change"]["discoverable_timeout_seconds"], 600)
         self.assertTrue(state["next_bluetooth_agent_trust_security_change"]["initial_deadline_relative_to_linux_boot"])
@@ -269,7 +277,7 @@ class SourceRightsLedgerTests(unittest.TestCase):
         self.assertFalse(state["last_native_verified"]["public_release_ready"])
         self.assertEqual(
             [item["number"] for item in state["draft_pr_chain"]],
-            [35, 36, 38, 39, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58],
+            [35, 36, 38, 39, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59],
         )
 
     def test_primary_handoff_points_to_authoritative_resume(self):

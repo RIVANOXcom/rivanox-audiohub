@@ -110,6 +110,11 @@ class RootfsAuditTests(unittest.TestCase):
             'fcntl.flock',
             'if slot in used:',
             'def lan_target(directory=None):',
+            "os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW",
+            "if len(raw) != st.st_size:",
+            "object_pairs_hook=_unique_route_members",
+            "parse_constant=_reject_route_constant",
+            "except (UnicodeError, ValueError, RecursionError):",
         )))
         make("opt/audiohub/src/audiohub/audio_graph.py", "\\n".join((
             "def summarize_links(raw):",
@@ -159,6 +164,11 @@ class RootfsAuditTests(unittest.TestCase):
             "MAX_NAME_CHARS = 32",
             "O_NOFOLLOW",
             "fcntl.flock",
+            "os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW",
+            "if len(data) != meta.st_size:",
+            "object_pairs_hook=_unique_profile_members",
+            "parse_constant=_reject_profile_constant",
+            "except (UnicodeError, ValueError, RecursionError):",
         )))
         make("opt/audiohub/src/audiohub/status_bind.py",
              'LOOPBACK = "127.0.0.1"\\n'
@@ -1122,6 +1132,54 @@ class RootfsAuditTests(unittest.TestCase):
             web = root / "opt/audiohub/src/audiohub/webserver.py"
             web.write_text(web.read_text().replace("Read-only preview", "owner write API"))
             self.assertFalse(audit.inspect(root)["editable_names_offline_no_public_api"])
+
+    def test_private_route_config_reader_guard_present(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            self.assertTrue(audit.inspect(root)["source_route_config_strict_nonblocking_read"])
+
+    def test_route_fifo_blocking_open_fails_image_audit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            file = root / "opt/audiohub/src/audiohub/source_routes.py"
+            file.write_text(file.read_text().replace(
+                "os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW",
+                "os.O_RDONLY | os.O_NOFOLLOW"
+            ))
+            self.assertFalse(audit.inspect(root)["source_route_config_strict_nonblocking_read"])
+
+    def test_route_duplicate_json_parser_missing_fails_image_audit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            file = root / "opt/audiohub/src/audiohub/source_routes.py"
+            file.write_text(file.read_text().replace(
+                "object_pairs_hook=_unique_route_members", "object_pairs_hook=None"
+            ))
+            self.assertFalse(audit.inspect(root)["source_route_config_strict_nonblocking_read"])
+
+    def test_private_input_profile_guard_present(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            self.assertTrue(audit.inspect(root)["input_profile_config_strict_nonblocking_read"])
+
+    def test_profile_fifo_blocking_open_fails_image_audit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            file = root / "opt/audiohub/src/audiohub/input_profiles.py"
+            file.write_text(file.read_text().replace(
+                "os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW",
+                "os.O_RDONLY | os.O_NOFOLLOW"
+            ))
+            self.assertFalse(audit.inspect(root)["input_profile_config_strict_nonblocking_read"])
+
+    def test_profile_duplicate_json_parser_missing_fails_image_audit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            file = root / "opt/audiohub/src/audiohub/input_profiles.py"
+            file.write_text(file.read_text().replace(
+                "object_pairs_hook=_unique_profile_members", "object_pairs_hook=None"
+            ))
+            self.assertFalse(audit.inspect(root)["input_profile_config_strict_nonblocking_read"])
 
     def test_missing_flexible_source_plan_blocks_alpha_image(self):
         with tempfile.TemporaryDirectory() as tmp:

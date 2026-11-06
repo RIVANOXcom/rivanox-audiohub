@@ -554,6 +554,32 @@ def inspect(root: Path) -> dict[str, bool]:
         )
     except OSError:
         checks["source_routing_isolated_and_fail_closed"] = False
+    # Offline configuration is user-owned and mutable, but must not hang
+    # a runtime worker on a FIFO or accept last-wins duplicate JSON members.
+    try:
+        routes_source = (source / "source_routes.py").read_text()
+        profile_source = (source / "input_profiles.py").read_text()
+        checks["source_route_config_strict_nonblocking_read"] = all(
+            marker in routes_source for marker in (
+                "os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW",
+                "if len(raw) != st.st_size:",
+                "object_pairs_hook=_unique_route_members",
+                "parse_constant=_reject_route_constant",
+                "except (UnicodeError, ValueError, RecursionError):",
+            )
+        )
+        checks["input_profile_config_strict_nonblocking_read"] = all(
+            marker in profile_source for marker in (
+                "os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW",
+                "if len(data) != meta.st_size:",
+                "object_pairs_hook=_unique_profile_members",
+                "parse_constant=_reject_profile_constant",
+                "except (UnicodeError, ValueError, RecursionError):",
+            )
+        )
+    except OSError:
+        checks["source_route_config_strict_nonblocking_read"] = False
+        checks["input_profile_config_strict_nonblocking_read"] = False
     # A green rootfs audit must not regress to name-only audio topology
     # assertions. The runtime must extract actual, bounded PipeWire Link
     # node IDs and report only aggregate counts on the offline SD card.
