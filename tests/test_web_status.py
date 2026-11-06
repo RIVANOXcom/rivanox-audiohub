@@ -296,6 +296,44 @@ class ReadonlyWebFileBoundaryTests(unittest.TestCase):
                 self.assertEqual(body, b"Not found")
                 self.assertIn("text/plain", mime)
 
+    def test_duplicate_top_level_status_fields_cannot_report_health(self):
+        documents = (
+            '{"updated_at":1,"updated_at":100,"usb_output":true}',
+            '{"updated_at":100,"usb_output":false,"usb_output":true}',
+            '{"updated_at":100,"active_routes":0,"active_routes":3}',
+        )
+        for document in documents:
+            with self.subTest(document=document):
+                self.status.write_text(document)
+                self.status.chmod(0o600)
+                report = read_public_status(path=self.status, now=101)
+                self.assertFalse(report["fresh"])
+                self.assertFalse(report["usb_connected"])
+                self.assertEqual(report["active_routes"], 0)
+
+    def test_nested_duplicate_status_json_members_are_rejected(self):
+        self.status.write_text(
+            '{"updated_at":100,"usb_output":true,'
+            '"extra":{"private":"a","private":"b"}}'
+        )
+        self.status.chmod(0o600)
+        report = read_public_status(path=self.status, now=101)
+        self.assertFalse(report["fresh"])
+        self.assertFalse(report["usb_connected"])
+
+    def test_nonfinite_status_json_numbers_cannot_report_healthy(self):
+        for literal in ("NaN", "Infinity", "-Infinity"):
+            with self.subTest(literal=literal):
+                self.status.write_text(
+                    '{"updated_at":100,"usb_output":true,"extra":'
+                    + literal + "}"
+                )
+                self.status.chmod(0o600)
+                report = read_public_status(path=self.status, now=101)
+                self.assertFalse(report["fresh"])
+                self.assertFalse(report["usb_connected"])
+                self.assertEqual(report["active_routes"], 0)
+
     def test_missing_status_is_stale(self):
         self.assertFalse(read_public_status(path=self.status)["fresh"])
 
