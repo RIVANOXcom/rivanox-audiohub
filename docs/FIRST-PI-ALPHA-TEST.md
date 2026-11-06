@@ -1,123 +1,136 @@
-# First Raspberry Pi 4 alpha SD-image test — experimental ONLY
+# Raspberry Pi 4 first-boot alpha test — isolated development only
 
-**Not a product release.** The first Pi OS image was created by a real
-GitHub Actions ARM64 image-build job, but no real Pi4/Edifier audio boot test
-or secure owner onboarding has been accepted. This document is for an
-authorized, local **isolated development bench** only. Do not deploy this
-image on a home or office network, expose network ports or enter real
-Wi-Fi/owner credentials.
+**NOT A PRODUCT RELEASE.** This procedure is for an explicitly authorized
+operator using a physically isolated development bench, a disposable
+microSD and NO home/workplace network or real credentials. CI validates
+source and image packaging, **not** Pi boot, Edifier sound, secure device
+ownership or safe installation. Nothing in this guide grants release GO.
 
-## Where the image actually is (not GitHub Releases)
+## Verified image snapshot — 6 November 2026
 
-The initial image from **4 November 2026** is an expiring *Actions artifact*:
+The latest independently completed ARM64 Pi4 preview on this branch lineage
+at this checkpoint is **Draft PR70**. Do not replace it with a different
+or newer run without rechecking ALL commit, test, artifact and checksum data.
 
-1. Sign in to GitHub with a user who can access this repository.
-2. Open [Actions run 41792407565](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/41792407565).
-3. On the run's **Summary** page, locate **Artifacts** (typically near
-   the bottom) and select
-   `AUDIOHUB-ALPHA-UNVERIFIED-DO-NOT-DISTRIBUTE`.
-4. [Direct artifact link](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/41792407565/artifacts/13303394505).
-5. GitHub supplies a ZIP archive (~604 MB). Extract the ZIP to see
-   `image_2026-11-04-AudioHub-Pi4-UNVERIFIED.img.xz` and
-   `SHA256SUMS.txt`.
-
-**Expiry:** GitHub reported this old artifact as present, not expired,
-and scheduled to expire on **11 November 2026**. After expiry, a new
-preview build is needed. Neither the repo **Releases** tab nor the
-green **Source checks** in the recent Actions list contains this image.
-
-The initial experimental build provenance is source commit
-`93e637276d5fc772a4b06f7848aacdeddfddaf17`,
-run `41792407565`; its CI rootfs preflight passed 32 build-only checks.
-A checksum and an XZ integrity test succeeded **in that build**,
-but a Pi 4 has not been booted as part of CI.
-
-Future experimental builds using the proposed download improvements
-will show an artifact link in the **Actions run job summary**, plus
-`SHA256SUMS.txt` and `PREVIEW-MANIFEST.json`. Proposed retention:
-30 days, if repo policy allows. They do **not** appear under Releases.
-
-### Download fails / no artifact visible?
-
-- **404 / sign-in page:** Sign in to GitHub and verify access to
-  `RIVANOXcom/rivanox-audiohub`, then open the exact run link above.
-  The link is not an anonymously hosted static file.
-- **No Artifacts section or expired artifact:** Check the run's Summary,
-  not Source checks or Releases. If the artifact has expired, an
-  authorized CI operator must create a fresh isolated preview build.
-- **ZIP opens but no image appears:** Verify the downloaded archive is
-  complete and unzip it before selecting the image.
-- **Permission or browser download blocked:** Use a logged-in browser
-  with adequate local storage and without a restrictive download
-  extension. Do not search for the ZIP under GitHub Releases.
-- **Want a stable public image?** That requires explicit review,
-  Pi hardware proof and a *separate* official release decision.
-  Do not mark an experimental artifact as production ready.
-
-## Prepare one isolated first-boot check
-
-Hardware: Raspberry Pi 4, official/reliable compatible power supply, a
-**spare** microSD (at least 16 GB, use 32 GB if available), known USB
-speaker (intended Edifier R600USB), Bluetooth phone, a second computer
-to download/flash the image.
-
-1. Unzip the GitHub artifact. Preserve the supplied checksum file.
-   Verify the compressed image's SHA-256 against `SHA256SUMS.txt`
-   *before flashing*. On Linux/macOS with `sha256sum` installed,
-   run `sha256sum -c SHA256SUMS.txt` from the extracted folder.
-   On Windows, `Get-FileHash <image.img.xz> -Algorithm SHA256`
-   gives a value to compare manually to the checksum file.
-2. Open Raspberry Pi Imager, choose **Use custom**, select the
-   `.img.xz` file and write it to the **spare** SD card. If the installed
-   Imager version refuses XZ, decompress the image with 7-Zip or `xz`
-   and select the resulting `.img`. This **erases the target card**.
-   Do not configure a shared Wi-Fi password, SSH or real private
-   credentials as part of this unverified setup.
-3. On an **isolated** bench with **no Ethernet** and **no WLAN
-   provisioning**, connect the intended USB speakers, insert the
-   flashed card and power the Pi 4.
-4. During the initial pairing period (source currently models a
-   ten-minute window), search on the phone for an AudioHub Bluetooth
-   device; observe whether it appears and whether pairing works.
-   If it connects, start **low-volume** test audio and check the USB
-   speaker. Device discovery, pairing and sound are all
-   **UNVERIFIED** until observed in the lab.
-5. Record whether the Pi boots, any LED or HDMI indicators, Bluetooth
-   discoverability, pairing, USB output and behavior after one
-   deliberate power cycle. Stop immediately on unexpected behavior.
-   Do not invite unrelated phones to pair.
-6. If sound fails, record the precise failing stage and useful
-   screenshots (redact MAC addresses and other identifying data).
-   Do not assume that the status page can be reached from a phone.
-   This image does **not** include a working secure phone Wi-Fi setup,
-   a verified admin login, or a guaranteed remote diagnostics route.
-
-### Minimal test record
-
-| Check | Result to record |
+| Proof | Exact value |
 | --- | --- |
-| Flash tool / image SHA-256 verified | tool/version and yes/no |
-| Pi4 model and power | model/revision, power type |
-| USB Edifier R600USB | connected/recognized/unknown |
-| First boot | visible boot indicators and elapsed observations |
-| Phone Bluetooth visibility | detected/not detected |
-| Pairing | success/failure/error |
-| Low-volume USB audio | audible/silent/errors |
-| Reboot and reconnect | yes/no/unknown |
+| Development PR | [PR70](https://github.com/RIVANOXcom/rivanox-audiohub/pull/70), Draft and unmerged |
+| Source commit | `83c5ccbdc206e4ba8e2fe2dbf481abd735b3ab12` |
+| Source checks | [GitHub Actions #42256023645](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42256023645), **686/686 PASS** |
+| Native ARM64 | [GitHub Actions #42255968531](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42255968531), **88/88** real installed-rootfs gates PASS |
+| Test-only artifact | [#13522368901](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42255968531/artifacts/13522368901) — `AUDIOHUB-ALPHA-UNVERIFIED-DO-NOT-DISTRIBUTE` |
+| ZIP SHA-256 (GitHub upload) | `6e8b309ae66062988610c19e156de561586b1e44398a17465611a3e739966935` |
+| Compressed Pi image SHA-256 (CI manifest) | `f03596a28d150ee3ee7ce89495910f84824c06851ceb1733dcd809c5252bdb87` |
+| Artifact expiry (server reported) | 6 December 2026, 16:57 UTC |
+| Classification | `UNVERIFIED_ALPHA_TEST_ONLY`; `public_release_ready=false` |
 
-## Why we are not releasing this image
+CI also reported `sha256sum -c` success, `xz --test` success, manifest provenance
+verification and `bundle_integrity=passed`. These are **CI readbacks**,
+not independent checks of any ZIP downloaded to the operator's computer.
+The repository Releases tab does **not** contain this artifact.
 
-The image belongs to an **older source branch** than the separate
-security and networking PRs #15–#19. Source checks succeeding in newer
-branches **do not retroactively update this image**. In particular,
-the initial image may use an unauthenticated status HTTP listener,
-initial Bluetooth pairing is not a hardware-bound owner proof,
-phone-only Wi-Fi onboarding is absent, and a working simultaneous
-three-channel mix remains untested.
+### Retrieve and verify the exact test ZIP — operator only
 
-Rootfs packaging tests, an Actions artifact and an XZ digest check are
-not a substituted physical boot/audio acceptance. Official release
-policy, security and third-party legal requirements still apply.
+1. Sign in to GitHub with access to this repo. Open the exact
+   [ARM64 job #42255968531](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42255968531)
+   and download **artifact #13522368901** under **Artifacts**. Do not
+   take an old or similarly named ZIP from another build. If it expired
+   or the account cannot access it, record **NOT AVAILABLE** and stop.
+2. Compare the locally downloaded **ZIP** SHA-256 with
+   `6e8b309ae66062988610c19e156de561586b1e44398a17465611a3e739966935`.
+   Windows PowerShell: `Get-FileHash -Algorithm SHA256 .\downloaded-artifact.zip`.
+   Linux/macOS with the required tools: `sha256sum downloaded-artifact.zip`.
+   Stop on any mismatch.
+3. Extract the ZIP locally. Confirm it contains precisely one compressed
+   `*.img.xz` image and the expected `SHA256SUMS.txt`,
+   `PREVIEW-MANIFEST.json` and `ROOTFS-PACKAGES.json`.
+   Check the manifest source commit matches the exact PR70 SHA above,
+   and its source run ID is #42255968531.
+4. Check the image digest against the **manifest, SHA256SUMS.txt and**
+   `f03596a28d150ee3ee7ce89495910f84824c06851ceb1733dcd809c5252bdb87`.
+   Linux: run `sha256sum -c SHA256SUMS.txt` in the extracted directory.
+   Windows: `Get-FileHash -Algorithm SHA256 .\image_2026-11-06-AudioHub-Pi4-UNVERIFIED.img.xz`.
+   If available, run `xz --test image_2026-11-06-AudioHub-Pi4-UNVERIFIED.img.xz`.
+   Any mismatch or corrupt XZ means **STOP**.
+5. Only after these checks and a specific operator decision for an
+   **isolated experiment**, use Raspberry Pi Imager **Use custom** with
+   the `.img.xz` image and a **spare** card of at least 16 GB,
+   preferably 32 GB. Flashing **erases the selected storage**.
+   This document is not approval to flash, deploy or install anything.
+   Do not substitute production cards or connect trusted systems.
 
-Tracking: PAPA `PJ2611-0001:R001`, AH-006 #3272,
-AH-009 #3275, AH-001 #3267. **No installation/deployment/release GO.**
+### Isolated physical first-boot protocol
+
+- Use the intended **Raspberry Pi 4**, suitable power, Edifier R600USB
+  over USB, and a test-only Bluetooth sender at **low initial volume**.
+  Disable Ethernet and do **not** provision WLAN, SSH, real passwords,
+  administrative credentials, shared networks, firewalls or services.
+- Power the Pi with the disposable image and observe boot indicators.
+  The tentative initial Bluetooth discovery/pairing window is about
+  ten minutes in the source; this has **not** been proven on a real Pi.
+  Record whether a Bluetooth device is actually discovered and pairs.
+- Record whether music is genuinely **audible** on the USB Edifier, not
+  merely present in PipeWire graph metadata. If no audio is heard,
+  do not infer a working path from process or status output.
+- Observe reboot and reconnection separately. A FAT partition
+  `AUDIOHUB-TEST-REPORT.json` may exist; it is unsigned and mutable
+  and is **not physical acceptance**. Never disclose MACs, IPs, SSIDs,
+  device IDs or private credentials in uploaded evidence.
+- The optional Windows Scream LAN receiver remains **unauthenticated,
+  disabled by default and IP-spoofable**. The three-source experiment
+  in [THREE-SOURCE-LAB-ACCEPTANCE.md](THREE-SOURCE-LAB-ACCEPTANCE.md)
+  requires a *separately authorized isolated test LAN*, manual
+  `--unsafe-lan-test` and a permitted Windows sender. Do not expose
+  it to a trusted/home/public network or enable it automatically.
+- Two independent Bluetooth streams, three-source mix and EQ isolation,
+  clipped waveform measurement, USB hotplug and true 24-hour endurance
+  have **NOT** been verified, irrespective of CI status. Do not claim a
+  physical result without a real operator test and evidence.
+
+## Blank bench evidence form (not yet executed)
+
+Every result starts as **NOT TESTED**. An operator must explicitly observe
+and record pass/fail/unknown using the exact source image identifiers above.
+Raw private device data should remain under operator control.
+
+| Required measurement | Recorded result |
+| --- | --- |
+| Operator reference/date and physically isolated setup | NOT TESTED |
+| Pi 4 revision and power supply type | NOT TESTED |
+| Downloaded ZIP SHA-256 independently checked | NOT TESTED |
+| Image SHA-256, manifest HEAD/run and XZ independently checked | NOT TESTED |
+| Disposable SD verified before destructive flash | NOT TESTED |
+| Pi boots without keyboard, Ethernet or WLAN | NOT TESTED |
+| Edifier R600USB recognized and audio genuinely audible | NOT TESTED |
+| Bluetooth discoverable and paired with test sender | NOT TESTED |
+| USB unplug/replug and restart recovery | NOT TESTED |
+| Second independent Bluetooth stream accepted concurrently | NOT TESTED |
+| Manually opted-in Windows laptop input on isolated test LAN | NOT TESTED |
+| Three simultaneous channels and independent mute/EQ verified | NOT TESTED |
+| Peak/clipping measurements with three sources | NOT TESTED |
+| 24-hour uninterrupted endurance and power-loss behavior | NOT TESTED |
+| Authenticated phone owner-claim and Wi-Fi onboarding | NOT IMPLEMENTED |
+| Source/third-party rights and CEO legal/release approval | NOT APPROVED |
+
+If an actual test fails, document stage, exact source/run/image, and
+redacted results. Lack of a report is missing evidence, not automatic
+proof of success or failure. No simulated observations may be treated
+as signed physical acceptance.
+
+## Mandatory release blockers
+
+- **689** packages were installed in the native CI image, **680**
+  copyright files present, **nine unresolved** notice paths, and
+  **83 source-rights** files pending human review.
+- The effective source license remains **AGPL-3.0-only**.
+  Proposed Model C is NOT effective; commercial redistribution
+  and third-party obligations are NOT signed off.
+- Physical Pi4/Edifier audible simultaneous audio, two-A2DP capability,
+  authenticated phone ownership/Wi-Fi onboarding, 24-hour endurance,
+  Windows sender security and operator/CEO release authorization remain
+  unverified.
+
+Neither this test-only image nor this guide is installable release
+evidence. No public release, no automated deployment, no merge or GO.
+Tracking: PAPA `PJ2611-0001:R001`, AH-001 #3267, AH-002 #3268,
+AH-006 #3272, AH-009 #3275.

@@ -345,6 +345,37 @@ class SourceRightsLedgerTests(unittest.TestCase):
         self.assertIn("PAPA_CANONICAL_RESUME_20261105.md", text)
         self.assertIn("AGPL-3.0-only", text)
 
+
+    def test_first_pi_alpha_guide_has_verified_image_provenance(self):
+        guide = (ROOT / "docs/FIRST-PI-ALPHA-TEST.md").read_text()
+        for token in (
+            "83c5ccbdc206e4ba8e2fe2dbf481abd735b3ab12",
+            "42256023645", "42255968531", "13522368901",
+            "f03596a28d150ee3ee7ce89495910f84824c06851ceb1733dcd809c5252bdb87",
+            "6e8b309ae66062988610c19e156de561586b1e44398a17465611a3e739966935",
+            "88/88", "UNVERIFIED_ALPHA_TEST_ONLY",
+            "public_release_ready=false", "SHA256SUMS.txt",
+            "PREVIEW-MANIFEST.json", "ROOTFS-PACKAGES.json",
+            "Get-FileHash", "sha256sum", "NOT TESTED",
+            "NOT APPROVED", "24-hour", "AGPL-3.0-only",
+            "83 source-rights", "nine unresolved",
+        ):
+            with self.subTest(token=token):
+                self.assertIn(token, guide)
+        # Old unverified first-image instructions must not be re-promoted.
+        self.assertNotIn("41792407565", guide)
+        self.assertNotIn("13303394505", guide)
+        self.assertNotIn("93e637276d5fc772a4b06f7848aacdeddfddaf17", guide)
+
+    def test_three_source_lab_links_to_same_verified_nonrelease_image(self):
+        lab = (ROOT / "docs/THREE-SOURCE-LAB-ACCEPTANCE.md").read_text()
+        self.assertIn("FIRST-PI-ALPHA-TEST.md", lab)
+        self.assertIn("83c5ccbdc206e4ba8e2fe2dbf481abd735b3ab12", lab)
+        self.assertIn("13522368901", lab)
+        self.assertIn("88/88", lab)
+        self.assertIn("NOT TESTED", lab)
+        self.assertIn("no network listener during boot", lab.lower())
+
     def test_declared_license_switch_has_not_occurred(self):
         state = json.loads(
             (ROOT / "docs/licensing/TRANSITION-STATE.json").read_text()

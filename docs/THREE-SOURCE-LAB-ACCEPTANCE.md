@@ -7,9 +7,28 @@ source-IP checks are spoofable. Neither the Windows driver nor admin login
 are installed/configured by AudioHub. **Do not connect this unclaimed
 prototype to a household, workplace, internet-routed or production LAN**.
 
+**No network listener during boot:** the unauthenticated Windows UDP
+receiver stays disabled unless an operator explicitly starts it on a
+separate isolated test LAN. Never expose it on a trusted network.
+
 Source-only and image CI tests are no substitute for actual Raspberry Pi4
 plus Edifier R600USB speaker tests. No official release or claim of a
 working three-source appliance exists.
+
+
+## Verified image selection for this lab plan
+
+Before physical tests, follow the
+[isolated first-boot guide](FIRST-PI-ALPHA-TEST.md) and verify **the exact**
+Draft PR70 source `83c5ccbdc206e4ba8e2fe2dbf481abd735b3ab12` and the independent
+[ARM64 run #42255968531](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42255968531)
+with **88/88** rootfs gates. Its only proven non-release test image is
+[artifact #13522368901](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42255968531/artifacts/13522368901),
+image SHA256 `f03596a28d150ee3ee7ce89495910f84824c06851ceb1733dcd809c5252bdb87`.
+Check ZIP, manifest and image locally; do not reuse older PRs or assume that
+a later Source CI run proves a corresponding image. Physical test result:
+**NOT TESTED** until an operator observes it. The Windows LAN test is
+still OFF by default and requires an isolated manual opt-in.
 
 ## Test 1: no-network flash/boot baseline (operator)
 
