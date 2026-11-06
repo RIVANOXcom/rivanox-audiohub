@@ -132,6 +132,26 @@ def inspect(root: Path) -> dict[str, bool]:
         )
     except OSError:
         checks["pipewire_node_identity_ambiguity_fails_closed"] = False
+    # Contradictory BlueZ identity metadata must not silently select one
+    # sender MAC and admit a different physical source for audio capture.
+    try:
+        discovery_source = (source / "discovery.py").read_text()
+        start = discovery_source.index("def bluetooth_sources(nodes):")
+        end = discovery_source.index("def virtual_sinks(nodes):", start)
+        bt_source = discovery_source[start:end]
+        checks["bluetooth_dual_address_metadata_agrees"] = all(
+            mark in bt_source for mark in (
+                'for field in ("api.bluez5.address", "device.address"):',
+                "if field not in value:",
+                "stated = value[field]",
+                "type(stated) is not str",
+                "_MAC.fullmatch(stated) is None",
+                "stated.upper() != name_mac",
+                "if address_conflict:",
+            )
+        ) and 'value.get("api.bluez5.address") or' not in bt_source
+    except (OSError, ValueError):
+        checks["bluetooth_dual_address_metadata_agrees"] = False
     # Real PipeWire metadata is untrusted: one JSON object with duplicate
     # Node IDs or Link endpoints must not become a last-wins valid graph,
     # and a deeply nested but size-bounded pw-dump must not crash services.
