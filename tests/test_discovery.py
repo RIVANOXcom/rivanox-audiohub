@@ -61,6 +61,29 @@ class DiscoveryTests(unittest.TestCase):
                 ])
                 self.assertEqual(found, [])
 
+
+    def test_bad_metadata_duplicate_bt_node_cannot_rehabilitate_other_profile(self):
+        matching = node(
+            21, "bluez_input.AA_BB_CC_DD_EE_FF.0", "Audio/Source",
+            **{"api.bluez5.address": "AA:BB:CC:DD:EE:FF"}
+        )
+        conflicting = node(
+            22, "bluez_input.AA_BB_CC_DD_EE_FF.1", "Audio/Source",
+            **{"api.bluez5.address": "AA:BB:CC:DD:EE:FF",
+               "device.address": "11:22:33:44:55:66"}
+        )
+        unrelated = node(
+            23, "bluez_input.11_22_33_44_55_66.0", "Audio/Source",
+            **{"api.bluez5.address": "11:22:33:44:55:66"}
+        )
+        for order in ((conflicting, matching), (matching, conflicting)):
+            with self.subTest(order=[x["id"] for x in order]):
+                found = bluetooth_sources([*order, unrelated])
+                self.assertEqual(
+                    [source["address"] for source in found],
+                    ["11:22:33:44:55:66"],
+                )
+
     def test_optional_single_bluetooth_address_property_remains_supported(self):
         for field in ("api.bluez5.address", "device.address"):
             source = node(
