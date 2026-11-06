@@ -375,6 +375,20 @@ def inspect(root: Path) -> dict[str, bool]:
         ) and "self.authorize_pending(device)" in pairing_source
     except OSError:
         checks["bluetooth_trust_requires_agent_authorization"] = False
+    # BlueZ Agent1.Cancel has no device argument. A canceled pairing must
+    # revoke all pending one-use trust tokens, not just close the UI.
+    try:
+        pairing_source = (source / "pairing.py").read_text()
+        cancel_body = pairing_source.split("def Cancel(self):", 1)[1].split(
+            "def main():", 1
+        )[0]
+        checks["bluetooth_cancel_revokes_pending_trust"] = (
+            cancel_body.strip().startswith("# BlueZ canceled")
+            and cancel_body.strip().endswith("self.pending_authorizations.clear()")
+            and "pass" not in cancel_body
+        )
+    except (OSError, IndexError):
+        checks["bluetooth_cancel_revokes_pending_trust"] = False
     # PairableTimeout=0 / DiscoverableTimeout=0 mean unlimited in BlueZ.
     # The first-boot listener may not reopen a fresh window on restart.
     try:

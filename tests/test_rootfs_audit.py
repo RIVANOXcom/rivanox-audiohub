@@ -36,6 +36,10 @@ class RootfsAuditTests(unittest.TestCase):
             'self.adapter.Set("org.bluez.Adapter1", "DiscoverableTimeout", dbus.UInt32(BOOT_WINDOW))',
             'self.adapter.Set("org.bluez.Adapter1", "Pairable", dbus.Boolean(False))',
             'self.adapter.Set("org.bluez.Adapter1", "Discoverable", dbus.Boolean(False))',
+            "def Cancel(self):",
+            "# BlueZ canceled the current agent request;",
+            "self.pending_authorizations.clear()",
+            "def main():",
         )))
         make("opt/audiohub/src/audiohub/runtime.py", "\\n".join((
             "channel not in CHANNELS",
@@ -480,6 +484,30 @@ class RootfsAuditTests(unittest.TestCase):
             self.assertFalse(audit.inspect(root)[
                 "bluetooth_trust_requires_agent_authorization"
             ])
+
+    def test_bluez_cancel_revokes_pending_in_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            self.assertTrue(audit.inspect(root)["bluetooth_cancel_revokes_pending_trust"])
+
+    def test_noop_bluez_cancel_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/src/audiohub/pairing.py"
+            path.write_text(path.read_text().replace(
+                "self.pending_authorizations.clear()", "pass"
+            ))
+            self.assertFalse(audit.inspect(root)["bluetooth_cancel_revokes_pending_trust"])
+
+    def test_incomplete_bluez_cancel_revocation_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/src/audiohub/pairing.py"
+            path.write_text(path.read_text().replace(
+                "self.pending_authorizations.clear()",
+                "self.pending_authorizations.pop(device, None)"
+            ))
+            self.assertFalse(audit.inspect(root)["bluetooth_cancel_revokes_pending_trust"])
 
     def test_authorized_bluez_pairing_guard_present_in_image(self):
         with tempfile.TemporaryDirectory() as tmp:

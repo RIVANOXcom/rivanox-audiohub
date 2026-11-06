@@ -504,5 +504,15 @@ PR48 adds an installed `manual_acceptance.py` source check and independent no-re
 
 **Next:** exact-head Source/ARM64 CI and bundle SHA/XZ for PR62, reconcile PR61 ARM64 #42235481006, append Workbench evidence. All PRs Draft/unmerged; no release, install, deployment or permissions change.
 
+## AE. 2026-11-06: revoke canceled BlueZ one-use trust authorizations — Draft PR63
+
+**Mission PAPA-18B8B3C6.** Isolated Draft PR63 branch `wd-papa-18b8b3c6-pairing-cancel-revocation-20261106`, exactly stacked on PR62 SHA `84460c807c1dfba20a59548da57fd2d69669f94e`; no parent/main overwrites. Parent Source #42236734076 **633/633 SUCCESS**, native ARM64 #42236640983 **80/80 actual installed image checks SUCCESS**, XZ checksum OK, bundle integrity PASS, classification UNVERIFIED_ALPHA_TEST_ONLY. Temporary test ZIP artifact #13511582971 (605828642 bytes, sha256 `3cdcca3484bd031748aee633295a4c1d5449a4f6e8db043727721e6b636f83ea`), not a public release. Workbench parent evidence #3018.
+
+**Actual security defect:** BlueZ Agent1.Cancel() previously had an empty body. Pairing callbacks create 45-second pending one-use authorizations; cancellation did not remove them. A later authentic Paired signal before expiry could still set the canceled device Trusted, despite the pairing being canceled. BlueZ Cancel receives no device path; all outstanding pending tokens must be revoked.
+
+**Fix and tests:** Cancel now immediately clears `pending_authorizations`. The original ten-minute initial discovery/pairability window is NOT extended and no authorization is automatically granted; a new explicit request remains necessary for an untrusted device. Three actual no-Pi DBus-callback tests cover two parallel tokens and idempotent Cancel, delayed canceled Paired signal cannot gain trust, and service access denied until fresh authorization. Three synthetic installed-image tests plus new guard `bluetooth_cancel_revokes_pending_trust`; **81** expected native image checks ONLY when independent ARM64 confirms. All prior pending-source checks remain. No owner cryptographic proof or consumer-ready pairing claim.
+
+**Blockers:** Nine copyright gaps, 83 pending source-rights ledger files, Pi4/Edifier actual sound/three-source routing/24-hour endurance, secure owner phone Wi-Fi, and Model C legal authorization remain open. AGPL-3.0-only remains effective. Next exact-head source/native PR63 tests, image ZIP/XZ provenance and Workbench evidence. No merges, installs, deployment or release-GO.
+
 **END OF HANDOFF.** If a live run/PR contradicts this document, treat
 the live GitHub evidence as authoritative, reconcile and update this file.
