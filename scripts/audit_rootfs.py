@@ -132,6 +132,32 @@ def inspect(root: Path) -> dict[str, bool]:
         )
     except OSError:
         checks["pipewire_node_identity_ambiguity_fails_closed"] = False
+    # Real PipeWire metadata is untrusted: one JSON object with duplicate
+    # Node IDs or Link endpoints must not become a last-wins valid graph,
+    # and a deeply nested but size-bounded pw-dump must not crash services.
+    try:
+        discovery_source = (source / "discovery.py").read_text()
+        graph_source = (source / "audio_graph.py").read_text()
+        checks["pipewire_nodes_and_links_strict_shared_json_snapshot"] = all(
+            marker in discovery_source for marker in (
+                "MAX_PIPEWIRE_GRAPH_BYTES = 4 * 1024 * 1024",
+                "MAX_PIPEWIRE_GRAPH_OBJECTS = 8192",
+                "def _unique_pipewire_members(pairs):",
+                "object_pairs_hook=_unique_pipewire_members",
+                "parse_constant=_reject_pipewire_constant",
+                "parse_float=_finite_pipewire_float",
+                "math.isfinite(value)",
+                "except (UnicodeError, TypeError, ValueError, RecursionError):",
+                "data = _parse_pipewire_graph(raw)",
+            )
+        ) and all(
+            marker in graph_source for marker in (
+                "_parse_pipewire_graph,",
+                "graph = _parse_pipewire_graph(raw)",
+            )
+        )
+    except OSError:
+        checks["pipewire_nodes_and_links_strict_shared_json_snapshot"] = False
     # No operator-only "hardware check" may quietly grant legal, owner or
     # stable-image approval from detected topology or typed responses.
     try:
