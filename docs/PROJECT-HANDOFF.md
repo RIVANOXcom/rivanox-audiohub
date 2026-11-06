@@ -541,3 +541,26 @@ AGPL-3.0-only remains effective, 83 source-rights rows pending and nine
 OS copyright/notice gaps unresolved; Pi4+Edifier actual audible three-way
 mixing, secured phone-owner WiFi, 24h durability and legal clearance absent.
 No release-GO, merge, deploy, installation, permissions or payment.
+
+
+## 2026-11-06: Draft PR71 — latest proven Pi4 operator image guide
+
+PAPA WD_JOB PAPA-18B8B3C6, isolated Draft PR71 stacked ONLY on exact
+PR70 83c5ccbdc206e4ba8e2fe2dbf481abd735b3ab12; no prior branch or main changes. Old
+docs/FIRST-PI-ALPHA-TEST.md directed an initial 4 November unverified
+32-check image artifact expiring 11 November despite later security work.
+The new guide and THREE-SOURCE-LAB-ACCEPTANCE.md instead pin verified
+PR70 source #42256023645 SUCCESS 686/686 and exact-head ARM64
+#42255968531 SUCCESS 88/88 installed rootfs checks, image sha256
+f03596a28d150ee3ee7ce89495910f84824c06851ceb1733dcd809c5252bdb87,
+ZIP test-only artifact #13522368901 sha256
+6e8b309ae66062988610c19e156de561586b1e44398a17465611a3e739966935,
+expiry 2026-12-06T16:57:40Z, bundle/XZ PASS. Workbench proof #3075.
+Adds local ZIP, manifest and image cross-check steps; physical isolated
+bench-only first boot, optional LAN receiver disabled, redacted NOT TESTED
+observation matrix and full release NO-GO gates. Two existing-file Python
+regressions prevent re-linking the obsolete image. This documentation-only
+change has NO new native build/image proof, no physical Pi4/Edifier
+performance proof, no release or operator install authority. Existing
+83 source rights and nine OS notices pending, no secured phone WiFi or
+24h/three-source acceptance. Source CI for PR71 must be independently checked.
