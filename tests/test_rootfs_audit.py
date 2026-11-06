@@ -117,7 +117,9 @@ class RootfsAuditTests(unittest.TestCase):
             "except (UnicodeError, ValueError, RecursionError):",
         )))
         make("opt/audiohub/src/audiohub/audio_graph.py", "\\n".join((
-            "def summarize_links(raw):",
+            "_parse_pipewire_graph,",
+            "graph = _parse_pipewire_graph(raw)",
+            "def summarize_links(raw):"
             "_conflicting_node_ids(nodes)",
             '"PipeWire:Interface:Link"',
             '"output-node-id"',
@@ -151,7 +153,14 @@ class RootfsAuditTests(unittest.TestCase):
         make("opt/audiohub/src/audiohub/discovery.py", "\\n".join((
             "MAX_PIPEWIRE_GRAPH_BYTES = 4 * 1024 * 1024",
             "MAX_PIPEWIRE_GRAPH_OBJECTS = 8192",
-            "def _conflicting_node_ids(nodes):",
+            "def _unique_pipewire_members(pairs):",
+            "object_pairs_hook=_unique_pipewire_members",
+            "parse_constant=_reject_pipewire_constant",
+            "parse_float=_finite_pipewire_float",
+            "math.isfinite(value)",
+            "except (UnicodeError, TypeError, ValueError, RecursionError):",
+            "data = _parse_pipewire_graph(raw)",
+            "def _conflicting_node_ids(nodes):"
             "if ident in seen:",
             "if _conflicting_node_ids(nodes):",
             "conflicted.add(name_mac)",
@@ -622,6 +631,47 @@ class RootfsAuditTests(unittest.TestCase):
             ))
             self.assertFalse(audit.inspect(root)[
                 "pipewire_node_identity_ambiguity_fails_closed"
+            ])
+
+    def test_shared_pipewire_json_guard_in_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            self.assertTrue(audit.inspect(root)[
+                "pipewire_nodes_and_links_strict_shared_json_snapshot"
+            ])
+
+    def test_missing_pipewire_duplicate_member_check_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            file = root / "opt/audiohub/src/audiohub/discovery.py"
+            file.write_text(file.read_text().replace(
+                "object_pairs_hook=_unique_pipewire_members", "object_pairs_hook=None"
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "pipewire_nodes_and_links_strict_shared_json_snapshot"
+            ])
+
+    def test_permissive_link_parser_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            file = root / "opt/audiohub/src/audiohub/audio_graph.py"
+            file.write_text(file.read_text().replace(
+                "graph = _parse_pipewire_graph(raw)", "graph = json.loads(raw)"
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "pipewire_nodes_and_links_strict_shared_json_snapshot"
+            ])
+
+    def test_missing_pipewire_deep_json_failure_handling_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            file = root / "opt/audiohub/src/audiohub/discovery.py"
+            file.write_text(file.read_text().replace(
+                "except (UnicodeError, TypeError, ValueError, RecursionError):",
+                "except (UnicodeError, TypeError, ValueError):"
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "pipewire_nodes_and_links_strict_shared_json_snapshot"
             ])
 
     def test_unique_pipewire_identity_guards_pass_image(self):
