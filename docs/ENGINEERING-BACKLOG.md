@@ -211,3 +211,7 @@ The existing audio runtime and offline manual hardware preflight both invoked `s
 ## 2026-11-06 — offline Pi4/Edifier operator hardware observation harness, Draft PR #48
 
 In [PR #48](https://github.com/RIVANOXcom/rivanox-audiohub/pull/48), added local-console `python3 -m audiohub.manual_acceptance` to convert incomplete hardware acceptance into six precise operator-only yes/no/skip observations after a safe topology preflight. No real audio generation, sockets, pairing, file writes or raw identifiers. **Every report is unverified**, even when all answers are affirmative: hardware, owner, redistribution, future Model C and release flags are always false. Developer [runbook](HARDWARE-OBSERVATION-RUNBOOK.md) explains how to execute manually on an isolated Pi4 and when to skip. Adds 17 unit tests + four image guard tests, source-rights ledger **83** files, native guard target **63** if final CI passes. Physical Pi4/Edifier issue #2 and owner/legal issues still open.
+
+### 2026-11-06 correction: real native package guard count
+
+PR47 ARM64 [#42180343356](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42180343356) completed **63/63** guards, not 62, because `process_capture.py` itself is a new mandatory installed source file. PR48 target is **65** (manual_acceptance.py + its separate nonapproval check), not 63. Source CI PR48 #42181382213 successful 481 tests, real native PR48 must still be checked after final docs commit.
