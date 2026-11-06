@@ -108,6 +108,7 @@ class RootfsAuditTests(unittest.TestCase):
         )))
         make("opt/audiohub/src/audiohub/audio_graph.py", "\\n".join((
             "def summarize_links(raw):",
+            "_conflicting_node_ids(nodes)",
             '"PipeWire:Interface:Link"',
             '"output-node-id"',
             '"input-node-id"',
@@ -126,7 +127,8 @@ class RootfsAuditTests(unittest.TestCase):
         )))
         make("opt/audiohub/src/audiohub/hardware_preflight.py",
              'from .audio_graph import summarize_links\\n'
-             'bounded_command_output(("pw-dump",), timeout=5)')
+             'bounded_command_output(("pw-dump",), timeout=5)\\n'
+             '_conflicting_node_ids(nodes)')
         make("opt/audiohub/src/audiohub/process_capture.py", "\\n".join((
             "MAX_COMMAND_STDOUT_BYTES = 4 * 1024 * 1024",
             "selectors.DefaultSelector()",
@@ -139,6 +141,13 @@ class RootfsAuditTests(unittest.TestCase):
         make("opt/audiohub/src/audiohub/discovery.py", "\\n".join((
             "MAX_PIPEWIRE_GRAPH_BYTES = 4 * 1024 * 1024",
             "MAX_PIPEWIRE_GRAPH_OBJECTS = 8192",
+            "def _conflicting_node_ids(nodes):",
+            "if ident in seen:",
+            "if _conflicting_node_ids(nodes):",
+            "conflicted.add(name_mac)",
+            'return [source for source in result if source["address"] not in conflicted]',
+            "ambiguous.add(name)",
+            "return {} if ambiguous else found",
         )))
         make("opt/audiohub/src/audiohub/input_profiles.py", "\\n".join((
             'SLOTS = ("music", "laptop", "tablet")',
@@ -479,6 +488,69 @@ class RootfsAuditTests(unittest.TestCase):
             root = self.root(tmp)
             self.assertTrue(audit.inspect(root)[
                 "manual_hardware_observation_not_auto_approval"
+            ])
+
+
+    def test_missing_duplicate_node_id_detection_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            source = root / "opt/audiohub/src/audiohub/discovery.py"
+            source.write_text(source.read_text().replace(
+                "if ident in seen:", "if False:"
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "pipewire_node_identity_ambiguity_fails_closed"
+            ])
+
+    def test_arbitrary_first_bluetooth_source_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            source = root / "opt/audiohub/src/audiohub/discovery.py"
+            source.write_text(source.read_text().replace(
+                "conflicted.add(name_mac)", "pass"
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "pipewire_node_identity_ambiguity_fails_closed"
+            ])
+
+    def test_arbitrary_last_virtual_sink_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            source = root / "opt/audiohub/src/audiohub/discovery.py"
+            source.write_text(source.read_text().replace(
+                "return {} if ambiguous else found", "return found"
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "pipewire_node_identity_ambiguity_fails_closed"
+            ])
+
+    def test_preflight_without_uniqueness_guard_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/src/audiohub/hardware_preflight.py"
+            path.write_text(path.read_text().replace(
+                "_conflicting_node_ids(nodes)", "True"
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "pipewire_node_identity_ambiguity_fails_closed"
+            ])
+
+    def test_link_inspection_without_uniqueness_guard_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/src/audiohub/audio_graph.py"
+            path.write_text(path.read_text().replace(
+                "_conflicting_node_ids(nodes)", "False"
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "pipewire_node_identity_ambiguity_fails_closed"
+            ])
+
+    def test_unique_pipewire_identity_guards_pass_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            self.assertTrue(audit.inspect(root)[
+                "pipewire_node_identity_ambiguity_fails_closed"
             ])
 
     def test_unchecked_status_web_listener_prevents_image_export(self):

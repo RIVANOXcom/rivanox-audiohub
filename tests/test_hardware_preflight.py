@@ -67,6 +67,16 @@ class HardwarePreflightTests(unittest.TestCase):
         data[0] = make_node(12, "alsa_output.usb-OTHER_USB", "Audio/Sink")
         self.assertFalse(preflight.inspect_topology(data)["checks"]["edifier_usb_sink_unique"])
 
+    def test_duplicate_pipewire_id_blocks_manual_hardware_readiness(self):
+        current = topology()
+        current.append(make_node(
+            30, "bluez_input.11_22_33_44_55_66.0", "Audio/Source"
+        ))
+        report = preflight.inspect_topology(current)
+        self.assertEqual(report["topology_preflight"], "incomplete")
+        self.assertFalse(report["hardware_gates"]["speaker_audible"] != "unverified")
+        self.assertFalse(report["release_ready"])
+
     def test_wrong_media_class_or_invalid_identifier_ignored(self):
         data = topology()
         data[1] = make_node(True, "audiohub.music", "Audio/Sink")

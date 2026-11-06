@@ -75,6 +75,28 @@ def inspect(root: Path) -> dict[str, bool]:
         )
     except OSError:
         checks["pipewire_stdout_bounded_no_shell"] = False
+    # PipeWire Node IDs and virtual sink identities must be unique before
+    # wpctl set-default or pw-loopback can use them. Duplicate records or
+    # conflicting BT profiles cannot choose an arbitrary first/last node.
+    try:
+        discovery = (source / "discovery.py").read_text()
+        preflight = (source / "hardware_preflight.py").read_text()
+        graph = (source / "audio_graph.py").read_text()
+        checks["pipewire_node_identity_ambiguity_fails_closed"] = all(
+            marker in discovery for marker in (
+                "def _conflicting_node_ids(nodes):",
+                "if ident in seen:",
+                "if _conflicting_node_ids(nodes):",
+                "conflicted.add(name_mac)",
+                'return [source for source in result if source["address"] not in conflicted]',
+                "ambiguous.add(name)",
+                "return {} if ambiguous else found",
+            )
+        ) and "_conflicting_node_ids(nodes)" in preflight and (
+            "_conflicting_node_ids(nodes)" in graph
+        )
+    except OSError:
+        checks["pipewire_node_identity_ambiguity_fails_closed"] = False
     # No operator-only "hardware check" may quietly grant legal, owner or
     # stable-image approval from detected topology or typed responses.
     try:

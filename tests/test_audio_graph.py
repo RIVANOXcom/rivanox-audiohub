@@ -68,6 +68,16 @@ class LinkEvidenceTests(unittest.TestCase):
         ])
         self.assertFalse(found["eq_output_to_usb_direct_link"]["music"])
 
+    def test_duplicate_unrelated_node_id_blocks_positive_link_evidence(self):
+        g = graph() + [
+            node(31, "untrusted.unrelated", "Audio/Source"),
+            link(31, 10),
+        ]
+        summary = summarize_links(g)
+        self.assertFalse(summary["inspection_available"])
+        self.assertFalse(summary["eq_output_to_usb_direct_link"]["music"])
+        self.assertFalse(summary["release_ready"])
+
     def test_duplicate_eq_node_name_is_ambiguous(self):
         found = summarize_links(graph() + [
             node(44, "audiohub.music.output", "Audio/Source"), link(31, 10)
