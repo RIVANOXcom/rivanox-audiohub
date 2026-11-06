@@ -99,6 +99,12 @@
       "base": "wd-papa-20261106-offline-hardware-acceptance-checklist",
       "head": "wd-papa-20261106-failclosed-pipewire-identity-ambiguity",
       "verified_head_sha": null
+    },
+    {
+      "number": 50,
+      "base": "wd-papa-20261106-failclosed-pipewire-identity-ambiguity",
+      "head": "wd-papa-20261106-offline-diag-runtime-path-nofollow",
+      "verified_head_sha": null
     }
   ],
   "last_native_verified": {
@@ -160,10 +166,10 @@
     "do not silently merge stacked draft PRs"
   ],
   "last_source_rights_ci_verified": {
-    "run_id": 42200344244,
-    "commit_sha": "27d13828011a50fff9cd7b664a508e2ffe76ce89",
+    "run_id": 42201349549,
+    "commit_sha": "a362b1630e6001478634d2c1f4f6bfde9814a007",
     "outcome": "success",
-    "python_tests": 500,
+    "python_tests": 512,
     "source_rights_ledger_file_count": 83
   },
   "latest_legacy_security_change": {
@@ -300,5 +306,29 @@
     "hardware_accepted": false,
     "commercial_model_c_approved": false,
     "public_release_ready": false
+  },
+  "next_offline_diagnostic_path_safety_change": {
+    "pr": 50,
+    "initial_implementation_sha": "a362b1630e6001478634d2c1f4f6bfde9814a007",
+    "initial_source_ci": {
+      "run_id": 42201349549,
+      "result": "success",
+      "python_tests": 512
+    },
+    "parent_pr": 49,
+    "parent_native_run_pending_validation": 42200618383,
+    "new_native_run_pending_validation": 42201386174,
+    "status": "source CI 512/512 passed on initial code SHA, final exact-head native pending",
+    "original_defect": "privileged diagnostic followed symlinked parent directories of private runtime JSON",
+    "all_directory_components_nofollow": true,
+    "private_final_status_directory_required": true,
+    "private_status_file_required": true,
+    "hardlinked_status_refused": true,
+    "max_runtime_status_bytes": 4096,
+    "expected_rootfs_guard_count": 67,
+    "installed_source_rights_ledger_file_count": 83,
+    "public_release_ready": false,
+    "model_c_license_effective": false,
+    "hardware_accepted": false
   }
 }

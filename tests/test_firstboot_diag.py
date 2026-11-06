@@ -135,6 +135,68 @@ class DiagnosticTests(unittest.TestCase):
         self.runtime.symlink_to(private)
         self.assertFalse(diag.sample(self.runtime, self.uid, now=101)["usb_audio_detected"])
 
+
+    def test_symlinked_runtime_parent_directory_is_refused(self):
+        actual = self.root / "real-private"
+        actual.mkdir(mode=0o700)
+        status = actual / "runtime-status.json"
+        status.write_text('{"updated_at":100,"usb_output":true}')
+        status.chmod(0o600)
+        linked = self.root / "linked-status"
+        linked.symlink_to(actual, target_is_directory=True)
+        result = diag.sample(linked / status.name, self.uid, now=101)
+        self.assertEqual(result["runtime_status"], "unavailable_or_stale")
+        self.assertFalse(result["usb_audio_detected"])
+
+    def test_runtime_state_directory_must_be_private(self):
+        holder = self.root / "audiohub"
+        holder.mkdir(mode=0o700)
+        status = holder / "runtime-status.json"
+        status.write_text('{"updated_at":100,"usb_output":true}')
+        status.chmod(0o600)
+        self.assertTrue(diag.sample(status, self.uid, now=101)["usb_audio_detected"])
+        holder.chmod(0o755)
+        self.assertFalse(diag.sample(status, self.uid, now=101)["usb_audio_detected"])
+
+    def test_runtime_state_file_must_be_owner_only(self):
+        self.runtime_write({"updated_at": 100, "usb_output": True})
+        self.runtime.chmod(0o644)
+        self.assertEqual(diag.sample(self.runtime, self.uid, now=101)[
+            "runtime_status"], "unavailable_or_stale")
+
+    def test_multiple_hardlinked_runtime_status_is_refused(self):
+        self.runtime_write({"updated_at": 100, "usb_output": True})
+        another = self.root / "second-link"
+        os.link(self.runtime, another)
+        self.assertFalse(diag.sample(self.runtime, self.uid, now=101)[
+            "usb_audio_detected"])
+
+    def test_status_in_wrong_owned_directory_is_refused(self):
+        self.runtime_write({"updated_at": 100, "usb_output": True})
+        self.assertFalse(diag.sample(self.runtime, self.uid + 1, now=101)[
+            "usb_audio_detected"])
+
+    def test_relative_and_parent_traversal_paths_are_refused(self):
+        for path in (Path("relative-status.json"),
+                     self.root / ".." / "unsafe-status.json"):
+            with self.subTest(path=str(path)):
+                self.assertIsNone(diag._read_runtime(path, self.uid))
+
+    def test_boolean_or_invalid_user_id_is_not_accepted(self):
+        self.runtime_write({"updated_at": 100, "usb_output": True})
+        for uid in (True, -1, "1000", None):
+            with self.subTest(uid=repr(uid)):
+                self.assertIsNone(diag._read_runtime(self.runtime, uid))
+
+    def test_status_directory_and_file_without_links_remain_readable(self):
+        private = self.root / "audiohub"
+        private.mkdir(mode=0o700)
+        status = private / "runtime-status.json"
+        status.write_text('{"updated_at":100,"usb_output":true}')
+        status.chmod(0o600)
+        self.assertTrue(diag.sample(status, self.uid, now=101)[
+            "usb_audio_detected"])
+
     def test_runtime_wrong_owner_fails_closed(self):
         self.runtime_write({"updated_at": 100, "usb_output": True})
         self.assertFalse(diag.sample(self.runtime, self.uid + 1, now=101)["usb_audio_detected"])
