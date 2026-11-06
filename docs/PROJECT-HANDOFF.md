@@ -804,3 +804,35 @@ still absent. 83 source-rights records and 9 missing OS copyright
 files need human/legal review; effective AGPL-3.0-only, Model C not
 approved. No deploy, install, network enrollment, merge, permission
 change, payment or release/GO.
+
+
+## 2026-11-06: Draft PR80 — correct Pi4 operator hyperlink and outdated backlog action
+
+PAPA MissionPilot PAPA-18B8B3C6 / AH-001/AH-009. New isolated
+docs/tests Draft PR80 stacks only on unchanged PR79 exact 157d1c36c13a5553af24ce98a787d238253e0534.
+Concrete documentation defect: FIRST-PI-ALPHA-TEST.md displayed
+"PR75" yet its hyperlink still opened /pull/70; the checklist also
+mislabelled the native ARM64 run ID #42305548510 as a source run.
+The Pi4 engineering backlog P0/AUDIO-01 still instructed flashing
+an older pre-source-routing PR26 artifact #13433476966, inconsistent
+with the newer deliberately pinned PR75 reference in the authoritative
+isolated lab guide. Corrects actual /pull/75 link, build-run wording,
+calls PR75 an explicitly pinned verified alpha snapshot rather than
+"latest", and routes the backlog operator to FIRST-PI-ALPHA-TEST.md
+instead of an obsolete ZIP. New source-rights regression assertions
+check link destination, build-run wording, exact backlog row and
+explicit separate human decision. Historical PR26 data remains
+accurately preserved as history, not a current test recommendation.
+PR79 parent Source #42310877204 SUCCESS 731/731; native ARM64
+#42310839466 was pending when this docs branch was opened.
+Pinned PR75 Source #42305591855 SUCCESS 709/709; native
+#42305548510 SUCCESS 92/92 actual installed rootfs; test-only
+artifact #13546207449, ZIP SHA256
+b6bc5175fdee8f7c89aa0e041ec5521e7881ec2f1bd1d658156237434e1b9ad5,
+image SHA256
+7b1adf94685ffe2cdbe1e86e83e11839da0fcd814d78bca0818e362f24167c95.
+No new image build is claimed for docs-only PR80. All observed
+hardware, phone ownership WiFi, legal rights and release gates still
+NOT TESTED/NOT APPROVED. Effective AGPL-3.0-only, 83 source rights
+and nine OS notice gaps remain; no install, SD flash, merge, deploy,
+permissions or release GO.

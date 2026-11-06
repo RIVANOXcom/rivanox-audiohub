@@ -8,13 +8,15 @@ ownership or safe installation. Nothing in this guide grants release GO.
 
 ## Verified image snapshot — 6 November 2026
 
-The latest independently completed ARM64 Pi4 preview on this branch lineage
-at this checkpoint is **Draft PR75**. Do not replace it with a different
-or newer run without rechecking ALL commit, test, artifact and checksum data.
+This deliberately pinned, independently verified ARM64 Pi4 preview is
+**Draft PR75**, for an expressly authorized isolated operator experiment
+only. Newer development previews exist; they are not automatically
+substitutes for this specific reference image. Verify ALL commit, test,
+artifact and checksum data again before any human decision to test.
 
 | Proof | Exact value |
 | --- | --- |
-| Development PR | [PR75](https://github.com/RIVANOXcom/rivanox-audiohub/pull/70), Draft and unmerged |
+| Development PR | [PR75](https://github.com/RIVANOXcom/rivanox-audiohub/pull/75), Draft and unmerged |
 | Source commit | `2b02bb4968467cd1033b47ddeaccaba092b96db0` |
 | Source checks | [GitHub Actions #42305591855](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42305591855), **709/709 PASS** |
 | Native ARM64 | [GitHub Actions #42305548510](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42305548510), **92/92** real installed-rootfs gates PASS |
@@ -45,7 +47,7 @@ The repository Releases tab does **not** contain this artifact.
    `*.img.xz` image and the expected `SHA256SUMS.txt`,
    `PREVIEW-MANIFEST.json` and `ROOTFS-PACKAGES.json`.
    Check the manifest source commit matches the exact PR75 SHA above,
-   and its source run ID is #42305548510.
+   and its native image-build run ID is #42305548510.
 4. Check the image digest against the **manifest, SHA256SUMS.txt and**
    `7b1adf94685ffe2cdbe1e86e83e11839da0fcd814d78bca0818e362f24167c95`.
    Linux: run `sha256sum -c SHA256SUMS.txt` in the extracted directory.
