@@ -146,21 +146,27 @@
       "number": 57,
       "base": "wd-papa-20261106-status-http-total-deadline-privacy",
       "head": "wd-papa-20261106-offline-diag-json-integrity",
-      "verified_head_sha": null
+      "verified_head_sha": "4a13707416da1e18d3d4ac9e223b18786ef5f0f2"
     },
     {
       "number": 58,
       "base": "wd-papa-20261106-offline-diag-json-integrity",
       "head": "wd-papa-20261106-finite-exponent-status-json",
+      "verified_head_sha": "4118dbc16fd8fc9e7d03f9c2c80395767d267111"
+    },
+    {
+      "number": 59,
+      "base": "wd-papa-20261106-finite-exponent-status-json",
+      "head": "wd-papa-18b8b3c6-private-route-config-parse-guard-20261106",
       "verified_head_sha": null
     }
   ],
   "last_native_verified": {
-    "run_id": 42220895650,
-    "source_sha": "1e666234b307a249e593b0e5a99b523ccf4af060",
+    "run_id": 42222648342,
+    "source_sha": "4118dbc16fd8fc9e7d03f9c2c80395767d267111",
     "conclusion": "success",
-    "python_tests": 568,
-    "rootfs_checks_passed": 73,
+    "python_tests": 583,
+    "rootfs_checks_passed": 75,
     "installed_packages": 689,
     "architecture_counts": {
       "arm64": 538,
@@ -173,11 +179,11 @@
       "doc_alias_target_link": 8,
       "copyright_file_missing": 1
     },
-    "artifact_id": 13504166490,
+    "artifact_id": 13505195599,
     "artifact_unverified": true,
-    "artifact_expiry": "2026-12-06T12:59:36Z",
+    "artifact_expiry": "2026-12-06T13:13:53Z",
     "public_release_ready": false,
-    "artifact_zip_sha256": "c8224ba3a11e7217c26d804e21b6b6c20e384b25be0e9bd4afcc153e791baf98"
+    "artifact_zip_sha256": "768bc5322d7a1300ecc89a6a72695c26b3cf604a1e823323c92dcaa4a4d2bbd4"
   },
   "open_issues": [
     {
@@ -538,13 +544,17 @@
     "expected_native_rootfs_guard_count": 74,
     "source_rights_ledger_file_count": 83,
     "source_ci_pending": false,
-    "native_ci_pending": true,
+    "native_ci_pending": false,
     "physical_pi4_edifier_accepted": false,
     "legal_redistribution_approved": false,
     "model_c_license_effective": false,
     "public_release_ready": false,
     "source_run_id": 42221984592,
-    "source_tests_passed": 576
+    "source_tests_passed": 576,
+    "native_run_id": 42221946079,
+    "native_checks_passed": 74,
+    "verified_sha": "4a13707416da1e18d3d4ac9e223b18786ef5f0f2",
+    "unverified_artifact_id": 13504646683
   },
   "next_json_exponent_finite_overflow_change": {
     "pr": 58,
@@ -557,10 +567,37 @@
     "malformed_json_yields_stale_no_usb_health": true,
     "expected_native_rootfs_guard_count": 75,
     "source_rights_ledger_file_count": 83,
-    "source_ci_pending": true,
-    "native_ci_pending": true,
+    "source_ci_pending": false,
+    "native_ci_pending": false,
     "public_release_ready": false,
     "physical_edifier_accepted": false,
-    "model_c_license_effective": false
+    "model_c_license_effective": false,
+    "source_run_id": 42222688582,
+    "native_run_id": 42222648342,
+    "native_checks_passed": 75,
+    "verified_sha": "4118dbc16fd8fc9e7d03f9c2c80395767d267111",
+    "unverified_artifact_id": 13505195599
+  },
+  "next_private_audio_config_safety_change": {
+    "job": "PAPA-18B8B3C6",
+    "pr": 59,
+    "parent_pr": 58,
+    "branch": "wd-papa-18b8b3c6-private-route-config-parse-guard-20261106",
+    "problem": "Private source route and input-label files opened without O_NONBLOCK can hang forever on FIFOs before fstat regular-file checks; default JSON parser silently selects duplicate object keys and throws RecursionError on deeply nested bounded data; short concurrent file reads can be accepted.",
+    "strict_duplicate_json_object_keys": true,
+    "nonstandard_numeric_constant_rejected": true,
+    "recursive_json_parse_fails_closed": true,
+    "regular_files_open_nonblocking": true,
+    "private_file_read_size_must_match_stat": true,
+    "read_only_web_api_unchanged": true,
+    "existing_routing_and_ownership_policy_unchanged": true,
+    "new_native_image_guards": 2,
+    "expected_native_rootfs_guard_count": 77,
+    "source_rights_ledger_file_count": 83,
+    "source_ci_pending": true,
+    "native_ci_pending": true,
+    "hardware_accepted": false,
+    "model_c_license_effective": false,
+    "public_release_ready": false
   }
 }
