@@ -420,3 +420,7 @@ PAPA-18B8B3C6 Draft PR61 on `wd-papa-18b8b3c6-runtime-private-json-integrity-202
 ## 2026-11-06: Final PR60 independent native verification
 
 PR60 exact SHA `3ff954883f6dc254b19a61928883f94e6c1d4f3f`, Source CI #42233692882 614/614 PASS and ARM64 #42233681180 78/78 actual installed rootfs checks PASS; .img.xz checksum and bundle integrity PASS. Temporary UNVERIFIED GitHub artifact #13511741029 (605530653 bytes, ZIP sha256 `cb8daada90a0c56def4dcbcfc60b6ad7debc3034e38787682f49c58dd50dfdf8`, expires 2026-12-06). Still not a product release, Pi4/Edifier physical signoff or Model C approval. PR61 isolates strict supervisor-local JSON config loader and will require independent 79 checks.
+
+## 2026-11-06: Draft PR62 fail-closed mixer delivery before managed playback
+
+PAPA-18B8B3C6 new isolated Draft PR62, branch `wd-papa-18b8b3c6-mixer-control-failclosed-20261106`, stacked on PR61 exact `c3f1b04839fb02d4814f6408fe242ca35e65b3ff`. Actual audio supervisor now applies conservative USB master attenuation before per-source volume/unmute, verifies every wpctl result, refuses new routes and stops active managed loopbacks on failure instead of ignoring hardware-mixer errors. Five real unit methods plus four synthetic rootfs methods and one image guard target **80** only after independent exact-head ARM64. Parent PR61 Source #42235548842 624/624 PASS; native #42235481006 pending at creation. AGPL and unreviewed source/OS package rights untouched. No physical audio/owner approval, merge, install, deployment, release GO. See canonical section AD.

@@ -425,20 +425,22 @@ class Supervisor:
         if prior["mode"] != plan["mode"] and plan["mode"] == "auto":
             self.assignments = read_json(ASSIGNMENTS, {})
         self.route_plan = plan
+        # Never start a new source, or keep an old source running after a
+        # mixer-control failure. The estimated gain budget alone is not proof
+        # that wpctl actually applied the physical USB master attenuation.
+        state = patch_settings(defaults(), read_json(SETTINGS, self.settings))
+        if usb_ready:
+            for args in volume_commands(state, {
+                c: sinks["audiohub." + c] for c in CHANNELS
+                if "audiohub." + c in sinks
+            }, output_id):
+                applied = run(*args)
+                if applied is None or applied.returncode != 0:
+                    # poll_safely() stops all managed loopbacks on this error.
+                    raise RuntimeError("AudioHub mixer control failed")
+        self.settings = state
         self._route(sources if self.route_policy_valid else [],
                     sinks if (usb_ready and self.route_policy_valid) else {})
-        try:
-            state = patch_settings(defaults(), read_json(SETTINGS, self.settings))
-            self.settings = state
-            if usb_ready:
-                for args in volume_commands(state, {
-                    c: sinks["audiohub." + c] for c in CHANNELS
-                    if "audiohub." + c in sinks
-                }, output_id):
-                    run(*args)
-        except ValueError:
-            # Invalid on-disk mixer values never expand volume or unmute.
-            pass
         atomic_json(STATE, {
             "usb_output": bool(output),
             "usb_route_ready": usb_ready,

@@ -492,5 +492,17 @@ PR48 adds an installed `manual_acceptance.py` source check and independent no-re
 
 **Next:** exact-head source/native CI for PR61, reconcile PR60 pending native 78 checks, append Workbench evidence. NO-GO until independent operator/hardware/legal acceptance.
 
+## AD. 2026-11-06: enforce live master gain and mixer commands before audio routes — Draft PR62
+
+**Mission PAPA-18B8B3C6.** New isolated Draft PR62 branch `wd-papa-18b8b3c6-mixer-control-failclosed-20261106`, stacked exclusively on exact PR61 parent SHA `c3f1b04839fb02d4814f6408fe242ca35e65b3ff`, without edits to parent or main. PR61 exact HEAD Source GitHub Actions #42235548842 SUCCESS **624/624**; native ARM64 #42235481006 was still running at PR62 creation (79 installed image guards expected only after exact-head verification). PR60 was independently verified Source 614/614 and native 78/78; temporary test artifact #13511741029 with explicit UNVERIFIED_ALPHA_TEST_ONLY classification, no product GO.
+
+**Concrete AH-003 reliability/safety issue:** Live supervisor `poll` previously started/upheld BT audio routes *before* executing the `wpctl set-volume` and `wpctl set-mute` commands. It ignored failed, timed-out or nonzero subprocess results and swallowed invalid stored mixer settings via `except ValueError: pass`. Thus active playback could continue while its estimated conservative master gain budget was never actually applied to the USB output (no physical hardware acceptance or hard limiter is implied).
+
+**Fix:** `mixer.volume_commands` puts the conservative master USB gain command **before** any per-source volume/unmute commands. `runtime.Supervisor.poll` validates the stored mixer state, executes each `wpctl` control and demands a successful command result **before** calling `self._route`. On missing, nonzero or invalid responses, a generic RuntimeError/ValueError propagates into already established `poll_safely` cleanup, stopping all managed loopback processes; no status confirmation is published and no new source is admitted. Existing explicit USB-selection gate, max-two-Bluetooth/three-EQ-mix slots, limited gain estimate and no anonymous web mutations are preserved.
+
+**Tests and release gates:** One direct mixer order assertion and four no-hardware supervisor poll tests (missing master command result, nonzero source mute result, all controls success before routing, corrupt stored settings), four synthetic installed-rootfs adversarial checks plus new native image guard `mixer_master_gain_verified_before_managed_routes`; target **80** real native rootfs checks only after independent ARM64 build. Source-rights ledger remains 83 unreviewed. AGPL-3.0-only remains effective, proposed commercial Model C not effective. Physical Pi4/Edifier sound, three simultaneous sources, calibrated clipping, 24h endurance and authenticated phone Wi-Fi owner acceptance remain open.
+
+**Next:** exact-head Source/ARM64 CI and bundle SHA/XZ for PR62, reconcile PR61 ARM64 #42235481006, append Workbench evidence. All PRs Draft/unmerged; no release, install, deployment or permissions change.
+
 **END OF HANDOFF.** If a live run/PR contradicts this document, treat
 the live GitHub evidence as authoritative, reconcile and update this file.

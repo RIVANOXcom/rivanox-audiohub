@@ -285,6 +285,13 @@ class SourceRightsLedgerTests(unittest.TestCase):
         self.assertEqual(state["next_supervisor_private_state_decoder_integrity"]["expected_native_rootfs_guard_count"], 79)
         self.assertTrue(state["next_supervisor_private_state_decoder_integrity"]["duplicate_keys_rejected_at_any_depth"])
         self.assertFalse(state["next_supervisor_private_state_decoder_integrity"]["public_release_ready"])
+        self.assertEqual(state["next_mixer_command_delivery_failclosed_change"]["job"], "PAPA-18B8B3C6")
+        self.assertEqual(state["next_mixer_command_delivery_failclosed_change"]["pr"], 62)
+        self.assertEqual(state["next_mixer_command_delivery_failclosed_change"]["parent_pr"], 61)
+        self.assertEqual(state["next_mixer_command_delivery_failclosed_change"]["expected_native_rootfs_guard_count"], 80)
+        self.assertTrue(state["next_mixer_command_delivery_failclosed_change"]["conservative_master_gain_programmed_first"])
+        self.assertTrue(state["next_mixer_command_delivery_failclosed_change"]["existing_routes_stopped_on_mixer_failure"])
+        self.assertFalse(state["next_mixer_command_delivery_failclosed_change"]["public_release_ready"])
         self.assertEqual(state["next_bluetooth_agent_trust_security_change"]["pairable_timeout_seconds"], 600)
         self.assertEqual(state["next_bluetooth_agent_trust_security_change"]["discoverable_timeout_seconds"], 600)
         self.assertTrue(state["next_bluetooth_agent_trust_security_change"]["initial_deadline_relative_to_linux_boot"])
@@ -294,7 +301,7 @@ class SourceRightsLedgerTests(unittest.TestCase):
         self.assertFalse(state["last_native_verified"]["public_release_ready"])
         self.assertEqual(
             [item["number"] for item in state["draft_pr_chain"]],
-            [35, 36, 38, 39, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61],
+            [35, 36, 38, 39, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62],
         )
 
     def test_primary_handoff_points_to_authoritative_resume(self):
