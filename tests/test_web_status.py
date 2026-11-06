@@ -1,5 +1,7 @@
 """Read-only web API and deployment safety tests."""
 import json
+import shutil
+import subprocess
 import os
 import socket
 import sys
@@ -506,6 +508,92 @@ class BoundedStatusHTTPResourceTests(unittest.TestCase):
         self.assertTrue(callable(Handler.do_POST))
         self.assertIs(Handler.do_DELETE, Handler.do_POST)
 
+
+
+def preview_status_reader_source():
+    """Extract the shipped status poller, not a duplicate test implementation."""
+    source = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
+    start = source.index("  async function readDeviceStatus() {")
+    end = source.index("\n  function translate()", start)
+    return source[start:end]
+
+
+class BrowserStatusPollOrderTests(unittest.TestCase):
+    def test_status_read_has_success_and_failure_generation_guards(self):
+        source = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
+        body = preview_status_reader_source()
+        self.assertIn("let statusRequestId = 0;", source)
+        self.assertIn("const requestId = ++statusRequestId;", body)
+        self.assertEqual(body.count("if (requestId !== statusRequestId) return;"), 2)
+        self.assertIn('fetch("./api/status", {cache: "no-store"})', body)
+        self.assertIn("renderHardwareStatus();", body)
+
+    @unittest.skipUnless(shutil.which("node"), "Node.js runtime unavailable")
+    def test_actual_status_poller_latest_response_wins_over_stale_success_and_error(self):
+        setup = r'''
+const assert = require("node:assert/strict");
+let statusRequestId = 0;
+let deviceHealth = null;
+const events = [];
+const renderHardwareStatus = () => {
+  events.push(deviceHealth === null ? "unknown"
+    : (deviceHealth.usb_connected ? "connected" : "disconnected"));
+};
+const pending = [];
+const fetch = () => new Promise((resolve, reject) => pending.push({resolve, reject}));
+'''
+        verify = r'''
+async function check() {
+  const slow = readDeviceStatus();
+  const latest = readDeviceStatus();
+  pending[1].resolve({ok: true, json: async () =>
+    ({fresh: true, usb_connected: true})});
+  await latest;
+  pending[0].resolve({ok: true, json: async () =>
+    ({fresh: true, usb_connected: false})});
+  await slow;
+  assert.deepEqual(events, ["connected"]);
+  assert.equal(deviceHealth.usb_connected, true);
+
+  const staleError = readDeviceStatus();
+  const next = readDeviceStatus();
+  pending[3].resolve({ok: true, json: async () =>
+    ({fresh: true, usb_connected: false})});
+  await next;
+  pending[2].reject(new Error("old request failed"));
+  await staleError;
+  assert.deepEqual(events, ["connected", "disconnected"]);
+
+  let finishParsing;
+  const slowParsing = readDeviceStatus();
+  pending[4].resolve({ok: true,
+    json: () => new Promise(resolve => {finishParsing = resolve;})});
+  await Promise.resolve();
+  assert.equal(typeof finishParsing, "function");
+  const updated = readDeviceStatus();
+  pending[5].resolve({ok: true, json: async () =>
+    ({fresh: true, usb_connected: true})});
+  await updated;
+  finishParsing({fresh: true, usb_connected: false});
+  await slowParsing;
+  assert.deepEqual(events, ["connected", "disconnected", "connected"]);
+
+  const oldSuccess = readDeviceStatus();
+  const latestError = readDeviceStatus();
+  pending[7].reject(new Error("new request failed"));
+  await latestError;
+  pending[6].resolve({ok: true, json: async () =>
+    ({fresh: true, usb_connected: true})});
+  await oldSuccess;
+  assert.deepEqual(events, ["connected", "disconnected", "connected", "unknown"]);
+  assert.equal(deviceHealth, null);
+}
+check().catch(e => {console.error(e); process.exitCode = 1;});
+'''
+        result = subprocess.run(
+            ["node", "-e", setup + "\n" + preview_status_reader_source() + "\n" + verify],
+            capture_output=True, text=True, timeout=15, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
 
 if __name__ == "__main__":
     unittest.main()
