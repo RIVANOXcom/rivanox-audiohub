@@ -141,6 +141,12 @@
       "base": "wd-papa-20261106-strict-status-json-integrity",
       "head": "wd-papa-20261106-status-http-total-deadline-privacy",
       "verified_head_sha": null
+    },
+    {
+      "number": 57,
+      "base": "wd-papa-20261106-status-http-total-deadline-privacy",
+      "head": "wd-papa-20261106-offline-diag-json-integrity",
+      "verified_head_sha": null
     }
   ],
   "last_native_verified": {
@@ -503,5 +509,23 @@
     "public_release_ready": false,
     "model_c_license_effective": false,
     "physical_edifier_accepted": false
+  },
+  "next_offline_diag_json_integrity_change": {
+    "pr": 57,
+    "parent_pr": 56,
+    "branch": "wd-papa-20261106-offline-diag-json-integrity",
+    "issue": "Root-owned SD offline diagnostic parses private, bounded user runtime JSON but still accepts repeated members and NaN/Infinity; deep JSON can raise RecursionError and interrupt the probe",
+    "reject_duplicate_fields_at_any_depth": true,
+    "reject_nonfinite_numbers": true,
+    "reject_json_recursion_errors": true,
+    "stale_report_without_usb_health_on_bad_json": true,
+    "expected_native_rootfs_guard_count": 74,
+    "source_rights_ledger_file_count": 83,
+    "source_ci_pending": true,
+    "native_ci_pending": true,
+    "physical_pi4_edifier_accepted": false,
+    "legal_redistribution_approved": false,
+    "model_c_license_effective": false,
+    "public_release_ready": false
   }
 }

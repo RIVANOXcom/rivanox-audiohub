@@ -29,6 +29,21 @@ def _bounded(value, upper):
     return min(max(value, 0), upper)
 
 
+def _unique_runtime_json_object(pairs):
+    """Refuse duplicate members at every depth, including unknown fields."""
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("duplicate diagnostic runtime JSON member")
+        result[key] = value
+    return result
+
+
+def _reject_runtime_json_constant(_value):
+    """Non-RFC NaN and Infinity cannot represent trusted health."""
+    raise ValueError("non-finite diagnostic runtime JSON")
+
+
 def _read_runtime(path, user_id):
     """Read one private, bounded runtime JSON with no symlinked ancestors.
 
@@ -69,8 +84,12 @@ def _read_runtime(path, user_id):
         if len(raw) != meta.st_size:
             return None
         try:
-            record = json.loads(raw.decode("utf-8"))
-        except (UnicodeError, ValueError):
+            record = json.loads(
+                raw.decode("utf-8"),
+                object_pairs_hook=_unique_runtime_json_object,
+                parse_constant=_reject_runtime_json_constant,
+            )
+        except (UnicodeError, ValueError, RecursionError):
             return None
         return record if type(record) is dict else None
     except (OSError, TypeError, ValueError):

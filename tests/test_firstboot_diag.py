@@ -129,6 +129,57 @@ class DiagnosticTests(unittest.TestCase):
         self.assertEqual(diag.sample(self.runtime, self.uid)["runtime_status"],
                          "unavailable_or_stale")
 
+    def test_duplicate_runtime_json_members_cannot_report_usb_health(self):
+        records = (
+            '{"updated_at":1,"updated_at":100,"usb_output":true}',
+            '{"updated_at":100,"usb_output":false,"usb_output":true}',
+            '{"updated_at":100,"active_routes":0,"active_routes":3}',
+        )
+        for document in records:
+            with self.subTest(document=document):
+                self.runtime.write_text(document)
+                self.runtime.chmod(0o600)
+                snapshot = diag.sample(self.runtime, self.uid, now=101)
+                self.assertEqual(snapshot["runtime_status"], "unavailable_or_stale")
+                self.assertFalse(snapshot["usb_audio_detected"])
+                self.assertEqual(snapshot["active_audio_routes"], 0)
+
+    def test_nested_duplicate_runtime_json_is_not_accepted(self):
+        self.runtime.write_text(
+            '{"updated_at":100,"usb_output":true,'
+            '"ignored":{"secret":"a","secret":"b"}}'
+        )
+        self.runtime.chmod(0o600)
+        snapshot = diag.sample(self.runtime, self.uid, now=101)
+        self.assertEqual(snapshot["runtime_status"], "unavailable_or_stale")
+        self.assertFalse(snapshot["usb_audio_detected"])
+
+    def test_nonfinite_runtime_json_is_stale_instead_of_true_health(self):
+        for value in ("NaN", "Infinity", "-Infinity"):
+            with self.subTest(value=value):
+                self.runtime.write_text(
+                    '{"updated_at":100,"usb_output":true,"ignored":' + value + "}"
+                )
+                self.runtime.chmod(0o600)
+                snapshot = diag.sample(self.runtime, self.uid, now=101)
+                self.assertEqual(snapshot["runtime_status"], "unavailable_or_stale")
+                self.assertFalse(snapshot["usb_audio_detected"])
+
+    def test_deeply_nested_runtime_json_is_stale_not_a_crash(self):
+        # Both samples remain smaller than the 4096-byte private runtime cap.
+        records = (
+            "[" * 1600 + "0" + "]" * 1600,
+            '{"x":' * 650 + "0" + "}" * 650,
+        )
+        for document in records:
+            with self.subTest(first_character=document[0]):
+                self.assertLess(len(document), diag.MAX_RUNTIME_BYTES)
+                self.runtime.write_text(document)
+                self.runtime.chmod(0o600)
+                snapshot = diag.sample(self.runtime, self.uid, now=101)
+                self.assertEqual(snapshot["runtime_status"], "unavailable_or_stale")
+                self.assertFalse(snapshot["usb_audio_detected"])
+
     def test_runtime_symlink_is_not_followed(self):
         private = self.root / "private"
         private.write_text(json.dumps({"updated_at": 100, "usb_output": True}))
