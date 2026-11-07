@@ -715,7 +715,7 @@ class BrowserRoutingSummaryTests(unittest.TestCase):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
         source = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
         for key in ("routing-routes", "routing-bluetooth", "routing-channels",
-                    "routing-freshness"):
+                    "routing-freshness", "routing-diagnostic"):
             self.assertIn('id="' + key + '"', html)
         for key in ("active_routes", "bluetooth_sources", "virtual_channel_count"):
             self.assertIn('"' + key + '"', preview_routing_summary_source())
@@ -729,7 +729,10 @@ class BrowserRoutingSummaryTests(unittest.TestCase):
         keys = {
             "routingTitle", "routingNotice", "routingRoutes",
             "routingBluetooth", "routingChannels", "routingPending",
-            "routingRecent", "routingUnavailable"
+            "routingRecent", "routingUnavailable", "routingDiagPending",
+            "routingDiagUnavailable", "routingDiagUsbMissing",
+            "routingDiagNoChannels", "routingDiagNoRoutes",
+            "routingDiagNoBluetooth", "routingDiagCountsAvailable"
         }
         for code in ("en", "de", "es", "fr", "it"):
             with self.subTest(code=code):
@@ -746,14 +749,21 @@ class BrowserRoutingSummaryTests(unittest.TestCase):
         setup = r'''
 const assert = require("node:assert/strict");
 const ids = ["routing-routes", "routing-bluetooth",
-             "routing-channels", "routing-freshness"];
+             "routing-channels", "routing-freshness", "routing-diagnostic"];
 const elements = Object.fromEntries(ids.map(id => [id, {textContent: ""}]));
 const byId = id => elements[id] || null;
 const get = id => elements[id].textContent;
 let words = {
   routingPending: "Waiting for first status check",
   routingRecent: "Recent device report",
-  routingUnavailable: "Routing status unavailable"
+  routingUnavailable: "Routing status unavailable",
+  routingDiagPending: "Waiting for diagnosis",
+  routingDiagUnavailable: "No recent device report",
+  routingDiagUsbMissing: "Check USB speakers",
+  routingDiagNoChannels: "Check virtual input channels",
+  routingDiagNoRoutes: "Check input routing",
+  routingDiagNoBluetooth: "No Bluetooth sources; other inputs may still work",
+  routingDiagCountsAvailable: "Verify audible playback manually"
 };
 const tr = key => words[key] || key;
 let deviceHealth = null;
@@ -766,6 +776,7 @@ function values() {
 renderRoutingSummary();
 assert.deepEqual(values(), ["—", "—", "—"]);
 assert.equal(get("routing-freshness"), "Waiting for first status check");
+assert.equal(get("routing-diagnostic"), "Waiting for diagnosis");
 
 statusChecked = true;
 // Invalid, stale or missing snapshots must not claim zero audio routes.
@@ -777,6 +788,7 @@ for (const snapshot of [null, {}, {fresh: false, usb_connected: true,
   renderRoutingSummary();
   assert.deepEqual(values(), ["—", "—", "—"]);
   assert.equal(get("routing-freshness"), "Routing status unavailable");
+  assert.equal(get("routing-diagnostic"), "No recent device report");
 }
 // A genuine zero is meaningful only in a fresh, complete, bounded report.
 deviceHealth = {fresh: true, usb_connected: false,
@@ -784,6 +796,24 @@ deviceHealth = {fresh: true, usb_connected: false,
 renderRoutingSummary();
 assert.deepEqual(values(), ["0", "0", "0"]);
 assert.equal(get("routing-freshness"), "Recent device report");
+assert.equal(get("routing-diagnostic"), "Check USB speakers");
+
+// Missing channels take priority over routes once USB has been found.
+deviceHealth = {fresh: true, usb_connected: true,
+  active_routes: 0, bluetooth_sources: 0, virtual_channel_count: 0};
+renderRoutingSummary();
+assert.equal(get("routing-diagnostic"), "Check virtual input channels");
+
+// A present virtual channel but no routes leads to routing guidance.
+deviceHealth.virtual_channel_count = 1;
+renderRoutingSummary();
+assert.equal(get("routing-diagnostic"), "Check input routing");
+
+// Routes without Bluetooth sources are not automatically a failure.
+deviceHealth.active_routes = 1;
+renderRoutingSummary();
+assert.equal(get("routing-diagnostic"),
+  "No Bluetooth sources; other inputs may still work");
 
 // Different valid counts do not leak source identifiers or assert audible sound.
 deviceHealth = {fresh: true, usb_connected: true,
@@ -791,6 +821,7 @@ deviceHealth = {fresh: true, usb_connected: true,
   mac: "PRIVATE-DEVICE-MAC", ssid: "PRIVATE-SSID"};
 renderRoutingSummary();
 assert.deepEqual(values(), ["3", "2", "3"]);
+assert.equal(get("routing-diagnostic"), "Verify audible playback manually");
 assert.ok(!JSON.stringify(elements).includes("PRIVATE"));
 
 // Accept no string coercion, negative counts, fractions, arrays or oversized data.
@@ -806,14 +837,17 @@ for (const bad of [
   deviceHealth = {fresh: true, usb_connected: true, ...bad};
   renderRoutingSummary();
   assert.deepEqual(values(), ["—", "—", "—"]);
+  assert.equal(get("routing-diagnostic"), "No recent device report");
 }
 // Locale changes translate the status without altering fresh counts.
 deviceHealth = {fresh: true, usb_connected: true,
   active_routes: 2, bluetooth_sources: 1, virtual_channel_count: 3};
 words.routingRecent = "Aktueller Gerätebericht";
+words.routingDiagCountsAvailable = "Wiedergabe manuell prüfen";
 renderRoutingSummary();
 assert.deepEqual(values(), ["2", "1", "3"]);
 assert.equal(get("routing-freshness"), "Aktueller Gerätebericht");
+assert.equal(get("routing-diagnostic"), "Wiedergabe manuell prüfen");
 '''
         program = setup + "\n" + preview_routing_summary_source() + "\n" + verify
         result = subprocess.run(
