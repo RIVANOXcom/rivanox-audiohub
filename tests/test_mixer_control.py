@@ -790,6 +790,147 @@ class LocalMixerControlsTests(unittest.TestCase):
                     preview.assert_not_called()
         self.assertFalse(self.settings.parent.exists())
 
+    def test_named_presets_are_fixed_bounded_and_volume_only(self):
+        self.assertEqual(set(mixer_control.PRESET_VOLUMES),
+                         {"quiet", "balanced", "music-priority"})
+        for name, values in mixer_control.PRESET_VOLUMES.items():
+            with self.subTest(name=name):
+                self.assertEqual(len(values), 4)
+                self.assertTrue(all(type(value) is int and 0 <= value <= 100
+                                    for value in values))
+                patch = mixer_control.preset_patch(name)
+                self.assertEqual(patch["master"], values[0])
+                for index, slot in enumerate(("music", "laptop", "tablet"), 1):
+                    self.assertEqual(patch[slot], {"volume": values[index]})
+                self.assertNotIn("mute", repr(patch))
+                self.assertNotIn("bass", repr(patch))
+                self.assertNotIn("treble", repr(patch))
+        for bad in ("unmute-all", "loud", "", None, True):
+            with self.subTest(name=repr(bad)):
+                with self.assertRaises(mixer_control.MixerControlUnavailable):
+                    mixer_control.preset_patch(bad)
+
+    def test_preset_preview_creates_nothing_and_supports_existing_revision(self):
+        for name in mixer_control.PRESET_VOLUMES:
+            with self.subTest(name=name):
+                result = mixer_control.preview_change(
+                    mixer_control.preset_patch(name), path=self.settings)
+                self.assertEqual(result["mode"], "preview-only")
+                self.assertRegex(result["revision"], r"^v1-[0-9a-f]{64}$")
+                self.assertFalse(result["settings_written"])
+                self.assertFalse(result["audible_playback_verified"])
+                self.assertFalse(self.settings.parent.exists())
+        with mock.patch("audiohub.mixer_control.preview_change",
+                        return_value={"mode": "preview-only"}) as preview:
+            with mock.patch("audiohub.mixer_control.change") as change:
+                with redirect_stdout(StringIO()):
+                    mixer_control.main(["--preview", "preset", "music-priority"])
+                preview.assert_called_once_with(
+                    mixer_control.preset_patch("music-priority"))
+                change.assert_not_called()
+
+    def test_preset_preserves_every_mute_eq_and_uses_one_atomic_change(self):
+        initial = mixer_control.change({
+            "master": 72,
+            "music": {"volume": 72, "bass": 9, "mid": -2, "mute": True},
+            "laptop": {"volume": 80, "bass": -3, "treble": 5, "mute": True},
+            "tablet": {"volume": 65, "mid": 4, "treble": -6, "mute": False},
+        }, path=self.settings, confirmed=True)
+        original_change = mixer_control.change
+        def change_local(patch, *, confirmed=False):
+            return original_change(patch, path=self.settings, confirmed=confirmed)
+        with (mock.patch("audiohub.mixer_control.change",
+                         side_effect=change_local) as changed,
+              mock.patch("audiohub.mixer_control.atomic_json",
+                         wraps=mixer_control.atomic_json) as atomic):
+            with redirect_stdout(StringIO()):
+                mixer_control.main(["--confirm-local-mixer-change",
+                                    "preset", "quiet"])
+            changed.assert_called_once_with(
+                mixer_control.preset_patch("quiet"), confirmed=True)
+            atomic.assert_called_once()
+        now = mixer_control.show(path=self.settings)
+        self.assertEqual(now["master"], 15)
+        self.assertEqual(tuple(now[x]["volume"] for x in
+                         ("music", "laptop", "tablet")), (25, 25, 25))
+        for slot in ("music", "laptop", "tablet"):
+            for field in ("mute", "bass", "mid", "treble"):
+                self.assertEqual(now[slot][field], initial[slot][field])
+        self.assertEqual(stat.S_IMODE(self.settings.stat().st_mode), 0o600)
+
+    def test_preset_stale_guard_refuses_and_read_only_repreviews(self):
+        initial = mixer_control.preview_change(
+            mixer_control.preset_patch("balanced"), path=self.settings)
+        mixer_control.change({"tablet": {"mute": True}},
+                             path=self.settings, confirmed=True)
+        original_bytes = self.settings.read_bytes()
+        original_change = mixer_control.change
+        original_preview = mixer_control.preview_change
+        def local_change(patch, *, confirmed=False, if_revision=None):
+            return original_change(patch, path=self.settings,
+                                   confirmed=confirmed, if_revision=if_revision)
+        def local_preview(patch):
+            return original_preview(patch, path=self.settings)
+        with (mock.patch("audiohub.mixer_control.change",
+                         side_effect=local_change) as changed,
+              mock.patch("audiohub.mixer_control.preview_change",
+                         side_effect=local_preview) as preview,
+              mock.patch("audiohub.mixer_control.atomic_json",
+                         wraps=mixer_control.atomic_json) as atomic):
+            with redirect_stdout(StringIO()) as output, redirect_stderr(StringIO()):
+                with self.assertRaises(SystemExit) as failed:
+                    mixer_control.main([
+                        "--confirm-local-mixer-change", "--if-preview-revision",
+                        initial["revision"], "preset", "balanced"])
+            self.assertEqual(failed.exception.code, 4)
+            changed.assert_called_once_with(
+                mixer_control.preset_patch("balanced"), confirmed=True,
+                if_revision=initial["revision"])
+            preview.assert_called_once_with(
+                mixer_control.preset_patch("balanced"))
+            atomic.assert_not_called()
+        report = json.loads(output.getvalue())
+        self.assertEqual(report["status"], "preview-stale")
+        self.assertFalse(report["settings_written"])
+        self.assertTrue(report["fresh_preview"]["before"]["tablet"]["mute"])
+        self.assertTrue(report["fresh_preview"]["after"]["tablet"]["mute"])
+        self.assertEqual(self.settings.read_bytes(), original_bytes)
+
+    def test_preset_cli_rejects_invalid_name_and_implicit_write(self):
+        for argv in (
+            ["preset", "quiet"],
+            ["--preview", "--confirm-local-mixer-change", "preset", "quiet"],
+            ["--confirm-local-mixer-change", "preset", "loud"],
+            ["--confirm-local-mixer-change", "preset"],
+        ):
+            with self.subTest(argv=argv):
+                with (mock.patch("audiohub.mixer_control.change") as change,
+                      mock.patch("audiohub.mixer_control.preview_change") as preview):
+                    with redirect_stdout(StringIO()), redirect_stderr(StringIO()):
+                        with self.assertRaises(SystemExit) as failed:
+                            mixer_control.main(argv)
+                    self.assertEqual(failed.exception.code, 2)
+                    change.assert_not_called()
+                    preview.assert_not_called()
+
+    def test_preset_cli_supports_wait_after_confirmed_save_without_auto_unmute(self):
+        saved = defaults()
+        saved["music"]["mute"] = True
+        report = {"delivery_state": "accepted", "saved_request": {},
+                  "settings_written": True, "pending_controls": [],
+                  "audible_playback_verified": False}
+        with (mock.patch("audiohub.mixer_control.change",
+                         return_value=saved) as change,
+              mock.patch("audiohub.mixer_control.wait_for_supervisor",
+                         return_value=report) as wait):
+            with redirect_stdout(StringIO()) as out:
+                mixer_control.main(["--confirm-local-mixer-change",
+                                    "--wait-for-supervisor", "preset", "balanced"])
+            change.assert_called_once_with(
+                mixer_control.preset_patch("balanced"), confirmed=True)
+            wait.assert_called_once_with(saved)
+            self.assertIn('"audible_playback_verified": false', out.getvalue())
+
     def test_wait_for_supervisor_accepts_matching_complete_ack_without_sleep(self):
         saved = defaults()
         observed = {
