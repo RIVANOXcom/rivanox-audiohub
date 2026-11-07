@@ -99,6 +99,16 @@ PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --preview save-cu
 # 2) Independently approve writing the profile; use the REV from step 1:
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-profile-save --if-preview-revision v1-REPLACE-WITH-64-HEX-CHARS save-current-profile my-snapshot
 
+# Overview all current profile choices in one read-only command:
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control profile-choices
+# Lists every saved profile alphabetically, master/music/laptop/tablet levels,
+# their signed changes versus currently requested levels, whether a muted
+# input would remain muted, and which volume changes are on muted inputs.
+# No profile selection or mixer change occurs. To choose, first run:
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --preview profile cinema
+# Then independently approve via the preview's exact revision:
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-mixer-change --if-preview-revision v1-REPLACE-WITH-64-HEX-CHARS profile cinema
+
 # Local, user-defined volume profiles (up to eight, fixed safe names):
 # First define a private profile; this does NOT modify the active mixer:
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-profile-save save-profile cinema 25 30 50 15
@@ -123,6 +133,27 @@ PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-m
 # COMPLETE PipeWire supervisor command acknowledgement (NOT measured audio):
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-mixer-change --wait-for-supervisor set-mix 20 35 25 0
 ```
+
+For a convenient **read-only overview of all saved profiles** before
+selecting one, run `profile-choices`. This lists up to eight private
+profiles in alphabetical order; each entry contains its four requested
+volume percentages, signed `deltas_from_current` versus the same
+currently requested mixer snapshot, `would_change`, `already_matches`,
+all `muted_sources_remaining_muted`, and
+`volume_changes_while_muted` for muted inputs whose stored volume
+would change. It reads one consistent generation of the private
+catalog and mixer settings (verified against concurrent replacement of
+either), and offers `mixer_revision` and `profile_revision` as
+read-only context. An uninitialized configuration shows an empty
+`profiles=[]` list, no files or locks are created, and no audio or
+network operation occurs. These are **requested percentages**, not
+measured physical output or hearing-safety assessments. The overview
+cannot select, activate, unmute, or modify a profile or EQ, and does
+not accept mutation or confirmation switches. To select one profile,
+first inspect `--preview profile NAME`, then use a **separate**
+`--confirm-local-mixer-change --if-preview-revision REV profile NAME`
+if you explicitly want to request those levels, preserving mute and
+stored EQ. No automatic selection or retry is introduced.
 
 A saved profile now has a clearer **read-only selection preview**
 through `--preview profile NAME`. Alongside the existing versioned
