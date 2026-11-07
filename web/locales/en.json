@@ -5,6 +5,7 @@
   "previewNotice": "These controls demonstrate the user interface; they are not connected to live audio yet.",
   "speaker": "USB speakers",
   "speakerState": "Hardware detection pending",
+  "speakerStatusUnavailable": "Hardware status unavailable",
   "channel": "Channel",
   "music": "Phone · Music",
   "laptop": "Laptop",
