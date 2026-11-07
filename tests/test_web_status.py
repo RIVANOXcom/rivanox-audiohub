@@ -821,6 +821,14 @@ class BrowserRoutingSummaryTests(unittest.TestCase):
         self.assertIn('id="routing-history-list"', html)
         self.assertIn('id="routing-history-clear"', html)
         self.assertIn('id="routing-history-status" role="status"', html)
+        for field in ("routing-compare-file", "routing-compare-clear",
+                      "routing-compare-status", "routing-compare-table",
+                      "routing-compare-old-usb", "routing-compare-new-active_routes",
+                      "routing-compare-diff-bluetooth_sources"):
+            self.assertIn('id="' + field + '"', html)
+        self.assertIn('aria-describedby="routing-compare-note"', html)
+        self.assertIn('byId("routing-compare-file").addEventListener("change", loadRoutingComparison);', source)
+        self.assertIn('byId("routing-compare-clear").addEventListener("click", clearRoutingComparison);', source)
         self.assertIn('byId("routing-history-clear").addEventListener("click", clearRoutingHistory);', source)
         self.assertIn('byId("routing-recheck").addEventListener("click", requestRoutingRecheck);', source)
         self.assertIn('byId("routing-export").addEventListener("click", downloadRoutingDiagnostics);', source)
@@ -851,7 +859,14 @@ class BrowserRoutingSummaryTests(unittest.TestCase):
             "routingObservationDualBluetooth", "routingObservationUsbReconnect",
             "routingObservationsReset", "routingObservationsCleared",
             "routingHistoryTitle", "routingHistoryNote", "routingHistoryEmpty",
-            "routingHistoryClear", "routingHistoryCleared"
+            "routingHistoryClear", "routingHistoryCleared",
+            "routingCompareTitle", "routingCompareNote", "routingCompareFile",
+            "routingCompareClear", "routingCompareNoFile", "routingCompareInvalid",
+            "routingCompareTooLarge", "routingCompareReady",
+            "routingCompareCurrentUnavailable", "routingCompareColumnMetric",
+            "routingCompareColumnPrevious", "routingCompareColumnCurrent",
+            "routingCompareColumnChange", "routingCompareUsb", "routingCompareChanged",
+            "routingCompareUnchanged", "routingCompareUnknown", "routingCompareCleared"
         }
         for code in ("en", "de", "es", "fr", "it"):
             with self.subTest(code=code):
@@ -1087,6 +1102,144 @@ deviceHealth.active_routes = "PRIVATE-INVALID";
 renderRoutingSummary();
 assert.equal(routingHistory[routingHistory.length - 1].health, null);
 assert.ok(!JSON.stringify(routingHistory).includes("PRIVATE"));
+'''
+        result = subprocess.run(
+            ["node", "-e", setup + "\n" + preview_routing_summary_source() + "\n" + verify],
+            capture_output=True, text=True, timeout=15, check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+
+    @unittest.skipUnless(shutil.which("node"), "Node.js runtime unavailable")
+    def test_previous_local_v4_report_compare_excludes_secrets_and_handles_stale(self):
+        """Run the shipped importer and table projection without network access."""
+        setup = r'''
+const assert = require("node:assert/strict");
+const keys = ["usb", "active_routes", "bluetooth_sources", "virtual_channel_count"];
+const ids = ["routing-compare-table", "routing-compare-status", "routing-compare-file",
+  ...keys.flatMap(key => ["routing-compare-old-" + key,
+    "routing-compare-new-" + key, "routing-compare-diff-" + key])];
+const nodes = Object.fromEntries(ids.map(id => [id, {textContent: "", hidden: true, value: ""}]));
+const byId = id => nodes[id] || null;
+const words = {
+  routingCompareUnknown: "Unavailable",
+  routingCompareReady: "Compared",
+  routingCompareCurrentUnavailable: "Live status unavailable",
+  routingCompareInvalid: "Invalid report",
+  routingCompareTooLarge: "Report too large",
+  routingCompareCleared: "Comparison cleared",
+  speakerConnected: "USB connected",
+  speakerDisconnected: "USB disconnected",
+  routingCompareChanged: "Changed",
+  routingCompareUnchanged: "Unchanged"
+};
+const tr = key => words[key] || key;
+let comparisonBaseline = null;
+let comparisonLoadId = 0;
+let deviceHealth = {fresh: true, usb_connected: true,
+  active_routes: 3, bluetooth_sources: 2, virtual_channel_count: 3,
+  mac: "SENSITIVE-MAC", ssid: "SENSITIVE-SSID", owner: "PRIVATE-OWNER"};
+let statusChecked = true;
+let statusReceivedAt = 1000;
+let nowMs = 1000;
+const performance = {now: () => nowMs};
+const routingHistory = [];
+let lastRoutingHistorySignature = null;
+const fetch = () => {throw new Error("Unexpected network use");};
+const fileInput = data => ({files: [data], value: "previous.json"});
+const report = {
+  format: "audiohub.routing-diagnostics.v4", status: "recent",
+  usb_connected: false, active_routes: 1, bluetooth_sources: 1,
+  virtual_channel_count: 2, owner: "PRIVATE-OWNER",
+  mac: "SENSITIVE-MAC", ssid: "SENSITIVE-SSID",
+  recent_routing_changes: [{owner: "SECRET-OWNER"}],
+  operator_observations: {usb_output_audio: "heard"}
+};
+const file = value => ({size: 350, text: async () => JSON.stringify(value)});
+const get = id => nodes[id].textContent;
+'''
+        verify = r'''
+async function check() {
+  assert.equal(safeImportedRoutingReport(null), null);
+  assert.equal(safeImportedRoutingReport({...report, status: "unavailable"}), null);
+  assert.equal(safeImportedRoutingReport({...report,
+    format: "audiohub.routing-diagnostics.v3"}), null);
+  assert.equal(safeImportedRoutingReport({...report, active_routes: 4}), null);
+  assert.equal(safeImportedRoutingReport({...report, bluetooth_sources: "1"}), null);
+  assert.equal(safeImportedRoutingReport({...report, usb_connected: "false"}), null);
+  assert.equal(safeImportedRoutingReport({...report, virtual_channel_count: -1}), null);
+  assert.equal(safeImportedRoutingReport({...report, active_routes: 1.2}), null);
+  assert.deepEqual(Object.keys(safeImportedRoutingReport(report)),
+    ["usb_connected", "active_routes", "bluetooth_sources", "virtual_channel_count"]);
+  assert.ok(!JSON.stringify(safeImportedRoutingReport(report)).includes("PRIVATE"));
+
+  renderRoutingComparison();
+  assert.equal(nodes["routing-compare-table"].hidden, true);
+  const chosen = fileInput(file(report));
+  await loadRoutingComparison({target: chosen});
+  assert.equal(chosen.value, "");
+  assert.equal(nodes["routing-compare-table"].hidden, false);
+  assert.equal(get("routing-compare-status"), "Compared");
+  assert.equal(get("routing-compare-old-usb"), "USB disconnected");
+  assert.equal(get("routing-compare-new-usb"), "USB connected");
+  assert.equal(get("routing-compare-diff-usb"), "Changed");
+  assert.equal(get("routing-compare-old-active_routes"), "1");
+  assert.equal(get("routing-compare-new-active_routes"), "3");
+  assert.equal(get("routing-compare-diff-active_routes"), "+2");
+  assert.equal(get("routing-compare-diff-bluetooth_sources"), "+1");
+  assert.equal(get("routing-compare-diff-virtual_channel_count"), "+1");
+  assert.ok(!JSON.stringify(nodes).includes("PRIVATE"));
+  assert.ok(!JSON.stringify(nodes).includes("SENSITIVE"));
+  assert.ok(!JSON.stringify(nodes).includes("SECRET"));
+
+  // Counts can fall; an unchanged USB state is distinct from changed state.
+  deviceHealth.active_routes = 0;
+  deviceHealth.usb_connected = false;
+  renderRoutingComparison();
+  assert.equal(get("routing-compare-diff-active_routes"), "-1");
+  assert.equal(get("routing-compare-diff-usb"), "Unchanged");
+
+  // Local age expiry blocks comparisons to an untrustworthy live snapshot.
+  nowMs = 16001;
+  renderRoutingComparison();
+  assert.equal(get("routing-compare-status"), "Live status unavailable");
+  assert.equal(get("routing-compare-new-active_routes"), "Unavailable");
+  assert.equal(get("routing-compare-diff-active_routes"), "Unavailable");
+  assert.equal(get("routing-compare-old-active_routes"), "1");
+
+  // Wrong format and unreadable/oversized files fail closed.
+  await loadRoutingComparison({target: fileInput(file({...report, status: "pending"}))});
+  assert.equal(nodes["routing-compare-table"].hidden, true);
+  assert.equal(get("routing-compare-status"), "Invalid report");
+  await loadRoutingComparison({target: fileInput({size: 65537, text: async () => "{}"})});
+  assert.equal(get("routing-compare-status"), "Report too large");
+  await loadRoutingComparison({target: fileInput({size: 4, text: async () => "{"})});
+  assert.equal(get("routing-compare-status"), "Invalid report");
+  await loadRoutingComparison({target: fileInput({size: NaN, text: async () => "{}"})});
+  assert.equal(get("routing-compare-status"), "Report too large");
+
+  // A pending earlier read cannot overwrite a newer report or a clear.
+  nowMs = 1000;
+  let resolveOld;
+  const older = loadRoutingComparison({target: fileInput({
+    size: 200, text: () => new Promise(resolve => {resolveOld = resolve;})
+  })});
+  await loadRoutingComparison({target: fileInput(file(report))});
+  resolveOld(JSON.stringify({...report, active_routes: 0}));
+  await older;
+  assert.equal(comparisonBaseline.active_routes, 1);
+  let resolveAfterClear;
+  const pending = loadRoutingComparison({target: fileInput({
+    size: 200, text: () => new Promise(resolve => {resolveAfterClear = resolve;})
+  })});
+  clearRoutingComparison();
+  resolveAfterClear(JSON.stringify(report));
+  await pending;
+  assert.equal(comparisonBaseline, null);
+  assert.equal(nodes["routing-compare-table"].hidden, true);
+  assert.equal(get("routing-compare-status"), "Comparison cleared");
+}
+check().catch(e => {console.error(e); process.exitCode = 1;});
 '''
         result = subprocess.run(
             ["node", "-e", setup + "\n" + preview_routing_summary_source() + "\n" + verify],

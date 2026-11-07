@@ -64,6 +64,28 @@
           <div class="routing-reset-actions"><button type="button" id="routing-observations-reset" data-t="routingObservationsReset">Clear test observations</button><span id="routing-observations-reset-status" role="status" aria-live="polite"></span></div>
         </fieldset>
         <div class="routing-export-actions"><button type="button" id="routing-export" class="routing-export" data-t="routingExport">Download diagnostic report</button><span id="routing-export-status" role="status" aria-live="polite"></span></div>
+        <details class="routing-compare-panel">
+          <summary data-t="routingCompareTitle">Compare a previous diagnostic report</summary>
+          <p id="routing-compare-note" data-t="routingCompareNote">Choose a previous AudioHub v4 JSON report from this device (maximum 64 KiB). It stays in this browser and is never uploaded. Only sanitized routing counts are compared with a fresh live status; differences are not proof of audible sound or hardware acceptance.</p>
+          <div class="routing-compare-actions">
+            <label for="routing-compare-file" data-t="routingCompareFile">Previous local JSON report</label>
+            <input type="file" id="routing-compare-file" accept=".json,application/json" aria-describedby="routing-compare-note" />
+            <button type="button" id="routing-compare-clear" data-t="routingCompareClear">Clear comparison</button>
+          </div>
+          <p id="routing-compare-status" role="status" aria-live="polite" data-t="routingCompareNoFile">No comparison report selected.</p>
+          <div class="routing-compare-table-wrap">
+            <table id="routing-compare-table" hidden>
+              <caption data-t="routingCompareTitle">Compare a previous diagnostic report</caption>
+              <thead><tr><th scope="col" data-t="routingCompareColumnMetric">Metric</th><th scope="col" data-t="routingCompareColumnPrevious">Previous report</th><th scope="col" data-t="routingCompareColumnCurrent">Live status</th><th scope="col" data-t="routingCompareColumnChange">Change</th></tr></thead>
+              <tbody>
+                <tr><th scope="row" data-t="routingCompareUsb">USB speakers detected</th><td id="routing-compare-old-usb"></td><td id="routing-compare-new-usb"></td><td id="routing-compare-diff-usb"></td></tr>
+                <tr><th scope="row" data-t="routingRoutes">Active routes</th><td id="routing-compare-old-active_routes"></td><td id="routing-compare-new-active_routes"></td><td id="routing-compare-diff-active_routes"></td></tr>
+                <tr><th scope="row" data-t="routingBluetooth">Bluetooth sources</th><td id="routing-compare-old-bluetooth_sources"></td><td id="routing-compare-new-bluetooth_sources"></td><td id="routing-compare-diff-bluetooth_sources"></td></tr>
+                <tr><th scope="row" data-t="routingChannels">Detected channels</th><td id="routing-compare-old-virtual_channel_count"></td><td id="routing-compare-new-virtual_channel_count"></td><td id="routing-compare-diff-virtual_channel_count"></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </details>
       </section>
       <h2 data-t="channel">Channel</h2>
       <div id="channels" class="grid"></div>
