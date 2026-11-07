@@ -691,3 +691,180 @@ class LocalSourceStatusTests(unittest.TestCase):
         self.assertNotIn("bluez_input.demo", json.dumps(data))
 
 
+
+
+    def _manual_blue_probe_state(self, *, second=False, status_age=100):
+        first = "AA:BB:CC:DD:EE:FF"
+        routes.bind_bluetooth(first, "music", self.directory)
+        if second:
+            routes.bind_bluetooth("11:22:33:44:55:66", "tablet", self.directory)
+        observations = self.sample()
+        if second:
+            observations["tablet"]["bluetooth_assigned"] = True
+        self.report_file({
+            "updated_at": status_age, "route_policy_valid": True,
+            "source_slot_observations_version": 1,
+            "source_slot_observations": observations,
+        })
+        return first
+
+    def test_bluez_connected_parser_accepts_only_exact_device_and_one_boolean(self):
+        mac = "AA:BB:CC:DD:EE:FF"
+        self.assertTrue(routes._bluez_connected_property(
+            "Device " + mac + " (public) Name\\n    Connected: yes\\n", mac))
+        self.assertFalse(routes._bluez_connected_property(
+            "Device " + mac + "\\n\\tConnected: no\\n", mac))
+        for invalid in (
+            "Device 11:22:33:44:55:66\\n Connected: yes\\n",
+            "Device " + mac + "\\n Connected: yes\\nConnected: no\\n",
+            "Device " + mac + "\\n Connected: YES\\n",
+            "Device " + mac + "\\n Connected: yes\\nDevice " + mac + "\\n",
+            "Device " + mac + "\\n Connected: yes\\nDevice 11:22:33:44:55:66\\n",
+            "Device " + mac + "\\n Paired: yes\\n",
+            "Device " + mac + "\\x00 Connected: yes\\n",
+            "x" * 4097,
+            None,
+            11,
+        ):
+            with self.subTest(invalid=str(invalid)[:25]):
+                self.assertIsNone(routes._bluez_connected_property(invalid, mac))
+
+    def test_bluez_probe_two_manual_slots_reports_true_and_false_without_identifiers(self):
+        from subprocess import CompletedProcess
+        self._manual_blue_probe_state(second=True)
+        before_policy = (self.directory / routes.FILENAME).read_bytes()
+        before_status = self.file.read_bytes()
+        calls = []
+        def runner(argv, *, timeout, max_bytes):
+            calls.append(argv)
+            self.assertEqual(argv[:2], ("bluetoothctl", "info"))
+            self.assertEqual(timeout, 3)
+            self.assertEqual(max_bytes, 4096)
+            response = "yes" if argv[2] == "AA:BB:CC:DD:EE:FF" else "no"
+            return CompletedProcess(argv, 0,
+                                    "Device " + argv[2] + "\\n    Connected: "
+                                    + response + "\\n", "")
+        with (mock.patch.object(routes, "bounded_command_output",
+                                side_effect=runner),
+              mock.patch.object(routes, "update") as writer):
+            report = routes.probe_bluez_connections(
+                directory=self.directory, status_path=self.file, now=102)
+            writer.assert_not_called()
+        self.assertEqual(report["bluez_probe"], "manual_assignments_queried")
+        self.assertTrue(report["inputs"]["music"]["bluez_connected_property"])
+        self.assertFalse(report["inputs"]["tablet"]["bluez_connected_property"])
+        self.assertIsNone(report["inputs"]["laptop"]["bluez_connected_property"])
+        self.assertEqual(report["inputs"]["music"]["bluetooth_connected"], "unverified")
+        self.assertEqual(report["inputs"]["music"]["audio_stream_available"], "unverified")
+        self.assertEqual(report["inputs"]["music"]["audible_playback"], "unverified")
+        self.assertEqual(len(calls), 2)
+        self.assertEqual((self.directory / routes.FILENAME).read_bytes(),
+                         before_policy)
+        self.assertEqual(self.file.read_bytes(), before_status)
+        self.assertNotIn("AA:BB:CC", json.dumps(report))
+        self.assertNotIn("11:22:33", json.dumps(report))
+
+    def test_bluez_probe_fails_closed_when_transport_cannot_be_read(self):
+        from subprocess import CompletedProcess
+        self._manual_blue_probe_state()
+        with mock.patch.object(routes, "bounded_command_output",
+                               return_value=CompletedProcess(
+                                   ["bluetoothctl"], 1, "Connected: yes", "SECRET")):
+            report = routes.probe_bluez_connections(
+                directory=self.directory, status_path=self.file, now=105)
+        self.assertEqual(report["bluez_probe"], "manual_assignments_queried")
+        self.assertIsNone(report["inputs"]["music"]["bluez_connected_property"])
+        self.assertNotIn("SECRET", json.dumps(report))
+        with mock.patch.object(routes, "bounded_command_output", return_value=None):
+            report = routes.probe_bluez_connections(
+                directory=self.directory, status_path=self.file, now=105)
+        self.assertIsNone(report["inputs"]["music"]["bluez_connected_property"])
+
+    def test_bluez_probe_never_calls_bluetoothctl_for_stale_runtime(self):
+        self._manual_blue_probe_state(status_age=100)
+        with mock.patch.object(routes, "bounded_command_output") as call:
+            report = routes.probe_bluez_connections(
+                directory=self.directory, status_path=self.file, now=131)
+            call.assert_not_called()
+        self.assertEqual(report["bluez_probe"], "runtime_evidence_unavailable")
+        self.assertFalse(report["observations_available"])
+
+    def test_bluez_probe_auto_mode_does_not_assume_current_device_assignments(self):
+        self.report_file({
+            "updated_at": 100, "route_policy_valid": True,
+            "source_slot_observations_version": 1,
+            "source_slot_observations": self.sample(),
+        })
+        with mock.patch.object(routes, "bounded_command_output") as call:
+            report = routes.probe_bluez_connections(
+                directory=self.directory, status_path=self.file, now=102)
+            call.assert_not_called()
+        self.assertEqual(report["bluez_probe"], "automatic_assignments_not_probed")
+        self.assertIsNone(report["inputs"]["music"]["bluez_connected_property"])
+
+    def test_bluez_probe_refuses_mismatched_policy_and_runtime_mappings(self):
+        self._manual_blue_probe_state(second=True)
+        report_data = runtime.read_json(self.file, {})
+        report_data["source_slot_observations"]["tablet"][
+            "bluetooth_assigned"] = False
+        self.report_file(report_data)
+        with mock.patch.object(routes, "bounded_command_output") as call:
+            report = routes.probe_bluez_connections(
+                directory=self.directory, status_path=self.file, now=102)
+            call.assert_not_called()
+        self.assertEqual(report["bluez_probe"], "runtime_policy_mismatch")
+        self.assertIsNone(report["inputs"]["music"]["bluez_connected_property"])
+
+    def test_bluez_probe_discards_results_after_policy_aba_replacement(self):
+        from subprocess import CompletedProcess
+        self._manual_blue_probe_state()
+        def replacing(argv, *, timeout, max_bytes):
+            routes.update(lambda current: dict(current), self.directory)
+            return CompletedProcess(argv, 0,
+                                    "Device " + argv[2] + "\\n Connected: yes\\n", "")
+        with mock.patch.object(routes, "bounded_command_output",
+                               side_effect=replacing):
+            report = routes.probe_bluez_connections(
+                directory=self.directory, status_path=self.file, now=102)
+        self.assertEqual(report["bluez_probe"], "policy_changed_during_probe")
+        self.assertIsNone(report["inputs"]["music"]["bluez_connected_property"])
+
+    def test_bluez_probe_unsafe_private_policy_is_unknown_and_never_queried(self):
+        self._manual_blue_probe_state()
+        path = self.directory / routes.FILENAME
+        path.chmod(0o644)
+        with mock.patch.object(routes, "bounded_command_output") as call:
+            report = routes.probe_bluez_connections(
+                directory=self.directory, status_path=self.file, now=102)
+            call.assert_not_called()
+        self.assertEqual(report["bluez_probe"], "policy_unavailable")
+        self.assertIsNone(report["inputs"]["music"]["bluez_connected_property"])
+
+    def test_bluez_probe_status_flag_is_local_read_only_and_not_implicit(self):
+        expected = routes.interpret_source_status({}, now=100)
+        expected["bluez_probe"] = "manual_assignments_queried"
+        with (mock.patch.object(routes, "probe_bluez_connections",
+                                return_value=expected) as probe,
+              mock.patch.object(routes, "update") as writer):
+            with redirect_stdout(StringIO()) as out:
+                routes.main(["--probe-bluetooth", "status"])
+            self.assertEqual(json.loads(out.getvalue()), expected)
+            probe.assert_called_once_with()
+            writer.assert_not_called()
+        for args in (
+            ["--probe-bluetooth", "slots"],
+            ["--probe-bluetooth", "show"],
+            ["--probe-bluetooth", "mode", "manual"],
+            ["--probe-bluetooth", "set-lan", "music"],
+            ["--probe-bluetooth", "--preview", "status"],
+            ["--probe-bluetooth", "--confirm-local-route-change", "status"],
+        ):
+            with self.subTest(args=args):
+                with (mock.patch.object(routes, "bounded_command_output") as query,
+                      mock.patch.object(routes, "update") as write):
+                    with redirect_stdout(StringIO()), redirect_stderr(StringIO()):
+                        with self.assertRaises(SystemExit) as rejected:
+                            routes.main(args)
+                    self.assertEqual(rejected.exception.code, 2)
+                    query.assert_not_called()
+                    write.assert_not_called()
