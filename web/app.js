@@ -142,7 +142,7 @@
       label.textContent = tr("inputName");
       const nameInput = document.createElement("input");
       Object.assign(nameInput, {
-        id: inputId, type: "text", maxLength: 32, autoComplete: "off",
+        id: inputId, type: "text", maxLength: 64, autoComplete: "off",
         value: displayName(channel)
       });
       nameInput.className = "channel-name-input";
@@ -150,17 +150,30 @@
         nameInput.value = editState.drafts[channel];
         nameInput.dataset.editing = "true";
       }
-      nameInput.addEventListener("input", () => { nameInput.dataset.editing = "true"; });
       nameInput.setAttribute("aria-label", tr("inputName") + ": " + tr("input" + SLOT_INDEX[channel]));
       const renameStatus = document.createElement("span");
       renameStatus.className = "channel-name-status";
       renameStatus.setAttribute("role", "status");
+      // HTML maxlength counts UTF-16 units, while validName counts Unicode
+      // characters. Allow up to 32 emoji (64 units), but warn and reject
+      // any name that violates the actual 32-character validation rule.
+      const hasInvalidName = () => {
+        const name = validName(nameInput.value);
+        return !name || CHANNELS.some(slot => slot !== channel &&
+          displayName(slot).toLocaleLowerCase() === name.toLocaleLowerCase());
+      };
+      if (nameInput.dataset.editing === "true" && hasInvalidName()) {
+        renameStatus.textContent = tr("invalidInputName");
+      }
+      nameInput.addEventListener("input", () => {
+        nameInput.dataset.editing = "true";
+        renameStatus.textContent = hasInvalidName() ? tr("invalidInputName") : "";
+      });
       nameInput.addEventListener("change", () => {
         nameInput.dataset.editing = "false";
         const name = validName(nameInput.value);
         const fallback = tr("input" + SLOT_INDEX[channel]);
-        if (!name || CHANNELS.some(slot => slot !== channel &&
-            displayName(slot).toLocaleLowerCase() === name.toLocaleLowerCase())) {
+        if (hasInvalidName()) {
           nameInput.value = displayName(channel);
           renameStatus.textContent = tr("invalidInputName");
           return;
