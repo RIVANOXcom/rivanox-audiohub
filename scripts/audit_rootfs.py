@@ -670,6 +670,22 @@ def inspect(root: Path) -> dict[str, bool]:
         )
     except OSError:
         checks["conservative_mix_gain_installed"] = False
+    # Previously stored control JSON must follow the same closed schema as
+    # new patches; unknown persisted keys cannot silently enter the mixer.
+    try:
+        mixer = (source / "mixer.py").read_text()
+        checks["mixer_stored_controls_strict_schema"] = all(
+            token in mixer for token in (
+                "if set(current) - allowed:",
+                'raise ValueError("unknown stored mixer control")',
+                'if set(value) - {"volume", "mute", *EQ_BANDS}:',
+                'raise ValueError("unknown stored mixer channel control")',
+                "if set(patch) - allowed:",
+                'raise ValueError("unknown control")',
+            )
+        )
+    except OSError:
+        checks["mixer_stored_controls_strict_schema"] = False
     # User-owned mixer JSON can contain a large integer within the bounded
     # JSON file: it must raise ValueError, never math.isfinite(int) OverflowError.
     try:
