@@ -727,9 +727,12 @@ class BrowserRoutingSummaryTests(unittest.TestCase):
         self.assertIn("Read-only device counts", html)
         self.assertIn('byId("routing-export").addEventListener("click", downloadRoutingDiagnostics);', source)
         for field in ("routing-observation-usb", "routing-observation-bluetooth",
-                      "routing-observation-three"):
+                      "routing-observation-three", "routing-observation-dual-bt",
+                      "routing-observation-usb-reconnect", "routing-observations-reset"):
             self.assertIn('id="' + field + '"', html)
         self.assertIn('aria-describedby="routing-observations-note"', html)
+        self.assertIn('id="routing-observations-reset-status" role="status"', html)
+        self.assertIn('byId("routing-observations-reset").addEventListener("click", resetManualSoundObservations);', source)
         self.assertIn('value="not_tested"', html)
         self.assertIn('value="heard"', html)
         self.assertIn('value="not_heard"', html)
@@ -745,7 +748,9 @@ class BrowserRoutingSummaryTests(unittest.TestCase):
             "routingExport", "routingExportRequested", "routingExportUnavailable",
             "routingObservationsTitle", "routingObservationsNote", "routingObservationUsb",
             "routingObservationBluetooth", "routingObservationThree",
-            "routingNotTested", "routingHeard", "routingNotHeard"
+            "routingNotTested", "routingHeard", "routingNotHeard",
+            "routingObservationDualBluetooth", "routingObservationUsbReconnect",
+            "routingObservationsReset", "routingObservationsCleared"
         }
         for code in ("en", "de", "es", "fr", "it"):
             with self.subTest(code=code):
@@ -880,12 +885,16 @@ const elements = {
   "routing-export-status": {textContent: ""},
   "routing-observation-usb": {value: "not_tested"},
   "routing-observation-bluetooth": {value: "not_tested"},
-  "routing-observation-three": {value: "not_tested"}
+  "routing-observation-three": {value: "not_tested"},
+  "routing-observation-dual-bt": {value: "not_tested"},
+  "routing-observation-usb-reconnect": {value: "not_tested"},
+  "routing-observations-reset-status": {textContent: ""}
 };
 const byId = id => elements[id] || null;
 const tr = key => ({
   routingExportRequested: "Download requested",
-  routingExportUnavailable: "Download unavailable"
+  routingExportUnavailable: "Download unavailable",
+  routingObservationsCleared: "Observations cleared"
 })[key] || key;
 let deviceHealth = null;
 let statusChecked = false;
@@ -924,7 +933,9 @@ const fields = ["format", "recorded_at_browser_utc", "status", "usb_connected",
 const observations = {
   usb_output_audio: "not_tested",
   bluetooth_source_audio: "not_tested",
-  three_inputs_simultaneously_audible: "not_tested"
+  three_inputs_simultaneously_audible: "not_tested",
+  two_bluetooth_sources_simultaneously_audible: "not_tested",
+  usb_audio_after_reconnect: "not_tested"
 };
 const clock = "2026-11-07T15:00:00.000Z";
 const checkDownload = expected => {
@@ -948,7 +959,7 @@ const unverified = {
   release_approved: false
 };
 checkDownload({
-  format: "audiohub.routing-diagnostics.v2",
+  format: "audiohub.routing-diagnostics.v3",
   recorded_at_browser_utc: clock, status: "pending",
   usb_connected: null, active_routes: null, bluetooth_sources: null,
   virtual_channel_count: null, ...unverified
@@ -959,7 +970,7 @@ deviceHealth = {fresh: true, usb_connected: true,
   mac: "PRIVATE-MAC", ssid: "PRIVATE-WIFI", username: "PRIVATE-OWNER",
   hidden: {key: "SECRET"}};
 checkDownload({
-  format: "audiohub.routing-diagnostics.v2",
+  format: "audiohub.routing-diagnostics.v3",
   recorded_at_browser_utc: clock, status: "recent",
   usb_connected: true, active_routes: 2, bluetooth_sources: 1,
   virtual_channel_count: 3, ...unverified
@@ -971,10 +982,14 @@ assert.ok(!exportContent().includes("MAC"));
 elements["routing-observation-usb"].value = "heard";
 elements["routing-observation-bluetooth"].value = "not_heard";
 elements["routing-observation-three"].value = "heard";
+elements["routing-observation-dual-bt"].value = "heard";
+elements["routing-observation-usb-reconnect"].value = "not_heard";
 assert.deepEqual(manualSoundObservations(), {
   usb_output_audio: "heard",
   bluetooth_source_audio: "not_heard",
-  three_inputs_simultaneously_audible: "heard"
+  three_inputs_simultaneously_audible: "heard",
+  two_bluetooth_sources_simultaneously_audible: "heard",
+  usb_audio_after_reconnect: "not_heard"
 });
 assert.equal(safeRoutingReport().hardware_verified, false);
 assert.equal(safeRoutingReport().audible_playback_verified, false);
@@ -985,17 +1000,29 @@ assert.equal(manualSoundObservations().usb_output_audio, "not_tested");
 assert.deepEqual(safeRoutingReport().operator_observations, {
   usb_output_audio: "not_tested",
   bluetooth_source_audio: "not_heard",
-  three_inputs_simultaneously_audible: "heard"
+  three_inputs_simultaneously_audible: "heard",
+  two_bluetooth_sources_simultaneously_audible: "heard",
+  usb_audio_after_reconnect: "not_heard"
 });
+// A reset must only clear manual selections, not change real device status.
+const beforeReset = safeRoutingReport();
+resetManualSoundObservations();
+assert.deepEqual(manualSoundObservations(), observations);
+assert.equal(elements["routing-observations-reset-status"].textContent,
+  "Observations cleared");
+assert.equal(elements["routing-export-status"].textContent, "");
+assert.deepEqual(safeRoutingReport().active_routes, beforeReset.active_routes);
 // Reset human selections before expecting the all-unchecked report.
 elements["routing-observation-usb"].value = "not_tested";
 elements["routing-observation-bluetooth"].value = "not_tested";
 elements["routing-observation-three"].value = "not_tested";
+elements["routing-observation-dual-bt"].value = "not_tested";
+elements["routing-observation-usb-reconnect"].value = "not_tested";
 deviceHealth = {fresh: false, usb_connected: true,
   active_routes: 2, bluetooth_sources: 1, virtual_channel_count: 3,
   mac: "PRIVATE-MAC"};
 checkDownload({
-  format: "audiohub.routing-diagnostics.v2",
+  format: "audiohub.routing-diagnostics.v3",
   recorded_at_browser_utc: clock, status: "unavailable",
   usb_connected: null, active_routes: null, bluetooth_sources: null,
   virtual_channel_count: null, ...unverified

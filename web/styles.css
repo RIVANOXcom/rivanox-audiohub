@@ -50,3 +50,10 @@
 .routing-observation-grid select{font:inherit;min-width:0;width:100%;min-height:44px;border:1px solid #7b9bbf;border-radius:8px;background:#0c1d35;color:#f3f7ff;padding:8px}
 .routing-observation-grid select:focus-visible{outline:2px solid #d8a1ff;outline-offset:3px}
 @media(max-width:700px){.routing-observation-grid{grid-template-columns:1fr}}
+
+/* Clear only the browser-local, self-reported bench observations. */
+.routing-reset-actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:14px}
+#routing-observations-reset{font:inherit;font-size:.85rem;min-height:44px;border:1px solid #80a9d3;border-radius:8px;background:#263b55;color:#f4f8ff;padding:10px 13px;cursor:pointer}
+#routing-observations-reset:hover{background:#345475}
+#routing-observations-reset:focus-visible{outline:3px solid #d8a1ff;outline-offset:3px}
+#routing-observations-reset-status{font-size:.82rem;color:#c1dcf0;line-height:1.4}

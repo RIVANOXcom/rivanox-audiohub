@@ -47,7 +47,14 @@
             <label for="routing-observation-three"><span data-t="routingObservationThree">Three inputs audible simultaneously</span><select id="routing-observation-three">
               <option value="not_tested" data-t="routingNotTested">Not tested</option><option value="heard" data-t="routingHeard">Heard</option><option value="not_heard" data-t="routingNotHeard">Not heard</option>
             </select></label>
+            <label for="routing-observation-dual-bt"><span data-t="routingObservationDualBluetooth">Two Bluetooth sources audible simultaneously</span><select id="routing-observation-dual-bt">
+              <option value="not_tested" data-t="routingNotTested">Not tested</option><option value="heard" data-t="routingHeard">Heard</option><option value="not_heard" data-t="routingNotHeard">Not heard</option>
+            </select></label>
+            <label for="routing-observation-usb-reconnect"><span data-t="routingObservationUsbReconnect">USB sound after reconnecting speakers</span><select id="routing-observation-usb-reconnect">
+              <option value="not_tested" data-t="routingNotTested">Not tested</option><option value="heard" data-t="routingHeard">Heard</option><option value="not_heard" data-t="routingNotHeard">Not heard</option>
+            </select></label>
           </div>
+          <div class="routing-reset-actions"><button type="button" id="routing-observations-reset" data-t="routingObservationsReset">Clear test observations</button><span id="routing-observations-reset-status" role="status" aria-live="polite"></span></div>
         </fieldset>
         <div class="routing-export-actions"><button type="button" id="routing-export" class="routing-export" data-t="routingExport">Download diagnostic report</button><span id="routing-export-status" role="status" aria-live="polite"></span></div>
       </section>
