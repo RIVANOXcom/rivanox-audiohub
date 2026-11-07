@@ -162,6 +162,11 @@ def main(argv=None):
     commands.add_parser(
         "mute-all", help="Atomically request mute on all three inputs"
     )
+    restore = commands.add_parser(
+        "unmute-selected",
+        help="Atomically restore one or two explicitly named inputs, never all three",
+    )
+    restore.add_argument("slots", nargs="+", choices=CHANNELS)
     mix = commands.add_parser(
         "set-mix", help="Atomically set master and all three input volumes 0..100"
     )
@@ -188,6 +193,13 @@ def main(argv=None):
                 # One private atomic snapshot, not three independent updates.
                 # Preserve master, volume and EQ. Do not auto-unmute later.
                 patch = {slot: {"mute": True} for slot in CHANNELS}
+            elif args.action == "unmute-selected":
+                # No implicit all-input restore; bound to a unique subset of
+                # at most two. One settings transaction with no intermediate
+                # three-way unmute, preserving other mutes, volumes and EQ.
+                if len(args.slots) > 2 or len(args.slots) != len(set(args.slots)):
+                    raise MixerControlUnavailable("Select one or two distinct inputs")
+                patch = {slot: {"mute": False} for slot in args.slots}
             else:
                 patch = {args.slot: {"mute": args.value == "on"}}
             state = change(patch, confirmed=args.confirm_local_mixer_change)
