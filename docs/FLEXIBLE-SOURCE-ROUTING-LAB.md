@@ -77,6 +77,16 @@ PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-m
 # One atomic update to master, then music, laptop and tablet levels:
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-mixer-change set-mix 20 35 25 0
 
+# Local, user-defined volume profiles (up to eight, fixed safe names):
+# First define a private profile; this does NOT modify the active mixer:
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-profile-save save-profile cinema 25 30 50 15
+# Read the stored names and requested levels; no writes or network use:
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control list-profiles
+# Preview the profile's effect against the CURRENT mixer (retains all mutes/EQ):
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --preview profile cinema
+# Separately confirm with the preview's own revision. A stale revision rejects:
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-mixer-change --if-preview-revision v1-REPLACE-WITH-64-HEX-CHARS profile cinema
+
 # Three conservative BUILT-IN volume presets; preview before any save:
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --preview preset quiet
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --preview preset balanced
@@ -88,6 +98,30 @@ PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-m
 # COMPLETE PipeWire supervisor command acknowledgement (NOT measured audio):
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-mixer-change --wait-for-supervisor set-mix 20 35 25 0
 ```
+
+Local user-defined `save-profile NAME MASTER MUSIC LAPTOP TABLET`
+stores a **volume-only** profile under the unprivileged account in
+`~/.config/audiohub/volume-profiles.json`. This is an operator-initiated
+private **0600** atomic JSON write beneath a user-owned **0700**
+directory and uses the same exclusive local mixer writer lock. A separate
+`--confirm-local-profile-save` is required to CREATE a profile, but
+saving does not change the active mixer or run PipeWire commands.
+`list-profiles` reads the bounded catalog without creating files or
+locks; `--preview profile NAME` shows exactly the would-be requested
+values; and `--confirm-local-mixer-change --if-preview-revision REV
+profile NAME` applies it via the existing guarded atomic mixer save.
+All 3 input `mute` states and stored `bass/mid/treble` values remain
+unchanged. Profile names are strictly 1–24 ASCII lower-case letters,
+numbers and hyphens beginning with a letter; paths, shell syntax,
+arbitrary fields, routes and unknown profile names are rejected.
+Master/input volume values must all be integers 0–100 (not booleans).
+Only **eight** custom profiles can be created. Existing names cannot
+be overwritten and no profile-removal or automatic-activation command
+is introduced in this increment; new profiles require unique names.
+Malformed, symlinked, insecure or non-canonical existing profile data
+fails closed rather than being discarded. A custom profile is only a
+stored preference, not a calibrated sound level, guaranteed
+three-source hardware mix or hearing-safe setting.
 
 Built-in local `preset NAME` offers three convenient **volume-only**
 starting points. All requests are one schema-validated, locked, 0600
