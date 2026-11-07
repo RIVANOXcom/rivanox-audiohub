@@ -1176,3 +1176,19 @@ notice paths; proposed Model C unapproved. Pi4/Edifier
 3 simultaneous audible sources/2 A2DP/24h, authenticated
 owner-phone WiFi, and operator/legal/CEO release GO unverified.
 No install, flash, merge, deploy, payments, permissions or release.
+
+
+## 2026-11-07: PR89 initial synthetic test fixture correction
+
+Initial PR89 Source Actions #42322220258 on HEAD
+9b2179aed67074c97519cb4d489417d21f0fbf8e
+FAILED 2 of 792 tests solely because the synthetic
+rootfs fixture for discovery.bluetooth_sources contained
+the reserved MAC veto but omitted the required "continue"
+marker. New code and other source identity tests were not
+accepted as CI success. Corrected the synthetic fixture
+in the same isolated PR89 branch. Require a fresh
+exact-head Source SUCCESS and real installed native
+rootfs 104/104 SUCCESS; no completed image/ZIP
+artifact or hardware/legal/release acceptance inferred
+from the failed run. Existing PR88 remains unmodified.
