@@ -432,12 +432,13 @@ class LocalMixerControlsTests(unittest.TestCase):
         saved = defaults()
         observed = {
             "requested": requested_mix_controls(saved), "supervisor": "accepted",
-            "pending_controls": [], "audible_playback_verified": False,
+            "pending_controls": [], "supervisor_updated_at": 1001,
+            "audible_playback_verified": False,
         }
         with mock.patch("audiohub.mixer_control.application_status",
                         return_value=observed) as status:
             with mock.patch("audiohub.mixer_control.time.sleep") as sleep:
-                report = mixer_control.wait_for_supervisor(saved)
+                report = mixer_control.wait_for_supervisor(saved, saved_at=1000)
         self.assertEqual(report["delivery_state"], "accepted")
         self.assertEqual(report["pending_controls"], [])
         self.assertTrue(report["settings_written"])
@@ -454,16 +455,70 @@ class LocalMixerControlsTests(unittest.TestCase):
             {"requested": expected, "supervisor": "pending",
              "pending_controls": ["master"]},
             {"requested": expected, "supervisor": "accepted",
-             "pending_controls": []},
+             "pending_controls": [], "supervisor_updated_at": 1001},
         ]
         with mock.patch("audiohub.mixer_control.application_status",
                         side_effect=statuses) as status:
             with mock.patch("audiohub.mixer_control.time.sleep") as sleep:
-                result = mixer_control.wait_for_supervisor(saved, checks=2)
+                result = mixer_control.wait_for_supervisor(saved, checks=2, saved_at=1000)
         self.assertEqual(result["delivery_state"], "accepted")
         self.assertEqual(result["pending_controls"], [])
         self.assertEqual(status.call_count, 2)
         sleep.assert_called_once_with(1)
+
+    def test_matching_older_ack_is_not_attributed_to_new_save(self):
+        saved = defaults()
+        matched_before_write = {
+            "requested": requested_mix_controls(saved),
+            "supervisor": "accepted", "pending_controls": [],
+            "supervisor_updated_at": 999,
+        }
+        with mock.patch("audiohub.mixer_control.application_status",
+                        return_value=matched_before_write) as read:
+            with mock.patch("audiohub.mixer_control.time.sleep") as sleep:
+                result = mixer_control.wait_for_supervisor(
+                    saved, checks=1, saved_at=1000
+                )
+        self.assertEqual(result["delivery_state"], "pending")
+        self.assertIsNone(result["pending_controls"])
+        self.assertTrue(result["settings_written"])
+        self.assertFalse(result["audible_playback_verified"])
+        self.assertEqual(read.call_count, 2)
+        sleep.assert_called_once_with(1)
+
+    def test_matching_ack_becomes_valid_only_after_followup_supervisor_poll(self):
+        saved = defaults()
+        requested = requested_mix_controls(saved)
+        older = {"requested": requested, "supervisor": "accepted",
+                 "pending_controls": [], "supervisor_updated_at": 1000}
+        newer = {**older, "supervisor_updated_at": 1001}
+        with mock.patch("audiohub.mixer_control.application_status",
+                        side_effect=[older, newer]) as read:
+            with mock.patch("audiohub.mixer_control.time.sleep") as sleep:
+                result = mixer_control.wait_for_supervisor(
+                    saved, checks=2, saved_at=1000
+                )
+        self.assertEqual(result["delivery_state"], "accepted")
+        self.assertEqual(result["pending_controls"], [])
+        self.assertEqual(read.call_count, 2)
+        sleep.assert_called_once_with(1)
+
+    def test_missing_or_bool_ack_timestamp_never_confirms_postsave(self):
+        saved = defaults()
+        requested = requested_mix_controls(saved)
+        for bogus in (None, True, False, "1002"):
+            with self.subTest(timestamp=repr(bogus)):
+                observation = {"requested": requested, "supervisor": "accepted",
+                               "pending_controls": [],
+                               "supervisor_updated_at": bogus}
+                with mock.patch("audiohub.mixer_control.application_status",
+                                return_value=observation):
+                    result = mixer_control.wait_for_supervisor(
+                        saved, checks=0, saved_at=1000
+                    )
+                self.assertEqual(result["delivery_state"], "unavailable")
+                self.assertIsNone(result["pending_controls"])
+                self.assertFalse(result["audible_playback_verified"])
 
     def test_wait_for_supervisor_timeout_keeps_unconfirmed_request(self):
         saved = defaults()
@@ -580,6 +635,7 @@ class LocalMixerControlsTests(unittest.TestCase):
             path=self.settings, runtime_path=runtime_path, now=1000
         )
         self.assertEqual(accepted["supervisor"], "accepted")
+        self.assertEqual(accepted["supervisor_updated_at"], 995)
         self.assertFalse(accepted["audible_playback_verified"])
         self.assertEqual(accepted["requested"], expected)
         self.assertFalse(self.settings.exists())  # status is read-only
