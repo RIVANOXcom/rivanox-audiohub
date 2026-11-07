@@ -104,8 +104,21 @@ works for the first confirmed update. A preview is NOT a reservation;
 the token is a one-use generation comparison, not an authentication
 credential. Never combine `--if-preview-revision` with `--preview`,
 `show` or `status`, and explicit `--confirm-local-mixer-change` remains
-mandatory. If the guarded change fails, re-run `--preview` and decide
-again; never force an older token. No network API or actual hardware
+mandatory. If the guarded change is refused **because its version is
+stale**, the CLI now exits with status **4** and prints a structured
+`status=preview-stale` response. It includes
+`settings_written=false` and a brand-new, **read-only**
+`fresh_preview` for the same requested action, with updated
+`before`, `after`, `would_change` and `revision`. It does
+**not** save, merge, replay or automatically approve the desired
+change. Read the new plan first; only then copy its latest revision to
+a **separate** confirmed invocation. If the current private settings
+became unsafe or the refresh cannot be read, only a sanitized error is
+shown; no settings or arbitrary filesystem details are exposed.
+Invalid confirmation, arguments or malformed version tokens retain the
+existing generic exit status **2**, with no automatic refresh. The
+new preview is itself a snapshot, so a further intervening writer is
+still rejected by the guarded save. No network API or actual hardware
 verification is added.
 
 The three names `music`, `laptop` and `tablet` are internal stable input
