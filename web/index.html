@@ -24,6 +24,16 @@
         <div class="device-icon" aria-hidden="true">◉</div>
         <div><strong data-t="speaker">USB speakers</strong><p data-t="speakerState">Hardware detection pending</p></div>
       </section>
+      <section class="routing-summary" aria-labelledby="routing-title">
+        <h2 id="routing-title" data-t="routingTitle">Audio routing status</h2>
+        <p class="routing-explainer" data-t="routingNotice">Read-only device counts; they do not confirm audible playback.</p>
+        <div class="routing-metrics">
+          <div class="routing-metric"><strong id="routing-routes">—</strong><span data-t="routingRoutes">Active routes</span></div>
+          <div class="routing-metric"><strong id="routing-bluetooth">—</strong><span data-t="routingBluetooth">Bluetooth sources</span></div>
+          <div class="routing-metric"><strong id="routing-channels">—</strong><span data-t="routingChannels">Detected channels</span></div>
+        </div>
+        <p class="routing-freshness" id="routing-freshness" role="status" aria-live="polite" data-t="routingPending">Waiting for first status check</p>
+      </section>
       <h2 data-t="channel">Channel</h2>
       <div id="channels" class="grid"></div>
       <section class="device master"><div><h2 data-t="master">Master output</h2><input id="master" type="range" min="0" max="100" value="70" aria-label="Master output"></div><output id="master-value" for="master">70%</output></section>
