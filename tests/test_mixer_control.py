@@ -267,12 +267,12 @@ class LocalMixerControlsTests(unittest.TestCase):
             "laptop": {"volume": 41, "mid": -2, "mute": True},
             "tablet": {"volume": 80, "treble": 3, "mute": True},
         }, path=self.settings, confirmed=True)
-        with mock.patch("audiohub.mixer_control.change", wraps=mixer_control.change) as changed:
-            # Use real CLI parser but direct its private settings access to
-            # a test-owned path; we never touch live user settings.
-            def local_change(patch, *, confirmed=False):
-                return mixer_control.change(patch, path=self.settings, confirmed=confirmed)
-            changed.side_effect = local_change
+        # Run real atomic change against the test-owned path; preserve the
+        # original function before mocking CLI dispatch to avoid recursion.
+        original_change = mixer_control.change
+        def local_change(patch, *, confirmed=False):
+            return original_change(patch, path=self.settings, confirmed=confirmed)
+        with mock.patch("audiohub.mixer_control.change", side_effect=local_change) as changed:
             with mock.patch("audiohub.mixer_control.atomic_json",
                             wraps=mixer_control.atomic_json) as atomic:
                 with redirect_stdout(StringIO()) as output:
