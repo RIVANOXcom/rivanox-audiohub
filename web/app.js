@@ -152,8 +152,17 @@
       }
       nameInput.setAttribute("aria-label", tr("inputName") + ": " + tr("input" + SLOT_INDEX[channel]));
       const renameStatus = document.createElement("span");
+      renameStatus.id = inputId + "-feedback";
       renameStatus.className = "channel-name-status";
       renameStatus.setAttribute("role", "status");
+      // The existing live status doubles as the input's spoken description.
+      // Mark only the currently invalid text as invalid, not a reverted value.
+      nameInput.setAttribute("aria-describedby", renameStatus.id);
+      const setNameInvalid = invalid => {
+        nameInput.setAttribute("aria-invalid", String(invalid));
+        renameStatus.dataset.invalid = String(invalid);
+      };
+      setNameInvalid(false);
       // HTML maxlength counts UTF-16 units, while validName counts Unicode
       // characters. Allow up to 32 emoji (64 units), but warn and reject
       // any name that violates the actual 32-character validation rule.
@@ -163,11 +172,14 @@
           displayName(slot).toLocaleLowerCase() === name.toLocaleLowerCase());
       };
       if (nameInput.dataset.editing === "true" && hasInvalidName()) {
+        setNameInvalid(true);
         renameStatus.textContent = tr("invalidInputName");
       }
       nameInput.addEventListener("input", () => {
         nameInput.dataset.editing = "true";
-        renameStatus.textContent = hasInvalidName() ? tr("invalidInputName") : "";
+        const invalid = hasInvalidName();
+        setNameInvalid(invalid);
+        renameStatus.textContent = invalid ? tr("invalidInputName") : "";
       });
       nameInput.addEventListener("change", () => {
         nameInput.dataset.editing = "false";
@@ -175,6 +187,7 @@
         const fallback = tr("input" + SLOT_INDEX[channel]);
         if (hasInvalidName()) {
           nameInput.value = displayName(channel);
+          setNameInvalid(false);
           renameStatus.textContent = tr("invalidInputName");
           return;
         }
@@ -186,6 +199,7 @@
         updateChannelControlLabels(channel);
         // Browser display preference only. No authenticated device API exists.
         savePreviewLabels();
+        setNameInvalid(false);
         renameStatus.textContent = tr("previewNamesOnly");
       });
       const source = document.createElement("p");
