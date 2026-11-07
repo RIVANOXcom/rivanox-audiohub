@@ -329,6 +329,105 @@ class LocalMixerControlsTests(unittest.TestCase):
                                  path=self.settings, confirmed=True)
         self.assertEqual(self.settings.read_bytes(), prior)
 
+    def test_preview_mute_all_preserves_eq_and_never_writes(self):
+        initial = mixer_control.change({
+            "master": 22,
+            "music": {"volume": 33, "bass": 4, "mute": False},
+            "laptop": {"volume": 41, "mid": -2, "mute": True},
+            "tablet": {"volume": 80, "treble": 3, "mute": False},
+        }, path=self.settings, confirmed=True)
+        data = self.settings.read_bytes()
+        original_preview = mixer_control.preview_change
+        def local_preview(patch):
+            return original_preview(patch, path=self.settings)
+        with mock.patch("audiohub.mixer_control.preview_change",
+                        side_effect=local_preview) as preview:
+            with mock.patch("audiohub.mixer_control.change") as changed:
+                with redirect_stdout(StringIO()) as stdout:
+                    mixer_control.main(["--preview", "mute-all"])
+                preview.assert_called_once_with({
+                    slot: {"mute": True} for slot in ("music", "laptop", "tablet")
+                })
+                changed.assert_not_called()
+        lines = stdout.getvalue().splitlines()
+        result = json.loads(lines[0])
+        self.assertEqual(result["mode"], "preview-only")
+        self.assertEqual(result["would_change"], ["music.mute", "tablet.mute"])
+        self.assertTrue(all(result["after"][slot]["mute"]
+                            for slot in ("music", "laptop", "tablet")))
+        self.assertFalse(result["settings_written"])
+        self.assertFalse(result["supervisor_applied"])
+        self.assertFalse(result["audible_playback_verified"])
+        self.assertIn("no settings saved", lines[1])
+        self.assertEqual(self.settings.read_bytes(), data)
+        self.assertEqual(mixer_control.show(path=self.settings), initial)
+
+    def test_preview_set_mix_and_selective_unmute_show_exact_changes(self):
+        runtime = mixer_control.change({
+            "master": 60,
+            "music": {"volume": 25, "mute": True},
+            "laptop": {"volume": 31, "mute": True},
+            "tablet": {"volume": 90, "mute": True},
+        }, path=self.settings, confirmed=True)
+        before = self.settings.read_bytes()
+        mix = mixer_control.preview_change({
+            "master": 20, "music": {"volume": 15},
+            "laptop": {"volume": 31}, "tablet": {"volume": 0},
+        }, path=self.settings)
+        self.assertEqual(mix["would_change"], [
+            "master", "music.volume", "tablet.volume",
+        ])
+        self.assertEqual(mix["before"]["master"], runtime["master"])
+        self.assertEqual(mix["after"]["master"], 20)
+        unmute = mixer_control.preview_change({
+            "music": {"mute": False}, "laptop": {"mute": False},
+        }, path=self.settings)
+        self.assertEqual(unmute["would_change"], ["music.mute", "laptop.mute"])
+        self.assertTrue(unmute["after"]["tablet"]["mute"])
+        self.assertEqual(self.settings.read_bytes(), before)
+
+    def test_preview_missing_defaults_creates_no_directory_or_lock(self):
+        result = mixer_control.preview_change({"master": 19}, path=self.settings)
+        self.assertEqual(result["mode"], "preview-only")
+        self.assertEqual(result["would_change"], ["master"])
+        self.assertEqual(result["before"]["master"], defaults()["master"])
+        self.assertFalse(self.settings.parent.exists())
+
+    def test_preview_refuses_bad_patch_and_unsafe_existing_state(self):
+        with self.assertRaises(mixer_control.MixerControlUnavailable):
+            mixer_control.preview_change({"master": 101}, path=self.settings)
+        self.settings.parent.mkdir(mode=0o700)
+        original = b'{"master": 20, "master": 40}'
+        self.settings.write_bytes(original)
+        self.settings.chmod(0o600)
+        with self.assertRaises(mixer_control.MixerControlUnavailable):
+            mixer_control.preview_change({"master": 25}, path=self.settings)
+        self.assertEqual(self.settings.read_bytes(), original)
+        target = self.root / "other.json"
+        target.write_text(json.dumps(defaults()))
+        self.settings.unlink()
+        self.settings.symlink_to(target)
+        with self.assertRaises(mixer_control.MixerControlUnavailable):
+            mixer_control.preview_change({"master": 25}, path=self.settings)
+        self.assertEqual(target.read_text(), json.dumps(defaults()))
+
+    def test_preview_cli_flags_and_invalid_selection_fail_before_any_write(self):
+        for args in (
+            ["--preview", "--confirm-local-mixer-change", "mute-all"],
+            ["--preview", "show"],
+            ["--preview", "status"],
+            ["--preview", "unmute-selected", "music", "music"],
+            ["--preview", "unmute-selected", "music", "laptop", "tablet"],
+        ):
+            with self.subTest(args=args):
+                with mock.patch("audiohub.mixer_control.change") as change:
+                    with mock.patch("audiohub.mixer_control.preview_change") as preview:
+                        with self.assertRaises(SystemExit) as failed, redirect_stderr(StringIO()):
+                            mixer_control.main(args)
+                        self.assertEqual(failed.exception.code, 2)
+                        change.assert_not_called()
+                        preview.assert_not_called()
+
     def test_local_application_status_accepts_only_current_complete_ack(self):
         runtime_path = self.root / "runtime" / "status.json"
         expected = requested_mix_controls(defaults())
