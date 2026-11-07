@@ -148,6 +148,9 @@ class RootfsAuditTests(unittest.TestCase):
             "os.O_DIRECTORY | os.O_NOFOLLOW",
             "info.st_uid != os.geteuid()",
             "stat.S_IMODE(info.st_mode) & 0o077",
+            # End marker for the generated fake helper; needed by the
+            # production audit's function-scoped source inspection.
+            "def _unique_state_json_members(pairs):",
             "os.O_NOFOLLOW", "os.O_NONBLOCK",
             "os.O_EXCL", "secrets.token_hex(12)",
             "stat.S_ISREG", "os.replace(name, path.name",
