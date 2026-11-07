@@ -27,6 +27,50 @@ The operator can exchange the roles. Example: manual LAN to Input 1
 (`music`), first BT to Input 2 (`laptop`), second BT to Input 3
 (`tablet`).
 
+## Local master volume and per-input mute (new alpha console control)
+
+The existing supervisor already polls its user-private `settings.json` and
+applies per-source `wpctl set-volume` and `set-mute` after conservatively
+attenuating the selected USB master output. Previously there was no supported
+operator-facing way to update these settings without editing JSON by hand.
+
+An authorized operator at the **local console of an already-approved isolated
+Pi4 test bench**, logged in as the **unprivileged `audiohub` user**, can now
+inspect and explicitly adjust the running mixer settings. No HTTP endpoint,
+network service, Bluetooth permission, EQ file rewrite or system configuration
+change is introduced:
+
+```sh
+# Read only; does not create or change a file:
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control show
+
+# Each mutation needs an explicit flag and a separate console invocation:
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-mixer-change set-master 20
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-mixer-change set-volume music 35
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-mixer-change mute tablet on
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-mixer-change mute tablet off
+```
+
+The three names `music`, `laptop` and `tablet` are internal stable input
+slots, **not** fixed categories of physical device. All levels are
+integers from 0 to 100; mute accepts only `on` or `off`. Each explicit
+change updates a private, user-owned, **0600** JSON file in a **0700**
+directory with an atomic replacement and exclusive local writer lock.
+Missing state starts at the known AudioHub defaults; corrupt, unsafe,
+symlinked or unreadable existing state is **refused rather than reset**.
+Concurrent operator changes cannot lose one another. The existing
+supervisor observes the new settings on a later poll (normally every
+five seconds) and retains its existing fail-closed gain controls.
+
+These controls change **requested software volume and mute**, not the
+physical speaker amplifier or measured sound pressure. Keep physical
+volume low before testing. They do not expose the per-band EQ editor:
+changing EQ gains would also require safe runtime filter application and
+is **not implemented** here. No automatic claim of audible playback,
+clipping protection, 3-way mixing acceptance or production release
+approval is produced. Never run as root, on a production unit, or without
+separate authorization for the affected physical hardware.
+
 ## Local console-only engineering commands
 
 Run as the **unprivileged audiohub Linux user** in an isolated development
