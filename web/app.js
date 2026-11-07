@@ -36,6 +36,7 @@
   let deviceHealth = null;
   let statusChecked = false;
   let statusRequestId = 0;
+  let statusReceivedAt = null;
   const byId = id => document.getElementById(id);
   const tr = key => words[key] || key;
   const displayName = channel => previewLabels[channel] || tr("input" + SLOT_INDEX[channel]);
@@ -217,10 +218,19 @@
     }
     restoreChannelEditState(editState);
   }
+  function statusIsRecent() {
+    // The API's own fresh flag is necessary but not sufficient: a hanging
+    // poll must not leave the previous snapshot visibly "recent" forever.
+    // Monotonic time is unaffected by manual browser clock adjustments.
+    const elapsed = statusReceivedAt === null
+      ? -1 : performance.now() - statusReceivedAt;
+    return elapsed >= 0 && elapsed <= 15000;
+  }
   function renderHardwareStatus() {
     const node = document.querySelector('[data-t="speakerState"]');
     if (!node) return;
-    const validHealth = deviceHealth && deviceHealth.fresh === true &&
+    const validHealth = statusIsRecent() && deviceHealth &&
+      deviceHealth.fresh === true &&
       typeof deviceHealth.usb_connected === "boolean";
     node.textContent = validHealth
       ? tr(deviceHealth.usb_connected ? "speakerConnected" : "speakerDisconnected")
@@ -235,7 +245,7 @@
       ["bluetooth_sources", 2],
       ["virtual_channel_count", 3]
     ];
-    if (!health || health.fresh !== true ||
+    if (!statusIsRecent() || !health || health.fresh !== true ||
         typeof health.usb_connected !== "boolean" ||
         !bounds.every(([key, limit]) => Number.isInteger(health[key]) &&
           health[key] >= 0 && health[key] <= limit)) return null;
@@ -353,15 +363,21 @@
   async function readDeviceStatus() {
     // Only the most recent poll may update health or its visible state.
     const requestId = ++statusRequestId;
+    // Re-check age at the start of every five-second poll, even if fetch
+    // never settles. This also invalidates the user-exportable snapshot.
+    renderHardwareStatus();
+    renderRoutingSummary();
     try {
       const response = await fetch("./api/status", {cache: "no-store"});
       if (!response.ok) throw new Error("Status unavailable");
       const json = await response.json();
       if (requestId !== statusRequestId) return;
       deviceHealth = json && typeof json === "object" ? json : null;
+      statusReceivedAt = performance.now();
     } catch (_) {
       if (requestId !== statusRequestId) return;
       deviceHealth = null;
+      statusReceivedAt = null;
     }
     statusChecked = true;
     renderHardwareStatus();

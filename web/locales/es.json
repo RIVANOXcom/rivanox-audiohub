@@ -12,7 +12,7 @@
   "routingBluetooth": "Fuentes Bluetooth",
   "routingChannels": "Canales detectados",
   "routingPending": "Esperando la primera comprobación",
-  "routingRecent": "Informe reciente del dispositivo (máximo 30 segundos)",
+  "routingRecent": "Estado consultado en los últimos 15 segundos",
   "routingUnavailable": "Estado de las rutas no disponible",
   "routingDiagPending": "Los consejos de diagnóstico aparecerán tras la primera comprobación.",
   "routingDiagUnavailable": "No hay informe reciente. Comprueba si funciona el servicio local de estado de AudioHub.",

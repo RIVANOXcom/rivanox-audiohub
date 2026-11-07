@@ -535,7 +535,10 @@ const assert = require("node:assert/strict");
 let statusRequestId = 0;
 let deviceHealth = null;
 let statusChecked = false;
+let statusReceivedAt = null;
+const performance = {now: () => 1000};
 const events = [];
+const transitions = () => events.filter((value, i) => i === 0 || value !== events[i - 1]);
 const renderHardwareStatus = () => {
   events.push(deviceHealth === null ? "unknown"
     : (deviceHealth.usb_connected ? "connected" : "disconnected"));
@@ -554,7 +557,7 @@ async function check() {
   pending[0].resolve({ok: true, json: async () =>
     ({fresh: true, usb_connected: false})});
   await slow;
-  assert.deepEqual(events, ["connected"]);
+  assert.deepEqual(transitions(), ["unknown", "connected"]);
   assert.equal(deviceHealth.usb_connected, true);
 
   const staleError = readDeviceStatus();
@@ -564,7 +567,7 @@ async function check() {
   await next;
   pending[2].reject(new Error("old request failed"));
   await staleError;
-  assert.deepEqual(events, ["connected", "disconnected"]);
+  assert.deepEqual(transitions(), ["unknown", "connected", "disconnected"]);
 
   let finishParsing;
   const slowParsing = readDeviceStatus();
@@ -578,7 +581,7 @@ async function check() {
   await updated;
   finishParsing({fresh: true, usb_connected: false});
   await slowParsing;
-  assert.deepEqual(events, ["connected", "disconnected", "connected"]);
+  assert.deepEqual(transitions(), ["unknown", "connected", "disconnected", "connected"]);
 
   const oldSuccess = readDeviceStatus();
   const latestError = readDeviceStatus();
@@ -587,7 +590,7 @@ async function check() {
   pending[6].resolve({ok: true, json: async () =>
     ({fresh: true, usb_connected: true})});
   await oldSuccess;
-  assert.deepEqual(events, ["connected", "disconnected", "connected", "unknown"]);
+  assert.deepEqual(transitions(), ["unknown", "connected", "disconnected", "connected", "unknown"]);
   assert.equal(deviceHealth, null);
 }
 check().catch(e => {console.error(e); process.exitCode = 1;});
@@ -601,7 +604,7 @@ check().catch(e => {console.error(e); process.exitCode = 1;});
 def preview_hardware_view_source():
     """Use the real shipped status renderer and poller together."""
     source = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
-    start = source.index("  function renderHardwareStatus() {")
+    start = source.index("  function statusIsRecent() {")
     end = source.index("\n  function translate() {", start)
     return source[start:end]
 
@@ -638,6 +641,9 @@ const byId = () => null; // No summary metrics in this speaker-only test.
 let deviceHealth = null;
 let statusChecked = false;
 let statusRequestId = 0;
+let statusReceivedAt = null;
+let nowMs = 1000;
+const performance = {now: () => nowMs};
 const pending = [];
 const fetch = () => new Promise((resolve, reject) => pending.push({resolve, reject}));
 '''
@@ -690,6 +696,16 @@ async function check() {
   await slow;
   assert.equal(speaker.textContent, "USB speakers connected");
   assert.equal(statusChecked, true);
+
+  // A stalled poll must never leave previous "connected" status forever.
+  nowMs += 15001;
+  renderHardwareStatus();
+  assert.equal(speaker.textContent, "Hardwarestatus nicht verfügbar");
+  const stalled = readDeviceStatus();
+  assert.equal(speaker.textContent, "Hardwarestatus nicht verfügbar");
+  pending[7].reject(new Error("network stalled"));
+  await stalled;
+  assert.equal(speaker.textContent, "Hardwarestatus nicht verfügbar");
 }
 check().catch(e => {console.error(e); process.exitCode = 1;});
 '''
@@ -703,7 +719,7 @@ check().catch(e => {console.error(e); process.exitCode = 1;});
 def preview_routing_summary_source():
     """Run the actual browser routing renderer rather than a copied version."""
     source = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
-    start = source.index("  function safeRoutingHealth() {")
+    start = source.index("  function statusIsRecent() {")
     end = source.index("\n  async function readDeviceStatus()", start)
     return source[start:end]
 
@@ -786,6 +802,9 @@ let words = {
 const tr = key => words[key] || key;
 let deviceHealth = null;
 let statusChecked = false;
+let nowMs = 1000;
+let statusReceivedAt = 1000;
+const performance = {now: () => nowMs};
 '''
         verify = r'''
 function values() {
@@ -866,6 +885,15 @@ renderRoutingSummary();
 assert.deepEqual(values(), ["2", "1", "3"]);
 assert.equal(get("routing-freshness"), "Aktueller Gerätebericht");
 assert.equal(get("routing-diagnostic"), "Wiedergabe manuell prüfen");
+// Browser-local expiry must remove misleading routing measurements.
+nowMs += 15001;
+renderRoutingSummary();
+assert.deepEqual(values(), ["—", "—", "—"]);
+assert.equal(get("routing-freshness"), "Routing status unavailable");
+assert.equal(get("routing-diagnostic"), "No recent device report");
+// Browser monotonic clock rollback or reset must fail closed.
+nowMs = 999;
+assert.equal(safeRoutingHealth(), null);
 '''
         program = setup + "\n" + preview_routing_summary_source() + "\n" + verify
         result = subprocess.run(
@@ -881,6 +909,9 @@ assert.equal(get("routing-diagnostic"), "Wiedergabe manuell prüfen");
         setup = r'''
 const assert = require("node:assert/strict");
 const Date = class {toISOString() {return "2026-11-07T15:00:00.000Z";}};
+let nowMs = 1000;
+let statusReceivedAt = 1000;
+const performance = {now: () => nowMs};
 const elements = {
   "routing-export-status": {textContent: ""},
   "routing-observation-usb": {value: "not_tested"},
@@ -1034,6 +1065,12 @@ assert.equal(safeRoutingReport().status, "unavailable");
 deviceHealth.active_routes = 0;
 assert.equal(safeRoutingReport().active_routes, 0);
 assert.equal(safeRoutingReport().status, "recent");
+// Even an API-fresh report must expire in the browser during hung polls.
+nowMs = 16001;
+assert.equal(safeRoutingHealth(), null);
+assert.equal(safeRoutingReport().status, "unavailable");
+assert.equal(safeRoutingReport().active_routes, null);
+assert.equal(safeRoutingReport().hardware_verified, false);
 // Non-supporting browsers receive an honest failure instead of false success.
 URL.createObjectURL = () => {throw new Error("blob URLs unsupported");};
 downloadRoutingDiagnostics();
