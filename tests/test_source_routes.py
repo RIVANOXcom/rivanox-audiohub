@@ -340,7 +340,10 @@ class SourcePolicyTests(unittest.TestCase):
         original_read = routes._read
         def modified_during_read(fd):
             policy = original_read(fd)
-            routes.set_lan("music", self.dir)
+            # The simulated writer uses the unpatched loader, so this test
+            # models one replacement rather than recursively intercepting it.
+            with mock.patch.object(routes, "_read", original_read):
+                routes.set_lan("music", self.dir)
             return policy
         with mock.patch.object(routes, "_read", side_effect=modified_during_read):
             with self.assertRaises(ValueError):
