@@ -535,7 +535,10 @@ const assert = require("node:assert/strict");
 let statusRequestId = 0;
 let deviceHealth = null;
 let statusChecked = false;
+let statusReceivedAt = null;
+const performance = {now: () => 1000};
 const events = [];
+const transitions = () => events.filter((value, i) => i === 0 || value !== events[i - 1]);
 const renderHardwareStatus = () => {
   events.push(deviceHealth === null ? "unknown"
     : (deviceHealth.usb_connected ? "connected" : "disconnected"));
@@ -554,7 +557,7 @@ async function check() {
   pending[0].resolve({ok: true, json: async () =>
     ({fresh: true, usb_connected: false})});
   await slow;
-  assert.deepEqual(events, ["connected"]);
+  assert.deepEqual(transitions(), ["unknown", "connected"]);
   assert.equal(deviceHealth.usb_connected, true);
 
   const staleError = readDeviceStatus();
@@ -564,7 +567,7 @@ async function check() {
   await next;
   pending[2].reject(new Error("old request failed"));
   await staleError;
-  assert.deepEqual(events, ["connected", "disconnected"]);
+  assert.deepEqual(transitions(), ["unknown", "connected", "disconnected"]);
 
   let finishParsing;
   const slowParsing = readDeviceStatus();
@@ -578,7 +581,7 @@ async function check() {
   await updated;
   finishParsing({fresh: true, usb_connected: false});
   await slowParsing;
-  assert.deepEqual(events, ["connected", "disconnected", "connected"]);
+  assert.deepEqual(transitions(), ["unknown", "connected", "disconnected", "connected"]);
 
   const oldSuccess = readDeviceStatus();
   const latestError = readDeviceStatus();
@@ -587,7 +590,7 @@ async function check() {
   pending[6].resolve({ok: true, json: async () =>
     ({fresh: true, usb_connected: true})});
   await oldSuccess;
-  assert.deepEqual(events, ["connected", "disconnected", "connected", "unknown"]);
+  assert.deepEqual(transitions(), ["unknown", "connected", "disconnected", "connected", "unknown"]);
   assert.equal(deviceHealth, null);
 }
 check().catch(e => {console.error(e); process.exitCode = 1;});
