@@ -475,6 +475,9 @@ A consumer-ready headless way to configure this does **not** exist.
 ```sh
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes show
 
+# New: LOCAL runtime evidence per mixer input, no identity, no writes:
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes status
+
 # New: read-only reservation map. Shows free inputs, not connected devices:
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes slots
 
@@ -495,6 +498,40 @@ PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes set-lan music
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes bind-bt AA:BB:CC:DD:EE:FF laptop
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes bind-bt 11:22:33:44:55:66 tablet
 ```
+
+For a more practical, truthful source **runtime status** on the authorized
+local console, run `python3 -m audiohub.source_routes status`. The
+supervisor now stores **only** six booleans per stable input (music,
+laptop, tablet) from one PipeWire poll: LAN reservation, permitted
+Bluetooth assignment, eligible discovered Bluetooth PipeWire *source
+node*, whether the supervisor's managed `pw-loopback` subprocess is
+still running, whether the virtual sink was observed, and whether the
+USB default-routing command succeeded. These are **observations**,
+not verified connections or playback. The local read-only status
+report adds `configured_role`, `configured`,
+`bluetooth_source_node_seen`, `managed_loopback_process_running`,
+`virtual_sink_observed`, `usb_route_ready` and explicit
+`bluetooth_connected=unverified`,
+`audio_stream_available=unverified`,
+`audible_playback=unverified`. A visible `bluez_input` does not
+prove pairing or A2DP connection; a running routing subprocess does
+not prove audio packets arrived or a USB speaker is audible.
+
+Source evidence comes from one **unmodified** owner-private
+`runtime-status.json` snapshot, never a fresh Bluetooth scan.
+`fresh` requires a trusted supervisor timestamp within 30 seconds;
+missing, stale, unsafe, invalid-schema or inconsistent snapshots
+report `observations_available=false` with `unknown` fields rather
+than calling a device disconnected or suppressing errors as success.
+If routing policy validation fails, source evidence is unavailable
+until a subsequent valid poll. The output never includes MAC/IP,
+node IDs, SSID, peer names, passwords or raw PipeWire records. It is
+**not** added to the anonymous HTTP status API, and it creates no
+files, locks, processes, Bluetooth pairing or network connections.
+`source_routes status` rejects all change/approval/preview flags.
+A free slot in `source_routes slots` is still only a
+reservation-policy fact. Actual Bluetooth connection and PCM delivery
+need separate device-specific hardware evidence before release.
 
 Read-only `slots` explains which stable inputs are reserved by LAN or
 explicit manual Bluetooth assignments, which remain available for
