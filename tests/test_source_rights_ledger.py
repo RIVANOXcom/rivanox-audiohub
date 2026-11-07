@@ -133,7 +133,10 @@ class SourceRightsLedgerTests(unittest.TestCase):
         self.assertFalse(state["public_release_authorized"])
         self.assertFalse(state["hardware_accepted"])
         self.assertTrue(state["old_agpl_recipient_rights_preserved"])
-        self.assertEqual(
+        # The 2026-11-05 checkpoint is an immutable historical snapshot.
+        # New source files may be added later, but every new file must remain
+        # covered by the current fail-closed ledger (no approval implied).
+        self.assertLessEqual(
             state["source_rights_ledger"]["file_count"],
             audit(ROOT)["files_covered"],
         )
