@@ -9,6 +9,7 @@ The existing untrusted Scream receiver remains opt-in in an isolated lab.
 from __future__ import annotations
 
 import fcntl
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -23,6 +24,18 @@ FILENAME = "source-routes.json"
 MAX_FILE_BYTES = 4096
 MAC = re.compile(r"(?:[0-9A-F]{2}:){5}[0-9A-F]{2}\Z")
 MODES = ("auto", "manual")
+
+
+class StaleRoutePreview(ValueError):
+    """A local route writer changed the policy after the operator's preview."""
+
+
+def _check_revision(token):
+    if (type(token) is not str or len(token) != 67
+            or not token.startswith("r1-")
+            or any(c not in "0123456789abcdef" for c in token[3:])):
+        raise ValueError("Invalid local route preview revision")
+    return token
 
 
 def defaults():
@@ -143,6 +156,144 @@ def _read(fd):
         os.close(handle)
 
 
+def _route_identity(dirfd):
+    """Return a stable private on-disk policy generation, or None if absent."""
+    try:
+        st = os.stat(FILENAME, dir_fd=dirfd, follow_symlinks=False)
+    except FileNotFoundError:
+        return None
+    if (not stat.S_ISREG(st.st_mode) or st.st_uid != os.geteuid()
+            or st.st_nlink != 1 or stat.S_IMODE(st.st_mode) & 0o077
+            or st.st_size > MAX_FILE_BYTES):
+        raise PermissionError("Unsafe private source route policy")
+    return (st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns, st.st_ctime_ns)
+
+
+def _revision(plan, identity):
+    encoded = json.dumps({"identity": identity, "policy": plan},
+                         sort_keys=True, separators=(",", ":"), allow_nan=False)
+    return "r1-" + hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
+def _stable_policy(dirfd):
+    """Reject a concurrent atomic/ABA policy replacement while reading."""
+    before = _route_identity(dirfd)
+    current = _read(dirfd)
+    if before != _route_identity(dirfd):
+        raise ValueError("Private audio route changed during preview")
+    return current, _revision(current, before)
+
+
+def _proposed(plan, action, value, slot=None):
+    """One routing mutation model shared by actual local writes and preview."""
+    new = validate(plan)
+    if action == "set-lan":
+        if type(value) is not str or value not in CHANNELS:
+            raise ValueError("Unknown input slot")
+        new["lan_slot"] = value
+    elif action == "bind-bt":
+        mac = canonical_mac(value)
+        if type(slot) is not str or slot not in CHANNELS:
+            raise ValueError("Unknown input slot")
+        if new["mode"] == "auto":
+            new["mode"] = "manual"
+            new["bluetooth"] = {}
+        new["bluetooth"][mac] = slot
+    elif action == "unbind-bt":
+        mac = canonical_mac(value)
+        if new["mode"] != "manual" or mac not in new["bluetooth"]:
+            raise ValueError("Bluetooth address is not manually bound")
+        del new["bluetooth"][mac]
+    elif action == "mode":
+        if type(value) is not str or value not in MODES:
+            raise ValueError("Invalid source policy mode")
+        new["mode"] = value
+        new["bluetooth"] = {}
+    else:
+        raise ValueError("Unknown local route operation")
+    return validate(new)
+
+
+def _slots(plan):
+    assigned = {name: {"lan_reserved": name == plan["lan_slot"],
+                       "manual_bluetooth_addresses": [],
+                       "free_for_manual_assignment": True}
+                for name in CHANNELS}
+    for mac, name in sorted(plan["bluetooth"].items()):
+        assigned[name]["manual_bluetooth_addresses"].append(mac)
+    for state in assigned.values():
+        state["free_for_manual_assignment"] = (
+            not state["lan_reserved"] and not state["manual_bluetooth_addresses"])
+    return assigned
+
+
+def route_slots(directory=None):
+    """Read-only slot reservation view; no connected-device assertions."""
+    directory = Path(directory) if directory is not None else (
+        Path.home() / ".config" / "audiohub")
+    try:
+        fd = _private_dir(directory)
+    except FileNotFoundError:
+        policy, revision = defaults(), _revision(defaults(), None)
+    else:
+        try:
+            policy, revision = _stable_policy(fd)
+        finally:
+            os.close(fd)
+    return {
+        "mode": "source-slots-read-only",
+        "route_policy": policy["mode"], "lan_slot": policy["lan_slot"],
+        "slots": _slots(policy),
+        "free_slots": [name for name in CHANNELS
+                       if _slots(policy)[name]["free_for_manual_assignment"]],
+        "revision": revision,
+        "connected_devices_verified": False,
+        "audible_playback_verified": False,
+        "policy_written": False,
+    }
+
+
+def preview_route(action, value, slot=None, *, directory=None):
+    """Plan a route change before it touches the source policy or devices."""
+    directory = Path(directory) if directory is not None else (
+        Path.home() / ".config" / "audiohub")
+    try:
+        fd = _private_dir(directory)
+    except FileNotFoundError:
+        current, revision = defaults(), _revision(defaults(), None)
+    else:
+        try:
+            current, revision = _stable_policy(fd)
+        finally:
+            os.close(fd)
+    proposed = _proposed(current, action, value, slot)
+    before = set(current["bluetooth"].items())
+    after = set(proposed["bluetooth"].items())
+    return {
+        "mode": "source-route-preview-only",
+        "action": action, "revision": revision,
+        "current": current, "proposed": proposed,
+        "would_change": proposed != current,
+        "lan_slot_change": ({"from": current["lan_slot"],
+                             "to": proposed["lan_slot"]}
+                            if proposed["lan_slot"] != current["lan_slot"] else None),
+        "source_mode_change": ({"from": current["mode"], "to": proposed["mode"]}
+                               if proposed["mode"] != current["mode"] else None),
+        "bluetooth_bindings_removed": [
+            {"address": mac, "slot": name} for mac, name in sorted(before - after)],
+        "bluetooth_bindings_added": [
+            {"address": mac, "slot": name} for mac, name in sorted(after - before)],
+        "current_slots": _slots(current),
+        "proposed_slots": _slots(proposed),
+        "auto_discovery_would_be_disabled": (
+            current["mode"] == "auto" and proposed["mode"] == "manual"),
+        "separate_confirmation_recommended": True,
+        "connected_devices_verified": False,
+        "audible_playback_verified": False,
+        "policy_written": False,
+    }
+
+
 def load(directory=None):
     directory = Path(directory) if directory is not None else (
         Path.home() / ".config" / "audiohub")
@@ -161,8 +312,10 @@ def lan_target(directory=None):
     return "audiohub." + load(directory)["lan_slot"]
 
 
-def update(mutate, directory=None):
-    """Atomic source-policy change from a controlled local console only."""
+def update(mutate, directory=None, *, if_revision=None):
+    """Atomic source-policy change; optionally guard a reviewed route preview."""
+    if if_revision is not None:
+        _check_revision(if_revision)
     directory = Path(directory) if directory is not None else (
         Path.home() / ".config" / "audiohub")
     fd = _private_dir(directory, create=True)
@@ -177,7 +330,12 @@ def update(mutate, directory=None):
                 or st.st_nlink != 1 or stat.S_IMODE(st.st_mode) & 0o077):
             raise PermissionError("Unsafe source policy lock")
         fcntl.flock(lock, fcntl.LOCK_EX)
-        current = _read(fd)
+        if if_revision is None:
+            current = _read(fd)
+        else:
+            current, actual_revision = _stable_policy(fd)
+            if actual_revision != if_revision:
+                raise StaleRoutePreview("Local source route preview is stale")
         desired = validate(mutate(current))
         data = (json.dumps(desired, sort_keys=True, separators=(",", ":")) +
                 "\n").encode("utf-8")
@@ -211,55 +369,39 @@ def update(mutate, directory=None):
         os.close(fd)
 
 
-def set_lan(slot, directory=None):
-    if type(slot) is not str or slot not in CHANNELS:
-        raise ValueError("Unknown input slot")
-    def change(plan):
-        plan["lan_slot"] = slot
-        return plan
-    return update(change, directory)
+def set_lan(slot, directory=None, *, if_revision=None):
+    return update(lambda plan: _proposed(plan, "set-lan", slot),
+                  directory, if_revision=if_revision)
 
 
-def bind_bluetooth(address, slot, directory=None):
-    mac = canonical_mac(address)
-    if type(slot) is not str or slot not in CHANNELS:
-        raise ValueError("Unknown input slot")
-    def change(plan):
-        if plan["mode"] == "auto":
-            plan["mode"] = "manual"
-            plan["bluetooth"] = {}
-        plan["bluetooth"][mac] = slot
-        return plan
-    return update(change, directory)
+def bind_bluetooth(address, slot, directory=None, *, if_revision=None):
+    return update(lambda plan: _proposed(plan, "bind-bt", address, slot),
+                  directory, if_revision=if_revision)
 
 
-def unbind_bluetooth(address, directory=None):
-    mac = canonical_mac(address)
-    def change(plan):
-        if plan["mode"] != "manual" or mac not in plan["bluetooth"]:
-            raise ValueError("Bluetooth address is not manually bound")
-        del plan["bluetooth"][mac]
-        return plan
-    return update(change, directory)
+def unbind_bluetooth(address, directory=None, *, if_revision=None):
+    return update(lambda plan: _proposed(plan, "unbind-bt", address),
+                  directory, if_revision=if_revision)
 
 
-def set_mode(mode, directory=None):
-    if mode not in MODES:
-        raise ValueError("Invalid source policy mode")
-    def change(plan):
-        plan["mode"] = mode
-        # Explicit mode change drops stale source-specific authorizations.
-        plan["bluetooth"] = {}
-        return plan
-    return update(change, directory)
+def set_mode(mode, directory=None, *, if_revision=None):
+    return update(lambda plan: _proposed(plan, "mode", mode),
+                  directory, if_revision=if_revision)
 
 
 def main(argv=None):
     import argparse
     parser = argparse.ArgumentParser(
         description="Local-only AudioHub lab routing; not owner onboarding or Bluetooth trust")
+    parser.add_argument("--preview", action="store_true",
+                        help="Preview a routing change without writing policy or devices")
+    parser.add_argument("--confirm-local-route-change", action="store_true",
+                        help="Explicitly approve a revision-guarded local routing policy change")
+    parser.add_argument("--if-preview-revision", metavar="REV",
+                        help="Require exact source policy revision from a prior --preview")
     sub = parser.add_subparsers(dest="action", required=True)
     sub.add_parser("show")
+    sub.add_parser("slots", help="Read-only reserved and free mixer slot overview")
     lan = sub.add_parser("set-lan")
     lan.add_argument("slot", choices=CHANNELS)
     bt = sub.add_parser("bind-bt")
@@ -270,19 +412,52 @@ def main(argv=None):
     mode = sub.add_parser("mode")
     mode.add_argument("value", choices=MODES)
     args = parser.parse_args(argv)
+
     try:
-        if args.action == "show":
-            value = load()
-        elif args.action == "set-lan":
-            value = set_lan(args.slot)
-        elif args.action == "bind-bt":
-            value = bind_bluetooth(args.address, args.slot)
-        elif args.action == "unbind-bt":
-            value = unbind_bluetooth(args.address)
+        if args.action in ("show", "slots"):
+            if (args.preview or args.confirm_local_route_change
+                    or args.if_preview_revision is not None):
+                raise ValueError("Status-only actions do not accept route changes")
+            value = load() if args.action == "show" else route_slots()
         else:
-            value = set_mode(args.value)
-    except (OSError, ValueError, UnicodeError) as exc:
-        parser.exit(2, "AudioHub route not changed: " + str(exc) + "\n")
+            target = (args.slot if args.action == "set-lan" else
+                      args.value if args.action == "mode" else args.address)
+            slot = args.slot if args.action == "bind-bt" else None
+            if args.preview:
+                if args.confirm_local_route_change or args.if_preview_revision is not None:
+                    raise ValueError("Preview must be read-only")
+                value = preview_route(args.action, target, slot)
+            else:
+                if bool(args.confirm_local_route_change) != (
+                        args.if_preview_revision is not None):
+                    raise ValueError("Guarded route change needs both approval and revision")
+                revision = args.if_preview_revision
+                if revision is not None:
+                    _check_revision(revision)
+                if args.action == "set-lan":
+                    value = set_lan(args.slot, if_revision=revision)
+                elif args.action == "bind-bt":
+                    value = bind_bluetooth(args.address, args.slot,
+                                           if_revision=revision)
+                elif args.action == "unbind-bt":
+                    value = unbind_bluetooth(args.address, if_revision=revision)
+                else:
+                    value = set_mode(args.value, if_revision=revision)
+    except StaleRoutePreview:
+        # A guarded write under the route-policy lock was refused. Only a
+        # NEW read-only preview may be shown; never retry or apply it.
+        try:
+            fresh = preview_route(args.action, target, slot)
+        except (OSError, ValueError, UnicodeError, TypeError):
+            parser.exit(4, "AudioHub route not changed: stale preview; fresh view unavailable.\\n")
+        print(json.dumps({
+            "status": "route-preview-stale", "policy_written": False,
+            "fresh_preview": fresh, "connected_devices_verified": False,
+        }, sort_keys=True))
+        parser.exit(4, "AudioHub route not changed: inspect fresh preview and confirm again.\\n")
+    except (OSError, ValueError, UnicodeError, TypeError):
+        # Do not echo private device addresses, policy JSON or filesystem paths.
+        parser.exit(2, "AudioHub route not changed or unavailable.\\n")
     print(json.dumps(value, sort_keys=True))
 
 

@@ -474,11 +474,55 @@ A consumer-ready headless way to configure this does **not** exist.
 
 ```sh
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes show
+
+# New: read-only reservation map. Shows free inputs, not connected devices:
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes slots
+
+# New: what-if routing preview. NO policy file or lock is created:
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes --preview set-lan music
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes --preview bind-bt AA:BB:CC:DD:EE:FF laptop
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes --preview mode manual
+
+# Inspect the output revision r1-... and its impact: old/new occupied slots,
+# Bluetooth sources removed/added and potential auto-discovery disablement.
+# After REVIEW, independently approve EXACTLY that preview generation:
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes --confirm-local-route-change --if-preview-revision r1-REPLACE-WITH-64-HEX-CHARS set-lan music
+
+# Existing direct local engineering commands are also retained for compatibility.
+# Prefer the guarded preview + separate confirmation above to avoid stale writes.
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes mode manual
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes set-lan music
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes bind-bt AA:BB:CC:DD:EE:FF laptop
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes bind-bt 11:22:33:44:55:66 tablet
 ```
+
+Read-only `slots` explains which stable inputs are reserved by LAN or
+explicit manual Bluetooth assignments, which remain available for
+manual assignment, and the current private policy revision. A free
+input is **not** proof that a Bluetooth device is actually present,
+paired, connected or audible. `--preview set-lan`, `--preview bind-bt`,
+`--preview unbind-bt` and `--preview mode` display an exact, validated
+old/new local route plan, including slot occupancy, removed/added
+assignments, and whether the proposal would disable automatic
+Bluetooth discovery. Invalid three-way/duplicate source reservations
+fail immediately without touching files, locks or devices. The
+`r1-...` revision identifies a PRIVATE local policy file generation
+(including atomic ABA replacements), not a device identity.
+
+After reviewing the preview, the operator can separately run
+`--confirm-local-route-change --if-preview-revision REV ACTION ...`.
+The original route generation is checked **inside the exclusive
+local route-policy writer lock** before updating one private policy
+file. A concurrent change is rejected with exit code 4 and at most a
+new read-only `fresh_preview`, never automatically retried. Both
+confirmation and revision must be present for this guarded path;
+`--preview` can never be combined with a write flag. Existing
+ungarded direct console commands are retained for compatibility
+but do **not** give protection against stale preview revisions;
+operators should prefer the guarded sequence for manual changes.
+No new network service, Bluetooth pairing, trust, external device
+control or physical-audio verification is introduced. Keep local
+Bluetooth addresses and policy previews out of public logs.
 
 The MAC addresses above are **fictional test examples**. Pairing or
 authenticating a real device is **not** performed by these commands.
