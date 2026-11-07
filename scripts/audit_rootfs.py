@@ -670,6 +670,24 @@ def inspect(root: Path) -> dict[str, bool]:
         )
     except OSError:
         checks["conservative_mix_gain_installed"] = False
+    # User-owned mixer JSON can contain a large integer within the bounded
+    # JSON file: it must raise ValueError, never math.isfinite(int) OverflowError.
+    try:
+        mixer = (source / "mixer.py").read_text()
+        checks["mixer_huge_integer_controls_fail_closed"] = all(
+            token in mixer for token in (
+                "def _integer(value, lower, upper):",
+                "if type(value) is int:",
+                "if lower <= value <= upper:",
+                "if type(value) is not float:",
+                "not math.isfinite(value)",
+                "value.is_integer()",
+                "return int(value)",
+                'raise ValueError("value out of range")',
+            )
+        ) and "math.isfinite(value) or int(value) != value" not in mixer
+    except OSError:
+        checks["mixer_huge_integer_controls_fail_closed"] = False
     # Source/router IDs come from PipeWire metadata; volume controls must
     # never coerce booleans/floats/strings or reuse one ID for two targets.
     try:
