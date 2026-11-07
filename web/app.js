@@ -388,7 +388,7 @@
         Number.isInteger(h.virtual_channel_count) && h.virtual_channel_count >= 0 &&
           h.virtual_channel_count <= 3;
       const timestamp = typeof entry.at_utc === "string" &&
-        /^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$/.test(entry.at_utc)
+        /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(entry.at_utc)
         ? entry.at_utc : null;
       return {
         observed_at_browser_utc: timestamp,
