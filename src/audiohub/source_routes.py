@@ -402,6 +402,7 @@ def main(argv=None):
     sub = parser.add_subparsers(dest="action", required=True)
     sub.add_parser("show")
     sub.add_parser("slots", help="Read-only reserved and free mixer slot overview")
+    sub.add_parser("status", help="Read-only per-input observed runtime state, without device identifiers")
     lan = sub.add_parser("set-lan")
     lan.add_argument("slot", choices=CHANNELS)
     bt = sub.add_parser("bind-bt")
@@ -414,11 +415,15 @@ def main(argv=None):
     args = parser.parse_args(argv)
 
     try:
-        if args.action in ("show", "slots"):
+        if args.action in ("show", "slots", "status"):
             if (args.preview or args.confirm_local_route_change
                     or args.if_preview_revision is not None):
                 raise ValueError("Status-only actions do not accept route changes")
-            value = load() if args.action == "show" else route_slots()
+            if args.action == "status":
+                from .source_status import read_report
+                value = read_report()
+            else:
+                value = load() if args.action == "show" else route_slots()
         else:
             target = (args.slot if args.action == "set-lan" else
                       args.value if args.action == "mode" else args.address)
