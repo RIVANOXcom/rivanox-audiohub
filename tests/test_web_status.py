@@ -717,6 +717,8 @@ let statusRequestId = 0;
 let statusReceivedAt = null;
 let nowMs = 1000;
 const performance = {now: () => nowMs};
+const routingHistory = [];
+let lastRoutingHistorySignature = null;
 const pending = [];
 const fetch = () => new Promise((resolve, reject) => pending.push({resolve, reject}));
 '''
@@ -816,6 +818,10 @@ class BrowserRoutingSummaryTests(unittest.TestCase):
         self.assertIn("Read-only device counts", html)
         self.assertIn('id="routing-recheck"', html)
         self.assertIn('id="routing-recheck-status" role="status"', html)
+        self.assertIn('id="routing-history-list"', html)
+        self.assertIn('id="routing-history-clear"', html)
+        self.assertIn('id="routing-history-status" role="status"', html)
+        self.assertIn('byId("routing-history-clear").addEventListener("click", clearRoutingHistory);', source)
         self.assertIn('byId("routing-recheck").addEventListener("click", requestRoutingRecheck);', source)
         self.assertIn('byId("routing-export").addEventListener("click", downloadRoutingDiagnostics);', source)
         for field in ("routing-observation-usb", "routing-observation-bluetooth",
@@ -843,7 +849,9 @@ class BrowserRoutingSummaryTests(unittest.TestCase):
             "routingObservationBluetooth", "routingObservationThree",
             "routingNotTested", "routingHeard", "routingNotHeard",
             "routingObservationDualBluetooth", "routingObservationUsbReconnect",
-            "routingObservationsReset", "routingObservationsCleared"
+            "routingObservationsReset", "routingObservationsCleared",
+            "routingHistoryTitle", "routingHistoryNote", "routingHistoryEmpty",
+            "routingHistoryClear", "routingHistoryCleared"
         }
         for code in ("en", "de", "es", "fr", "it"):
             with self.subTest(code=code):
@@ -882,6 +890,8 @@ let statusChecked = false;
 let nowMs = 1000;
 let statusReceivedAt = 1000;
 const performance = {now: () => nowMs};
+const routingHistory = [];
+let lastRoutingHistorySignature = null;
 '''
         verify = r'''
 function values() {
@@ -979,6 +989,108 @@ assert.equal(safeRoutingHealth(), null);
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 
+
+
+    @unittest.skipUnless(shutil.which("node"), "Node.js runtime unavailable")
+    def test_actual_browser_history_is_bounded_redacted_and_clearable(self):
+        """No raw API IDs or persistence in the shipped routing change log."""
+        setup = r'''
+const assert = require("node:assert/strict");
+const list = {
+  children: [],
+  replaceChildren() {this.children = [];},
+  append(item) {this.children.push(item);}
+};
+const feedback = {textContent: ""};
+const byId = id => id === "routing-history-list" ? list :
+  id === "routing-history-status" ? feedback : null;
+const document = {createElement(tag) {
+  assert.equal(tag, "li");
+  return {textContent: ""};
+}};
+const words = {
+  routingHistoryEmpty: "No recent changes",
+  routingHistoryCleared: "History cleared",
+  routingRoutes: "Routes",
+  routingBluetooth: "Bluetooth",
+  routingChannels: "Channels",
+  routingUnavailable: "Status unavailable",
+  speakerConnected: "USB connected",
+  speakerDisconnected: "USB disconnected"
+};
+const tr = key => words[key] || key;
+let deviceHealth = null;
+let statusChecked = false;
+let statusReceivedAt = 1000;
+let nowMs = 1000;
+const performance = {now: () => nowMs};
+const routingHistory = [];
+let lastRoutingHistorySignature = null;
+'''
+        verify = r'''
+renderRoutingSummary();
+assert.equal(routingHistory.length, 0);
+assert.equal(list.children[0].textContent, "No recent changes");
+statusChecked = true;
+deviceHealth = {fresh: true, usb_connected: true,
+  active_routes: 0, bluetooth_sources: 0, virtual_channel_count: 1,
+  mac: "SENSITIVE-MAC", ssid: "SENSITIVE-SSID", owner: "SECRET-OWNER"};
+renderRoutingSummary();
+assert.equal(routingHistory.length, 1);
+assert.deepEqual(Object.keys(routingHistory[0].health),
+  ["usb_connected", "active_routes", "bluetooth_sources", "virtual_channel_count"]);
+assert.equal(routingHistory[0].health.active_routes, 0);
+renderRoutingSummary();
+assert.equal(routingHistory.length, 1); // Re-render is not another event.
+
+// Frequent real changes use a bounded in-memory history.
+for (let i = 0; i < 15; i++) {
+  deviceHealth.usb_connected = i % 2 === 0;
+  deviceHealth.active_routes = i % 3;
+  deviceHealth.bluetooth_sources = i % 2;
+  renderRoutingSummary();
+}
+assert.equal(routingHistory.length, 8);
+assert.equal(list.children.length, 8);
+assert.ok(!JSON.stringify(routingHistory).includes("SENSITIVE"));
+assert.ok(!JSON.stringify(list.children).includes("SENSITIVE"));
+assert.ok(!JSON.stringify(list.children).includes("SECRET"));
+
+// Language changes update visible labels but never create observations.
+const count = routingHistory.length;
+words.routingRoutes = "Routen";
+renderRoutingSummary();
+assert.equal(routingHistory.length, count);
+assert.ok(list.children.some(node => node.textContent.includes("Routen")));
+
+// A hung API makes the report unavailable; this is a transition, not zero.
+nowMs = 16001;
+renderRoutingSummary();
+assert.equal(routingHistory.length, 8);
+assert.equal(routingHistory[routingHistory.length - 1].health, null);
+assert.ok(list.children[list.children.length - 1].textContent.includes("Status unavailable"));
+clearRoutingHistory();
+assert.equal(routingHistory.length, 0);
+assert.equal(list.children[0].textContent, "No recent changes");
+assert.equal(feedback.textContent, "History cleared");
+renderRoutingSummary();
+assert.equal(routingHistory.length, 0); // No immediate reappearance.
+nowMs = 17000;
+statusReceivedAt = 17000;
+renderRoutingSummary();
+assert.equal(routingHistory.length, 1);
+assert.equal(routingHistory[0].health.active_routes, 2);
+// Malformed status must not reach the log, even with additional IDs.
+deviceHealth.active_routes = "PRIVATE-INVALID";
+renderRoutingSummary();
+assert.equal(routingHistory[routingHistory.length - 1].health, null);
+assert.ok(!JSON.stringify(routingHistory).includes("PRIVATE"));
+'''
+        result = subprocess.run(
+            ["node", "-e", setup + "\n" + preview_routing_summary_source() + "\n" + verify],
+            capture_output=True, text=True, timeout=15, check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     @unittest.skipUnless(shutil.which("node"), "Node.js runtime unavailable")
     def test_actual_browser_export_only_copies_bounded_public_fields(self):

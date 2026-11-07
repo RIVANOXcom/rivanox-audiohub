@@ -38,6 +38,8 @@
   let statusRequestId = 0;
   let statusReceivedAt = null;
   let lastManualStatusRequestAt = -Infinity;
+  const routingHistory = [];
+  let lastRoutingHistorySignature = null;
   const byId = id => document.getElementById(id);
   const tr = key => words[key] || key;
   const displayName = channel => previewLabels[channel] || tr("input" + SLOT_INDEX[channel]);
@@ -257,8 +259,57 @@
       virtual_channel_count: health.virtual_channel_count
     };
   }
+  function captureRoutingHistory(summary) {
+    if (!statusChecked) return;
+    // Record only transitions. This is an in-memory browser note, not a
+    // hardware log or proof of sound. Never copy raw /api/status objects.
+    const signature = summary
+      ? [summary.usb_connected, summary.active_routes,
+        summary.bluetooth_sources, summary.virtual_channel_count].join("|")
+      : "unavailable";
+    if (signature === lastRoutingHistorySignature) return;
+    lastRoutingHistorySignature = signature;
+    routingHistory.push({
+      at: new Date().toLocaleTimeString(),
+      // safeRoutingHealth only returns fixed, bounded public fields.
+      health: summary ? {...summary} : null
+    });
+    if (routingHistory.length > 8) routingHistory.shift();
+  }
+  function renderRoutingHistory() {
+    const list = byId("routing-history-list");
+    if (!list) return;
+    list.replaceChildren();
+    if (!routingHistory.length) {
+      const empty = document.createElement("li");
+      empty.textContent = tr("routingHistoryEmpty");
+      list.append(empty);
+      return;
+    }
+    for (const entry of routingHistory) {
+      const item = document.createElement("li");
+      const health = entry.health;
+      item.textContent = entry.at + " · " + (health
+        ? tr(health.usb_connected ? "speakerConnected" : "speakerDisconnected") +
+          " · " + tr("routingRoutes") + ": " + health.active_routes +
+          " · " + tr("routingBluetooth") + ": " + health.bluetooth_sources +
+          " · " + tr("routingChannels") + ": " + health.virtual_channel_count
+        : tr("routingUnavailable"));
+      list.append(item);
+    }
+  }
+  function clearRoutingHistory() {
+    routingHistory.length = 0;
+    // Leave the current snapshot signature unchanged: clearing the list
+    // must not immediately recreate the same entry on a locale change.
+    renderRoutingHistory();
+    const feedback = byId("routing-history-status");
+    if (feedback) feedback.textContent = tr("routingHistoryCleared");
+  }
   function renderRoutingSummary() {
     const summary = safeRoutingHealth();
+    captureRoutingHistory(summary);
+    renderRoutingHistory();
     const usable = summary !== null;
     const ids = [
       ["active_routes", "routing-routes"],
@@ -405,6 +456,7 @@
     byId("routing-export-status").textContent = "";
     byId("routing-observations-reset-status").textContent = "";
     byId("routing-recheck-status").textContent = "";
+    byId("routing-history-status").textContent = "";
   }
   async function setLanguage(language) {
     // Late locale replies must not overwrite newer user choices.
@@ -431,6 +483,7 @@
   byId("language").addEventListener("change", event => setLanguage(event.target.value));
   byId("routing-export").addEventListener("click", downloadRoutingDiagnostics);
   byId("routing-recheck").addEventListener("click", requestRoutingRecheck);
+  byId("routing-history-clear").addEventListener("click", clearRoutingHistory);
   byId("routing-observations-reset").addEventListener("click", resetManualSoundObservations);
   byId("master").addEventListener("input", event => {
     state.master = Number(event.target.value);

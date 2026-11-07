@@ -64,3 +64,16 @@
 #routing-recheck:hover{background:#2b4a6d}
 #routing-recheck:focus-visible{outline:3px solid #d8a1ff;outline-offset:3px}
 #routing-recheck-status{font-size:.82rem;line-height:1.4;color:#bfd8ef}
+
+/* Bounded, session-only timeline of sanitized routing changes. */
+.routing-history-panel{border:1px solid #355778;border-radius:12px;padding:12px 14px;margin:14px 0;background:#111f33}
+.routing-history-panel summary{cursor:pointer;color:#e1edff;font-weight:650;min-height:32px}
+.routing-history-panel summary:focus-visible{outline:3px solid #d8a1ff;outline-offset:3px}
+.routing-history-note{color:#bfcfe3;font-size:.82rem;line-height:1.5}
+.routing-history-list{margin:12px 0;padding-left:22px;color:#deebfc;font-size:.84rem;line-height:1.55}
+.routing-history-list li{padding:5px 0;overflow-wrap:anywhere}
+.routing-history-actions{display:flex;flex-wrap:wrap;align-items:center;gap:12px}
+#routing-history-clear{font:inherit;min-height:44px;border:1px solid #8bb5da;background:#213a58;color:#f3f8ff;border-radius:9px;padding:10px 14px;cursor:pointer}
+#routing-history-clear:hover{background:#2b4a6d}
+#routing-history-clear:focus-visible{outline:3px solid #d8a1ff;outline-offset:3px}
+#routing-history-status{color:#c4d9ed;font-size:.82rem;line-height:1.4}

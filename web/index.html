@@ -35,6 +35,12 @@
         <p class="routing-freshness" id="routing-freshness" role="status" aria-live="polite" data-t="routingPending">Waiting for first status check</p>
         <div class="routing-recheck-actions"><button type="button" id="routing-recheck" data-t="routingRecheck">Recheck device status now</button><span id="routing-recheck-status" role="status" aria-live="polite"></span></div>
         <p class="routing-diagnostic" id="routing-diagnostic" aria-live="polite" data-t="routingDiagPending">Diagnostic guidance will appear after the first status check.</p>
+        <details class="routing-history-panel">
+          <summary data-t="routingHistoryTitle">Recent local routing changes</summary>
+          <p class="routing-history-note" data-t="routingHistoryNote">Only recent sanitized status changes from this open page are shown (maximum eight). Timestamps come from your browser clock. This is not hardware or audio verification; closing or reloading the page clears the history.</p>
+          <ol id="routing-history-list" class="routing-history-list" aria-live="off"></ol>
+          <div class="routing-history-actions"><button type="button" id="routing-history-clear" data-t="routingHistoryClear">Clear change history</button><span id="routing-history-status" role="status" aria-live="polite"></span></div>
+        </details>
         <fieldset class="routing-observations" aria-describedby="routing-observations-note">
           <legend data-t="routingObservationsTitle">Manual sound observations</legend>
           <p id="routing-observations-note" data-t="routingObservationsNote">Record what you personally heard during an isolated test. These unverified selections exist only on this page (reloading resets them) and do not approve the hardware or a release. The exported timestamp comes from your browser clock.</p>
