@@ -1,6 +1,7 @@
 """Isolated source-only tests: never play audio or discover actual devices."""
 import json
 import struct
+from threading import Barrier
 import subprocess
 import sys
 import unittest
@@ -243,6 +244,211 @@ class UsbSoundcheckTests(unittest.TestCase):
             soundcheck.run_soundcheck(confirmed=False, through_input="music")
         inspect.assert_not_called()
         player.assert_not_called()
+
+
+    @staticmethod
+    def mix_graph(*, disconnected=None, foreign=None,
+                  missing=None, duplicated=None, malformed=False):
+        nodes = [node(11, EDIFIER)]
+        for i, slot in enumerate(("music", "laptop", "tablet")):
+            target = "audiohub." + slot
+            if slot != missing:
+                nodes.append(node(30 + i, target))
+            nodes.append(node(40 + i, target + ".output",
+                              "Stream/Output/Audio"))
+            if slot == duplicated:
+                nodes.append(node(60 + i, target + ".output",
+                                  "Stream/Output/Audio"))
+            if slot != disconnected:
+                nodes.append({"type": "PipeWire:Interface:Link",
+                              "info": {"output-node-id": 40 + i,
+                                       "input-node-id": 11}})
+            if slot == foreign:
+                nodes.append({"type": "PipeWire:Interface:Link",
+                              "info": {"output-node-id": 40 + i,
+                                       "input-node-id": 19}})
+        if malformed:
+            nodes.append({"type": "PipeWire:Interface:Link",
+                          "info": {"output-node-id": "PRIVATE",
+                                   "input-node-id": False}})
+        return nodes
+
+    @mock.patch("audiohub.usb_soundcheck.bounded_command_output")
+    def test_all_three_virtual_eq_inputs_require_one_consistent_graph(self, inspect):
+        inspect.return_value = subprocess.CompletedProcess(
+            ("pw-dump",), 0, json.dumps(self.mix_graph()), ""
+        )
+        self.assertEqual(soundcheck.safe_three_input_targets(),
+                         ("audiohub.music", "audiohub.laptop", "audiohub.tablet"))
+        inspect.assert_called_once_with(("pw-dump",), timeout=5)
+
+    @mock.patch("audiohub.usb_soundcheck.bounded_command_output")
+    def test_mix_graph_refuses_silent_foreign_or_ambiguous_routes(self, inspect):
+        scenarios = [
+            self.mix_graph(disconnected="music"),
+            self.mix_graph(disconnected="laptop"),
+            self.mix_graph(disconnected="tablet"),
+            self.mix_graph(foreign="laptop"),
+            self.mix_graph(missing="tablet"),
+            self.mix_graph(duplicated="music"),
+            self.mix_graph(malformed=True),
+            self.mix_graph() + [node(91, "alsa_output.usb-Second")],
+        ]
+        for graph in scenarios:
+            with self.subTest(graph=repr(graph)[-90:]):
+                inspect.return_value = subprocess.CompletedProcess(
+                    ("pw-dump",), 0, json.dumps(graph), ""
+                )
+                with self.assertRaises(soundcheck.SoundcheckUnavailable):
+                    soundcheck.safe_three_input_targets()
+        for result in (
+            None,
+            subprocess.CompletedProcess(("pw-dump",), 1, "", "SECRET"),
+            subprocess.CompletedProcess(("pw-dump",), 0, "[invalid", "")
+        ):
+            inspect.return_value = result
+            with self.assertRaises(soundcheck.SoundcheckUnavailable):
+                soundcheck.safe_three_input_targets()
+
+    def test_three_input_patterns_have_distinct_markers_and_bounded_sum(self):
+        signals = [soundcheck.three_input_pattern(slot)
+                   for slot in ("music", "laptop", "tablet")]
+        self.assertEqual(len(set(signals)), 3)
+        self.assertEqual({len(pcm) for pcm in signals},
+                         {soundcheck.MIX_FRAMES * 4})
+        self.assertEqual(soundcheck.MIX_FRAMES, 2 * soundcheck.RATE)
+        samples = [list(struct.iter_unpack("<hh", pcm)) for pcm in signals]
+        peak = round(32767 * soundcheck.MIX_GAIN)
+        for stereo in samples:
+            self.assertEqual(stereo[0], (0, 0))
+            self.assertEqual(stereo[-1], (0, 0))
+            self.assertTrue(any(a != 0 for a, b in stereo))
+            self.assertTrue(all(a == b for a, b in stereo))
+            self.assertLessEqual(max(abs(a) for a, b in stereo), peak)
+        # Even worst-case in-phase sum stays quieter than direct USB tone.
+        self.assertLessEqual(3 * peak, round(32767 * soundcheck.GAIN))
+        for value in (None, False, 2, "unknown", "music; rm -rf /"):
+            with self.assertRaises(soundcheck.SoundcheckUnavailable):
+                soundcheck.three_input_pattern(value)
+
+    @mock.patch("audiohub.usb_soundcheck.os.geteuid", return_value=1000)
+    @mock.patch("audiohub.usb_soundcheck.subprocess.Popen")
+    @mock.patch("audiohub.usb_soundcheck.bounded_command_output")
+    def test_three_mix_never_runs_without_explicit_consent(self, inspect, popen, uid):
+        for confirm in (False, None, "yes", 1):
+            with self.assertRaisesRegex(
+                    soundcheck.SoundcheckUnavailable, "confirmation"):
+                soundcheck.run_three_input_probe(confirmed=confirm)
+        inspect.assert_not_called()
+        popen.assert_not_called()
+
+    @mock.patch("audiohub.usb_soundcheck.os.geteuid", return_value=0)
+    @mock.patch("audiohub.usb_soundcheck.subprocess.Popen")
+    @mock.patch("audiohub.usb_soundcheck.bounded_command_output")
+    def test_three_mix_refuses_root_without_any_graph_probe(self, inspect, popen, uid):
+        with self.assertRaisesRegex(soundcheck.SoundcheckUnavailable, "unprivileged"):
+            soundcheck.run_three_input_probe(confirmed=True)
+        inspect.assert_not_called()
+        popen.assert_not_called()
+
+    @mock.patch("audiohub.usb_soundcheck.os.geteuid", return_value=1000)
+    @mock.patch("audiohub.usb_soundcheck.subprocess.Popen")
+    @mock.patch("audiohub.usb_soundcheck.bounded_command_output")
+    def test_three_mix_opens_three_explicit_streams_concurrently(
+            self, inspect, popen, uid):
+        inspect.return_value = subprocess.CompletedProcess(
+            ("pw-dump",), 0, json.dumps(self.mix_graph()), ""
+        )
+        call_gate = Barrier(3)
+        observed = []
+        class Player:
+            def __init__(self, args, kwargs):
+                self.args = args
+                self.kwargs = kwargs
+                self.returncode = 0
+                self.did_communicate = False
+            def communicate(self, *, input, timeout):
+                self.did_communicate = True
+                observed.append((self.args[-3], input, timeout))
+                call_gate.wait(timeout=2)  # Prove all streams write in parallel.
+                return (b"", b"")
+            def poll(self):
+                return self.returncode
+            def wait(self, timeout):
+                return self.returncode
+            def kill(self):
+                raise AssertionError("Successful source must not be killed")
+        players = []
+        def start(args, **kwargs):
+            player = Player(args, kwargs)
+            players.append(player)
+            return player
+        popen.side_effect = start
+        self.assertTrue(soundcheck.run_three_input_probe(confirmed=True))
+        self.assertEqual(len(players), 3)
+        self.assertEqual(len(observed), 3)
+        inspect.assert_called_once_with(("pw-dump",), timeout=5)
+        targets = ["--target=audiohub." + slot for slot in
+                   ("music", "laptop", "tablet")]
+        self.assertEqual([p.args[-3] for p in players], targets)
+        for player in players:
+            self.assertIn("--playback", player.args)
+            self.assertNotIn("--target=auto", player.args)
+            self.assertFalse(player.kwargs["shell"])
+            self.assertEqual(player.kwargs["stdin"], subprocess.PIPE)
+            self.assertEqual(player.kwargs["stdout"], subprocess.DEVNULL)
+            self.assertEqual(player.kwargs["stderr"], subprocess.DEVNULL)
+            self.assertTrue(player.did_communicate)
+        self.assertTrue(all(timeout == soundcheck.MAX_PLAY_SECONDS
+                            for target, payload, timeout in observed))
+        self.assertTrue(all(payload for target, payload, timeout in observed))
+
+    @mock.patch("audiohub.usb_soundcheck.os.geteuid", return_value=1000)
+    @mock.patch("audiohub.usb_soundcheck.subprocess.Popen")
+    @mock.patch("audiohub.usb_soundcheck.bounded_command_output")
+    def test_mix_stream_failure_cleans_up_and_never_claims_success(
+            self, inspect, popen, uid):
+        inspect.return_value = subprocess.CompletedProcess(
+            ("pw-dump",), 0, json.dumps(self.mix_graph()), ""
+        )
+        class Player:
+            def __init__(self, number):
+                self.number = number
+                self.returncode = 2 if number == 1 else 0
+                self.waited = False
+                self.killed = False
+            def communicate(self, *, input, timeout):
+                return (b"", b"")
+            def poll(self):
+                return self.returncode
+            def wait(self, timeout):
+                self.waited = True
+                return self.returncode
+            def kill(self):
+                self.killed = True
+        players = []
+        def start(args, **kwargs):
+            player = Player(len(players))
+            players.append(player)
+            return player
+        popen.side_effect = start
+        with self.assertRaisesRegex(soundcheck.SoundcheckUnavailable, "unavailable"):
+            soundcheck.run_three_input_probe(confirmed=True)
+        self.assertEqual(len(players), 3)
+        self.assertTrue(all(p.waited for p in players))
+
+    @mock.patch("audiohub.usb_soundcheck.run_soundcheck")
+    @mock.patch("audiohub.usb_soundcheck.run_three_input_probe", return_value=True)
+    def test_cli_three_input_probe_requires_both_flags(self, mix, direct):
+        from contextlib import redirect_stdout
+        from io import StringIO
+        with redirect_stdout(StringIO()):
+            soundcheck.main(["--confirm-isolated-usb-test", "--three-input-mix-probe"])
+        mix.assert_called_once_with(confirmed=True)
+        direct.assert_not_called()
+        with self.assertRaises(SystemExit) as ctx:
+            soundcheck.main(["--three-input-mix-probe", "--through-input", "music"])
+        self.assertEqual(ctx.exception.code, 2)
 
     @mock.patch("audiohub.usb_soundcheck.run_soundcheck")
     def test_cli_disabled_without_explicit_operator_option(self, run):
