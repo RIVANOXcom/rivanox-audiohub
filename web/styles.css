@@ -57,3 +57,10 @@
 #routing-observations-reset:hover{background:#345475}
 #routing-observations-reset:focus-visible{outline:3px solid #d8a1ff;outline-offset:3px}
 #routing-observations-reset-status{font-size:.82rem;color:#c1dcf0;line-height:1.4}
+
+/* On-demand read-only status recheck after changing physical connections. */
+.routing-recheck-actions{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-top:11px}
+#routing-recheck{font:inherit;font-weight:600;font-size:.85rem;min-height:44px;background:#213a58;color:#f3f8ff;border:1px solid #8bb5da;border-radius:9px;padding:10px 14px;cursor:pointer}
+#routing-recheck:hover{background:#2b4a6d}
+#routing-recheck:focus-visible{outline:3px solid #d8a1ff;outline-offset:3px}
+#routing-recheck-status{font-size:.82rem;line-height:1.4;color:#bfd8ef}
