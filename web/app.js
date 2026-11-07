@@ -75,6 +75,13 @@
     container.append(label, range);
     return container;
   }
+  // Keep screen-reader slider names in sync with renamed display inputs.
+  function updateChannelControlLabels(channel) {
+    for (const key of ["volume", ...BANDS]) {
+      const range = byId(channel + "-" + key);
+      if (range) range.setAttribute("aria-label", tr(key) + ": " + displayName(channel));
+    }
+  }
   function drawChannels() {
     const target = byId("channels");
     target.replaceChildren();
@@ -90,6 +97,8 @@
       const updateMute = () => {
         mute.textContent = tr(state[channel].mute ? "unmute" : "mute");
         mute.setAttribute("aria-pressed", String(state[channel].mute));
+        mute.setAttribute("aria-label",
+          tr(state[channel].mute ? "unmute" : "mute") + ": " + displayName(channel));
       };
       mute.addEventListener("click", () => {
         state[channel].mute = !state[channel].mute;
@@ -128,6 +137,8 @@
         else previewLabels[channel] = name;
         heading.textContent = displayName(channel);
         nameInput.value = displayName(channel);
+        updateMute();
+        updateChannelControlLabels(channel);
         // Browser display preference only. No authenticated device API exists.
         savePreviewLabels();
         renameStatus.textContent = tr("previewNamesOnly");

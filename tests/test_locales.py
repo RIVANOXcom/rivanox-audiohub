@@ -219,5 +219,79 @@ check().catch(e => {console.error(e); process.exitCode = 1;});
             capture_output=True, text=True, timeout=15, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
 
+
+def preview_control_labels_source():
+    """Extract the exact helper shipped to browsers, not a reimplementation."""
+    source = PREVIEW.read_text(encoding="utf-8")
+    start = source.index("  function updateChannelControlLabels(channel) {")
+    end = source.index("\n  }\n  function drawChannels()", start) + len("\n  }")
+    return source[start:end]
+
+
+class BrowserRenameAccessibilityTests(unittest.TestCase):
+    """Renaming a preview input must update its existing focusable controls."""
+
+    def test_rename_event_refreshes_mute_and_slider_accessible_names(self):
+        source = PREVIEW.read_text(encoding="utf-8")
+        start = source.index('nameInput.addEventListener("change", () => {')
+        end = source.index('const source = document.createElement("p")', start)
+        handler = source[start:end]
+        self.assertIn("updateMute();", handler)
+        self.assertIn("updateChannelControlLabels(channel);", handler)
+        self.assertIn('mute.setAttribute("aria-label"', source)
+        self.assertIn("state[channel].mute ? \"unmute\" : \"mute\"", source)
+        self.assertNotIn('method: "POST"', source)
+
+    @unittest.skipUnless(shutil.which("node"), "Node.js runtime unavailable")
+    def test_shipped_slider_helper_updates_labels_after_rename_and_locale_change(self):
+        setup = r'''
+const assert = require("node:assert/strict");
+const BANDS = ["bass", "mid", "treble"];
+const labels = {};
+const elements = {};
+for (const key of ["volume", ...BANDS]) {
+  const id = "music-" + key;
+  elements[id] = {setAttribute(attr, value) {
+    assert.equal(attr, "aria-label");
+    labels[id] = value;
+  }};
+}
+const byId = id => elements[id] || null;
+let words = {volume: "Volume", bass: "Bass", mid: "Mid", treble: "Treble"};
+const tr = key => words[key] || key;
+let display = "Living room TV";
+const displayName = channel => {
+  assert.equal(channel, "music");
+  return display;
+};
+'''
+        verify = r'''
+updateChannelControlLabels("music");
+assert.deepEqual(labels, {
+  "music-volume": "Volume: Living room TV",
+  "music-bass": "Bass: Living room TV",
+  "music-mid": "Mid: Living room TV",
+  "music-treble": "Treble: Living room TV"
+});
+display = "Kitchen speaker";
+words = {volume: "Lautstärke", bass: "Bass",
+         mid: "Mitten", treble: "Höhen"};
+updateChannelControlLabels("music");
+assert.deepEqual(labels, {
+  "music-volume": "Lautstärke: Kitchen speaker",
+  "music-bass": "Bass: Kitchen speaker",
+  "music-mid": "Mitten: Kitchen speaker",
+  "music-treble": "Höhen: Kitchen speaker"
+});
+// A transiently absent control (e.g. during re-render) must not crash.
+delete elements["music-bass"];
+updateChannelControlLabels("music");
+'''
+        program = setup + "\n" + preview_control_labels_source() + "\n" + verify
+        result = subprocess.run(["node", "-e", program], capture_output=True,
+                                text=True, timeout=15, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()
