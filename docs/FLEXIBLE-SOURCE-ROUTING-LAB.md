@@ -67,6 +67,10 @@ PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-m
 
 # One atomic update to master, then music, laptop and tablet levels:
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-mixer-change set-mix 20 35 25 0
+
+# Confirm and save, then wait at most ten seconds for a matching recent,
+# COMPLETE PipeWire supervisor command acknowledgement (NOT measured audio):
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-mixer-change --wait-for-supervisor set-mix 20 35 25 0
 ```
 
 The optional `--preview` applies to all change commands:
@@ -117,6 +121,25 @@ invalid number or unsafe existing state rejects the entire request;
 it never resets settings as a fallback. The existing supervisor observes
 the new settings on a later poll (normally every five seconds) and
 retains its existing fail-closed gain controls.
+
+The optional `--wait-for-supervisor` can be added only to an explicitly
+confirmed **change** command (not `show`, `status` or `--preview`).
+The CLI first saves the validated settings atomically, then reads the
+already private local supervisor acceptance status up to eleven times
+over **at most ten one-second waits**. Its JSON report distinguishes
+`settings_written=true` from `delivery_state=accepted`,
+`pending`, `unavailable` or `superseded`. It also includes bounded
+`saved_request` controls, `pending_controls`, and always
+`audible_playback_verified=false`. A different later request from
+another local writer returns `superseded`: acceptance of that later
+request must never be attributed to the first invocation. A completed
+command with no fresh, complete acknowledgement exits with status **3**
+while clearly saying the settings **were saved**; it does **not** retry
+the write or assert that hardware sound changed. A matching successful
+supervisor software acknowledgement exits with status 0. Existing
+`status` remains available for later read-only checks. This does not
+make the audio process, PipeWire, speakers or real sound synchronous and
+is not an emergency mute. Keep physical volume low.
 
 The read-only `status` command compares private saved master/input
 level/mute settings against the last **successful set of PipeWire control
