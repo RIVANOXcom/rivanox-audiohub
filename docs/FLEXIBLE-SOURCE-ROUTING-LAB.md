@@ -79,8 +79,15 @@ level/mute settings against the last **successful set of PipeWire control
 commands**, provided the supervisor reported a unique USB output, all three
 EQ sinks and a complete recent poll (15 seconds or less). It reports
 `accepted`, `pending` or `unavailable`, never equates status with
-measured volume or audible sound. A missing/stale/unsafe/legacy supervisor
-snapshot is **unavailable**, not success. The comparison stays entirely on
+measured volume or audible sound. On a fresh complete acknowledgement,
+`pending_controls` identifies exactly which requested fields differ:
+`master`, `music.volume`, `music.mute`, `laptop.volume`,
+`laptop.mute`, `tablet.volume` or `tablet.mute`. For example, after
+changing only Input 2 mute and Input 3 volume, the output identifies
+`["laptop.mute", "tablet.volume"]`, so the local operator knows which
+controls remain unacknowledged. A matching acknowledgement returns `[]`.
+A missing/stale/unsafe/legacy supervisor snapshot is **unavailable** and
+returns `null`, **not an empty list or a claim of success**. The comparison stays entirely on
 the unprivileged local console, writes nothing, returns no MAC/SSID/device
 identity and adds no public web API; `audible_playback_verified` remains
 false regardless of command outcome.

@@ -237,6 +237,66 @@ class LocalMixerControlsTests(unittest.TestCase):
         self.assertEqual(pending["requested"]["master"], 30)
         self.assertFalse(pending["audible_playback_verified"])
 
+    def test_pending_diagnostics_name_exact_changed_input_controls(self):
+        runtime_path = self.root / "runtime" / "status.json"
+        previously_accepted = requested_mix_controls(defaults())
+        runtime.atomic_json(runtime_path, {
+            "updated_at": 1000, "usb_route_ready": True,
+            "mixer_controls_accepted": previously_accepted,
+        })
+        mixer_control.change({
+            "master": 20,
+            "music": {"volume": 20},
+            "laptop": {"mute": True},
+            "tablet": {"volume": 0, "mute": True},
+        }, path=self.settings, confirmed=True)
+        status = mixer_control.application_status(
+            path=self.settings, runtime_path=runtime_path, now=1000
+        )
+        self.assertEqual(status["supervisor"], "pending")
+        self.assertEqual(status["pending_controls"], [
+            "master", "music.volume", "laptop.mute",
+            "tablet.volume", "tablet.mute",
+        ])
+        self.assertFalse(status["audible_playback_verified"])
+
+    def test_equal_acknowledged_settings_have_no_pending_controls(self):
+        runtime_path = self.root / "runtime" / "status.json"
+        mixer_control.change({"music": {"volume": 50}, "tablet": {"mute": True}},
+                             path=self.settings, confirmed=True)
+        current = requested_mix_controls(mixer_control.show(path=self.settings))
+        runtime.atomic_json(runtime_path, {
+            "updated_at": 1000, "usb_route_ready": True,
+            "mixer_controls_accepted": current,
+        })
+        result = mixer_control.application_status(
+            path=self.settings, runtime_path=runtime_path, now=1000
+        )
+        self.assertEqual(result["supervisor"], "accepted")
+        self.assertEqual(result["pending_controls"], [])
+        self.assertFalse(result["audible_playback_verified"])
+
+    def test_no_pending_comparison_when_supervisor_evidence_unavailable(self):
+        runtime_path = self.root / "runtime" / "status.json"
+        expected = requested_mix_controls(defaults())
+        for snapshot in (
+            None,
+            {"updated_at": 1000, "usb_route_ready": False,
+             "mixer_controls_accepted": expected},
+            {"updated_at": 970, "usb_route_ready": True,
+             "mixer_controls_accepted": expected},
+            {"updated_at": 1000, "usb_route_ready": True,
+             "mixer_controls_accepted": {"master": 70}},
+        ):
+            if snapshot is not None:
+                runtime.atomic_json(runtime_path, snapshot)
+            status = mixer_control.application_status(
+                path=self.settings, runtime_path=runtime_path, now=1000
+            )
+            self.assertEqual(status["supervisor"], "unavailable")
+            self.assertIsNone(status["pending_controls"])
+            self.assertFalse(status["audible_playback_verified"])
+
     def test_local_status_refuses_stale_untrusted_or_incomplete_claim(self):
         runtime_path = self.root / "runtime" / "status.json"
         expected = requested_mix_controls(defaults())

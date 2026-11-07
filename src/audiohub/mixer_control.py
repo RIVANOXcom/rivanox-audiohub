@@ -86,9 +86,21 @@ def application_status(*, path=SETTINGS, runtime_path=STATE, now=None):
     if (not fresh or snapshot.get("usb_route_ready") is not True
             or not _valid_acknowledged_controls(acknowledged)):
         state = "unavailable"
+        pending_controls = None
     else:
-        state = "accepted" if acknowledged == requested else "pending"
+        # Pinpoint only bounded, fixed mixer fields, never arbitrary keys or
+        # device identifiers. No per-field positive claim without complete,
+        # fresh acknowledgement of the whole PipeWire control command set.
+        pending_controls = []
+        if requested["master"] != acknowledged["master"]:
+            pending_controls.append("master")
+        for slot in CHANNELS:
+            for control in ("volume", "mute"):
+                if requested[slot][control] != acknowledged[slot][control]:
+                    pending_controls.append(slot + "." + control)
+        state = "pending" if pending_controls else "accepted"
     return {"requested": requested, "supervisor": state,
+            "pending_controls": pending_controls,
             "audible_playback_verified": False}
 
 
