@@ -77,6 +77,12 @@ PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-m
 # One atomic update to master, then music, laptop and tablet levels:
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-mixer-change set-mix 20 35 25 0
 
+# Clone an existing custom profile to a NEW name, never overwriting either:
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --preview copy-profile cinema cinema-alt
+# Review source, destination, stored levels and profile_revision from the output.
+# Separately confirm the catalog revision from that exact preview:
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-profile-save --if-profile-revision p1-REPLACE-WITH-64-HEX-CHARS copy-profile cinema cinema-alt
+
 # Capture the CURRENT requested mixer levels as a new private named profile:
 # 1) Preview the exact currently stored (not measured) four levels and REV:
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --preview save-current-profile my-snapshot
@@ -104,6 +110,30 @@ PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-m
 # COMPLETE PipeWire supervisor command acknowledgement (NOT measured audio):
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-mixer-change --wait-for-supervisor set-mix 20 35 25 0
 ```
+
+To duplicate an existing private volume profile safely, use
+`--preview copy-profile SOURCE NEW-NAME`. It reads the validated
+private profile catalog and emits a **read-only** plan with source,
+destination, four volume values and a `profile_revision` starting
+with `p1-`; the preview neither writes a catalog nor touches the
+active mixer. After reviewing, independently invoke
+`--confirm-local-profile-save --if-profile-revision PROFILE_REV
+copy-profile SOURCE NEW-NAME`. This is an atomic, exclusive-locked,
+single **private profile catalog** update, never an active mixer
+settings update. It refuses unknown sources, invalid or identical
+names, existing destination names, the eight-profile limit, unsafe
+catalogs and stale catalog generations. A separate local profile
+writer makes the preview revision stale even if it restored identical
+values: copying then exits **4**, with a fresh read-only plan where
+safe, never automatically retrying or overwriting any profile. The
+source remains immutable, the destination has exactly the same
+four bounded requested volume percentages, and no mute, EQ, routing,
+network or physical sound is affected. `--if-profile-revision` is
+**different from** mixer `--if-preview-revision`; it is accepted
+only for a separately confirmed `copy-profile`, not an unguarded
+change. The profile snapshot and revision are local private
+operator details, not credentials; keep them out of public logs.
+No delete, overwrite, rename or automatic activation is introduced.
 
 For an exact snapshot of the **currently requested** private mixer
 master/music/laptop/tablet levels without retyping them, use
