@@ -1,0 +1,148 @@
+"""Isolated source-only tests: never play audio or discover actual devices."""
+import json
+import struct
+import subprocess
+import sys
+import unittest
+from pathlib import Path
+from unittest import mock
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+from audiohub import usb_soundcheck as soundcheck
+
+
+def node(index, name, media_class="Audio/Sink"):
+    return {"id": index, "type": "PipeWire:Interface:Node",
+            "info": {"props": {"node.name": name, "media.class": media_class}}}
+
+
+EDIFIER = "alsa_output.usb-Edifier_R600USB-00.analog-stereo"
+
+
+class UsbSoundcheckTests(unittest.TestCase):
+    def test_fixed_quiet_stereo_pattern_is_bounded_and_channel_isolated(self):
+        pcm = soundcheck.stereo_pattern()
+        left = soundcheck.PULSE_FRAMES
+        gap = soundcheck.GAP_FRAMES
+        self.assertEqual(len(pcm), 4 * (2 * left + gap))
+        self.assertLess(len(pcm), 100_000)
+        samples = list(struct.iter_unpack("<hh", pcm))
+        self.assertTrue(any(pair[0] for pair in samples[:left]))
+        self.assertTrue(all(pair[1] == 0 for pair in samples[:left]))
+        self.assertTrue(all(pair == (0, 0) for pair in samples[left:left + gap]))
+        self.assertTrue(any(pair[1] for pair in samples[left + gap:]))
+        self.assertTrue(all(pair[0] == 0 for pair in samples[left + gap:]))
+        self.assertLessEqual(max(max(abs(a), abs(b)) for a, b in samples), 656)
+        self.assertLess(len(samples) / soundcheck.RATE, 1)
+
+    @mock.patch("audiohub.usb_soundcheck.subprocess.run")
+    @mock.patch("audiohub.usb_soundcheck.bounded_command_output")
+    def test_without_explicit_confirmation_never_inspects_or_plays(self, inspect, player):
+        for flag in (False, None, 1, "yes"):
+            with self.subTest(flag=flag), self.assertRaisesRegex(
+                    soundcheck.SoundcheckUnavailable, "confirmation"):
+                soundcheck.run_soundcheck(confirmed=flag)
+        inspect.assert_not_called()
+        player.assert_not_called()
+
+    @mock.patch("audiohub.usb_soundcheck.os.geteuid", return_value=0)
+    @mock.patch("audiohub.usb_soundcheck.subprocess.run")
+    @mock.patch("audiohub.usb_soundcheck.bounded_command_output")
+    def test_root_cannot_play_automatically(self, inspect, player, euid):
+        with self.assertRaisesRegex(soundcheck.SoundcheckUnavailable, "unprivileged"):
+            soundcheck.run_soundcheck(confirmed=True)
+        inspect.assert_not_called()
+        player.assert_not_called()
+
+    @mock.patch("audiohub.usb_soundcheck.bounded_command_output")
+    def test_target_is_only_the_single_usb_sink_not_default_or_hdmi(self, inspect):
+        source = [node(20, "alsa_output.pci-HDMI"), node(11, EDIFIER)]
+        inspect.return_value = subprocess.CompletedProcess(
+            ("pw-dump",), 0, json.dumps(source), ""
+        )
+        self.assertEqual(soundcheck.safe_usb_target(), EDIFIER)
+        inspect.assert_called_once_with(("pw-dump",), timeout=5)
+        for graph in (
+            [node(20, "alsa_output.pci-HDMI")],
+            [node(10, "alsa_output.usb-First"), node(11, "alsa_output.usb-Second")],
+            [node(11, EDIFIER), node(12, EDIFIER)],
+            [node(11, "alsa_output.usb-Evil bad target")],
+        ):
+            with self.subTest(graph=graph):
+                inspect.return_value = subprocess.CompletedProcess(
+                    ("pw-dump",), 0, json.dumps(graph), ""
+                )
+                with self.assertRaises(soundcheck.SoundcheckUnavailable):
+                    soundcheck.safe_usb_target()
+
+    @mock.patch("audiohub.usb_soundcheck.bounded_command_output")
+    def test_broken_graph_or_inspection_failure_never_picks_default(self, inspect):
+        for result in (
+            None,
+            subprocess.CompletedProcess(("pw-dump",), 2, "", "SECRET-MAC"),
+            subprocess.CompletedProcess(("pw-dump",), 0, "[invalid-json", ""),
+            subprocess.CompletedProcess(("pw-dump",), 0, "[]", ""),
+        ):
+            inspect.return_value = result
+            with self.subTest(result=str(result)[:30]):
+                with self.assertRaises(soundcheck.SoundcheckUnavailable):
+                    soundcheck.safe_usb_target()
+
+    @mock.patch("audiohub.usb_soundcheck.os.geteuid", return_value=1000)
+    @mock.patch("audiohub.usb_soundcheck.subprocess.run")
+    @mock.patch("audiohub.usb_soundcheck.bounded_command_output")
+    def test_confirmed_pattern_targets_only_usb_and_never_uses_shell(
+            self, inspect, player, euid):
+        inspect.return_value = subprocess.CompletedProcess(
+            ("pw-dump",), 0, json.dumps([node(11, EDIFIER)]), ""
+        )
+        player.return_value = subprocess.CompletedProcess(("pw-cat",), 0, "", "")
+        self.assertTrue(soundcheck.run_soundcheck(confirmed=True))
+        player.assert_called_once()
+        args, kwargs = player.call_args
+        self.assertEqual(args[0][0], "pw-cat")
+        self.assertIn("--target=" + EDIFIER, args[0])
+        self.assertIn("--playback", args[0])
+        self.assertIn("--raw", args[0])
+        self.assertNotIn("--target=auto", args[0])
+        self.assertNotIn("wpctl", args[0])
+        self.assertTrue(kwargs["input"])
+        self.assertEqual(kwargs["timeout"], 5)
+        self.assertFalse(kwargs["shell"])
+        self.assertFalse(kwargs["check"])
+        self.assertEqual(kwargs["stderr"], subprocess.DEVNULL)
+        self.assertEqual(kwargs["stdout"], subprocess.DEVNULL)
+        self.assertEqual(inspect.call_count, 1)
+
+    @mock.patch("audiohub.usb_soundcheck.os.geteuid", return_value=1000)
+    @mock.patch("audiohub.usb_soundcheck.subprocess.run")
+    @mock.patch("audiohub.usb_soundcheck.bounded_command_output")
+    def test_failed_player_or_timeout_is_not_reported_as_success(
+            self, inspect, player, euid):
+        inspect.return_value = subprocess.CompletedProcess(
+            ("pw-dump",), 0, json.dumps([node(11, EDIFIER)]), ""
+        )
+        for outcome in (
+            subprocess.CompletedProcess(("pw-cat",), 9, "", ""),
+            OSError("SECRET-USB-IDENTIFIER"),
+            subprocess.TimeoutExpired(cmd="pw-cat", timeout=5),
+        ):
+            player.side_effect = outcome if isinstance(outcome, BaseException) else None
+            if not isinstance(outcome, BaseException):
+                player.return_value = outcome
+            with self.subTest(outcome=type(outcome).__name__):
+                with self.assertRaises(soundcheck.SoundcheckUnavailable) as failure:
+                    soundcheck.run_soundcheck(confirmed=True)
+                self.assertNotIn("SECRET", str(failure.exception))
+
+    @mock.patch("audiohub.usb_soundcheck.run_soundcheck")
+    def test_cli_disabled_without_explicit_operator_option(self, run):
+        run.side_effect = soundcheck.SoundcheckUnavailable("confirmation required")
+        with self.assertRaises(SystemExit) as stopped:
+            soundcheck.main([])
+        self.assertEqual(stopped.exception.code, 2)
+        run.assert_called_once_with(confirmed=False)
+
+
+if __name__ == "__main__":
+    unittest.main()
