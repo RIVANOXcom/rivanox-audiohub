@@ -25,7 +25,7 @@
   "routingExportRequested": "Descarga solicitada. Comprueba las descargas del navegador.",
   "routingExportUnavailable": "La descarga del informe no está disponible en este navegador.",
   "routingObservationsTitle": "Observaciones manuales de sonido",
-  "routingObservationsNote": "Indica qué escuchaste durante una prueba aislada. Estas selecciones no verificadas duran solo la sesión del navegador y no aprueban el hardware ni una versión. La hora exportada procede del reloj del navegador.",
+  "routingObservationsNote": "Indica qué escuchaste durante una prueba aislada. Estas selecciones no verificadas solo existen en esta página (se borran al recargar) y no aprueban el hardware ni una versión. La hora exportada procede del reloj del navegador.",
   "routingObservationUsb": "Sonido por los altavoces USB",
   "routingObservationBluetooth": "Sonido de una fuente Bluetooth",
   "routingObservationThree": "Tres entradas audibles a la vez",
