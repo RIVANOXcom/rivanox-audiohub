@@ -212,6 +212,54 @@ class LocalMixerControlsTests(unittest.TestCase):
                 ])
             change.assert_not_called()
 
+    def test_mute_all_is_single_atomic_write_and_preserves_levels_and_eq(self):
+        prior = mixer_control.change({
+            "master": 27, "music": {"volume": 33, "bass": 4},
+            "laptop": {"volume": 14, "mute": True},
+            "tablet": {"volume": 95, "treble": -2},
+        }, path=self.settings, confirmed=True)
+        with mock.patch("audiohub.mixer_control.atomic_json",
+                        wraps=mixer_control.atomic_json) as atomic:
+            muted = mixer_control.change({
+                slot: {"mute": True} for slot in ("music", "laptop", "tablet")
+            }, path=self.settings, confirmed=True)
+            atomic.assert_called_once()
+        self.assertEqual(muted["master"], prior["master"])
+        for slot in ("music", "laptop", "tablet"):
+            self.assertTrue(muted[slot]["mute"])
+            for control in ("volume", "bass", "mid", "treble"):
+                self.assertEqual(muted[slot][control], prior[slot][control])
+        self.assertEqual(mixer_control.show(path=self.settings), muted)
+        self.assertEqual(stat.S_IMODE(self.settings.stat().st_mode), 0o600)
+
+    def test_mute_all_cli_requires_confirmation_and_no_extra_arguments(self):
+        expected = {slot: {"mute": True} for slot in ("music", "laptop", "tablet")}
+        with mock.patch("audiohub.mixer_control.change", return_value=defaults()) as change:
+            with redirect_stdout(StringIO()):
+                mixer_control.main(["--confirm-local-mixer-change", "mute-all"])
+            change.assert_called_once_with(expected, confirmed=True)
+        with mock.patch("audiohub.mixer_control.change",
+                        side_effect=mixer_control.MixerControlUnavailable("confirmation")) as change:
+            with self.assertRaises(SystemExit) as failed, redirect_stderr(StringIO()):
+                mixer_control.main(["mute-all"])
+            self.assertEqual(failed.exception.code, 2)
+            change.assert_called_once_with(expected, confirmed=False)
+        with mock.patch("audiohub.mixer_control.change") as change:
+            with self.assertRaises(SystemExit), redirect_stderr(StringIO()):
+                mixer_control.main(["--confirm-local-mixer-change", "mute-all", "off"])
+            change.assert_not_called()
+
+    def test_mute_all_keeps_existing_corrupt_state_unchanged(self):
+        self.settings.parent.mkdir(mode=0o700)
+        self.settings.write_bytes(b'{"music": {"mute": false}, "music": {"mute": true}}')
+        self.settings.chmod(0o600)
+        before = self.settings.read_bytes()
+        with self.assertRaises(mixer_control.MixerControlUnavailable):
+            mixer_control.change({
+                slot: {"mute": True} for slot in ("music", "laptop", "tablet")
+            }, path=self.settings, confirmed=True)
+        self.assertEqual(self.settings.read_bytes(), before)
+
     def test_local_application_status_accepts_only_current_complete_ack(self):
         runtime_path = self.root / "runtime" / "status.json"
         expected = requested_mix_controls(defaults())

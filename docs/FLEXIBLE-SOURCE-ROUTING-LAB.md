@@ -53,6 +53,9 @@ PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-m
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-mixer-change mute tablet on
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-mixer-change mute tablet off
 
+# Request all three input mutes together, preserving previous levels and EQ:
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-mixer-change mute-all
+
 # One atomic update to master, then music, laptop and tablet levels:
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-mixer-change set-mix 20 35 25 0
 ```
@@ -64,7 +67,18 @@ change updates a private, user-owned, **0600** JSON file in a **0700**
 directory with an atomic replacement and exclusive local writer lock.
 Missing state starts at the known AudioHub defaults; corrupt, unsafe,
 symlinked or unreadable existing state is **refused rather than reset**.
-Concurrent operator changes cannot lose one another. The new `set-mix`
+Concurrent operator changes cannot lose one another. The local
+`mute-all` command requests all three input mutes in **one** private
+atomic write, preserving requested master volume, input volumes and EQ.
+It never automatically unmutes: a deliberate `mute SLOT off` is required
+for each input you later choose to re-enable. It requires the existing
+explicit confirmation and non-root account, rejects unsafe existing state
+and creates no network API. Its request takes effect only on a later
+successful supervisor poll; it is **not an emergency physical cutoff**
+and cannot guarantee immediate or audible silence. For emergencies,
+disconnect or turn down the physical speaker amplifier.
+
+The `set-mix`
 command accepts exactly four 0–100 integers in the order master, music,
 laptop, tablet and saves all four volumes **in one atomic snapshot** rather
 than exposing intermediate levels across four separate console calls.

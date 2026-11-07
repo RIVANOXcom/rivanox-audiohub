@@ -159,6 +159,9 @@ def main(argv=None):
     mute = commands.add_parser("mute", help="Set a channel mute (on/off)")
     mute.add_argument("slot", choices=CHANNELS)
     mute.add_argument("value", choices=("on", "off"))
+    commands.add_parser(
+        "mute-all", help="Atomically request mute on all three inputs"
+    )
     mix = commands.add_parser(
         "set-mix", help="Atomically set master and all three input volumes 0..100"
     )
@@ -181,6 +184,10 @@ def main(argv=None):
                 # levels during a supervised poll; preserve every mute/EQ.
                 patch = {"master": args.master}
                 patch.update({slot: {"volume": getattr(args, slot)} for slot in CHANNELS})
+            elif args.action == "mute-all":
+                # One private atomic snapshot, not three independent updates.
+                # Preserve master, volume and EQ. Do not auto-unmute later.
+                patch = {slot: {"mute": True} for slot in CHANNELS}
             else:
                 patch = {args.slot: {"mute": args.value == "on"}}
             state = change(patch, confirmed=args.confirm_local_mixer_change)
