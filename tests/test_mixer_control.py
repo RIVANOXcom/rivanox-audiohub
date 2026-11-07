@@ -897,8 +897,17 @@ class LocalMixerControlsTests(unittest.TestCase):
         self.assertEqual(self.settings.read_bytes(), original_bytes)
 
     def test_preset_cli_rejects_invalid_name_and_implicit_write(self):
+        with mock.patch(
+                "audiohub.mixer_control.change",
+                side_effect=mixer_control.MixerControlUnavailable("confirmation")
+        ) as change:
+            with redirect_stdout(StringIO()), redirect_stderr(StringIO()):
+                with self.assertRaises(SystemExit) as failed:
+                    mixer_control.main(["preset", "quiet"])
+            self.assertEqual(failed.exception.code, 2)
+            change.assert_called_once_with(
+                mixer_control.preset_patch("quiet"), confirmed=False)
         for argv in (
-            ["preset", "quiet"],
             ["--preview", "--confirm-local-mixer-change", "preset", "quiet"],
             ["--confirm-local-mixer-change", "preset", "loud"],
             ["--confirm-local-mixer-change", "preset"],
