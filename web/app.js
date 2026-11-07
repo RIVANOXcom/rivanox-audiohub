@@ -283,17 +283,35 @@
       if (diagnostic.textContent !== text) diagnostic.textContent = text;
     }
   }
+  function manualSoundObservations() {
+    // Explicit human observations, never sourced from device telemetry.
+    // No free text, device IDs, usernames, or persistence outside this tab.
+    const observation = id => {
+      const node = byId("routing-observation-" + id);
+      return node && ["heard", "not_heard"].includes(node.value)
+        ? node.value : "not_tested";
+    };
+    return {
+      usb_output_audio: observation("usb"),
+      bluetooth_source_audio: observation("bluetooth"),
+      three_inputs_simultaneously_audible: observation("three")
+    };
+  }
   function safeRoutingReport() {
     const summary = safeRoutingHealth();
     // Fixed key list: no MACs, names, SSIDs, URLs, addresses, audio payloads
     // or raw diagnostics ever reach the downloaded local JSON.
     return {
-      format: "audiohub.routing-diagnostics.v1",
+      format: "audiohub.routing-diagnostics.v2",
+      // Browser time is only a self-reported observation timestamp.
+      recorded_at_browser_utc: new Date().toISOString(),
       status: summary ? "recent" : (statusChecked ? "unavailable" : "pending"),
       usb_connected: summary ? summary.usb_connected : null,
       active_routes: summary ? summary.active_routes : null,
       bluetooth_sources: summary ? summary.bluetooth_sources : null,
       virtual_channel_count: summary ? summary.virtual_channel_count : null,
+      operator_observations: manualSoundObservations(),
+      hardware_verified: false,
       audible_playback_verified: false,
       release_approved: false
     };
