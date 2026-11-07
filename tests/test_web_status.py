@@ -982,7 +982,15 @@ assert.equal(safeRoutingReport().release_approved, false);
 // Unknown or injected select values are not copied to the report.
 elements["routing-observation-usb"].value = "PRIVATE-NAME";
 assert.equal(manualSoundObservations().usb_output_audio, "not_tested");
+assert.deepEqual(safeRoutingReport().operator_observations, {
+  usb_output_audio: "not_tested",
+  bluetooth_source_audio: "not_heard",
+  three_inputs_simultaneously_audible: "heard"
+});
+// Reset human selections before expecting the all-unchecked report.
 elements["routing-observation-usb"].value = "not_tested";
+elements["routing-observation-bluetooth"].value = "not_tested";
+elements["routing-observation-three"].value = "not_tested";
 deviceHealth = {fresh: false, usb_connected: true,
   active_routes: 2, bluetooth_sources: 1, virtual_channel_count: 3,
   mac: "PRIVATE-MAC"};
