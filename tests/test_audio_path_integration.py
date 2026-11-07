@@ -193,6 +193,45 @@ class AudioPathTests(unittest.TestCase):
         self.assertEqual(launch.call_count, 2)
         self.assertTrue(first.terminated)
 
+
+    def test_bt_auto_assignment_persist_error_leaves_no_in_memory_or_audio_route(self):
+        s = self.supervisor(assignments={})
+        with (mock.patch("audiohub.runtime.atomic_json",
+                         side_effect=OSError("storage unavailable")) as saved,
+              mock.patch("audiohub.runtime.subprocess.Popen") as launched):
+            with self.assertRaisesRegex(OSError, "storage unavailable"):
+                s._route([self.src(PHONE)], {"audiohub.music": 21}, now=0)
+        self.assertEqual(s.assignments, {})
+        self.assertEqual(s.loopbacks, {})
+        saved.assert_called_once()
+        launched.assert_not_called()
+
+    def test_bt_auto_assignment_persists_on_retry_after_transient_write_error(self):
+        s = self.supervisor(assignments={})
+        with mock.patch("audiohub.runtime.atomic_json",
+                        side_effect=[OSError("one failed write"), None]) as saved:
+            with self.assertRaisesRegex(OSError, "one failed write"):
+                s._assign([self.src(PHONE)])
+            self.assertEqual(s.assignments, {})
+            s._assign([self.src(PHONE)])
+        self.assertEqual(s.assignments, {PHONE: "music"})
+        self.assertEqual(saved.call_count, 2)
+        self.assertEqual(saved.call_args_list[0].args[1], {PHONE: "music"})
+        self.assertEqual(saved.call_args_list[1].args[1], {PHONE: "music"})
+
+    def test_bt_auto_invalid_mapping_cleanup_retries_when_write_failed(self):
+        original = {PHONE: "music", PHONE2: "music", "not-a-mac": "tablet"}
+        s = self.supervisor(assignments=dict(original))
+        with mock.patch("audiohub.runtime.atomic_json",
+                        side_effect=[OSError("storage failed"), None]) as saved:
+            with self.assertRaisesRegex(OSError, "storage failed"):
+                s._assign([self.src(PHONE)])
+            self.assertEqual(s.assignments, original)
+            s._assign([self.src(PHONE)])
+        self.assertEqual(s.assignments, {PHONE: "tablet", PHONE2: "music"})
+        self.assertEqual(saved.call_count, 2)
+        self.assertEqual(saved.call_args.args[1], s.assignments)
+
     def test_invalid_stored_assignments_do_not_grant_extra_channels(self):
         s = self.supervisor(assignments={
             PHONE: "music", PHONE2: "music", "non-mac": "tablet",
