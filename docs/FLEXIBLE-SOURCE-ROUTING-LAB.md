@@ -49,6 +49,9 @@ PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-m
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-mixer-change set-volume music 35
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-mixer-change mute tablet on
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-mixer-change mute tablet off
+
+# One atomic update to master, then music, laptop and tablet levels:
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-mixer-change set-mix 20 35 25 0
 ```
 
 The three names `music`, `laptop` and `tablet` are internal stable input
@@ -58,9 +61,15 @@ change updates a private, user-owned, **0600** JSON file in a **0700**
 directory with an atomic replacement and exclusive local writer lock.
 Missing state starts at the known AudioHub defaults; corrupt, unsafe,
 symlinked or unreadable existing state is **refused rather than reset**.
-Concurrent operator changes cannot lose one another. The existing
-supervisor observes the new settings on a later poll (normally every
-five seconds) and retains its existing fail-closed gain controls.
+Concurrent operator changes cannot lose one another. The new `set-mix`
+command accepts exactly four 0–100 integers in the order master, music,
+laptop, tablet and saves all four volumes **in one atomic snapshot** rather
+than exposing intermediate levels across four separate console calls.
+It deliberately preserves all prior per-input mute and EQ settings. Any
+invalid number or unsafe existing state rejects the entire request;
+it never resets settings as a fallback. The existing supervisor observes
+the new settings on a later poll (normally every five seconds) and
+retains its existing fail-closed gain controls.
 
 These controls change **requested software volume and mute**, not the
 physical speaker amplifier or measured sound pressure. Keep physical

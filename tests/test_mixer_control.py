@@ -160,6 +160,57 @@ class LocalMixerControlsTests(unittest.TestCase):
                 ])
             change.assert_not_called()
 
+    def test_atomic_mix_changes_all_four_levels_preserving_mutes_and_eq(self):
+        mixer_control.change({"tablet": {"mute": True, "bass": 4},
+                              "music": {"treble": -3}},
+                             path=self.settings, confirmed=True)
+        with mock.patch("audiohub.mixer_control.atomic_json",
+                        wraps=mixer_control.atomic_json) as atomic:
+            state = mixer_control.change(
+                {"master": 20, "music": {"volume": 15},
+                 "laptop": {"volume": 35}, "tablet": {"volume": 0}},
+                path=self.settings, confirmed=True)
+            atomic.assert_called_once()
+        self.assertEqual(state["master"], 20)
+        self.assertEqual([state[c]["volume"] for c in ("music", "laptop", "tablet")],
+                         [15, 35, 0])
+        self.assertTrue(state["tablet"]["mute"])
+        self.assertEqual(state["tablet"]["bass"], 4)
+        self.assertEqual(state["music"]["treble"], -3)
+        self.assertEqual(mixer_control.show(path=self.settings), state)
+
+    def test_invalid_mix_rejects_whole_update_without_changing_existing_state(self):
+        mixer_control.change({"master": 45}, path=self.settings, confirmed=True)
+        before = self.settings.read_bytes()
+        with self.assertRaises(mixer_control.MixerControlUnavailable):
+            mixer_control.change(
+                {"master": 10, "music": {"volume": 20},
+                 "laptop": {"volume": 101}, "tablet": {"volume": 30}},
+                path=self.settings, confirmed=True)
+        self.assertEqual(self.settings.read_bytes(), before)
+
+    def test_set_mix_cli_is_gated_and_sends_one_validated_patch(self):
+        expected = {"master": 20, "music": {"volume": 15},
+                    "laptop": {"volume": 35}, "tablet": {"volume": 0}}
+        with mock.patch("audiohub.mixer_control.change", return_value=defaults()) as change:
+            with redirect_stdout(StringIO()):
+                mixer_control.main([
+                    "--confirm-local-mixer-change", "set-mix", "20", "15", "35", "0"
+                ])
+            change.assert_called_once_with(expected, confirmed=True)
+        with mock.patch("audiohub.mixer_control.change",
+                        side_effect=mixer_control.MixerControlUnavailable("confirmation")) as change:
+            with self.assertRaises(SystemExit) as failed, redirect_stderr(StringIO()):
+                mixer_control.main(["set-mix", "20", "15", "35", "0"])
+            self.assertEqual(failed.exception.code, 2)
+            change.assert_called_once_with(expected, confirmed=False)
+        with mock.patch("audiohub.mixer_control.change") as change:
+            with self.assertRaises(SystemExit), redirect_stderr(StringIO()):
+                mixer_control.main([
+                    "--confirm-local-mixer-change", "set-mix", "20", "15", "35"
+                ])
+            change.assert_not_called()
+
     def test_computed_supervisor_commands_reflect_saved_levels_and_mutes(self):
         from audiohub.mixer import volume_commands
         mixer_control.change({"master": 20, "music": {"volume": 14},
