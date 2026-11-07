@@ -1072,3 +1072,29 @@ owner WiFi, legal/hardware/CEO GO; effective AGPL-3.0-only,
 83 source rights pending, nine OS notice paths missing,
 Model C unapproved. No flashing/install/merging/deploying/
 permissions changes/payments/official release.
+
+
+## 2026-11-07: PR87 exact-head native audit false-negative and recovery
+
+Native ARM64 Actions #42319853661 on PR87 HEAD
+ac06a70f7d983befc05e5918f0f58024908a3a1c FAILED at real
+installed rootfs 102-gate audit; failed_checks was precisely
+["runtime_private_directory_race_nofollow"]. The corresponding
+Source Actions #42319861169 succeeded 776/776 but the synthetic
+runtime fixture had only one next_fd = os.open marker. The
+actual installed Python source correctly opens a directory before
+the FileNotFoundError handler AND reopens after catching
+FileExistsError. Static rootfs auditor mistakenly used
+opener.index("next_fd = os.open(...)"), which selected the
+initial normal-path open before "except FileExistsError", declaring
+the safe real implementation unsafe. This was an audit
+false-negative, not hardware proof or a successful native build.
+Replace comparison with opener.rindex(...), selecting the
+post-catch reopen. Add real source-backed positive and
+adversarial missing-reopen regression checks in addition to
+synthetic checks, preventing this exact discrepancy in future
+source-only verification. No audio code change needed and
+the original failed native run remains FAILED. Re-run
+independent Source and native ARM64 CI on the new exact head;
+do not assert 102/102 until verified. Existing legal,
+hardware and release gates remain unverified.
