@@ -99,6 +99,12 @@ class RootfsAuditTests(unittest.TestCase):
             "return min(1.0, 1.0 / worst_case)",
             "str(effective_master_gain(settings))",
             "def volume_commands(settings, sink_ids, output_id=None):",
+            "if set(current) - allowed:",
+            'raise ValueError("unknown stored mixer control")',
+            'if set(value) - {"volume", "mute", *EQ_BANDS}:',
+            'raise ValueError("unknown stored mixer channel control")',
+            "if set(patch) - allowed:",
+            'raise ValueError("unknown control")',
             "def _integer(value, lower, upper):",
             "if type(value) is int:",
             "if lower <= value <= upper:",
@@ -1576,6 +1582,30 @@ class RootfsAuditTests(unittest.TestCase):
             self.assertFalse(audit.inspect(root)["bluetooth_input_role_configured"])
 
 
+
+
+    def test_stored_mixer_schema_guard_present(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            self.assertTrue(audit.inspect(root)["mixer_stored_controls_strict_schema"])
+
+    def test_stored_mixer_unknown_top_level_allowed_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            mixer = root / "opt/audiohub/src/audiohub/mixer.py"
+            mixer.write_text(mixer.read_text().replace(
+                "if set(current) - allowed:", "if set(current) - {}:"
+            ))
+            self.assertFalse(audit.inspect(root)["mixer_stored_controls_strict_schema"])
+
+    def test_stored_mixer_unknown_channel_allowed_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            mixer = root / "opt/audiohub/src/audiohub/mixer.py"
+            mixer.write_text(mixer.read_text().replace(
+                'if set(value) - {"volume", "mute", *EQ_BANDS}:', "if False:"
+            ))
+            self.assertFalse(audit.inspect(root)["mixer_stored_controls_strict_schema"])
 
     def test_mixer_huge_integer_fail_closed_audit_guard_present(self):
         with tempfile.TemporaryDirectory() as tmp:

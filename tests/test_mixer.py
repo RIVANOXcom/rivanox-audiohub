@@ -26,6 +26,38 @@ class MixerTests(unittest.TestCase):
             with self.subTest(payload=payload), self.assertRaises(ValueError):
                 patch_settings(defaults(), payload)
 
+
+    def test_unknown_stored_top_level_settings_rejected_without_normalization(self):
+        for unknown in ({"legacy_admin": 1}, {"device_serial": "private"},
+                        {0: "unexpected"}):
+            old = defaults()
+            old.update(unknown)
+            with self.subTest(keys=repr(list(unknown))):
+                with self.assertRaises(ValueError):
+                    patch_settings(old, {})
+                with self.assertRaises(ValueError):
+                    patch_settings(old, {"master": 30})
+
+    def test_unknown_stored_channel_settings_rejected_even_if_patch_overwrites(self):
+        for channel in CHANNELS:
+            old = defaults()
+            old[channel]["legacy_filter"] = 123
+            with self.subTest(channel=channel):
+                with self.assertRaises(ValueError):
+                    patch_settings(old, {})
+                with self.assertRaises(ValueError):
+                    patch_settings(old, {channel: {"volume": 5}})
+
+    def test_partial_stored_settings_remain_supported_without_unknown_fields(self):
+        old = {"master": 80, "music": {"volume": 22, "mute": True}}
+        clean = patch_settings(old, {"tablet": {"treble": -12}})
+        self.assertEqual(clean["master"], 80)
+        self.assertEqual(clean["music"]["volume"], 22)
+        self.assertTrue(clean["music"]["mute"])
+        self.assertEqual(clean["laptop"]["volume"], 50)
+        self.assertEqual(clean["tablet"]["treble"], -12)
+        self.assertEqual(set(clean), {"master", *CHANNELS})
+
     def test_bad_numbers_rejected(self):
         for value in ("10", True, -1, 101, float("nan"), float("inf"), 2.5):
             with self.subTest(value=value), self.assertRaises(ValueError):
