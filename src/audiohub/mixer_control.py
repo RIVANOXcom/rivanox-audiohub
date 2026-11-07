@@ -8,6 +8,8 @@ private settings on its next poll and applies conservative gain attenuation.
 from __future__ import annotations
 
 import argparse
+import base64
+import binascii
 import fcntl
 import hashlib
 import json
@@ -16,7 +18,7 @@ from pathlib import Path
 import stat
 import time
 
-from .mixer import CHANNELS, defaults, patch_settings, requested_mix_controls
+from .mixer import CHANNELS, EQ_BANDS, defaults, patch_settings, requested_mix_controls
 from .runtime import SETTINGS, STATE, _private_parent_fd, read_json, atomic_json
 
 LOCK_NAME = ".mixer-settings.lock"
@@ -159,7 +161,74 @@ def _preview_snapshot(*, path=SETTINGS):
         os.close(dirfd)
 
 
-def preview_change(patch, *, path=SETTINGS):
+def _baseline_token(settings):
+    """Encode only bounded known master/input/EQ controls; no files or IDs."""
+    value = [1, settings["master"], [
+        [settings[slot]["volume"], settings[slot]["mute"],
+         *(settings[slot][band] for band in EQ_BANDS)]
+        for slot in CHANNELS
+    ]]
+    raw = json.dumps(value, separators=(",", ":"), allow_nan=False).encode("ascii")
+    return "b1-" + base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+
+
+def _decode_baseline(value):
+    """Strict compact operator-supplied baseline, never untrusted JSON keys."""
+    if (type(value) is not str or not 4 <= len(value) <= 256
+            or not value.startswith("b1-")):
+        raise MixerControlUnavailable("Invalid private mixer comparison baseline")
+    token = value[3:]
+    if not token or any(ch not in
+                        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+                        for ch in token):
+        raise MixerControlUnavailable("Invalid private mixer comparison baseline")
+    try:
+        raw = base64.b64decode(token + "=" * (-len(token) % 4),
+                               altchars=b"-_", validate=True)
+        if len(raw) > 200:
+            raise ValueError("Oversized mixer comparison baseline")
+        val = json.loads(raw)
+        if (type(val) is not list or len(val) != 3 or type(val[0]) is not int
+                or val[0] != 1 or type(val[1]) is not int
+                or type(val[2]) is not list or len(val[2]) != len(CHANNELS)):
+            raise ValueError("Invalid mixer comparison shape")
+        state = {"master": val[1]}
+        for slot, controls in zip(CHANNELS, val[2]):
+            if (type(controls) is not list or len(controls) != 5
+                    or type(controls[0]) is not int
+                    or type(controls[1]) is not bool
+                    or any(type(x) is not int for x in controls[2:])):
+                raise ValueError("Invalid mixer comparison controls")
+            state[slot] = {
+                "volume": controls[0], "mute": controls[1],
+                **dict(zip(EQ_BANDS, controls[2:]))
+            }
+        state = patch_settings(defaults(), state)
+        if _baseline_token(state) != value:
+            raise ValueError("Noncanonical mixer comparison baseline")
+        return state
+    except (ValueError, TypeError, UnicodeError, binascii.Error, OverflowError):
+        raise MixerControlUnavailable("Invalid private mixer comparison baseline") from None
+
+
+def _control_differences(before, after, *, fields=("volume", "mute")):
+    """Readable fixed-order changes; include EQ only in baseline comparisons."""
+    differences = []
+    if before["master"] != after["master"]:
+        differences.append({"control": "master", "previous": before["master"],
+                            "current": after["master"]})
+    for slot in CHANNELS:
+        for field in fields:
+            if before[slot][field] != after[slot][field]:
+                differences.append({
+                    "control": slot + "." + field,
+                    "previous": before[slot][field],
+                    "current": after[slot][field],
+                })
+    return differences
+
+
+def preview_change(patch, *, path=SETTINGS, baseline=None):
     """Show a validated prospective request; no lock, write, or audio action.
 
     The returned opaque revision may be passed to an independently confirmed
@@ -167,6 +236,7 @@ def preview_change(patch, *, path=SETTINGS):
     Return only known volume/mute fields, never private routes or IDs.
     """
     try:
+        previous = _decode_baseline(baseline) if baseline is not None else None
         current, revision = _preview_snapshot(path=path)
         before = requested_mix_controls(current)
         after = requested_mix_controls(patch_settings(current, patch))
@@ -179,9 +249,18 @@ def preview_change(patch, *, path=SETTINGS):
         for field in ("volume", "mute"):
             if before[slot][field] != after[slot][field]:
                 changes.append(slot + "." + field)
+    compared = (_control_differences(
+        previous, current, fields=("volume", "mute", *EQ_BANDS)
+    ) if previous is not None else None)
+    planned = _control_differences(before, after)
     return {
         "mode": "preview-only",
         "revision": revision,
+        "comparison_baseline": _baseline_token(current),
+        # null means no prior snapshot was provided; [] means same values.
+        # A previous opaque revision alone cannot reveal past control values.
+        "changed_since_baseline": compared,
+        "planned_changes": planned,
         "before": before,
         "after": after,
         "would_change": changes,
@@ -303,6 +382,8 @@ def main(argv=None):
                         help="Show requested changes without writing any settings")
     parser.add_argument("--if-preview-revision", metavar="REV",
                         help="Require matching revision from a recent --preview before saving")
+    parser.add_argument("--compare-baseline", metavar="BASELINE",
+                        help="Compare current inputs and stored EQ to an earlier preview snapshot")
     parser.add_argument("--wait-for-supervisor", action="store_true",
                         help="After confirmed save, check for software acceptance for up to 10 seconds")
     commands = parser.add_subparsers(dest="action", required=True)
@@ -343,6 +424,14 @@ def main(argv=None):
                 args.preview or not args.confirm_local_mixer_change
                 or args.action in ("show", "status")):
             raise MixerControlUnavailable("Preview revision requires confirmed change")
+        if args.compare_baseline is not None:
+            if (args.action in ("show", "status")
+                    or not (args.preview or (
+                        args.confirm_local_mixer_change
+                        and args.if_preview_revision is not None))):
+                raise MixerControlUnavailable("Baseline requires preview or guarded change")
+            # Reject malformed snapshots BEFORE a guarded save, never after it.
+            _decode_baseline(args.compare_baseline)
         if args.action == "show":
             state = show()
         elif args.action == "status":
@@ -371,7 +460,9 @@ def main(argv=None):
             else:
                 patch = {args.slot: {"mute": args.value == "on"}}
             if args.preview:
-                state = preview_change(patch)
+                extras = ({"baseline": args.compare_baseline}
+                          if args.compare_baseline is not None else {})
+                state = preview_change(patch, **extras)
             else:
                 kwargs = ({"if_revision": args.if_preview_revision}
                           if args.if_preview_revision is not None else {})
@@ -382,7 +473,9 @@ def main(argv=None):
         # fresh read-only projection so the operator can decide again. It is
         # never silently applied, even if a concurrent writer changed state.
         try:
-            refreshed = preview_change(patch)
+            extras = ({"baseline": args.compare_baseline}
+                      if args.compare_baseline is not None else {})
+            refreshed = preview_change(patch, **extras)
         except (MixerControlUnavailable, OSError, PermissionError, ValueError, TypeError):
             parser.exit(4, "AudioHub mixer not changed: preview is outdated. "
                            "Fresh preview unavailable; inspect local settings.\n")
