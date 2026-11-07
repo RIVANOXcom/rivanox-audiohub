@@ -115,6 +115,74 @@ def _profile_catalog_with_revision(path, dirfd):
     return catalog, "p1-" + hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
+def profile_selection_overview(*, path=PROFILE_PATH, settings_path=SETTINGS):
+    """List all saved profiles with projected effects on current requests.
+
+    Read just ONE catalog and ONE mixer-settings generation; refuse a
+    simultaneous atomic replacement of either. No locks, writes, routing,
+    EQ changes, sound measurements or automatic profile selection.
+    """
+    path, settings_path = _profile_snapshot_paths(path, settings_path)
+    if os.geteuid() == 0:
+        raise MixerControlUnavailable("Use the unprivileged audiohub account")
+    try:
+        dirfd = _private_parent_fd(path, create=False)
+    except FileNotFoundError:
+        # No profile catalog or mixer settings can exist in a missing
+        # private directory. Do not create it merely to show the choices.
+        current, mixer_revision = _preview_snapshot(path=settings_path)
+        catalog = {"version": 1, "profiles": {}}
+        profile_revision = None
+    else:
+        try:
+            before_profile = _state_identity(path, dirfd)
+            before_mixer = _state_identity(settings_path, dirfd)
+            catalog, profile_revision = _profile_catalog_with_revision(path, dirfd)
+            current, mixer_revision = _state_with_revision(settings_path, dirfd)
+            if (before_profile != _state_identity(path, dirfd)
+                    or before_mixer != _state_identity(settings_path, dirfd)):
+                raise MixerControlUnavailable("Private profile or mixer changed during selection")
+        finally:
+            os.close(dirfd)
+    requested = _profile_levels({
+        "master": current["master"],
+        **{slot: current[slot]["volume"] for slot in CHANNELS},
+    })
+    muted = [slot for slot in CHANNELS if current[slot]["mute"]]
+    choices = []
+    for name in sorted(catalog["profiles"]):
+        values = _profile_levels(catalog["profiles"][name])
+        deltas = {field: values[field] - requested[field]
+                  for field in PROFILE_FIELDS}
+        changed = [field for field in PROFILE_FIELDS if deltas[field] != 0]
+        choices.append({
+            "name": name,
+            "requested_volumes": values,
+            "deltas_from_current": deltas,
+            "would_change": changed,
+            "already_matches": not changed,
+            "muted_sources_remaining_muted": list(muted),
+            "volume_changes_while_muted": [
+                slot for slot in muted if deltas[slot] != 0
+            ],
+        })
+    return {
+        "mode": "profile-choices-read-only",
+        "current_requested_volumes": requested,
+        "profiles": choices,
+        "profile_count": len(choices),
+        "profile_limit": MAX_CUSTOM_PROFILES,
+        "mixer_revision": mixer_revision,
+        "profile_revision": profile_revision,
+        "preview_selected_with": "--preview profile NAME",
+        "apply_requires_separate_confirmation": True,
+        "mute_states_preserved": True,
+        "stored_eq_preserved": True,
+        "profile_written": False, "mixer_settings_written": False,
+        "audible_playback_verified": False,
+    }
+
+
 def compare_profile_to_current(name, *, path=PROFILE_PATH,
                                settings_path=SETTINGS):
     """Show requested mixer levels alongside one saved volume profile.
@@ -822,6 +890,10 @@ def main(argv=None):
     preset.add_argument("name", choices=tuple(PRESET_VOLUMES))
     commands.add_parser("list-profiles",
                         help="List private custom volume profiles without changing anything")
+    commands.add_parser(
+        "profile-choices",
+        help="Read-only overview of all saved profiles versus current requested levels and mutes",
+    )
     save_profile = commands.add_parser(
         "save-profile", help="Store custom volume levels privately; do not apply them")
     save_profile.add_argument("name")
@@ -859,7 +931,8 @@ def main(argv=None):
         mix.add_argument(slot, type=int)
     args = parser.parse_args(argv)
     try:
-        if args.action in ("compare-profiles", "compare-profile-current") and (
+        if args.action in ("compare-profiles", "compare-profile-current",
+                           "profile-choices") and (
                 args.preview or args.confirm_local_mixer_change
                 or args.confirm_local_profile_save or args.wait_for_supervisor
                 or args.if_preview_revision is not None
@@ -928,6 +1001,8 @@ def main(argv=None):
             state = application_status()
         elif args.action == "list-profiles":
             state = list_volume_profiles()
+        elif args.action == "profile-choices":
+            state = profile_selection_overview()
         elif args.action == "compare-profiles":
             state = compare_volume_profiles(args.left, args.right)
         elif args.action == "compare-profile-current":
@@ -1074,7 +1149,7 @@ def main(argv=None):
         else:
             print("Private volume profile saved; active mixer settings unchanged.")
     elif args.action not in ("show", "list-profiles", "compare-profiles",
-                              "compare-profile-current"):
+                              "compare-profile-current", "profile-choices"):
         print("Saved locally; running supervisor applies validated gains on its next poll. "
               "No physical output or audible playback was verified.")
 
