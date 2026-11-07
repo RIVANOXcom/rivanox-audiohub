@@ -325,6 +325,29 @@ def inspect(root: Path) -> dict[str, bool]:
         ) and 'path.with_suffix(".tmp")' not in runtime_security
     except OSError:
         checks["runtime_private_state_nofollow_atomic"] = False
+    # Bluetooth auto-routing must write its candidate mapping before
+    # swapping the active mapping. A transient private file write error
+    # must never be treated as committed on the next audio poll.
+    try:
+        runtime = (source / "runtime.py").read_text()
+        start = runtime.index("    def _assign(self, sources):")
+        end = runtime.index("    def _retry_after_failure(", start)
+        assign = runtime[start:end]
+        checks["bt_auto_assignment_persist_before_memory_commit"] = all(
+            marker in assign for marker in (
+                "filtered = {",
+                "candidate = unique",
+                "or address in candidate",
+                "candidate[address] = channel",
+                "atomic_json(ASSIGNMENTS, candidate)",
+                "self.assignments = candidate",
+                "if changed:",
+            )
+        ) and assign.index("atomic_json(ASSIGNMENTS, candidate)") < assign.rindex(
+            "self.assignments = candidate"
+        ) and "self.assignments[address] = channel" not in assign
+    except (OSError, ValueError):
+        checks["bt_auto_assignment_persist_before_memory_commit"] = False
     # User-owned settings and BT mapping files are parsed by the real
     # supervisor, not just read-only status paths. No contradictory keys,
     # nonfinite numbers or deep but size-bounded JSON may influence routing.
