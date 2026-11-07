@@ -101,6 +101,9 @@ def application_status(*, path=SETTINGS, runtime_path=STATE, now=None):
         state = "pending" if pending_controls else "accepted"
     return {"requested": requested, "supervisor": state,
             "pending_controls": pending_controls,
+            # Local-only timestamp from the SAME private snapshot as the
+            # accepted controls; do not trust it if the snapshot is stale.
+            "supervisor_updated_at": at if fresh else None,
             "audible_playback_verified": False}
 
 
@@ -173,16 +176,22 @@ def change(patch, *, path=SETTINGS, confirmed=False):
         os.close(dirfd)
 
 
-def wait_for_supervisor(saved, *, checks=10):
+def wait_for_supervisor(saved, *, checks=10, saved_at=None):
     """Bounded follow-up for a saved request; never measure actual sound.
 
-    The supervisor may acknowledge only the *current* private settings.
+    Require a complete fresh acknowledgement timestamped *after* the save:
+    a recent matching status from before the write cannot prove new delivery.
     If another local writer changes the request, report 'superseded' rather
     than attributing that writer's acknowledgement to this invocation.
     This reads status only; it never re-applies an update automatically.
     """
     expected = requested_mix_controls(saved)
-    if type(checks) is not int or not 0 <= checks <= 10:
+    # The saved settings have just been atomically committed by the caller.
+    # Require an ACK from a *subsequent* supervisor poll, not merely a
+    # recent ACK matching the same levels from an earlier cycle.
+    saved_after = int(time.time()) if saved_at is None else saved_at
+    if (type(checks) is not int or not 0 <= checks <= 10
+            or type(saved_after) is not int):
         raise ValueError("Invalid bounded supervisor wait")
     result = "unavailable"
     pending = None
@@ -199,10 +208,16 @@ def wait_for_supervisor(saved, *, checks=10):
             pending = None
             break
         if current_requested == expected and current.get("supervisor") == "accepted":
-            result = "accepted"
-            pending = []
-            break
-        if current_requested == expected and current.get("supervisor") == "pending":
+            observed_at = current.get("supervisor_updated_at")
+            if type(observed_at) is int and observed_at > saved_after:
+                result = "accepted"
+                pending = []
+                break
+            # An older matching success can belong to a *previous* setting
+            # cycle. It is not evidence of post-write acceptance.
+            result = "pending" if type(observed_at) is int else "unavailable"
+            pending = None
+        elif current_requested == expected and current.get("supervisor") == "pending":
             result = "pending"
             pending = current.get("pending_controls")
         else:
