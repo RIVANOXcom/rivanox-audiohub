@@ -135,13 +135,122 @@ class UsbSoundcheckTests(unittest.TestCase):
                     soundcheck.run_soundcheck(confirmed=True)
                 self.assertNotIn("SECRET", str(failure.exception))
 
+
+    @staticmethod
+    def eq_graph(slot="music", *, connected=True, foreign=False,
+                 duplicated=False, missing_sink=False, missing_usb=False):
+        """Synthetic topology: exact virtual input + filter output -> USB."""
+        target = "audiohub." + slot
+        data = ([] if missing_usb else [node(11, EDIFIER)])
+        if not missing_sink:
+            data.append(node(31, target))
+        data.append(node(32, target + ".output", "Stream/Output/Audio"))
+        if duplicated:
+            data.append(node(33, target + ".output", "Stream/Output/Audio"))
+        if connected:
+            data.append({"type": "PipeWire:Interface:Link",
+                         "info": {"output-node-id": 32, "input-node-id": 11}})
+        if foreign:
+            data.extend([
+                node(12, "alsa_output.pci-HDMI"),
+                {"type": "PipeWire:Interface:Link",
+                 "info": {"output-node-id": 32, "input-node-id": 12}},
+            ])
+        return data
+
+    @mock.patch("audiohub.usb_soundcheck.bounded_command_output")
+    def test_each_virtual_eq_input_requires_one_direct_usb_link(self, inspect):
+        for slot in ("music", "laptop", "tablet"):
+            with self.subTest(slot=slot):
+                inspect.return_value = subprocess.CompletedProcess(
+                    ("pw-dump",), 0, json.dumps(self.eq_graph(slot)), ""
+                )
+                self.assertEqual(soundcheck.safe_input_target(slot), "audiohub." + slot)
+        self.assertEqual(inspect.call_count, 3)
+        for call in inspect.call_args_list:
+            self.assertEqual(call.args[0], ("pw-dump",))
+            self.assertEqual(call.kwargs, {"timeout": 5})
+
+    @mock.patch("audiohub.usb_soundcheck.bounded_command_output")
+    def test_eq_input_refuses_missing_competing_or_ambiguous_output(self, inspect):
+        configurations = (
+            {"connected": False},
+            {"foreign": True},
+            {"duplicated": True},
+            {"missing_sink": True},
+            {"missing_usb": True},
+        )
+        for opts in configurations:
+            with self.subTest(opts=opts):
+                inspect.return_value = subprocess.CompletedProcess(
+                    ("pw-dump",), 0, json.dumps(self.eq_graph(**opts)), ""
+                )
+                with self.assertRaises(soundcheck.SoundcheckUnavailable):
+                    soundcheck.safe_input_target("music")
+
+    @mock.patch("audiohub.usb_soundcheck.bounded_command_output")
+    def test_eq_input_rejects_unsafe_identifiers_and_broken_graph(self, inspect):
+        for slot in (None, 1, True, "bluetooth", "music; cat /etc/passwd", ""):
+            with self.subTest(slot=repr(slot)), self.assertRaises(
+                    soundcheck.SoundcheckUnavailable):
+                soundcheck.safe_input_target(slot)
+        inspect.assert_not_called()
+        inspect.return_value = subprocess.CompletedProcess(
+            ("pw-dump",), 0, "[invalid-json", ""
+        )
+        with self.assertRaises(soundcheck.SoundcheckUnavailable):
+            soundcheck.safe_input_target("tablet")
+
+    @mock.patch("audiohub.usb_soundcheck.os.geteuid", return_value=1000)
+    @mock.patch("audiohub.usb_soundcheck.subprocess.run")
+    @mock.patch("audiohub.usb_soundcheck.bounded_command_output")
+    def test_explicit_virtual_input_sends_quiet_stereo_to_only_selected_eq(
+            self, inspect, player, euid):
+        inspect.return_value = subprocess.CompletedProcess(
+            ("pw-dump",), 0, json.dumps(self.eq_graph("tablet")), ""
+        )
+        player.return_value = subprocess.CompletedProcess(("pw-cat",), 0, "", "")
+        self.assertTrue(soundcheck.run_soundcheck(
+            confirmed=True, through_input="tablet"
+        ))
+        player.assert_called_once()
+        cmd, kwargs = player.call_args
+        self.assertIn("--target=audiohub.tablet", cmd[0])
+        self.assertNotIn("--target=" + EDIFIER, cmd[0])
+        self.assertFalse(any("HDMI" in arg or "wpctl" in arg for arg in cmd[0]))
+        self.assertLessEqual(max(abs(sample) for pair in
+                             struct.iter_unpack("<hh", kwargs["input"])
+                             for sample in pair), 656)
+        self.assertEqual(kwargs["timeout"], soundcheck.MAX_PLAY_SECONDS)
+        self.assertFalse(kwargs["shell"])
+
+    @mock.patch("audiohub.usb_soundcheck.os.geteuid", return_value=1000)
+    @mock.patch("audiohub.usb_soundcheck.subprocess.run")
+    @mock.patch("audiohub.usb_soundcheck.bounded_command_output")
+    def test_eq_check_missing_direct_link_cannot_start_player(self, inspect, player, euid):
+        inspect.return_value = subprocess.CompletedProcess(
+            ("pw-dump",), 0, json.dumps(self.eq_graph(connected=False)), ""
+        )
+        with self.assertRaises(soundcheck.SoundcheckUnavailable):
+            soundcheck.run_soundcheck(confirmed=True, through_input="music")
+        player.assert_not_called()
+
+    @mock.patch("audiohub.usb_soundcheck.os.geteuid", return_value=1000)
+    @mock.patch("audiohub.usb_soundcheck.subprocess.run")
+    @mock.patch("audiohub.usb_soundcheck.bounded_command_output")
+    def test_explicit_input_requires_same_manual_confirmation(self, inspect, player, euid):
+        with self.assertRaisesRegex(soundcheck.SoundcheckUnavailable, "confirmation"):
+            soundcheck.run_soundcheck(confirmed=False, through_input="music")
+        inspect.assert_not_called()
+        player.assert_not_called()
+
     @mock.patch("audiohub.usb_soundcheck.run_soundcheck")
     def test_cli_disabled_without_explicit_operator_option(self, run):
         run.side_effect = soundcheck.SoundcheckUnavailable("confirmation required")
         with self.assertRaises(SystemExit) as stopped:
             soundcheck.main([])
         self.assertEqual(stopped.exception.code, 2)
-        run.assert_called_once_with(confirmed=False)
+        run.assert_called_once_with(confirmed=False, through_input=None)
 
 
 if __name__ == "__main__":
