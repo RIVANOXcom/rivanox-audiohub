@@ -77,6 +77,12 @@ PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-m
 # One atomic update to master, then music, laptop and tablet levels:
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-mixer-change set-mix 20 35 25 0
 
+# Capture the CURRENT requested mixer levels as a new private named profile:
+# 1) Preview the exact currently stored (not measured) four levels and REV:
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --preview save-current-profile my-snapshot
+# 2) Independently approve writing the profile; use the REV from step 1:
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-profile-save --if-preview-revision v1-REPLACE-WITH-64-HEX-CHARS save-current-profile my-snapshot
+
 # Local, user-defined volume profiles (up to eight, fixed safe names):
 # First define a private profile; this does NOT modify the active mixer:
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-profile-save save-profile cinema 25 30 50 15
@@ -98,6 +104,28 @@ PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-m
 # COMPLETE PipeWire supervisor command acknowledgement (NOT measured audio):
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-mixer-change --wait-for-supervisor set-mix 20 35 25 0
 ```
+
+For an exact snapshot of the **currently requested** private mixer
+master/music/laptop/tablet levels without retyping them, use
+`--preview save-current-profile NAME`. It prints a no-write
+`mode=profile-capture-preview` report with four bounded `volumes`
+and the same mixer generation `revision` used by guarded setting
+changes. No profile file, settings file, lock or directory is created
+by the preview when absent. To create the profile, issue a **separate**
+`--confirm-local-profile-save --if-preview-revision REV
+save-current-profile NAME` command with the exact revision you
+just reviewed. Profile catalog creation and the mixer generation check
+occur under the **same exclusive local writer lock**: if any later
+mixer write changed master, a source volume, a mute, or even stored EQ,
+the profile is NOT saved (exit 4) and a new read-only capture preview
+is offered for renewed approval. A missing, malformed, unsafe or
+already-named catalog is never overwritten. Successful capture saves
+only the four volumes; it does not copy mutes or EQ, and it does not
+change the active mixer or claim real speaker sound. The operator
+must still separately preview and approve any later application with
+`--preview profile NAME` and a confirmed `profile NAME` command.
+The 8-profile immutable name limit and 0600/0700 safety rules also
+apply to captured profiles.
 
 Local user-defined `save-profile NAME MASTER MUSIC LAPTOP TABLET`
 stores a **volume-only** profile under the unprivileged account in
