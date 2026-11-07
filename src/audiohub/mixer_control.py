@@ -115,6 +115,49 @@ def _profile_catalog_with_revision(path, dirfd):
     return catalog, "p1-" + hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
+def compare_volume_profiles(left, right, *, path=PROFILE_PATH):
+    """Read one private catalog generation and compare only four volume fields.
+
+    No lock, directory creation, settings write or audio action is performed.
+    If a concurrent atomic writer changes this file mid-read, refuse to
+    present a potentially mismatched comparison of two generations.
+    """
+    _check_profile_name(left)
+    _check_profile_name(right)
+    if left == right:
+        raise MixerControlUnavailable("Choose two distinct profiles for comparison")
+    if os.geteuid() == 0:
+        raise MixerControlUnavailable("Use the unprivileged audiohub account")
+    path = Path(path)
+    try:
+        dirfd = _private_parent_fd(path, create=False)
+    except FileNotFoundError:
+        raise MixerControlUnavailable("Private volume profile catalog not found") from None
+    try:
+        catalog, revision = _profile_catalog_with_revision(path, dirfd)
+    finally:
+        os.close(dirfd)
+    profiles = catalog["profiles"]
+    if left not in profiles or right not in profiles:
+        raise MixerControlUnavailable("Named volume profile does not exist")
+    first = _profile_levels(profiles[left])
+    second = _profile_levels(profiles[right])
+    differences = [
+        {"control": field, "left": first[field], "right": second[field],
+         "delta": second[field] - first[field]}
+        for field in PROFILE_FIELDS if first[field] != second[field]
+    ]
+    return {
+        "mode": "profile-compare-only",
+        "left": left, "right": right,
+        "left_volumes": first, "right_volumes": second,
+        "differences": differences, "same_levels": not differences,
+        "profile_revision": revision,
+        "profile_written": False, "mixer_settings_written": False,
+        "audible_playback_verified": False,
+    }
+
+
 def preview_profile_copy(source, destination, *, path=PROFILE_PATH):
     """Plan an immutable volume-only local copy, with NO file or lock creation."""
     _check_profile_name(source)
@@ -700,6 +743,12 @@ def main(argv=None):
     )
     copy.add_argument("source")
     copy.add_argument("destination")
+    compare = commands.add_parser(
+        "compare-profiles",
+        help="Compare two saved private volume profiles read-only",
+    )
+    compare.add_argument("left")
+    compare.add_argument("right")
     custom = commands.add_parser(
         "profile", help="Preview or explicitly apply a saved custom volume profile")
     custom.add_argument("name")
@@ -711,6 +760,13 @@ def main(argv=None):
         mix.add_argument(slot, type=int)
     args = parser.parse_args(argv)
     try:
+        if args.action == "compare-profiles" and (
+                args.preview or args.confirm_local_mixer_change
+                or args.confirm_local_profile_save or args.wait_for_supervisor
+                or args.if_preview_revision is not None
+                or args.if_profile_revision is not None
+                or args.compare_baseline is not None):
+            raise MixerControlUnavailable("Profile comparison is already read-only")
         if args.if_profile_revision is not None and args.action != "copy-profile":
             raise MixerControlUnavailable("Profile revision is only for copying profiles")
         if args.action == "copy-profile" and (
@@ -773,6 +829,8 @@ def main(argv=None):
             state = application_status()
         elif args.action == "list-profiles":
             state = list_volume_profiles()
+        elif args.action == "compare-profiles":
+            state = compare_volume_profiles(args.left, args.right)
         elif args.action == "save-profile":
             state = save_volume_profile(
                 args.name, *(getattr(args, key) for key in PROFILE_FIELDS),
@@ -908,7 +966,7 @@ def main(argv=None):
             print("Read-only private profile preview: no profile or mixer settings saved.")
         else:
             print("Private volume profile saved; active mixer settings unchanged.")
-    elif args.action not in ("show", "list-profiles"):
+    elif args.action not in ("show", "list-profiles", "compare-profiles"):
         print("Saved locally; running supervisor applies validated gains on its next poll. "
               "No physical output or audible playback was verified.")
 
