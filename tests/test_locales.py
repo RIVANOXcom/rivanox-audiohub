@@ -305,6 +305,13 @@ def preview_channel_renderer_source():
 class BrowserLocaleInputEditTests(unittest.TestCase):
     """Async translations must not erase user input or steal keyboard focus."""
 
+    def test_input_length_matches_unicode_validator_and_previews_early_feedback(self):
+        source = PREVIEW.read_text(encoding="utf-8")
+        self.assertIn('maxLength: 64, autoComplete: "off"', source)
+        self.assertNotIn('maxLength: 32, autoComplete: "off"', source)
+        self.assertIn('renameStatus.textContent = hasInvalidName() ?', source)
+        self.assertIn('const hasInvalidName = () => {', source)
+
     def test_draft_and_focus_are_captured_before_replacing_cards(self):
         source = PREVIEW.read_text(encoding="utf-8")
         start = source.index("  function drawChannels() {")
@@ -368,7 +375,6 @@ const state = {
 };
 const saved = [];
 const savePreviewLabels = () => {saved.push({...previewLabels});};
-const validName = name => typeof name === "string" && name.trim() || null;
 let words = {
   input1: "Input 1", input2: "Input 2", input3: "Input 3",
   inputName: "Input name", volume: "Volume", bass: "Bass",
@@ -429,9 +435,40 @@ const languageDropdown = new Node("select");
 languageDropdown.focus();
 drawChannels();
 assert.equal(document.activeElement, languageDropdown);
+
+// A 32-codepoint name is valid even if it needs 64 UTF-16 code units.
+const emoji = "🙂".repeat(32);
+const tabletName = byId("tablet-display-name");
+assert.equal(tabletName.maxLength, 64);
+tabletName.value = emoji;
+tabletName.handlers.input();
+const tabletFeedback = root.children[2].children[1].children[3];
+assert.equal(tabletFeedback.textContent, "");
+tabletName.handlers.change();
+assert.equal(previewLabels.tablet, emoji);
+
+// Too many visible characters must be called out before commit.
+words.invalidInputName = "Ungültiger Name";
+const laptopName = byId("laptop-display-name");
+laptopName.value = "A".repeat(33);
+laptopName.handlers.input();
+const laptopFeedback = root.children[1].children[1].children[3];
+assert.equal(laptopFeedback.textContent, "Ungültiger Name");
+laptopName.handlers.change();
+assert.equal(laptopName.value, "Eingang 2");
+assert.equal(previewLabels.laptop, undefined);
+
+// Duplicate input names must also receive immediate feedback.
+laptopName.value = emoji;
+laptopName.handlers.input();
+assert.equal(laptopFeedback.textContent, "Ungültiger Name");
+laptopName.value = "Studio";
+laptopName.handlers.input();
+assert.equal(laptopFeedback.textContent, "");
 '''
         result = subprocess.run(
-            ["node", "-e", setup + "\n" + preview_channel_renderer_source() + "\n" + verify],
+            ["node", "-e", setup + "\n" + preview_validator_source() + "\n" +
+             preview_channel_renderer_source() + "\n" + verify],
             capture_output=True, text=True, timeout=15, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
 
