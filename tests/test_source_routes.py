@@ -622,7 +622,7 @@ class LocalSourceStatusTests(unittest.TestCase):
 
     def test_source_routes_status_command_is_read_only_and_forbids_write_flags(self):
         expected = routes.interpret_source_status({}, now=100)
-        with (mock.patch.object(routes, "read_report",
+        with (mock.patch.object(routes, "read_source_report",
                                 return_value=expected) as show,
               mock.patch.object(routes, "update") as writer):
             with redirect_stdout(StringIO()) as out:
@@ -635,7 +635,7 @@ class LocalSourceStatusTests(unittest.TestCase):
                      ["--confirm-local-route-change", "status"],
                      ["--if-preview-revision", token, "status"]):
             with self.subTest(args=args):
-                with (mock.patch.object(routes, "read_report") as show,
+                with (mock.patch.object(routes, "read_source_report") as show,
                       mock.patch.object(routes, "update") as writer):
                     with redirect_stdout(StringIO()), redirect_stderr(StringIO()):
                         with self.assertRaises(SystemExit) as failed:
