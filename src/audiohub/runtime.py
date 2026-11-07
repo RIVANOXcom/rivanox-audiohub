@@ -68,7 +68,13 @@ def _private_parent_fd(path, *, create=False):
             except FileNotFoundError:
                 if not create:
                     raise
-                os.mkdir(part, 0o700, dir_fd=fd)
+                try:
+                    os.mkdir(part, 0o700, dir_fd=fd)
+                except FileExistsError:
+                    # Another local writer may have created the directory.
+                    # Always reopen with O_DIRECTORY|O_NOFOLLOW, never trust
+                    # the existence error as proof of safe directory identity.
+                    pass
                 next_fd = os.open(part, flags, dir_fd=fd)
             os.close(fd)
             fd = next_fd
