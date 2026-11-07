@@ -711,17 +711,17 @@ class LocalSourceStatusTests(unittest.TestCase):
     def test_bluez_connected_parser_accepts_only_exact_device_and_one_boolean(self):
         mac = "AA:BB:CC:DD:EE:FF"
         self.assertTrue(routes._bluez_connected_property(
-            "Device " + mac + " (public) Name\\n    Connected: yes\\n", mac))
+            "Device " + mac + " (public) Name\n    Connected: yes\n", mac))
         self.assertFalse(routes._bluez_connected_property(
-            "Device " + mac + "\\n\\tConnected: no\\n", mac))
+            "Device " + mac + "\n\tConnected: no\n", mac))
         for invalid in (
-            "Device 11:22:33:44:55:66\\n Connected: yes\\n",
-            "Device " + mac + "\\n Connected: yes\\nConnected: no\\n",
-            "Device " + mac + "\\n Connected: YES\\n",
-            "Device " + mac + "\\n Connected: yes\\nDevice " + mac + "\\n",
-            "Device " + mac + "\\n Connected: yes\\nDevice 11:22:33:44:55:66\\n",
-            "Device " + mac + "\\n Paired: yes\\n",
-            "Device " + mac + "\\x00 Connected: yes\\n",
+            "Device 11:22:33:44:55:66\n Connected: yes\n",
+            "Device " + mac + "\n Connected: yes\nConnected: no\n",
+            "Device " + mac + "\n Connected: YES\n",
+            "Device " + mac + "\n Connected: yes\nDevice " + mac + "\n",
+            "Device " + mac + "\n Connected: yes\nDevice 11:22:33:44:55:66\n",
+            "Device " + mac + "\n Paired: yes\n",
+            "Device " + mac + "\x00 Connected: yes\n",
             "x" * 4097,
             None,
             11,
@@ -742,8 +742,8 @@ class LocalSourceStatusTests(unittest.TestCase):
             self.assertEqual(max_bytes, 4096)
             response = "yes" if argv[2] == "AA:BB:CC:DD:EE:FF" else "no"
             return CompletedProcess(argv, 0,
-                                    "Device " + argv[2] + "\\n    Connected: "
-                                    + response + "\\n", "")
+                                    "Device " + argv[2] + "\n    Connected: "
+                                    + response + "\n", "")
         with (mock.patch.object(routes, "bounded_command_output",
                                 side_effect=runner),
               mock.patch.object(routes, "update") as writer):
@@ -821,7 +821,7 @@ class LocalSourceStatusTests(unittest.TestCase):
         def replacing(argv, *, timeout, max_bytes):
             routes.update(lambda current: dict(current), self.directory)
             return CompletedProcess(argv, 0,
-                                    "Device " + argv[2] + "\\n Connected: yes\\n", "")
+                                    "Device " + argv[2] + "\n Connected: yes\n", "")
         with mock.patch.object(routes, "bounded_command_output",
                                side_effect=replacing):
             report = routes.probe_bluez_connections(
