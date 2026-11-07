@@ -15,6 +15,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import stat
 import time
 
@@ -22,6 +23,10 @@ from .mixer import CHANNELS, EQ_BANDS, defaults, patch_settings, requested_mix_c
 from .runtime import SETTINGS, STATE, _private_parent_fd, read_json, atomic_json
 
 LOCK_NAME = ".mixer-settings.lock"
+PROFILE_PATH = SETTINGS.with_name("volume-profiles.json")
+MAX_CUSTOM_PROFILES = 8
+PROFILE_FIELDS = ("master", *CHANNELS)
+_PROFILE_NAME = re.compile(r"[a-z][a-z0-9-]{0,23}\\Z", re.ASCII)
 
 # Conservative convenience starting points, NOT calibrated output levels.
 # In every preset, existing per-input mute and stored EQ are untouched.
@@ -52,6 +57,112 @@ class MixerControlUnavailable(RuntimeError):
 
 class StaleMixerPreview(MixerControlUnavailable):
     """A conditional write was refused because the preview became stale."""
+
+
+def _check_profile_name(name):
+    if type(name) is not str or _PROFILE_NAME.fullmatch(name) is None:
+        raise MixerControlUnavailable("Invalid local volume profile name")
+    return name
+
+
+def _profile_levels(values):
+    """Reject extra keys, booleans and unbounded levels in private profiles."""
+    if (type(values) is not dict or set(values) != set(PROFILE_FIELDS)
+            or any(type(values[key]) is not int or not 0 <= values[key] <= 100
+                   for key in PROFILE_FIELDS)):
+        raise MixerControlUnavailable("Invalid local volume profile levels")
+    return {key: values[key] for key in PROFILE_FIELDS}
+
+
+def _profile_patch(values):
+    valid = _profile_levels(values)
+    return {"master": valid["master"],
+            **{slot: {"volume": valid[slot]} for slot in CHANNELS}}
+
+
+def _profile_catalog(path, dirfd):
+    """Read only a private regular profile catalog; reject corrupt state."""
+    try:
+        os.stat(path.name, dir_fd=dirfd, follow_symlinks=False)
+    except FileNotFoundError:
+        return {"version": 1, "profiles": {}}
+    fallback = {"__invalid_private_profile_catalog__": True}
+    data = read_json(path, fallback)
+    if data is fallback or type(data) is not dict or set(data) != {"version", "profiles"}:
+        raise MixerControlUnavailable("Unsafe or invalid private volume profiles")
+    if (type(data["version"]) is not int or data["version"] != 1
+            or type(data["profiles"]) is not dict
+            or len(data["profiles"]) > MAX_CUSTOM_PROFILES):
+        raise MixerControlUnavailable("Invalid private volume profiles")
+    for name, values in data["profiles"].items():
+        _check_profile_name(name)
+        _profile_levels(values)
+    return data
+
+
+def list_volume_profiles(*, path=PROFILE_PATH):
+    """Read private profiles with NO directory/file/lock creation."""
+    if os.geteuid() == 0:
+        raise MixerControlUnavailable("Use the unprivileged audiohub account")
+    path = Path(path)
+    try:
+        dirfd = _private_parent_fd(path, create=False)
+    except FileNotFoundError:
+        return {"version": 1, "profiles": {}}
+    try:
+        return _profile_catalog(path, dirfd)
+    finally:
+        os.close(dirfd)
+
+
+def saved_profile_patch(name, *, path=PROFILE_PATH):
+    _check_profile_name(name)
+    profiles = list_volume_profiles(path=path)["profiles"]
+    if name not in profiles:
+        raise MixerControlUnavailable("Local volume profile does not exist")
+    return _profile_patch(profiles[name])
+
+
+def save_volume_profile(name, master, music, laptop, tablet, *,
+                        path=PROFILE_PATH, confirmed=False):
+    """Create one private immutable named volume profile, not active settings.
+
+    The same local writer lock protects concurrent profile creators. Existing
+    names are never overwritten; all fields are fixed integers (no mute/EQ).
+    """
+    if confirmed is not True:
+        raise MixerControlUnavailable("Explicit local profile save confirmation required")
+    _check_profile_name(name)
+    values = _profile_levels(dict(zip(PROFILE_FIELDS,
+                                      (master, music, laptop, tablet))))
+    if os.geteuid() == 0:
+        raise MixerControlUnavailable("Use the unprivileged audiohub account")
+    path = Path(path)
+    dirfd = _private_parent_fd(path, create=True)
+    lockfd = None
+    try:
+        lockfd = os.open(LOCK_NAME, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW
+                         | os.O_CLOEXEC, 0o600, dir_fd=dirfd)
+        st = os.fstat(lockfd)
+        if (not stat.S_ISREG(st.st_mode) or st.st_nlink != 1
+                or st.st_uid != os.geteuid()
+                or stat.S_IMODE(st.st_mode) & 0o077):
+            raise MixerControlUnavailable("Unsafe private profile writer lock")
+        fcntl.flock(lockfd, fcntl.LOCK_EX)
+        catalog = _profile_catalog(path, dirfd)
+        if name in catalog["profiles"]:
+            raise MixerControlUnavailable("Local volume profile already exists")
+        if len(catalog["profiles"]) >= MAX_CUSTOM_PROFILES:
+            raise MixerControlUnavailable("Private volume profile limit reached")
+        catalog["profiles"][name] = values
+        atomic_json(path, catalog)
+        return {"profile_saved": name, "volumes": values,
+                "mixer_settings_written": False,
+                "audible_playback_verified": False}
+    finally:
+        if lockfd is not None:
+            os.close(lockfd)
+        os.close(dirfd)
 
 
 def _existing_state(path, dirfd):
@@ -400,6 +511,8 @@ def main(argv=None):
     )
     parser.add_argument("--confirm-local-mixer-change", action="store_true",
                         help="Explicitly approve an atomic local settings update")
+    parser.add_argument("--confirm-local-profile-save", action="store_true",
+                        help="Explicitly create one immutable private custom volume profile")
     parser.add_argument("--preview", action="store_true",
                         help="Show requested changes without writing any settings")
     parser.add_argument("--if-preview-revision", metavar="REV",
@@ -432,6 +545,16 @@ def main(argv=None):
         help="Request one conservative named volume preset, without unmuting or changing EQ",
     )
     preset.add_argument("name", choices=tuple(PRESET_VOLUMES))
+    commands.add_parser("list-profiles",
+                        help="List private custom volume profiles without changing anything")
+    save_profile = commands.add_parser(
+        "save-profile", help="Store custom volume levels privately; do not apply them")
+    save_profile.add_argument("name")
+    for field in PROFILE_FIELDS:
+        save_profile.add_argument(field, type=int)
+    custom = commands.add_parser(
+        "profile", help="Preview or explicitly apply a saved custom volume profile")
+    custom.add_argument("name")
     mix = commands.add_parser(
         "set-mix", help="Atomically set master and all three input volumes 0..100"
     )
@@ -440,8 +563,21 @@ def main(argv=None):
         mix.add_argument(slot, type=int)
     args = parser.parse_args(argv)
     try:
+        if args.confirm_local_profile_save and args.action != "save-profile":
+            raise MixerControlUnavailable("Private profile save confirmation not applicable")
+        if args.action == "save-profile" and (
+                args.preview or args.confirm_local_mixer_change
+                or args.wait_for_supervisor or args.if_preview_revision is not None
+                or args.compare_baseline is not None):
+            raise MixerControlUnavailable("Profile save is separate from mixer changes")
+        if args.action == "list-profiles" and (
+                args.preview or args.confirm_local_mixer_change
+                or args.confirm_local_profile_save or args.wait_for_supervisor
+                or args.if_preview_revision is not None
+                or args.compare_baseline is not None):
+            raise MixerControlUnavailable("Profile listing is read-only")
         if args.preview and (args.confirm_local_mixer_change
-                             or args.action in ("show", "status")):
+                             or args.action in ("show", "status", "list-profiles")):
             raise MixerControlUnavailable("Preview is read-only for change commands")
         if args.wait_for_supervisor and (args.preview
                                          or not args.confirm_local_mixer_change
@@ -463,6 +599,12 @@ def main(argv=None):
             state = show()
         elif args.action == "status":
             state = application_status()
+        elif args.action == "list-profiles":
+            state = list_volume_profiles()
+        elif args.action == "save-profile":
+            state = save_volume_profile(
+                args.name, *(getattr(args, key) for key in PROFILE_FIELDS),
+                confirmed=args.confirm_local_profile_save)
         else:
             if args.action == "set-master":
                 patch = {"master": args.percent}
@@ -488,6 +630,10 @@ def main(argv=None):
                 # Single atomic settings update; only requested master and
                 # per-input volumes are changed. Keep mute and EQ intact.
                 patch = preset_patch(args.name)
+            elif args.action == "profile":
+                # Custom profiles are volume-only snapshots in a separate
+                # private file, NEVER an automatic mute/EQ or routing change.
+                patch = saved_profile_patch(args.name)
             else:
                 patch = {args.slot: {"mute": args.value == "on"}}
             if args.preview:
@@ -538,7 +684,9 @@ def main(argv=None):
     elif args.action == "status":
         print("Supervisor acceptance means a recent complete set of PipeWire commands "
               "returned successfully; no hardware audio was measured.")
-    elif args.action != "show":
+    elif args.action == "save-profile":
+        print("Private volume profile saved; active mixer settings unchanged.")
+    elif args.action not in ("show", "list-profiles"):
         print("Saved locally; running supervisor applies validated gains on its next poll. "
               "No physical output or audible playback was verified.")
 
