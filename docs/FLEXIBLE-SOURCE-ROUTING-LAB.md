@@ -48,8 +48,11 @@ PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control show
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control status
 
 # Preview WITHOUT storing a change, creating a lock or applying any audio:
-# The JSON now includes an opaque "revision": "v1-<64 lowercase hex digits>".
+# JSON includes "revision" (guarded save) and "comparison_baseline" (value snapshot).
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --preview mute-all
+# Compare a later preview to the ORIGINAL saved "comparison_baseline" b1-...;
+# replace the placeholder with that exact token from the earlier JSON:
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --preview --compare-baseline b1-REPLACE-WITH-ORIGINAL-BASELINE set-mix 20 35 25 0
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --preview unmute-selected music laptop
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --preview set-mix 20 35 25 0
 
@@ -83,7 +86,28 @@ The optional `--preview` applies to all change commands:
 `set-master`, `set-volume`, `mute`, `mute-all`, `unmute-selected`
 and `set-mix`. It outputs only validated requested master/input
 volume and mute values (`before` and `after`) and a deterministic
-`would_change` list. The response explicitly states
+`would_change` list, plus readable `planned_changes` entries with
+`control`, `previous` and `current` values. It also emits a
+compact `comparison_baseline` beginning `b1-`, representing ONLY
+the fixed, bounded local master/input volume/mute and stored EQ values.
+Unlike `revision`, this baseline stores actual control values and can
+be passed to a later `--preview --compare-baseline BASELINE` command.
+The result's `changed_since_baseline` pinpoints individual input
+volume/mute and stored `bass`, `mid`, `treble` changes: e.g.
+`laptop.volume` 50→17 and `laptop.mid` 0→−4. A `null` comparison
+means no earlier snapshot was supplied; an empty list `[]` means no
+compared **value** differences. It does not infer changes merely from
+a stale revision hash, nor prove runtime EQ is currently applied.
+The baseline does not include device identifiers, addresses, network
+configuration or secrets. It is not a permission credential; however,
+it encodes operator mixer preferences and should stay in the local
+private console workflow. It is never stored by the preview command.
+On a guarded `--confirm-local-mixer-change --if-preview-revision REV`,
+an optional **validated** `--compare-baseline BASELINE` may also be
+included, so a stale exit 4 response can show the exact changes from
+the earlier preview inside its fresh read-only plan. Invalid or unsafe
+baseline input is rejected **before** any write. It cannot be combined
+with a plain, unguarded change or read-only `show`/`status`. The response explicitly states
 `settings_written=false`, `supervisor_applied=false` and
 `audible_playback_verified=false`. No config directory or lock is
 created when settings do not yet exist. Corrupt, unsafe or symlinked

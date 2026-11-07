@@ -631,6 +631,165 @@ class LocalMixerControlsTests(unittest.TestCase):
             preview.assert_not_called()
         self.assertNotIn("preview-stale", stdout.getvalue())
 
+    def test_comparison_snapshot_pinpoints_individual_eq_and_input_changes(self):
+        mixer_control.change({
+            "master": 32,
+            "music": {"volume": 25, "bass": 3, "mid": -2},
+            "laptop": {"mute": True},
+            "tablet": {"treble": 4}
+        }, path=self.settings, confirmed=True)
+        old = mixer_control.preview_change({"master": 20}, path=self.settings)
+        token = old["comparison_baseline"]
+        self.assertTrue(token.startswith("b1-"))
+        self.assertIsNone(old["changed_since_baseline"])
+        self.assertEqual(old["planned_changes"], [
+            {"control": "master", "previous": 32, "current": 20}
+        ])
+        mixer_control.change({
+            "music": {"volume": 30, "bass": 5},
+            "tablet": {"treble": 2, "mute": True}
+        }, path=self.settings, confirmed=True)
+        bytes_before = self.settings.read_bytes()
+        refreshed = mixer_control.preview_change(
+            {"master": 20}, path=self.settings, baseline=token)
+        self.assertEqual(refreshed["changed_since_baseline"], [
+            {"control": "music.volume", "previous": 25, "current": 30},
+            {"control": "music.bass", "previous": 3, "current": 5},
+            {"control": "tablet.mute", "previous": False, "current": True},
+            {"control": "tablet.treble", "previous": 4, "current": 2},
+        ])
+        self.assertEqual(refreshed["planned_changes"], [
+            {"control": "master", "previous": 32, "current": 20}
+        ])
+        self.assertNotEqual(refreshed["comparison_baseline"], token)
+        self.assertTrue(refreshed["before"]["tablet"]["mute"])
+        self.assertFalse(refreshed["settings_written"])
+        self.assertFalse(refreshed["supervisor_applied"])
+        self.assertFalse(refreshed["audible_playback_verified"])
+        self.assertEqual(self.settings.read_bytes(), bytes_before)
+
+    def test_comparison_baseline_equal_values_reports_empty_not_unavailable(self):
+        old = mixer_control.preview_change({"music": {"volume": 21}},
+                                           path=self.settings)
+        again = mixer_control.preview_change(
+            {"music": {"volume": 21}}, path=self.settings,
+            baseline=old["comparison_baseline"])
+        self.assertEqual(again["changed_since_baseline"], [])
+        self.assertEqual(again["planned_changes"], [
+            {"control": "music.volume", "previous": 65, "current": 21}
+        ])
+        self.assertFalse(self.settings.parent.exists())
+        # A generation change without a value difference must not invent one.
+        mixer_control.change({"master": 70}, path=self.settings, confirmed=True)
+        generation = mixer_control.preview_change({"music": {"volume": 21}},
+                       path=self.settings, baseline=old["comparison_baseline"])
+        self.assertEqual(generation["changed_since_baseline"], [])
+
+    def test_stale_guarded_cli_comparison_renders_intervening_eq_changes_without_write(self):
+        mixer_control.change({"master": 49}, path=self.settings, confirmed=True)
+        original_preview = mixer_control.preview_change(
+            {"master": 20}, path=self.settings)
+        mixer_control.change({"laptop": {"mid": -4, "volume": 17}},
+                             path=self.settings, confirmed=True)
+        original_bytes = self.settings.read_bytes()
+        real_change = mixer_control.change
+        real_preview = mixer_control.preview_change
+        def change_local(patch, *, confirmed=False, if_revision=None):
+            return real_change(patch, path=self.settings, confirmed=confirmed,
+                               if_revision=if_revision)
+        def preview_local(patch, *, baseline=None):
+            return real_preview(patch, path=self.settings, baseline=baseline)
+        with (mock.patch("audiohub.mixer_control.change",
+                         side_effect=change_local) as change,
+              mock.patch("audiohub.mixer_control.preview_change",
+                         side_effect=preview_local) as preview,
+              mock.patch("audiohub.mixer_control.atomic_json",
+                         wraps=mixer_control.atomic_json) as atomic):
+            with redirect_stdout(StringIO()) as stdout, redirect_stderr(StringIO()) as stderr:
+                with self.assertRaises(SystemExit) as exc:
+                    mixer_control.main([
+                        "--confirm-local-mixer-change", "--if-preview-revision",
+                        original_preview["revision"], "--compare-baseline",
+                        original_preview["comparison_baseline"], "set-master", "20"
+                    ])
+            self.assertEqual(exc.exception.code, 4)
+            change.assert_called_once_with({"master": 20}, confirmed=True,
+                                           if_revision=original_preview["revision"])
+            preview.assert_called_once_with(
+                {"master": 20}, baseline=original_preview["comparison_baseline"])
+            atomic.assert_not_called()
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["status"], "preview-stale")
+        fresh = payload["fresh_preview"]
+        self.assertEqual(fresh["changed_since_baseline"], [
+            {"control": "laptop.volume", "previous": 50, "current": 17},
+            {"control": "laptop.mid", "previous": 0, "current": -4},
+        ])
+        self.assertEqual(fresh["planned_changes"], [
+            {"control": "master", "previous": 49, "current": 20}
+        ])
+        self.assertFalse(payload["settings_written"])
+        self.assertIn("explicitly confirm", stderr.getvalue())
+        self.assertEqual(self.settings.read_bytes(), original_bytes)
+
+    def test_compare_baseline_cli_preview_without_writing_anything(self):
+        earlier = mixer_control.preview_change({"master": 20}, path=self.settings)
+        with mock.patch("audiohub.mixer_control.preview_change",
+                        return_value=earlier) as preview:
+            with mock.patch("audiohub.mixer_control.change") as change:
+                with redirect_stdout(StringIO()):
+                    mixer_control.main([
+                        "--preview", "--compare-baseline",
+                        earlier["comparison_baseline"], "mute-all"])
+                preview.assert_called_once_with({
+                    slot: {"mute": True} for slot in ("music", "laptop", "tablet")
+                }, baseline=earlier["comparison_baseline"])
+                change.assert_not_called()
+
+    def test_invalid_comparison_tokens_fail_closed_before_any_write(self):
+        valid = mixer_control.preview_change({"master": 20},
+                       path=self.settings)["comparison_baseline"]
+        for bad in (None, "", "b1-", "b1-%", "b1-" + "A" * 300,
+                    valid + "=", valid[:-1] + "!", "b2-" + valid[3:],
+                    "b1-" + "e30"):
+            with self.subTest(token=repr(bad)[:40]):
+                if bad is None:
+                    continue  # None means comparison was not requested.
+                with self.assertRaises(mixer_control.MixerControlUnavailable):
+                    mixer_control._decode_baseline(bad)
+                with mock.patch("audiohub.mixer_control.change") as change:
+                    with redirect_stdout(StringIO()), redirect_stderr(StringIO()):
+                        with self.assertRaises(SystemExit) as failed:
+                            mixer_control.main([
+                                "--confirm-local-mixer-change", "--if-preview-revision",
+                                "v1-" + "a" * 64, "--compare-baseline",
+                                bad, "set-master", "20"
+                            ])
+                        self.assertEqual(failed.exception.code, 2)
+                    change.assert_not_called()
+        self.assertFalse(self.settings.parent.exists())
+
+    def test_compare_baseline_requires_preview_or_conditional_confirmed_change(self):
+        baseline = mixer_control.preview_change({"master": 20},
+                          path=self.settings)["comparison_baseline"]
+        for args in (
+            ["--compare-baseline", baseline, "show"],
+            ["--compare-baseline", baseline, "status"],
+            ["--compare-baseline", baseline, "set-master", "20"],
+            ["--confirm-local-mixer-change", "--compare-baseline",
+             baseline, "set-master", "20"],
+        ):
+            with self.subTest(args=args):
+                with (mock.patch("audiohub.mixer_control.change") as change,
+                      mock.patch("audiohub.mixer_control.preview_change") as preview):
+                    with redirect_stdout(StringIO()), redirect_stderr(StringIO()):
+                        with self.assertRaises(SystemExit) as failed:
+                            mixer_control.main(args)
+                    self.assertEqual(failed.exception.code, 2)
+                    change.assert_not_called()
+                    preview.assert_not_called()
+        self.assertFalse(self.settings.parent.exists())
+
     def test_wait_for_supervisor_accepts_matching_complete_ack_without_sleep(self):
         saved = defaults()
         observed = {
