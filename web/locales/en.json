@@ -12,7 +12,7 @@
   "routingBluetooth": "Bluetooth sources",
   "routingChannels": "Detected channels",
   "routingPending": "Waiting for first status check",
-  "routingRecent": "Recent device report (up to 30 seconds old)",
+  "routingRecent": "Status retrieved within the last 15 seconds",
   "routingUnavailable": "Routing status unavailable",
   "routingDiagPending": "Diagnostic guidance will appear after the first status check.",
   "routingDiagUnavailable": "No recent device report. Check whether the local AudioHub status service is running.",
