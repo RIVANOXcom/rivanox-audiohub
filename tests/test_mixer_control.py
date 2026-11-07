@@ -260,6 +260,75 @@ class LocalMixerControlsTests(unittest.TestCase):
             }, path=self.settings, confirmed=True)
         self.assertEqual(self.settings.read_bytes(), before)
 
+    def test_selective_unmute_restores_only_named_inputs_in_one_atomic_write(self):
+        before = mixer_control.change({
+            "master": 22,
+            "music": {"volume": 33, "bass": 4, "mute": True},
+            "laptop": {"volume": 41, "mid": -2, "mute": True},
+            "tablet": {"volume": 80, "treble": 3, "mute": True},
+        }, path=self.settings, confirmed=True)
+        # Run real atomic change against the test-owned path; preserve the
+        # original function before mocking CLI dispatch to avoid recursion.
+        original_change = mixer_control.change
+        def local_change(patch, *, confirmed=False):
+            return original_change(patch, path=self.settings, confirmed=confirmed)
+        with mock.patch("audiohub.mixer_control.change", side_effect=local_change) as changed:
+            with mock.patch("audiohub.mixer_control.atomic_json",
+                            wraps=mixer_control.atomic_json) as atomic:
+                with redirect_stdout(StringIO()) as output:
+                    mixer_control.main([
+                        "--confirm-local-mixer-change", "unmute-selected", "music", "laptop"
+                    ])
+                changed.assert_called_once_with({
+                    "music": {"mute": False}, "laptop": {"mute": False}
+                }, confirmed=True)
+                atomic.assert_called_once()
+            self.assertIn('"mute": false', output.getvalue())
+        after = mixer_control.show(path=self.settings)
+        self.assertFalse(after["music"]["mute"])
+        self.assertFalse(after["laptop"]["mute"])
+        self.assertTrue(after["tablet"]["mute"])
+        self.assertEqual(after["master"], before["master"])
+        for slot in ("music", "laptop", "tablet"):
+            for control in ("volume", "bass", "mid", "treble"):
+                self.assertEqual(after[slot][control], before[slot][control])
+
+    def test_selective_unmute_requires_confirmation_and_rejects_duplicates_or_all(self):
+        with mock.patch("audiohub.mixer_control.change", return_value=defaults()) as change:
+            with redirect_stdout(StringIO()):
+                mixer_control.main([
+                    "--confirm-local-mixer-change", "unmute-selected", "tablet"
+                ])
+            change.assert_called_once_with({"tablet": {"mute": False}}, confirmed=True)
+        with mock.patch("audiohub.mixer_control.change",
+                        side_effect=mixer_control.MixerControlUnavailable("confirmation")) as change:
+            with self.assertRaises(SystemExit) as failed, redirect_stderr(StringIO()):
+                mixer_control.main(["unmute-selected", "music"])
+            self.assertEqual(failed.exception.code, 2)
+            change.assert_called_once_with({"music": {"mute": False}}, confirmed=False)
+        for bad in (
+            ["unmute-selected"],
+            ["unmute-selected", "music", "music"],
+            ["unmute-selected", "music", "laptop", "tablet"],
+            ["unmute-selected", "music", "unknown"],
+        ):
+            with self.subTest(bad=bad):
+                with mock.patch("audiohub.mixer_control.change") as change:
+                    with self.assertRaises(SystemExit) as failed, redirect_stderr(StringIO()):
+                        mixer_control.main(["--confirm-local-mixer-change", *bad])
+                    self.assertEqual(failed.exception.code, 2)
+                    change.assert_not_called()
+
+    def test_selective_unmute_does_not_replace_unsafe_existing_settings(self):
+        self.settings.parent.mkdir(mode=0o700)
+        self.settings.write_bytes(b'{"master": 25, "master": 70}')
+        self.settings.chmod(0o600)
+        prior = self.settings.read_bytes()
+        with self.assertRaises(mixer_control.MixerControlUnavailable):
+            mixer_control.change({"laptop": {"mute": False}},
+                                 path=self.settings, confirmed=True)
+        self.assertEqual(self.settings.read_bytes(), prior)
+
     def test_local_application_status_accepts_only_current_complete_ack(self):
         runtime_path = self.root / "runtime" / "status.json"
         expected = requested_mix_controls(defaults())

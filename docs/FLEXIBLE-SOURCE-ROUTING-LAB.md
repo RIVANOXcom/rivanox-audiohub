@@ -56,6 +56,10 @@ PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-m
 # Request all three input mutes together, preserving previous levels and EQ:
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-mixer-change mute-all
 
+# Restore only the specifically selected 1 or 2 inputs in ONE atomic step;
+# the third input stays muted, with all previous levels and EQ untouched:
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-mixer-change unmute-selected music laptop
+
 # One atomic update to master, then music, laptop and tablet levels:
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-mixer-change set-mix 20 35 25 0
 ```
@@ -70,8 +74,13 @@ symlinked or unreadable existing state is **refused rather than reset**.
 Concurrent operator changes cannot lose one another. The local
 `mute-all` command requests all three input mutes in **one** private
 atomic write, preserving requested master volume, input volumes and EQ.
-It never automatically unmutes: a deliberate `mute SLOT off` is required
-for each input you later choose to re-enable. It requires the existing
+It never automatically unmutes: a deliberate `mute SLOT off` or the new
+`unmute-selected SLOT [SLOT]` is required to re-enable exactly the chosen
+one or two inputs. `unmute-selected` refuses duplicate slots and all three
+slots, so it can never implicitly act as `unmute-all`. It keeps all
+unselected inputs muted as before, preserves master/source levels and EQ and
+writes once under the existing lock; there is no partial intermediate
+restore. It requires the existing
 explicit confirmation and non-root account, rejects unsafe existing state
 and creates no network API. Its request takes effect only on a later
 successful supervisor poll; it is **not an emergency physical cutoff**
