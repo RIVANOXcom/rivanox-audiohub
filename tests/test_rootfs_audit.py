@@ -99,6 +99,14 @@ class RootfsAuditTests(unittest.TestCase):
             "return min(1.0, 1.0 / worst_case)",
             "str(effective_master_gain(settings))",
             "def volume_commands(settings, sink_ids, output_id=None):",
+            "def _integer(value, lower, upper):",
+            "if type(value) is int:",
+            "if lower <= value <= upper:",
+            "if type(value) is not float:",
+            "not math.isfinite(value)",
+            "value.is_integer()",
+            "return int(value)",
+            'raise ValueError("value out of range")',
             "MAX_PIPEWIRE_NODE_ID = 2**31 - 1",
             "def _validated_wpctl_targets(sink_ids, output_id):",
             "type(sink_ids) is not dict",
@@ -1567,6 +1575,30 @@ class RootfsAuditTests(unittest.TestCase):
             (root / "etc/wireplumber/wireplumber.conf.d/90-audiohub.conf").unlink()
             self.assertFalse(audit.inspect(root)["bluetooth_input_role_configured"])
 
+
+
+    def test_mixer_huge_integer_fail_closed_audit_guard_present(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            self.assertTrue(audit.inspect(root)["mixer_huge_integer_controls_fail_closed"])
+
+    def test_mixer_unsafe_math_isfinite_on_unbounded_int_blocks_native_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            mixer = root / "opt/audiohub/src/audiohub/mixer.py"
+            mixer.write_text(mixer.read_text().replace(
+                "if type(value) is int:", "if math.isfinite(value):"
+            ))
+            self.assertFalse(audit.inspect(root)["mixer_huge_integer_controls_fail_closed"])
+
+    def test_mixer_missing_float_integrality_check_blocks_native_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            mixer = root / "opt/audiohub/src/audiohub/mixer.py"
+            mixer.write_text(mixer.read_text().replace(
+                "value.is_integer()", "True"
+            ))
+            self.assertFalse(audit.inspect(root)["mixer_huge_integer_controls_fail_closed"])
 
     def test_mixer_target_id_validation_guard_present(self):
         with tempfile.TemporaryDirectory() as tmp:
