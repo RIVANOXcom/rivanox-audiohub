@@ -293,5 +293,148 @@ updateChannelControlLabels("music");
         self.assertEqual(result.returncode, 0, result.stderr)
 
 
+
+def preview_channel_renderer_source():
+    """Exercise the shipped card construction and focus preservation together."""
+    source = PREVIEW.read_text(encoding="utf-8")
+    start = source.index('  function control(key, min, max, value, channel, unit = "") {')
+    end = source.index("  function renderHardwareStatus()", start)
+    return source[start:end]
+
+
+class BrowserLocaleInputEditTests(unittest.TestCase):
+    """Async translations must not erase user input or steal keyboard focus."""
+
+    def test_draft_and_focus_are_captured_before_replacing_cards(self):
+        source = PREVIEW.read_text(encoding="utf-8")
+        start = source.index("  function drawChannels() {")
+        end = source.index("  function renderHardwareStatus()", start)
+        body = source[start:end]
+        self.assertLess(body.index("captureChannelEditState(target)"),
+                        body.index("target.replaceChildren()"))
+        self.assertIn("restoreChannelEditState(editState);", body)
+        self.assertIn('nameInput.addEventListener("input", () =>', body)
+        self.assertIn('nameInput.dataset.editing = "false";', body)
+        self.assertNotIn('method: "POST"', source)
+
+    @unittest.skipUnless(shutil.which("node"), "Node.js runtime unavailable")
+    def test_actual_browser_cards_keep_unsaved_name_caret_and_slider_focus(self):
+        setup = r'''
+const assert = require("node:assert/strict");
+class Node {
+  constructor(tag) {
+    this.tag = tag;
+    this.id = "";
+    this.type = "";
+    this.value = "";
+    this.children = [];
+    this.handlers = {};
+    this.dataset = {};
+    this.attributes = {};
+  }
+  append(...items) {this.children.push(...items);}
+  replaceChildren(...items) {this.children = items;}
+  addEventListener(kind, handler) {this.handlers[kind] = handler;}
+  setAttribute(key, value) {this.attributes[key] = String(value);}
+  contains(node) {
+    return this === node || this.children.some(child => child.contains(node));
+  }
+  focus() {document.activeElement = this;}
+  setSelectionRange(start, end) {
+    this.selectionStart = start;
+    this.selectionEnd = end;
+  }
+}
+const document = {activeElement: null, createElement: tag => new Node(tag)};
+const root = new Node("div");
+root.id = "channels";
+function find(el, id) {
+  if (el.id === id) return el;
+  for (const child of el.children) {
+    const found = find(child, id);
+    if (found) return found;
+  }
+  return null;
+}
+const byId = id => id === "channels" ? root : find(root, id);
+const CHANNELS = ["music", "laptop", "tablet"];
+const BANDS = ["bass", "mid", "treble"];
+const SLOT_INDEX = {music: 1, laptop: 2, tablet: 3};
+const previewLabels = Object.create(null);
+const state = {
+  music: {volume: 65, mute: false, bass: 0, mid: 0, treble: 0},
+  laptop: {volume: 50, mute: false, bass: 0, mid: 0, treble: 0},
+  tablet: {volume: 50, mute: false, bass: 0, mid: 0, treble: 0}
+};
+const saved = [];
+const savePreviewLabels = () => {saved.push({...previewLabels});};
+const validName = name => typeof name === "string" && name.trim() || null;
+let words = {
+  input1: "Input 1", input2: "Input 2", input3: "Input 3",
+  inputName: "Input name", volume: "Volume", bass: "Bass",
+  mid: "Mid", treble: "Treble", mute: "Mute", unmute: "Unmute"
+};
+const tr = key => words[key] || key;
+const displayName = channel =>
+  previewLabels[channel] || tr("input" + SLOT_INDEX[channel]);
+'''
+        verify = r'''
+drawChannels();
+const oldName = byId("music-display-name");
+oldName.focus();
+oldName.value = "Living room TV";
+oldName.selectionStart = 4;
+oldName.selectionEnd = 11;
+oldName.handlers.input();
+state.music.volume = 37;
+// A delayed locale request finishes while the user is still editing.
+words = {
+  input1: "Eingang 1", input2: "Eingang 2", input3: "Eingang 3",
+  inputName: "Eingangsname", volume: "Lautstärke",
+  bass: "Bass", mid: "Mitten", treble: "Höhen",
+  mute: "Stumm", unmute: "Ton an"
+};
+drawChannels();
+const newName = byId("music-display-name");
+assert.notEqual(newName, oldName);
+assert.equal(newName.value, "Living room TV");
+assert.equal(newName.dataset.editing, "true");
+assert.equal(document.activeElement, newName);
+assert.equal(newName.selectionStart, 4);
+assert.equal(newName.selectionEnd, 11);
+assert.equal(byId("music-volume").value, 37);
+assert.equal(byId("laptop-display-name").value, "Eingang 2");
+assert.equal(byId("music-volume").attributes["aria-label"], "Lautstärke: Eingang 1");
+assert.deepEqual(saved, []); // no implicit persistence on locale load
+
+// Explicit change still performs the original browser-local save.
+newName.handlers.change();
+assert.equal(newName.dataset.editing, "false");
+assert.equal(previewLabels.music, "Living room TV");
+assert.equal(saved.length, 1);
+assert.equal(byId("music-volume").attributes["aria-label"],
+             "Lautstärke: Living room TV");
+
+// A focused existing slider also retains its focus after a redraw.
+const oldRange = byId("music-volume");
+oldRange.focus();
+drawChannels();
+const newRange = byId("music-volume");
+assert.notEqual(oldRange, newRange);
+assert.equal(document.activeElement, newRange);
+assert.equal(newRange.value, 37);
+
+// An external language selector must not be grabbed by a card redraw.
+const languageDropdown = new Node("select");
+languageDropdown.focus();
+drawChannels();
+assert.equal(document.activeElement, languageDropdown);
+'''
+        result = subprocess.run(
+            ["node", "-e", setup + "\n" + preview_channel_renderer_source() + "\n" + verify],
+            capture_output=True, text=True, timeout=15, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()
