@@ -900,3 +900,36 @@ physical Pi4/Edifier hardware proof, 2 A2DP/3-way sound, 24h soak,
 owner WiFi/security, legal or CEO approval. Effective AGPL-3.0-only,
 83 source rights and nine OS notices remain pending; no install,
 flash, merge, deploy, permissions change or official release GO.
+
+
+## 2026-11-07: Draft PR83 — refuse ambiguous PipeWire mixer node IDs
+
+PAPA MissionPilot PAPA-18B8B3C6 / AH-003, AH-007.
+New isolated Draft PR83 stacks ONLY on unchanged Draft PR82 HEAD
+aff8629c77ef40fcac4a31ae40a56f700b9a798e. Production source discovery already restricts
+PipeWire numeric node identities, but mixer.volume_commands() still
+used int(sink_ids[channel]) and int(output_id) directly. This would
+silently coerce a boolean, numeric string or fractional float to a
+different wpctl target if malformed data reaches this boundary via
+future call sites. Also multiple channel or physical-output controls
+could target the same node ID without rejection. Add a strict
+_validated_wpctl_targets() before producing any argv: only exact
+integers in 0..2**31-1, only three named input slots and no reused
+node ID between virtual inputs or the physical output. The already
+validated current production route IDs remain permitted; no actual
+audio or ownership state is modified by this offline code change.
+Four source regression tests cover bad types and range, duplicate
+output/channel identities, accepted min/max PipeWire ID and the
+existing offline no-output command form. Installed-rootfs
+mixer_wpctl_target_ids_strict_unique gate plus synthetic positive and
+two negative tests; expect native 98/98 only if new exact-head ARM64
+build succeeds. Parent PR82 Source #42314163753 SUCCESS 744/744,
+native #42314130889 SUCCESS actual 97/97, compressed Pi image
+SHA256 69627852cf1d73dc14786819324e660311fe238817894112d52f6c48402d3858,
+GitHub test-only ZIP artifact #13549843891 digest
+6fe0a0f8b30e2f5bddd2dcdb304c9abfe95d515ebd99ca13480e11fca7fad53a,
+Workbench #3145. Pi4 Edifier physical 3-source/2-A2DP/24h,
+phone-owner WiFi, legal rights and CEO release signoff still absent,
+83 source rights and nine OS notices unresolved; effective
+AGPL-3.0-only, proposed Model C not approved, no GO/deploy/flash/
+merge/install/permissions change.

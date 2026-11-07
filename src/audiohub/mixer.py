@@ -138,18 +138,44 @@ def effective_master_gain(settings):
     return (settings["master"] / 100) * mix_gain_budget(settings)
 
 
+MAX_PIPEWIRE_NODE_ID = 2**31 - 1
+
+
+def _validated_wpctl_targets(sink_ids, output_id):
+    """Reject missing/ambiguous identity before returning ANY control command.
+
+    Production PipeWire discovery already bounds IDs, but this boundary
+    must not turn a boolean, float or device name into a different target.
+    """
+    if type(sink_ids) is not dict or any(channel not in CHANNELS for channel in sink_ids):
+        raise ValueError("Unknown mixer target channel")
+    used = set()
+    if output_id is not None:
+        if type(output_id) is not int or not 0 <= output_id <= MAX_PIPEWIRE_NODE_ID:
+            raise ValueError("Invalid physical output node ID")
+        used.add(output_id)
+    for node_id in sink_ids.values():
+        if (type(node_id) is not int
+                or not 0 <= node_id <= MAX_PIPEWIRE_NODE_ID
+                or node_id in used):
+            raise ValueError("Invalid or repeated mixer target node ID")
+        used.add(node_id)
+    return sink_ids
+
+
 def volume_commands(settings, sink_ids, output_id=None):
     """Return argv lists; commands are *not* executed here."""
     settings = patch_settings(defaults(), settings)
+    sink_ids = _validated_wpctl_targets(sink_ids, output_id)
     commands = []
     # Apply the conservative master gain before per-input volume/unmute.
     # A failed master command must never leave a newly admitted source live.
     if output_id is not None:
-        commands.append(["wpctl", "set-volume", str(int(output_id)), str(effective_master_gain(settings))])
+        commands.append(["wpctl", "set-volume", str(output_id), str(effective_master_gain(settings))])
     for channel in CHANNELS:
         if channel not in sink_ids:
             continue
-        node_id = str(int(sink_ids[channel]))
+        node_id = str(sink_ids[channel])
         commands.append(["wpctl", "set-volume", node_id, str(settings[channel]["volume"] / 100)])
         commands.append(["wpctl", "set-mute", node_id, "1" if settings[channel]["mute"] else "0"])
     return commands

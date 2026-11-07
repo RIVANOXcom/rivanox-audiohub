@@ -99,6 +99,15 @@ class RootfsAuditTests(unittest.TestCase):
             "return min(1.0, 1.0 / worst_case)",
             "str(effective_master_gain(settings))",
             "def volume_commands(settings, sink_ids, output_id=None):",
+            "MAX_PIPEWIRE_NODE_ID = 2**31 - 1",
+            "def _validated_wpctl_targets(sink_ids, output_id):",
+            "type(sink_ids) is not dict",
+            "type(output_id) is not int",
+            "type(node_id) is not int",
+            "node_id in used",
+            "sink_ids = _validated_wpctl_targets(sink_ids, output_id)",
+            "node_id = str(sink_ids[channel])",
+            "str(output_id), str(effective_master_gain(settings))",
             "if output_id is not None:",
             "for channel in CHANNELS:",
         )))
@@ -1557,6 +1566,31 @@ class RootfsAuditTests(unittest.TestCase):
             root = self.root(tmp)
             (root / "etc/wireplumber/wireplumber.conf.d/90-audiohub.conf").unlink()
             self.assertFalse(audit.inspect(root)["bluetooth_input_role_configured"])
+
+
+    def test_mixer_target_id_validation_guard_present(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            self.assertTrue(audit.inspect(root)["mixer_wpctl_target_ids_strict_unique"])
+
+    def test_mixer_int_coercion_must_block_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/src/audiohub/mixer.py"
+            path.write_text(path.read_text().replace(
+                "node_id = str(sink_ids[channel])",
+                "node_id = str(int(sink_ids[channel]))"
+            ))
+            self.assertFalse(audit.inspect(root)["mixer_wpctl_target_ids_strict_unique"])
+
+    def test_mixer_duplicate_pipewire_target_guard_cannot_be_skipped(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/src/audiohub/mixer.py"
+            path.write_text(path.read_text().replace(
+                "node_id in used", "False"
+            ))
+            self.assertFalse(audit.inspect(root)["mixer_wpctl_target_ids_strict_unique"])
 
     def test_missing_gain_budget_blocks_image_export(self):
         with tempfile.TemporaryDirectory() as tmp:
