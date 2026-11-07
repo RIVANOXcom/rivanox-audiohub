@@ -1382,6 +1382,270 @@ class LocalMixerControlsTests(unittest.TestCase):
                     preview.assert_not_called()
                     changed.assert_not_called()
 
+    def test_copy_profile_preview_is_read_only_and_has_private_catalog_revision(self):
+        profile_path = self.settings.with_name("volume-profiles.json")
+        mixer_control.save_volume_profile("original", 27, 38, 49, 12,
+                                          path=profile_path, confirmed=True)
+        catalog_before = profile_path.read_bytes()
+        with mock.patch("audiohub.mixer_control.atomic_json") as write:
+            plan = mixer_control.preview_profile_copy(
+                "original", "alternate", path=profile_path)
+            write.assert_not_called()
+        self.assertEqual(plan["mode"], "profile-copy-preview")
+        self.assertEqual(plan["volumes"], {
+            "master": 27, "music": 38, "laptop": 49, "tablet": 12})
+        self.assertRegex(plan["profile_revision"], r"^p1-[0-9a-f]{64}$")
+        self.assertFalse(plan["profile_written"])
+        self.assertTrue(plan["source_unchanged"])
+        self.assertFalse(plan["mixer_settings_written"])
+        self.assertFalse(plan["audible_playback_verified"])
+        self.assertEqual(profile_path.read_bytes(), catalog_before)
+        self.assertFalse(self.settings.exists())
+
+    def test_copy_profile_locked_save_preserves_source_and_active_mixer(self):
+        profile_path = self.settings.with_name("volume-profiles.json")
+        mixer_control.save_volume_profile("first", 25, 35, 45, 15,
+                                          path=profile_path, confirmed=True)
+        existing = mixer_control.change({
+            "master": 72,
+            "music": {"volume": 62, "mute": True, "bass": 6},
+            "laptop": {"mute": True, "mid": -3},
+            "tablet": {"treble": 5}}, path=self.settings, confirmed=True)
+        mixer_bytes = self.settings.read_bytes()
+        plan = mixer_control.preview_profile_copy(
+            "first", "second", path=profile_path)
+        with mock.patch("audiohub.mixer_control.atomic_json",
+                        wraps=mixer_control.atomic_json) as write:
+            report = mixer_control.copy_volume_profile(
+                "first", "second", path=profile_path,
+                if_profile_revision=plan["profile_revision"], confirmed=True)
+            write.assert_called_once()
+        self.assertEqual(report["profile_copied_from"], "first")
+        self.assertEqual(report["profile_saved"], "second")
+        self.assertFalse(report["mixer_settings_written"])
+        self.assertTrue(report["source_unchanged"])
+        self.assertEqual(report["volumes"], plan["volumes"])
+        self.assertEqual(stat.S_IMODE(profile_path.stat().st_mode), 0o600)
+        catalog = mixer_control.list_volume_profiles(path=profile_path)["profiles"]
+        self.assertEqual(catalog["first"], plan["volumes"])
+        self.assertEqual(catalog["second"], plan["volumes"])
+        self.assertEqual(self.settings.read_bytes(), mixer_bytes)
+        self.assertEqual(mixer_control.show(path=self.settings), existing)
+
+    def test_copy_profile_stale_on_any_catalog_change_and_aba_generation(self):
+        profile_path = self.settings.with_name("volume-profiles.json")
+        mixer_control.save_volume_profile("first", 25, 35, 45, 15,
+                                          path=profile_path, confirmed=True)
+        old = mixer_control.preview_profile_copy(
+            "first", "second", path=profile_path)
+        mixer_control.save_volume_profile("someone-else", 30, 30, 30, 30,
+                                          path=profile_path, confirmed=True)
+        saved_bytes = profile_path.read_bytes()
+        with mock.patch("audiohub.mixer_control.atomic_json") as write:
+            with self.assertRaises(mixer_control.StaleProfilePreview):
+                mixer_control.copy_volume_profile(
+                    "first", "second", path=profile_path,
+                    if_profile_revision=old["profile_revision"], confirmed=True)
+            write.assert_not_called()
+        self.assertEqual(profile_path.read_bytes(), saved_bytes)
+        # Even a writer that replaces the same canonical file contents
+        # advances its generation and invalidates the earlier plan.
+        new = mixer_control.preview_profile_copy(
+            "first", "second", path=profile_path)
+        catalog = mixer_control.list_volume_profiles(path=profile_path)
+        mixer_control.atomic_json(profile_path, catalog)
+        with self.assertRaises(mixer_control.StaleProfilePreview):
+            mixer_control.copy_volume_profile(
+                "first", "second", path=profile_path,
+                if_profile_revision=new["profile_revision"], confirmed=True)
+        self.assertNotIn("second", mixer_control.list_volume_profiles(
+            path=profile_path)["profiles"])
+
+    def test_copy_profile_invalid_source_or_destination_and_full_cap_refused(self):
+        profile_path = self.settings.with_name("volume-profiles.json")
+        self.assertEqual(mixer_control.list_volume_profiles(
+            path=profile_path)["profiles"], {})
+        for source, destination in (("missing", "new"), ("same", "same"),
+                                     ("../path", "other"), ("missing", "also")):
+            with self.subTest(source=source, destination=destination):
+                with self.assertRaises(mixer_control.MixerControlUnavailable):
+                    mixer_control.preview_profile_copy(
+                        source, destination, path=profile_path)
+        self.assertFalse(profile_path.parent.exists())
+        mixer_control.save_volume_profile("first", 25, 25, 25, 25,
+                                          path=profile_path, confirmed=True)
+        mixer_control.save_volume_profile("second", 40, 40, 40, 40,
+                                          path=profile_path, confirmed=True)
+        for pair in (("missing", "new"), ("first", "first"),
+                     ("first", "second"), ("first", "../path")):
+            with self.subTest(pair=pair):
+                with self.assertRaises(mixer_control.MixerControlUnavailable):
+                    mixer_control.preview_profile_copy(*pair, path=profile_path)
+        for index in range(6):
+            mixer_control.save_volume_profile(
+                "rest-" + str(index), 20, 20, 20, 20,
+                path=profile_path, confirmed=True)
+        before = profile_path.read_bytes()
+        with self.assertRaises(mixer_control.MixerControlUnavailable):
+            mixer_control.preview_profile_copy("first", "last", path=profile_path)
+        with self.assertRaises(mixer_control.MixerControlUnavailable):
+            mixer_control.copy_volume_profile(
+                "first", "last", path=profile_path,
+                if_profile_revision="p1-" + "a" * 64, confirmed=True)
+        self.assertEqual(profile_path.read_bytes(), before)
+
+    def test_copy_profile_refuses_invalid_revision_or_missing_confirmation(self):
+        profile_path = self.settings.with_name("volume-profiles.json")
+        for token, confirmed in ((None, True), ("p1-", True),
+                                 ("p1-" + "A" * 64, True),
+                                 ("p1-" + "a" * 63, True),
+                                 ("v1-" + "a" * 64, True),
+                                 ("p1-" + "a" * 64, False)):
+            with self.subTest(token=repr(token), confirmed=confirmed):
+                with self.assertRaises(mixer_control.MixerControlUnavailable):
+                    mixer_control.copy_volume_profile(
+                        "source", "new", path=profile_path,
+                        if_profile_revision=token, confirmed=confirmed)
+        self.assertFalse(profile_path.parent.exists())
+
+    def test_copy_profile_invalid_private_state_does_not_overwrite_any_file(self):
+        profile_path = self.settings.with_name("volume-profiles.json")
+        profile_path.parent.mkdir(mode=0o700)
+        target = self.root / "sensitive-data.json"
+        target.write_text("PRIVATE-DATA")
+        profile_path.symlink_to(target)
+        with self.assertRaises(mixer_control.MixerControlUnavailable):
+            mixer_control.preview_profile_copy("first", "second",
+                                               path=profile_path)
+        with self.assertRaises(mixer_control.MixerControlUnavailable):
+            mixer_control.copy_volume_profile(
+                "first", "second", path=profile_path,
+                if_profile_revision="p1-" + "a" * 64, confirmed=True)
+        self.assertEqual(target.read_text(), "PRIVATE-DATA")
+        profile_path.unlink()
+        for raw in (b'{', b'{"version":1,"profiles":{},"unexpected":"SECRET"}',
+                    b'{"version":1,"profiles":{},"profiles":{}}'):
+            profile_path.write_bytes(raw)
+            profile_path.chmod(0o600)
+            before = profile_path.read_bytes()
+            with self.assertRaises(mixer_control.MixerControlUnavailable):
+                mixer_control.preview_profile_copy("first", "second",
+                                                   path=profile_path)
+            with self.assertRaises(mixer_control.MixerControlUnavailable):
+                mixer_control.copy_volume_profile(
+                    "first", "second", path=profile_path,
+                    if_profile_revision="p1-" + "a" * 64, confirmed=True)
+            self.assertEqual(profile_path.read_bytes(), before)
+
+    def test_copy_profile_cli_preview_then_separate_explicit_save(self):
+        plan = {
+            "mode": "profile-copy-preview",
+            "profile_revision": "p1-" + "a" * 64,
+            "source": "original", "destination": "alternate",
+            "volumes": {"master": 20, "music": 35, "laptop": 25, "tablet": 0},
+            "profile_written": False, "source_unchanged": True,
+            "mixer_settings_written": False,
+            "audible_playback_verified": False}
+        result = {"profile_copied_from": "original", "profile_saved": "alternate",
+                  "volumes": plan["volumes"], "mixer_settings_written": False,
+                  "source_unchanged": True, "audible_playback_verified": False}
+        with (mock.patch("audiohub.mixer_control.preview_profile_copy",
+                         return_value=plan) as preview,
+              mock.patch("audiohub.mixer_control.copy_volume_profile",
+                         return_value=result) as copy,
+              mock.patch("audiohub.mixer_control.change") as apply):
+            with redirect_stdout(StringIO()) as stdout:
+                mixer_control.main(["--preview", "copy-profile",
+                                    "original", "alternate"])
+            self.assertIn('"profile_written": false', stdout.getvalue())
+            preview.assert_called_once_with("original", "alternate")
+            copy.assert_not_called()
+            with redirect_stdout(StringIO()) as stdout:
+                mixer_control.main(["--confirm-local-profile-save",
+                                    "--if-profile-revision", plan["profile_revision"],
+                                    "copy-profile", "original", "alternate"])
+            copy.assert_called_once_with(
+                "original", "alternate", confirmed=True,
+                if_profile_revision=plan["profile_revision"])
+            apply.assert_not_called()
+            self.assertIn('"source_unchanged": true', stdout.getvalue())
+
+    def test_copy_profile_cli_stale_returns_only_fresh_read_only_copy_plan(self):
+        plan = {
+            "mode": "profile-copy-preview",
+            "profile_revision": "p1-" + "b" * 64,
+            "source": "original", "destination": "alternate",
+            "volumes": {"master": 20, "music": 35, "laptop": 25, "tablet": 0},
+            "profile_written": False, "source_unchanged": True,
+            "mixer_settings_written": False,
+            "audible_playback_verified": False}
+        with (mock.patch("audiohub.mixer_control.copy_volume_profile",
+                         side_effect=mixer_control.StaleProfilePreview("PRIVATE")) as copy,
+              mock.patch("audiohub.mixer_control.preview_profile_copy",
+                         return_value=plan) as preview,
+              mock.patch("audiohub.mixer_control.atomic_json") as write):
+            with redirect_stdout(StringIO()) as out, redirect_stderr(StringIO()) as err:
+                with self.assertRaises(SystemExit) as failed:
+                    mixer_control.main(["--confirm-local-profile-save",
+                                        "--if-profile-revision", "p1-" + "a" * 64,
+                                        "copy-profile", "original", "alternate"])
+            self.assertEqual(failed.exception.code, 4)
+            copy.assert_called_once()
+            preview.assert_called_once_with("original", "alternate")
+            write.assert_not_called()
+        reply = json.loads(out.getvalue())
+        self.assertEqual(reply["status"], "profile-copy-stale")
+        self.assertFalse(reply["profile_written"])
+        self.assertEqual(reply["fresh_preview"], plan)
+        self.assertNotIn("PRIVATE", err.getvalue())
+
+    def test_copy_profile_cli_missing_or_mixed_consent_refused_without_writing(self):
+        bad = (
+            ["copy-profile", "first", "second"],
+            ["--confirm-local-profile-save", "copy-profile", "first", "second"],
+            ["--if-profile-revision", "p1-" + "a" * 64,
+             "copy-profile", "first", "second"],
+            ["--preview", "--confirm-local-profile-save",
+             "copy-profile", "first", "second"],
+            ["--preview", "--if-profile-revision", "p1-" + "a" * 64,
+             "copy-profile", "first", "second"],
+            ["--confirm-local-profile-save", "--if-preview-revision",
+             "v1-" + "a" * 64, "copy-profile", "first", "second"],
+            ["--confirm-local-profile-save", "--if-profile-revision",
+             "p1-" + "a" * 64, "--wait-for-supervisor",
+             "copy-profile", "first", "second"],
+            ["--if-profile-revision", "p1-" + "a" * 64, "list-profiles"],
+            ["--if-profile-revision", "p1-" + "a" * 64,
+             "save-profile", "first", "20", "30", "40", "50"],
+        )
+        for argv in bad:
+            with self.subTest(argv=argv):
+                with (mock.patch("audiohub.mixer_control.copy_volume_profile") as copy,
+                      mock.patch("audiohub.mixer_control.atomic_json") as write):
+                    with redirect_stdout(StringIO()), redirect_stderr(StringIO()):
+                        with self.assertRaises(SystemExit) as failed:
+                            mixer_control.main(argv)
+                    self.assertEqual(failed.exception.code, 2)
+                    copy.assert_not_called()
+                    write.assert_not_called()
+
+    def test_copy_profile_cli_stale_refresh_failure_sanitizes_private_details(self):
+        with (mock.patch("audiohub.mixer_control.copy_volume_profile",
+                         side_effect=mixer_control.StaleProfilePreview("PRIVATE-PATH")),
+              mock.patch("audiohub.mixer_control.preview_profile_copy",
+                         side_effect=mixer_control.MixerControlUnavailable("PRIVATE-VALUES"))):
+            with redirect_stdout(StringIO()) as output, redirect_stderr(StringIO()) as error:
+                with self.assertRaises(SystemExit) as failed:
+                    mixer_control.main([
+                        "--confirm-local-profile-save",
+                        "--if-profile-revision", "p1-" + "a" * 64,
+                        "copy-profile", "first", "second"])
+            self.assertEqual(failed.exception.code, 4)
+            self.assertEqual(output.getvalue(), "")
+            self.assertNotIn("PRIVATE-VALUES", error.getvalue())
+            self.assertNotIn("PRIVATE-PATH", error.getvalue())
+            self.assertIn("Fresh preview unavailable", error.getvalue())
+
     def test_wait_for_supervisor_accepts_matching_complete_ack_without_sleep(self):
         saved = defaults()
         observed = {
