@@ -59,6 +59,10 @@ class StaleMixerPreview(MixerControlUnavailable):
     """A conditional write was refused because the preview became stale."""
 
 
+class StaleProfilePreview(MixerControlUnavailable):
+    """The private catalog changed since the operator reviewed its version."""
+
+
 def _check_profile_name(name):
     if type(name) is not str or _PROFILE_NAME.fullmatch(name) is None:
         raise MixerControlUnavailable("Invalid local volume profile name")
@@ -98,6 +102,76 @@ def _profile_catalog(path, dirfd):
         _check_profile_name(name)
         _profile_levels(values)
     return data
+
+
+def _profile_catalog_with_revision(path, dirfd):
+    """Validated catalog + private file generation, including ABA replacements."""
+    before = _state_identity(path, dirfd)
+    catalog = _profile_catalog(path, dirfd)
+    if before != _state_identity(path, dirfd):
+        raise MixerControlUnavailable("Private profile catalog changed during read")
+    raw = json.dumps({"identity": before, "catalog": catalog},
+                     sort_keys=True, separators=(",", ":"), allow_nan=False)
+    return catalog, "p1-" + hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def preview_profile_copy(source, destination, *, path=PROFILE_PATH):
+    """Plan an immutable volume-only local copy, with NO file or lock creation."""
+    _check_profile_name(source)
+    _check_profile_name(destination)
+    if source == destination:
+        raise MixerControlUnavailable("Profile copy needs a different destination")
+    if os.geteuid() == 0:
+        raise MixerControlUnavailable("Use the unprivileged audiohub account")
+    path = Path(path)
+    try:
+        dirfd = _private_parent_fd(path, create=False)
+    except FileNotFoundError:
+        raise MixerControlUnavailable("Private volume profile catalog not found") from None
+    try:
+        catalog, revision = _profile_catalog_with_revision(path, dirfd)
+    finally:
+        os.close(dirfd)
+    if source not in catalog["profiles"]:
+        raise MixerControlUnavailable("Source volume profile not found")
+    if destination in catalog["profiles"]:
+        raise MixerControlUnavailable("Destination volume profile already exists")
+    if len(catalog["profiles"]) >= MAX_CUSTOM_PROFILES:
+        raise MixerControlUnavailable("Private volume profile limit reached")
+    return {
+        "mode": "profile-copy-preview",
+        "source": source, "destination": destination,
+        "volumes": _profile_levels(catalog["profiles"][source]),
+        "profile_revision": revision,
+        "profile_written": False, "source_unchanged": True,
+        "mixer_settings_written": False, "audible_playback_verified": False,
+    }
+
+
+def copy_volume_profile(source, destination, *, path=PROFILE_PATH,
+                        if_profile_revision=None, confirmed=False):
+    """One locked, revision-guarded clone of volumes; never overwrite originals."""
+    if confirmed is not True:
+        raise MixerControlUnavailable("Explicit local profile save confirmation required")
+    _check_profile_name(source)
+    _check_profile_name(destination)
+    if source == destination:
+        raise MixerControlUnavailable("Profile copy needs a different destination")
+    if (type(if_profile_revision) is not str or len(if_profile_revision) != 67
+            or not if_profile_revision.startswith("p1-")
+            or any(c not in "0123456789abcdef" for c in if_profile_revision[3:])):
+        raise MixerControlUnavailable("Valid private profile revision required")
+
+    def source_levels(dirfd):
+        current, revision = _profile_catalog_with_revision(Path(path), dirfd)
+        if revision != if_profile_revision:
+            raise StaleProfilePreview("Private volume profile preview became stale")
+        if source not in current["profiles"]:
+            raise MixerControlUnavailable("Source volume profile no longer exists")
+        return current["profiles"][source]
+
+    result = _save_profile_under_lock(destination, source_levels, path=path)
+    return {"profile_copied_from": source, **result, "source_unchanged": True}
 
 
 def list_volume_profiles(*, path=PROFILE_PATH):
@@ -579,6 +653,8 @@ def main(argv=None):
                         help="Show requested changes without writing any settings")
     parser.add_argument("--if-preview-revision", metavar="REV",
                         help="Require matching revision from a recent --preview before saving")
+    parser.add_argument("--if-profile-revision", metavar="PROFILE_REV",
+                        help="Require same private catalog version for confirmed copy-profile")
     parser.add_argument("--compare-baseline", metavar="BASELINE",
                         help="Compare current inputs and stored EQ to an earlier preview snapshot")
     parser.add_argument("--wait-for-supervisor", action="store_true",
@@ -618,6 +694,12 @@ def main(argv=None):
         "save-current-profile",
         help="Preview or capture current requested mixer volumes as a private profile")
     capture.add_argument("name")
+    copy = commands.add_parser(
+        "copy-profile",
+        help="Preview or separately confirm copying a private profile to a new name",
+    )
+    copy.add_argument("source")
+    copy.add_argument("destination")
     custom = commands.add_parser(
         "profile", help="Preview or explicitly apply a saved custom volume profile")
     custom.add_argument("name")
@@ -629,8 +711,21 @@ def main(argv=None):
         mix.add_argument(slot, type=int)
     args = parser.parse_args(argv)
     try:
+        if args.if_profile_revision is not None and args.action != "copy-profile":
+            raise MixerControlUnavailable("Profile revision is only for copying profiles")
+        if args.action == "copy-profile" and (
+                args.confirm_local_mixer_change or args.wait_for_supervisor
+                or args.compare_baseline is not None
+                or args.if_preview_revision is not None
+                or (args.preview and (
+                    args.confirm_local_profile_save
+                    or args.if_profile_revision is not None))
+                or (not args.preview and (
+                    not args.confirm_local_profile_save
+                    or args.if_profile_revision is None))):
+            raise MixerControlUnavailable("Profile copy requires preview or separate guarded confirmation")
         if args.confirm_local_profile_save and args.action not in (
-                "save-profile", "save-current-profile"):
+                "save-profile", "save-current-profile", "copy-profile"):
             raise MixerControlUnavailable("Private profile save confirmation not applicable")
         if args.action == "save-current-profile" and (
                 args.confirm_local_mixer_change or args.wait_for_supervisor
@@ -689,6 +784,14 @@ def main(argv=None):
                 state = capture_current_profile(
                     args.name, if_revision=args.if_preview_revision,
                     confirmed=args.confirm_local_profile_save)
+        elif args.action == "copy-profile":
+            if args.preview:
+                state = preview_profile_copy(args.source, args.destination)
+            else:
+                state = copy_volume_profile(
+                    args.source, args.destination,
+                    if_profile_revision=args.if_profile_revision,
+                    confirmed=args.confirm_local_profile_save)
         else:
             if args.action == "set-master":
                 patch = {"master": args.percent}
@@ -729,6 +832,22 @@ def main(argv=None):
                           if args.if_preview_revision is not None else {})
                 state = change(patch, confirmed=args.confirm_local_mixer_change,
                                **kwargs)
+    except StaleProfilePreview:
+        # Failed compare-and-save is a no-op. A new read-only plan requires
+        # the operator to review and submit another explicit confirmation.
+        try:
+            fresh = preview_profile_copy(args.source, args.destination)
+        except (MixerControlUnavailable, OSError, ValueError, TypeError):
+            parser.exit(4, "Profile not copied: catalog changed. "
+                           "Fresh preview unavailable.\n")
+        print(json.dumps({
+            "status": "profile-copy-stale",
+            "profile_written": False, "source_unchanged": True,
+            "mixer_settings_written": False, "fresh_preview": fresh,
+            "audible_playback_verified": False,
+        }, sort_keys=True))
+        parser.exit(4, "Profile not copied: review the fresh copy preview "
+                       "and separately confirm its new profile revision.\n")
     except StaleMixerPreview:
         if args.action == "save-current-profile":
             # Never auto-capture a later state after a stale revision. The
@@ -784,9 +903,9 @@ def main(argv=None):
     elif args.action == "status":
         print("Supervisor acceptance means a recent complete set of PipeWire commands "
               "returned successfully; no hardware audio was measured.")
-    elif args.action in ("save-profile", "save-current-profile"):
+    elif args.action in ("save-profile", "save-current-profile", "copy-profile"):
         if args.preview:
-            print("Read-only capture preview: no profile or mixer settings saved.")
+            print("Read-only private profile preview: no profile or mixer settings saved.")
         else:
             print("Private volume profile saved; active mixer settings unchanged.")
     elif args.action not in ("show", "list-profiles"):
