@@ -78,6 +78,15 @@ class RootfsAuditTests(unittest.TestCase):
             '"--capture", source',
             '"--playback", "audiohub." + channel',
             'usb_ready = bool(selected and selected.returncode == 0)',
+            "    def _assign(self, sources):",
+            "filtered = {",
+            "candidate = unique",
+            "or address in candidate",
+            "candidate[address] = channel",
+            "if changed:",
+            "atomic_json(ASSIGNMENTS, candidate)",
+            "self.assignments = candidate",
+            "    def _retry_after_failure(self, address, identity, now):",
             "    def poll(self):",
             "for args in volume_commands(",
             "applied = run(*args)",
@@ -592,6 +601,58 @@ class RootfsAuditTests(unittest.TestCase):
                 "target.write_text(payload.decode())"
             ))
             self.assertFalse(audit.inspect(root)["eq_setup_private_atomic_nofollow"])
+
+
+    def test_bt_auto_assignment_atomic_persistence_guard_present(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            self.assertTrue(audit.inspect(root)[
+                "bt_auto_assignment_persist_before_memory_commit"
+            ])
+
+    def test_real_runtime_bt_auto_assignment_atomicity_matches_installed_gate(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            real = Path(__file__).resolve().parents[1] / "src/audiohub/runtime.py"
+            staged = root / "opt/audiohub/src/audiohub/runtime.py"
+            staged.write_bytes(real.read_bytes())
+            self.assertTrue(audit.inspect(root)[
+                "bt_auto_assignment_persist_before_memory_commit"
+            ])
+
+    def test_bt_auto_assignment_commit_before_persistence_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            real = (Path(__file__).resolve().parents[1] /
+                    "src/audiohub/runtime.py").read_text()
+            unsafe = real.replace(
+                "        if changed:\n"
+                "            atomic_json(ASSIGNMENTS, candidate)\n"
+                "        self.assignments = candidate",
+                "        self.assignments = candidate\n"
+                "        if changed:\n"
+                "            atomic_json(ASSIGNMENTS, candidate)",
+            )
+            self.assertNotEqual(real, unsafe)
+            (root / "opt/audiohub/src/audiohub/runtime.py").write_text(unsafe)
+            self.assertFalse(audit.inspect(root)[
+                "bt_auto_assignment_persist_before_memory_commit"
+            ])
+
+    def test_bt_auto_assignment_old_mapping_write_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            real = (Path(__file__).resolve().parents[1] /
+                    "src/audiohub/runtime.py").read_text()
+            unsafe = real.replace(
+                "atomic_json(ASSIGNMENTS, candidate)",
+                "atomic_json(ASSIGNMENTS, self.assignments)",
+            )
+            self.assertNotEqual(real, unsafe)
+            (root / "opt/audiohub/src/audiohub/runtime.py").write_text(unsafe)
+            self.assertFalse(audit.inspect(root)[
+                "bt_auto_assignment_persist_before_memory_commit"
+            ])
 
     def test_missing_private_runtime_atomic_guard_blocks_image(self):
         with tempfile.TemporaryDirectory() as tmp:

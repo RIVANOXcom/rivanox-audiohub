@@ -1098,3 +1098,42 @@ the original failed native run remains FAILED. Re-run
 independent Source and native ARM64 CI on the new exact head;
 do not assert 102/102 until verified. Existing legal,
 hardware and release gates remain unverified.
+
+
+## 2026-11-07: Draft PR88 — Bluetooth auto-route persistence is transactional
+
+PAPA MissionPilot PAPA-18B8B3C6 / AH-003, AH-007, AH-009.
+New isolated Draft PR88 is stacked only on unchanged Draft
+PR87 HEAD ddabc4086a0fe696eec9c754fb47978cc57bb5a0. Auto-mode Supervisor._assign() previously
+sanitized and updated self.assignments BEFORE
+atomic_json(ASSIGNMENTS, self.assignments), so an unsuccessful
+persistent write left the new assignments active in memory.
+On the next supervised poll the assignment was no longer
+marked changed and persistence could be silently skipped;
+new audio could be routed on an unpersisted assignment.
+The change builds a filtered candidate map without mutating
+the original, persists the candidate atomically first, and
+updates self.assignments ONLY after the write succeeds.
+No failed write can start a new BT route during that cycle.
+Three new source integration regressions cover write failure
+and no player/memory update, success on next retry, and
+retry of sanitization after a previous write fails.
+New installed-rootfs gate
+bt_auto_assignment_persist_before_memory_commit, synthetic
+positive plus real-source verification and two adversarial
+source mutations; expect native 103 checks only upon exact-head
+ARM64 SUCCESS. PR87 Source #42321534345 SUCCESS 778/778 after
+fixing earlier false-negative audit; its corrected native
+Actions #42321528857 was still in progress at branch creation.
+PR87 native predecessor #42319853661 FAILED the static
+audit runtime_private_directory_race_nofollow, no artifact;
+PAPA Workbench #3155. Parent PR86 native #42317355013
+101/101 PASS and test ZIP #13551752280,
+PAPA Workbench #3153. All are Draft/unmerged,
+classification UNVERIFIED_ALPHA_TEST_ONLY.
+The real Pi4+Edifier sound, three concurrent sources,
+two A2DP/24h soak, authenticated phone owner WiFi and legal/
+operator/CEO release GO are NOT verified. Effective
+AGPL-3.0-only, 83 source rights and nine OS copyright
+gaps pending; Model C not approved. No install, flash,
+merge, deploy, payments, permissions or public release.

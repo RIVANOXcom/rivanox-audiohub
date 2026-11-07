@@ -263,7 +263,10 @@ class Supervisor:
         if plan["mode"] == "manual":
             self.assignments = dict(plan["bluetooth"])
             return
-        self.assignments = {
+        # Compute a candidate without mutating active in-memory routing.
+        # Failed persistence must leave the prior assignment map intact so
+        # the next supervised poll retries the write instead of forgetting it.
+        filtered = {
             address: channel
             for address, channel in self.assignments.items()
             if type(address) is str and _BLUETOOTH_MAC.fullmatch(address)
@@ -271,25 +274,26 @@ class Supervisor:
         }
         unique = {}
         assigned = set()
-        for address, channel in sorted(self.assignments.items()):
+        for address, channel in sorted(filtered.items()):
             if channel not in assigned:
                 unique[address] = channel
                 assigned.add(channel)
         changed = unique != self.assignments
-        self.assignments = unique
+        candidate = unique
         for source in sources:
             address = source.get("address")
             if (type(address) is not str or _BLUETOOTH_MAC.fullmatch(address) is None
-                    or address in self.assignments):
+                    or address in candidate):
                 continue
             for channel in allowed:
                 if channel not in assigned:
-                    self.assignments[address] = channel
+                    candidate[address] = channel
                     assigned.add(channel)
                     changed = True
                     break
         if changed:
-            atomic_json(ASSIGNMENTS, self.assignments)
+            atomic_json(ASSIGNMENTS, candidate)
+        self.assignments = candidate
 
     def _retry_after_failure(self, address, identity, now):
         retries = getattr(self, "retry_state", {})
