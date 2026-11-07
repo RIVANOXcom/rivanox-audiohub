@@ -269,8 +269,12 @@
       : "unavailable";
     if (signature === lastRoutingHistorySignature) return;
     lastRoutingHistorySignature = signature;
+    const observedAt = new Date();
     routingHistory.push({
-      at: new Date().toLocaleTimeString(),
+      at: observedAt.toLocaleTimeString(),
+      // An explicit browser-provided UTC timestamp is exportable without
+      // trusting locale-specific or other uncontrolled formatting.
+      at_utc: observedAt.toISOString(),
       // safeRoutingHealth only returns fixed, bounded public fields.
       health: summary ? {...summary} : null
     });
@@ -372,12 +376,36 @@
     const exportStatus = byId("routing-export-status");
     if (exportStatus) exportStatus.textContent = "";
   }
+  function safeRoutingHistoryReport() {
+    // Each historical item is independently revalidated before local export.
+    // Never serialize the stored UI objects or anything from the raw API.
+    return routingHistory.slice(-8).map(entry => {
+      const h = entry.health;
+      const valid = h && typeof h.usb_connected === "boolean" &&
+        Number.isInteger(h.active_routes) && h.active_routes >= 0 && h.active_routes <= 3 &&
+        Number.isInteger(h.bluetooth_sources) && h.bluetooth_sources >= 0 &&
+          h.bluetooth_sources <= 2 &&
+        Number.isInteger(h.virtual_channel_count) && h.virtual_channel_count >= 0 &&
+          h.virtual_channel_count <= 3;
+      const timestamp = typeof entry.at_utc === "string" &&
+        /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(entry.at_utc)
+        ? entry.at_utc : null;
+      return {
+        observed_at_browser_utc: timestamp,
+        status: valid ? "recent" : "unavailable",
+        usb_connected: valid ? h.usb_connected : null,
+        active_routes: valid ? h.active_routes : null,
+        bluetooth_sources: valid ? h.bluetooth_sources : null,
+        virtual_channel_count: valid ? h.virtual_channel_count : null
+      };
+    });
+  }
   function safeRoutingReport() {
     const summary = safeRoutingHealth();
     // Fixed key list: no MACs, names, SSIDs, URLs, addresses, audio payloads
     // or raw diagnostics ever reach the downloaded local JSON.
     return {
-      format: "audiohub.routing-diagnostics.v3",
+      format: "audiohub.routing-diagnostics.v4",
       // Browser time is only a self-reported observation timestamp.
       recorded_at_browser_utc: new Date().toISOString(),
       status: summary ? "recent" : (statusChecked ? "unavailable" : "pending"),
@@ -385,6 +413,7 @@
       active_routes: summary ? summary.active_routes : null,
       bluetooth_sources: summary ? summary.bluetooth_sources : null,
       virtual_channel_count: summary ? summary.virtual_channel_count : null,
+      recent_routing_changes: safeRoutingHistoryReport(),
       operator_observations: manualSoundObservations(),
       hardware_verified: false,
       audible_playback_verified: false,

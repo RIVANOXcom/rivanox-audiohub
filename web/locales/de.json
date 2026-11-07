@@ -17,7 +17,7 @@
   "routingRecheck": "Gerätestatus jetzt neu prüfen",
   "routingRecheckRequested": "Statusprüfung angefordert. Das aktuelle Ergebnis steht oben.",
   "routingHistoryTitle": "Letzte lokale Routingänderungen",
-  "routingHistoryNote": "Maximal acht datensparsame Änderungen auf dieser Seite. Zeiten stammen aus dem Browser. Kein Nachweis für Ton oder Hardwareabnahme; Neuladen löscht den Verlauf.",
+  "routingHistoryNote": "Maximal acht datensparsame Änderungen auf dieser Seite werden auch in den JSON-Diagnosebericht aufgenommen. Zeiten stammen aus dem Browser. Kein Ton- oder Hardwareabnahmenachweis; Neuladen löscht den Verlauf.",
   "routingHistoryEmpty": "Noch keine Routingänderungen erfasst.",
   "routingHistoryClear": "Änderungsverlauf löschen",
   "routingHistoryCleared": "Routingverlauf gelöscht.",

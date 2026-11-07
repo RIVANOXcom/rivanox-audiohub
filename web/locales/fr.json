@@ -17,7 +17,7 @@
   "routingRecheck": "Vérifier à nouveau l’état maintenant",
   "routingRecheckRequested": "Nouvelle vérification demandée. Consultez l’état actuel ci-dessus.",
   "routingHistoryTitle": "Modifications récentes du routage local",
-  "routingHistoryNote": "Huit changements sans identifiants au maximum observés sur cette page. L'heure vient du navigateur. Ce n'est pas une preuve de son ou une validation matérielle ; recharger efface l'historique.",
+  "routingHistoryNote": "Jusqu'à huit changements sans identifiants observés sur cette page sont inclus dans le rapport JSON téléchargé. L'heure vient du navigateur. Ce n'est pas une preuve de son ni une validation matérielle ; recharger efface l'historique.",
   "routingHistoryEmpty": "Aucun changement de routage enregistré.",
   "routingHistoryClear": "Effacer l'historique",
   "routingHistoryCleared": "Historique de routage effacé.",
