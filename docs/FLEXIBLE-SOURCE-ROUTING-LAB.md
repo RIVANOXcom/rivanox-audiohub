@@ -126,7 +126,13 @@ The optional `--wait-for-supervisor` can be added only to an explicitly
 confirmed **change** command (not `show`, `status` or `--preview`).
 The CLI first saves the validated settings atomically, then reads the
 already private local supervisor acceptance status up to eleven times
-over **at most ten one-second waits**. Its JSON report distinguishes
+over **at most ten one-second waits**. A matching software acceptance
+is valid for this particular write **only if the timestamp of that same
+complete supervisor snapshot is strictly later than the save**. A
+still-fresh but pre-write acknowledgement, even with identical volumes
+and mute settings, remains unconfirmed until another supervisor poll;
+the check may therefore wait for the next five-second cycle. A missing,
+invalid or boolean snapshot timestamp never proves acceptance. Its JSON report distinguishes
 `settings_written=true` from `delivery_state=accepted`,
 `pending`, `unavailable` or `superseded`. It also includes bounded
 `saved_request` controls, `pending_controls`, and always
