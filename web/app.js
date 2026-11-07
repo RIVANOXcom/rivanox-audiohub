@@ -226,22 +226,38 @@
       ? tr(deviceHealth.usb_connected ? "speakerConnected" : "speakerDisconnected")
       : tr(statusChecked ? "speakerStatusUnavailable" : "speakerState");
   }
-  function renderRoutingSummary() {
-    // Only read the existing sanitized /api/status fields. A stale, missing
-    // or malformed snapshot must never display zero as a real measurement.
+  function safeRoutingHealth() {
+    // Share one strictly validated projection between the screen and export.
+    // Only whitelisted, bounded public fields are copied; never raw JSON.
+    const health = deviceHealth;
     const bounds = [
-      ["active_routes", "routing-routes", 3],
-      ["bluetooth_sources", "routing-bluetooth", 2],
-      ["virtual_channel_count", "routing-channels", 3]
+      ["active_routes", 3],
+      ["bluetooth_sources", 2],
+      ["virtual_channel_count", 3]
     ];
-    const usable = deviceHealth && deviceHealth.fresh === true &&
-      typeof deviceHealth.usb_connected === "boolean" &&
-      bounds.every(([key, , limit]) => Number.isInteger(deviceHealth[key]) &&
-        deviceHealth[key] >= 0 && deviceHealth[key] <= limit);
-    for (const [key, id] of bounds) {
+    if (!health || health.fresh !== true ||
+        typeof health.usb_connected !== "boolean" ||
+        !bounds.every(([key, limit]) => Number.isInteger(health[key]) &&
+          health[key] >= 0 && health[key] <= limit)) return null;
+    return {
+      usb_connected: health.usb_connected,
+      active_routes: health.active_routes,
+      bluetooth_sources: health.bluetooth_sources,
+      virtual_channel_count: health.virtual_channel_count
+    };
+  }
+  function renderRoutingSummary() {
+    const summary = safeRoutingHealth();
+    const usable = summary !== null;
+    const ids = [
+      ["active_routes", "routing-routes"],
+      ["bluetooth_sources", "routing-bluetooth"],
+      ["virtual_channel_count", "routing-channels"]
+    ];
+    for (const [key, id] of ids) {
       const node = byId(id);
       if (node) {
-        const value = usable ? String(deviceHealth[key]) : "—";
+        const value = usable ? String(summary[key]) : "—";
         if (node.textContent !== value) node.textContent = value;
       }
     }
@@ -255,16 +271,52 @@
     // never claim proof of sound, ownership, pairing or hardware fitness.
     let guidance = statusChecked ? "routingDiagUnavailable" : "routingDiagPending";
     if (usable) {
-      if (!deviceHealth.usb_connected) guidance = "routingDiagUsbMissing";
-      else if (deviceHealth.virtual_channel_count === 0) guidance = "routingDiagNoChannels";
-      else if (deviceHealth.active_routes === 0) guidance = "routingDiagNoRoutes";
-      else if (deviceHealth.bluetooth_sources === 0) guidance = "routingDiagNoBluetooth";
+      if (!summary.usb_connected) guidance = "routingDiagUsbMissing";
+      else if (summary.virtual_channel_count === 0) guidance = "routingDiagNoChannels";
+      else if (summary.active_routes === 0) guidance = "routingDiagNoRoutes";
+      else if (summary.bluetooth_sources === 0) guidance = "routingDiagNoBluetooth";
       else guidance = "routingDiagCountsAvailable";
     }
     const diagnostic = byId("routing-diagnostic");
     if (diagnostic) {
       const text = tr(guidance);
       if (diagnostic.textContent !== text) diagnostic.textContent = text;
+    }
+  }
+  function safeRoutingReport() {
+    const summary = safeRoutingHealth();
+    // Fixed key list: no MACs, names, SSIDs, URLs, addresses, audio payloads
+    // or raw diagnostics ever reach the downloaded local JSON.
+    return {
+      format: "audiohub.routing-diagnostics.v1",
+      status: summary ? "recent" : (statusChecked ? "unavailable" : "pending"),
+      usb_connected: summary ? summary.usb_connected : null,
+      active_routes: summary ? summary.active_routes : null,
+      bluetooth_sources: summary ? summary.bluetooth_sources : null,
+      virtual_channel_count: summary ? summary.virtual_channel_count : null,
+      audible_playback_verified: false,
+      release_approved: false
+    };
+  }
+  function downloadRoutingDiagnostics() {
+    let url = null;
+    try {
+      const body = JSON.stringify(safeRoutingReport(), null, 2) + "\n";
+      const blob = new Blob([body], {type: "application/json;charset=utf-8"});
+      url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "audiohub-routing-diagnostics.json";
+      link.hidden = true;
+      document.body.append(link);
+      try { link.click(); }
+      finally { link.remove(); }
+      // Browser download activation is not evidence of successful saving.
+      byId("routing-export-status").textContent = tr("routingExportRequested");
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (_) {
+      if (url) URL.revokeObjectURL(url);
+      byId("routing-export-status").textContent = tr("routingExportUnavailable");
     }
   }
   async function readDeviceStatus() {
@@ -290,6 +342,7 @@
     drawChannels();
     renderHardwareStatus();
     renderRoutingSummary();
+    byId("routing-export-status").textContent = "";
   }
   async function setLanguage(language) {
     // Late locale replies must not overwrite newer user choices.
@@ -314,6 +367,7 @@
     translate();
   }
   byId("language").addEventListener("change", event => setLanguage(event.target.value));
+  byId("routing-export").addEventListener("click", downloadRoutingDiagnostics);
   byId("master").addEventListener("input", event => {
     state.master = Number(event.target.value);
     byId("master-value").textContent = state.master + "%";
