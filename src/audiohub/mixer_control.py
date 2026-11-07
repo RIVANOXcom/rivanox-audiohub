@@ -123,18 +123,13 @@ def saved_profile_patch(name, *, path=PROFILE_PATH):
     return _profile_patch(profiles[name])
 
 
-def save_volume_profile(name, master, music, laptop, tablet, *,
-                        path=PROFILE_PATH, confirmed=False):
-    """Create one private immutable named volume profile, not active settings.
+def _save_profile_under_lock(name, levels_from_snapshot, *, path):
+    """Serialize private profile creation with CLI mixer writers.
 
-    The same local writer lock protects concurrent profile creators. Existing
-    names are never overwritten; all fields are fixed integers (no mute/EQ).
+    The supplier runs inside the same exclusive lock, so it may safely
+    compare the live mixer settings generation before persisting a profile.
+    No mixer settings are written by this helper.
     """
-    if confirmed is not True:
-        raise MixerControlUnavailable("Explicit local profile save confirmation required")
-    _check_profile_name(name)
-    values = _profile_levels(dict(zip(PROFILE_FIELDS,
-                                      (master, music, laptop, tablet))))
     if os.geteuid() == 0:
         raise MixerControlUnavailable("Use the unprivileged audiohub account")
     path = Path(path)
@@ -154,6 +149,7 @@ def save_volume_profile(name, master, music, laptop, tablet, *,
             raise MixerControlUnavailable("Local volume profile already exists")
         if len(catalog["profiles"]) >= MAX_CUSTOM_PROFILES:
             raise MixerControlUnavailable("Private volume profile limit reached")
+        values = _profile_levels(levels_from_snapshot(dirfd))
         catalog["profiles"][name] = values
         atomic_json(path, catalog)
         return {"profile_saved": name, "volumes": values,
@@ -164,6 +160,72 @@ def save_volume_profile(name, master, music, laptop, tablet, *,
             os.close(lockfd)
         os.close(dirfd)
 
+
+def save_volume_profile(name, master, music, laptop, tablet, *,
+                        path=PROFILE_PATH, confirmed=False):
+    """Create one immutable private volume profile; do not apply it."""
+    if confirmed is not True:
+        raise MixerControlUnavailable("Explicit local profile save confirmation required")
+    _check_profile_name(name)
+    values = _profile_levels(dict(zip(PROFILE_FIELDS,
+                                      (master, music, laptop, tablet))))
+    return _save_profile_under_lock(name, lambda _dirfd: values, path=path)
+
+
+def _profile_snapshot_paths(path, settings_path):
+    """Only a profile catalog next to its own local mixer settings is valid."""
+    path, settings_path = Path(path), Path(settings_path)
+    if (path.name != "volume-profiles.json" or settings_path.name != "settings.json"
+            or path.parent != settings_path.parent):
+        raise MixerControlUnavailable("Local profile and mixer paths must share a directory")
+    return path, settings_path
+
+
+def preview_current_profile(name, *, path=PROFILE_PATH, settings_path=SETTINGS):
+    """Read-only snapshot of existing REQUESTED levels, never hardware sound."""
+    _check_profile_name(name)
+    path, settings_path = _profile_snapshot_paths(path, settings_path)
+    catalog = list_volume_profiles(path=path)
+    if name in catalog["profiles"]:
+        raise MixerControlUnavailable("Local volume profile already exists")
+    if len(catalog["profiles"]) >= MAX_CUSTOM_PROFILES:
+        raise MixerControlUnavailable("Private volume profile limit reached")
+    current, revision = _preview_snapshot(path=settings_path)
+    levels = {"master": current["master"],
+              **{slot: current[slot]["volume"] for slot in CHANNELS}}
+    return {
+        "mode": "profile-capture-preview", "name": name,
+        "revision": revision, "volumes": _profile_levels(levels),
+        "profile_written": False, "mixer_settings_written": False,
+        "audible_playback_verified": False,
+    }
+
+
+def capture_current_profile(name, *, path=PROFILE_PATH, settings_path=SETTINGS,
+                            if_revision=None, confirmed=False):
+    """Save validated current requested volumes if the operator's snapshot matches.
+
+    Capture and catalog creation share the same exclusive writer lock. A
+    concurrent mixer change (including EQ or an ABA generation) rejects the
+    entire profile creation, without touching active settings.
+    """
+    if confirmed is not True:
+        raise MixerControlUnavailable("Explicit local profile save confirmation required")
+    _check_profile_name(name)
+    if (type(if_revision) is not str or len(if_revision) != 67
+            or not if_revision.startswith("v1-")
+            or any(c not in "0123456789abcdef" for c in if_revision[3:])):
+        raise MixerControlUnavailable("A valid preview revision is required")
+    path, settings_path = _profile_snapshot_paths(path, settings_path)
+
+    def current_levels(dirfd):
+        current, revision = _state_with_revision(settings_path, dirfd)
+        if revision != if_revision:
+            raise StaleMixerPreview("Local volume profile capture preview is stale")
+        return {"master": current["master"],
+                **{slot: current[slot]["volume"] for slot in CHANNELS}}
+
+    return _save_profile_under_lock(name, current_levels, path=path)
 
 def _existing_state(path, dirfd):
     """Reject malformed existing state instead of overwriting with defaults."""
@@ -552,6 +614,10 @@ def main(argv=None):
     save_profile.add_argument("name")
     for field in PROFILE_FIELDS:
         save_profile.add_argument(field, type=int)
+    capture = commands.add_parser(
+        "save-current-profile",
+        help="Preview or capture current requested mixer volumes as a private profile")
+    capture.add_argument("name")
     custom = commands.add_parser(
         "profile", help="Preview or explicitly apply a saved custom volume profile")
     custom.add_argument("name")
@@ -563,8 +629,19 @@ def main(argv=None):
         mix.add_argument(slot, type=int)
     args = parser.parse_args(argv)
     try:
-        if args.confirm_local_profile_save and args.action != "save-profile":
+        if args.confirm_local_profile_save and args.action not in (
+                "save-profile", "save-current-profile"):
             raise MixerControlUnavailable("Private profile save confirmation not applicable")
+        if args.action == "save-current-profile" and (
+                args.confirm_local_mixer_change or args.wait_for_supervisor
+                or args.compare_baseline is not None
+                or (args.preview and (
+                    args.confirm_local_profile_save
+                    or args.if_preview_revision is not None))
+                or (not args.preview and (
+                    not args.confirm_local_profile_save
+                    or args.if_preview_revision is None))):
+            raise MixerControlUnavailable("Capture requires preview or confirmed revision")
         if args.action == "save-profile" and (
                 args.preview or args.confirm_local_mixer_change
                 or args.wait_for_supervisor or args.if_preview_revision is not None
@@ -583,7 +660,7 @@ def main(argv=None):
                                          or not args.confirm_local_mixer_change
                                          or args.action in ("show", "status")):
             raise MixerControlUnavailable("Supervisor wait requires confirmed change")
-        if args.if_preview_revision is not None and (
+        if args.if_preview_revision is not None and args.action != "save-current-profile" and (
                 args.preview or not args.confirm_local_mixer_change
                 or args.action in ("show", "status")):
             raise MixerControlUnavailable("Preview revision requires confirmed change")
@@ -605,6 +682,13 @@ def main(argv=None):
             state = save_volume_profile(
                 args.name, *(getattr(args, key) for key in PROFILE_FIELDS),
                 confirmed=args.confirm_local_profile_save)
+        elif args.action == "save-current-profile":
+            if args.preview:
+                state = preview_current_profile(args.name)
+            else:
+                state = capture_current_profile(
+                    args.name, if_revision=args.if_preview_revision,
+                    confirmed=args.confirm_local_profile_save)
         else:
             if args.action == "set-master":
                 patch = {"master": args.percent}
@@ -646,6 +730,22 @@ def main(argv=None):
                 state = change(patch, confirmed=args.confirm_local_mixer_change,
                                **kwargs)
     except StaleMixerPreview:
+        if args.action == "save-current-profile":
+            # Never auto-capture a later state after a stale revision. The
+            # operator must inspect the new read-only snapshot and consent.
+            try:
+                fresh = preview_current_profile(args.name)
+            except (MixerControlUnavailable, OSError, ValueError, TypeError):
+                parser.exit(4, "Profile not saved: mixer state changed. "
+                               "Fresh preview unavailable.\\n")
+            print(json.dumps({
+                "status": "profile-capture-stale",
+                "profile_written": False, "mixer_settings_written": False,
+                "fresh_preview": fresh,
+                "audible_playback_verified": False,
+            }, sort_keys=True))
+            parser.exit(4, "Profile not saved: inspect a fresh capture preview "
+                           "and separately confirm its new revision.\\n")
         # The guarded save was rejected UNDER the writer lock. Offer only a
         # fresh read-only projection so the operator can decide again. It is
         # never silently applied, even if a concurrent writer changed state.
@@ -684,8 +784,11 @@ def main(argv=None):
     elif args.action == "status":
         print("Supervisor acceptance means a recent complete set of PipeWire commands "
               "returned successfully; no hardware audio was measured.")
-    elif args.action == "save-profile":
-        print("Private volume profile saved; active mixer settings unchanged.")
+    elif args.action in ("save-profile", "save-current-profile"):
+        if args.preview:
+            print("Read-only capture preview: no profile or mixer settings saved.")
+        else:
+            print("Private volume profile saved; active mixer settings unchanged.")
     elif args.action not in ("show", "list-profiles"):
         print("Saved locally; running supervisor applies validated gains on its next poll. "
               "No physical output or audible playback was verified.")
