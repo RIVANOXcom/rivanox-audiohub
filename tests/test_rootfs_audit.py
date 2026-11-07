@@ -310,7 +310,7 @@ class RootfsAuditTests(unittest.TestCase):
             "if _conflicting_node_ids(nodes):",
             "def bluetooth_sources(nodes):",
             'if name_mac in ("00:00:00:00:00:00", "FF:FF:FF:FF:FF:FF"):',
-
+            "continue",
             "if name_mac in seen:",
             "conflicted.add(name_mac)",
             "seen.add(name_mac)",
