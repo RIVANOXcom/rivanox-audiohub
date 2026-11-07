@@ -17,7 +17,7 @@
   "routingRecheck": "Recheck device status now",
   "routingRecheckRequested": "Status recheck requested. See the current result above.",
   "routingHistoryTitle": "Recent local routing changes",
-  "routingHistoryNote": "At most eight sanitized changes observed on this page. Times come from your browser. This is not proof of sound or hardware acceptance; reloading clears the history.",
+  "routingHistoryNote": "At most eight sanitized changes observed on this page are also included in the diagnostic JSON download. Times come from your browser. This is not proof of sound or hardware acceptance; reloading clears the history.",
   "routingHistoryEmpty": "No routing changes recorded yet.",
   "routingHistoryClear": "Clear change history",
   "routingHistoryCleared": "Routing history cleared.",
