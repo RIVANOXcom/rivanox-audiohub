@@ -703,7 +703,7 @@ check().catch(e => {console.error(e); process.exitCode = 1;});
 def preview_routing_summary_source():
     """Run the actual browser routing renderer rather than a copied version."""
     source = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
-    start = source.index("  function renderRoutingSummary() {")
+    start = source.index("  function safeRoutingHealth() {")
     end = source.index("\n  async function readDeviceStatus()", start)
     return source[start:end]
 
@@ -715,7 +715,8 @@ class BrowserRoutingSummaryTests(unittest.TestCase):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
         source = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
         for key in ("routing-routes", "routing-bluetooth", "routing-channels",
-                    "routing-freshness", "routing-diagnostic"):
+                    "routing-freshness", "routing-diagnostic",
+                    "routing-export", "routing-export-status"):
             self.assertIn('id="' + key + '"', html)
         for key in ("active_routes", "bluetooth_sources", "virtual_channel_count"):
             self.assertIn('"' + key + '"', preview_routing_summary_source())
@@ -724,6 +725,7 @@ class BrowserRoutingSummaryTests(unittest.TestCase):
         self.assertNotIn('method: "POST"', source)
         self.assertIn('role="status"', html)
         self.assertIn("Read-only device counts", html)
+        self.assertIn('byId("routing-export").addEventListener("click", downloadRoutingDiagnostics);', source)
 
     def test_five_locale_labels_have_safe_nonplayback_disclaimer(self):
         keys = {
@@ -732,7 +734,8 @@ class BrowserRoutingSummaryTests(unittest.TestCase):
             "routingRecent", "routingUnavailable", "routingDiagPending",
             "routingDiagUnavailable", "routingDiagUsbMissing",
             "routingDiagNoChannels", "routingDiagNoRoutes",
-            "routingDiagNoBluetooth", "routingDiagCountsAvailable"
+            "routingDiagNoBluetooth", "routingDiagCountsAvailable",
+            "routingExport", "routingExportRequested", "routingExportUnavailable"
         }
         for code in ("en", "de", "es", "fr", "it"):
             with self.subTest(code=code):
@@ -855,6 +858,111 @@ assert.equal(get("routing-diagnostic"), "Wiedergabe manuell prüfen");
             capture_output=True, text=True, timeout=15, check=False,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
+
+
+    @unittest.skipUnless(shutil.which("node"), "Node.js runtime unavailable")
+    def test_actual_browser_export_only_copies_bounded_public_fields(self):
+        """Click exports a safe, fixed JSON schema and no device identifiers."""
+        setup = r'''
+const assert = require("node:assert/strict");
+const elements = {"routing-export-status": {textContent: ""}};
+const byId = id => elements[id] || null;
+const tr = key => ({
+  routingExportRequested: "Download requested",
+  routingExportUnavailable: "Download unavailable"
+})[key] || key;
+let deviceHealth = null;
+let statusChecked = false;
+const links = [];
+const blobs = [];
+const revoked = [];
+class Blob {
+  constructor(parts, opts) {this.parts = parts; this.opts = opts;}
+}
+const URL = {
+  createObjectURL(blob) {blobs.push(blob); return "blob:local-report";},
+  revokeObjectURL(url) {revoked.push(url);}
+};
+const setTimeout = (fn, delay) => {
+  assert.equal(delay, 1000);
+  fn();
+};
+const document = {
+  body: {append(node) {links.push(node);}},
+  createElement(tag) {
+    assert.equal(tag, "a");
+    return {
+      href: "", download: "", hidden: false,
+      click() {this.clicked = true;},
+      remove() {this.removed = true;}
+    };
+  }
+};
+const exportContent = () => blobs[blobs.length - 1].parts.join("");
+'''
+        verify = r'''
+const fields = ["format", "status", "usb_connected", "active_routes",
+  "bluetooth_sources", "virtual_channel_count",
+  "audible_playback_verified", "release_approved"];
+const checkDownload = expected => {
+  downloadRoutingDiagnostics();
+  const report = JSON.parse(exportContent());
+  assert.deepEqual(Object.keys(report), fields);
+  assert.deepEqual(report, expected);
+  const link = links[links.length - 1];
+  assert.equal(link.download, "audiohub-routing-diagnostics.json");
+  assert.equal(link.href, "blob:local-report");
+  assert.equal(link.clicked, true);
+  assert.equal(link.removed, true);
+  assert.equal(elements["routing-export-status"].textContent, "Download requested");
+  assert.equal(revoked[revoked.length - 1], "blob:local-report");
+  return report;
+};
+const unverified = {audible_playback_verified: false, release_approved: false};
+checkDownload({
+  format: "audiohub.routing-diagnostics.v1", status: "pending",
+  usb_connected: null, active_routes: null, bluetooth_sources: null,
+  virtual_channel_count: null, ...unverified
+});
+statusChecked = true;
+deviceHealth = {fresh: true, usb_connected: true,
+  active_routes: 2, bluetooth_sources: 1, virtual_channel_count: 3,
+  mac: "PRIVATE-MAC", ssid: "PRIVATE-WIFI", username: "PRIVATE-OWNER",
+  hidden: {key: "SECRET"}};
+checkDownload({
+  format: "audiohub.routing-diagnostics.v1", status: "recent",
+  usb_connected: true, active_routes: 2, bluetooth_sources: 1,
+  virtual_channel_count: 3, ...unverified
+});
+assert.ok(!exportContent().includes("PRIVATE"));
+assert.ok(!exportContent().includes("SECRET"));
+assert.ok(!exportContent().includes("MAC"));
+deviceHealth = {fresh: false, usb_connected: true,
+  active_routes: 2, bluetooth_sources: 1, virtual_channel_count: 3,
+  mac: "PRIVATE-MAC"};
+checkDownload({
+  format: "audiohub.routing-diagnostics.v1", status: "unavailable",
+  usb_connected: null, active_routes: null, bluetooth_sources: null,
+  virtual_channel_count: null, ...unverified
+});
+deviceHealth = {fresh: true, usb_connected: true,
+  active_routes: "2", bluetooth_sources: 1, virtual_channel_count: 3};
+assert.equal(safeRoutingHealth(), null);
+assert.equal(safeRoutingReport().status, "unavailable");
+deviceHealth.active_routes = 0;
+assert.equal(safeRoutingReport().active_routes, 0);
+assert.equal(safeRoutingReport().status, "recent");
+// Non-supporting browsers receive an honest failure instead of false success.
+URL.createObjectURL = () => {throw new Error("blob URLs unsupported");};
+downloadRoutingDiagnostics();
+assert.equal(elements["routing-export-status"].textContent, "Download unavailable");
+'''
+        result = subprocess.run(
+            ["node", "-e", setup + "\n" + preview_routing_summary_source() + "\n" + verify],
+            capture_output=True, text=True, timeout=15, check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()
