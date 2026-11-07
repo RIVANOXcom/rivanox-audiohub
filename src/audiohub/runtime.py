@@ -246,6 +246,53 @@ def pipewire_loopback_args(source, channel):
     ]
 
 
+def observed_source_slots(sources, assignments, loopbacks, sinks, *,
+                          lan_slot, policy_valid, usb_ready):
+    """Anonymized per-slot facts from ONE supervisor poll, never audio proof.
+
+    A discovered PipeWire BlueZ node is not proof of a connected Bluetooth
+    profile; a running pw-loopback is not proof of actual audio samples.
+    The output contains only the three fixed internal slots, no MAC/node IDs.
+    """
+    valid_policy = policy_valid is True and lan_slot in CHANNELS
+    observations = {}
+    seen = set()
+    running = set()
+    assigned = set()
+    if valid_policy:
+        for address, slot in assignments.items():
+            if (_usable_bluetooth_mac(address) and slot in CHANNELS
+                    and slot != lan_slot):
+                assigned.add(slot)
+        for source in sources:
+            if type(source) is not dict:
+                continue
+            address, name = source.get("address"), source.get("name")
+            slot = assignments.get(address) if _usable_bluetooth_mac(address) else None
+            if (slot in assigned and type(name) is str
+                    and _SOURCE_NAME.fullmatch(name)):
+                seen.add(slot)
+        for address, record in loopbacks.items():
+            if not _usable_bluetooth_mac(address):
+                continue
+            slot = assignments.get(address)
+            if slot not in assigned or not isinstance(record, tuple) or len(record) != 3:
+                continue
+            _, destination, process = record
+            if destination == "audiohub." + slot and process.poll() is None:
+                running.add(slot)
+    for slot in CHANNELS:
+        observations[slot] = {
+            "lan_reserved": valid_policy and slot == lan_slot,
+            "bluetooth_assigned": slot in assigned,
+            "bluetooth_node_observed": slot in seen,
+            "managed_loopback_running": slot in running,
+            "virtual_sink_observed": "audiohub." + slot in sinks,
+            "usb_route_ready": usb_ready is True,
+        }
+    return observations
+
+
 class Supervisor:
     def __init__(self):
         CONFIG.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -486,6 +533,14 @@ class Supervisor:
                 if graph_links["eq_output_to_usb_direct_link"][slot]
             ],
             "route_policy_valid": self.route_policy_valid,
+            # Only anonymized stable slot booleans from this SAME poll.
+            # No address, node ID, paired/connected assertion or audio payload.
+            "source_slot_observations_version": 1,
+            "source_slot_observations": observed_source_slots(
+                sources, self.assignments, self.loopbacks, sinks,
+                lan_slot=plan["lan_slot"],
+                policy_valid=self.route_policy_valid, usb_ready=usb_ready,
+            ),
             # Bounded *requested gain* estimate, not measured sound or a limiter.
             "effective_master_percent": min(
                 100, max(0, round(100 * effective_master_gain(self.settings)))
