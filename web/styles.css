@@ -33,3 +33,10 @@
 
 /* Operator hints are read-only suggestions, never hardware acceptance results. */
 .routing-diagnostic{margin:12px 0 0;padding:12px 14px;border-left:3px solid #79b6e9;border-radius:0 8px 8px 0;background:#101e32;color:#d8e9ff;font-size:.86rem;line-height:1.55}
+
+/* Explicit, user-initiated export of redacted local read-only status only. */
+.routing-export-actions{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-top:16px}
+.routing-export{font:inherit;font-weight:650;border:1px solid #93b9e3;border-radius:9px;background:#203b5a;color:#f3f8ff;padding:10px 14px;cursor:pointer;min-height:44px}
+.routing-export:hover{background:#294c73}
+.routing-export:focus-visible{outline:3px solid #d8a1ff;outline-offset:3px}
+#routing-export-status{color:#c6d9f0;font-size:.82rem;line-height:1.45}
