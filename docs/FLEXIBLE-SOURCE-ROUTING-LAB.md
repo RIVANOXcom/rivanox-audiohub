@@ -47,6 +47,11 @@ PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control show
 # Read-only: requested levels vs recent, complete supervisor command acknowledgement:
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control status
 
+# Preview WITHOUT storing a change, creating a lock or applying any audio:
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --preview mute-all
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --preview unmute-selected music laptop
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --preview set-mix 20 35 25 0
+
 # Each mutation needs an explicit flag and a separate console invocation:
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-mixer-change set-master 20
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-mixer-change set-volume music 35
@@ -63,6 +68,22 @@ PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-m
 # One atomic update to master, then music, laptop and tablet levels:
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-mixer-change set-mix 20 35 25 0
 ```
+
+The optional `--preview` applies to all change commands:
+`set-master`, `set-volume`, `mute`, `mute-all`, `unmute-selected`
+and `set-mix`. It outputs only validated requested master/input
+volume and mute values (`before` and `after`) and a deterministic
+`would_change` list. The response explicitly states
+`settings_written=false`, `supervisor_applied=false` and
+`audible_playback_verified=false`. No config directory or lock is
+created when settings do not yet exist. Corrupt, unsafe or symlinked
+existing settings refuse the preview instead of silently replacing
+them. `--preview` refuses an accompanying change-confirmation flag,
+and it is invalid for read-only `show` and `status` commands.
+A preview is NOT reserved: another local writer may change the
+settings before the operator separately runs a confirmed command.
+Always inspect current controls again before deciding. No network
+API or actual hardware verification is added.
 
 The three names `music`, `laptop` and `tablet` are internal stable input
 slots, **not** fixed categories of physical device. All levels are
