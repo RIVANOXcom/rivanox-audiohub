@@ -1153,6 +1153,235 @@ class LocalMixerControlsTests(unittest.TestCase):
             changed.assert_called_once_with(
                 patch, confirmed=True, if_revision="v1-" + "a" * 64)
 
+    def test_capture_preview_is_read_only_and_does_not_create_config(self):
+        path = self.settings.with_name("volume-profiles.json")
+        plan = mixer_control.preview_current_profile(
+            "my-levels", path=path, settings_path=self.settings)
+        self.assertEqual(plan["mode"], "profile-capture-preview")
+        self.assertEqual(plan["name"], "my-levels")
+        self.assertEqual(plan["volumes"], {
+            "master": 70, "music": 65, "laptop": 50, "tablet": 50})
+        self.assertRegex(plan["revision"], r"^v1-[0-9a-f]{64}$")
+        self.assertFalse(plan["profile_written"])
+        self.assertFalse(plan["mixer_settings_written"])
+        self.assertFalse(plan["audible_playback_verified"])
+        self.assertFalse(path.parent.exists())
+
+    def test_capture_current_values_saves_only_private_profile_never_active_mixer(self):
+        path = self.settings.with_name("volume-profiles.json")
+        old = mixer_control.change({
+            "master": 23,
+            "music": {"volume": 37, "mute": True, "bass": 9, "mid": -2},
+            "laptop": {"volume": 18, "mute": True, "treble": 5},
+            "tablet": {"volume": 0, "mute": False, "bass": -8},
+        }, path=self.settings, confirmed=True)
+        mixer_bytes = self.settings.read_bytes()
+        preview = mixer_control.preview_current_profile(
+            "my-levels", path=path, settings_path=self.settings)
+        with mock.patch("audiohub.mixer_control.atomic_json",
+                        wraps=mixer_control.atomic_json) as atomic:
+            outcome = mixer_control.capture_current_profile(
+                "my-levels", path=path, settings_path=self.settings,
+                if_revision=preview["revision"], confirmed=True)
+            atomic.assert_called_once()
+        self.assertEqual(outcome["profile_saved"], "my-levels")
+        self.assertEqual(outcome["volumes"], {
+            "master": 23, "music": 37, "laptop": 18, "tablet": 0})
+        self.assertFalse(outcome["mixer_settings_written"])
+        self.assertFalse(outcome["audible_playback_verified"])
+        self.assertEqual(self.settings.read_bytes(), mixer_bytes)
+        self.assertEqual(mixer_control.show(path=self.settings), old)
+        self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
+        catalog = mixer_control.list_volume_profiles(path=path)
+        self.assertEqual(catalog["profiles"]["my-levels"], outcome["volumes"])
+        self.assertEqual(mixer_control.saved_profile_patch(
+            "my-levels", path=path), {
+            "master": 23, "music": {"volume": 37},
+            "laptop": {"volume": 18}, "tablet": {"volume": 0}})
+
+    def test_capture_missing_mixer_settings_uses_guarded_defaults_without_creating_mixer(self):
+        path = self.settings.with_name("volume-profiles.json")
+        plan = mixer_control.preview_current_profile(
+            "first", path=path, settings_path=self.settings)
+        result = mixer_control.capture_current_profile(
+            "first", path=path, settings_path=self.settings,
+            if_revision=plan["revision"], confirmed=True)
+        self.assertEqual(result["volumes"], plan["volumes"])
+        self.assertFalse(self.settings.exists())
+        self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
+
+    def test_capture_rejects_intervening_eq_change_and_aba_generation(self):
+        path = self.settings.with_name("volume-profiles.json")
+        mixer_control.change({"master": 36}, path=self.settings, confirmed=True)
+        preview = mixer_control.preview_current_profile(
+            "safety", path=path, settings_path=self.settings)
+        mixer_control.change({"music": {"bass": 4}},
+                             path=self.settings, confirmed=True)
+        mixer_bytes = self.settings.read_bytes()
+        with mock.patch("audiohub.mixer_control.atomic_json",
+                        wraps=mixer_control.atomic_json) as atomic:
+            with self.assertRaises(mixer_control.StaleMixerPreview):
+                mixer_control.capture_current_profile(
+                    "safety", path=path, settings_path=self.settings,
+                    if_revision=preview["revision"], confirmed=True)
+            atomic.assert_not_called()
+        self.assertFalse(path.exists())
+        self.assertEqual(self.settings.read_bytes(), mixer_bytes)
+        new_plan = mixer_control.preview_current_profile(
+            "safety", path=path, settings_path=self.settings)
+        mixer_control.change({"master": 45}, path=self.settings, confirmed=True)
+        mixer_control.change({"master": 36}, path=self.settings, confirmed=True)
+        with self.assertRaises(mixer_control.StaleMixerPreview):
+            mixer_control.capture_current_profile(
+                "safety", path=path, settings_path=self.settings,
+                if_revision=new_plan["revision"], confirmed=True)
+        self.assertFalse(path.exists())
+
+    def test_capture_cannot_overwrite_existing_profile_or_bypass_catalog_limit(self):
+        path = self.settings.with_name("volume-profiles.json")
+        mixer_control.save_volume_profile(
+            "existing", 10, 20, 30, 40, path=path, confirmed=True)
+        plan = mixer_control.preview_current_profile
+        with self.assertRaises(mixer_control.MixerControlUnavailable):
+            plan("existing", path=path, settings_path=self.settings)
+        before = path.read_bytes()
+        revision = mixer_control._preview_snapshot(path=self.settings)[1]
+        with self.assertRaises(mixer_control.MixerControlUnavailable):
+            mixer_control.capture_current_profile(
+                "existing", path=path, settings_path=self.settings,
+                if_revision=revision, confirmed=True)
+        self.assertEqual(path.read_bytes(), before)
+        for number in range(7):
+            mixer_control.save_volume_profile(
+                "rest-" + str(number), 20, 20, 20, 20,
+                path=path, confirmed=True)
+        full = path.read_bytes()
+        with self.assertRaises(mixer_control.MixerControlUnavailable):
+            mixer_control.preview_current_profile(
+                "another", path=path, settings_path=self.settings)
+        with self.assertRaises(mixer_control.MixerControlUnavailable):
+            mixer_control.capture_current_profile(
+                "another", path=path, settings_path=self.settings,
+                if_revision=revision, confirmed=True)
+        self.assertEqual(path.read_bytes(), full)
+
+    def test_capture_bad_consent_revision_and_paths_refuse_before_any_write(self):
+        path = self.settings.with_name("volume-profiles.json")
+        valid = "v1-" + "a" * 64
+        for token, approved in ((None, True), ("invalid", True),
+                                ("v1-" + "A" * 64, True),
+                                (True, True), (valid, False)):
+            with self.subTest(token=repr(token), confirmed=approved):
+                with self.assertRaises(mixer_control.MixerControlUnavailable):
+                    mixer_control.capture_current_profile(
+                        "backup", path=path, settings_path=self.settings,
+                        if_revision=token, confirmed=approved)
+        for bad in (path.with_name("settings.json"),
+                    self.root / "other" / "volume-profiles.json"):
+            with self.assertRaises(mixer_control.MixerControlUnavailable):
+                mixer_control.capture_current_profile(
+                    "backup", path=bad, settings_path=self.settings,
+                    if_revision=valid, confirmed=True)
+        self.assertFalse(self.settings.parent.exists())
+
+    def test_capture_cli_preview_and_separate_guarded_confirm(self):
+        preview = {
+            "mode": "profile-capture-preview", "name": "saved", "revision": "v1-" + "a" * 64,
+            "volumes": {"master": 25, "music": 25, "laptop": 25, "tablet": 25},
+            "profile_written": False, "mixer_settings_written": False,
+            "audible_playback_verified": False}
+        saved = {"profile_saved": "saved", "volumes": preview["volumes"],
+                 "mixer_settings_written": False, "audible_playback_verified": False}
+        with (mock.patch("audiohub.mixer_control.preview_current_profile",
+                         return_value=preview) as planned,
+              mock.patch("audiohub.mixer_control.capture_current_profile",
+                         return_value=saved) as capture,
+              mock.patch("audiohub.mixer_control.change") as change):
+            with redirect_stdout(StringIO()) as output:
+                mixer_control.main(["--preview", "save-current-profile", "saved"])
+                self.assertIn('"profile_written": false', output.getvalue())
+            planned.assert_called_once_with("saved")
+            capture.assert_not_called()
+            with redirect_stdout(StringIO()) as output:
+                mixer_control.main(["--confirm-local-profile-save",
+                                    "--if-preview-revision", preview["revision"],
+                                    "save-current-profile", "saved"])
+                self.assertIn('"mixer_settings_written": false', output.getvalue())
+            capture.assert_called_once_with(
+                "saved", if_revision=preview["revision"], confirmed=True)
+            change.assert_not_called()
+
+    def test_capture_cli_stale_is_read_only_and_requires_second_confirmation(self):
+        current_plan = {"mode": "profile-capture-preview", "name": "mine",
+                        "revision": "v1-" + "b" * 64,
+                        "volumes": {"master": 25, "music": 25,
+                                    "laptop": 25, "tablet": 25},
+                        "profile_written": False, "mixer_settings_written": False,
+                        "audible_playback_verified": False}
+        with (mock.patch("audiohub.mixer_control.capture_current_profile",
+                         side_effect=mixer_control.StaleMixerPreview("PRIVATE")) as saved,
+              mock.patch("audiohub.mixer_control.preview_current_profile",
+                         return_value=current_plan) as preview,
+              mock.patch("audiohub.mixer_control.atomic_json") as write):
+            with redirect_stdout(StringIO()) as out, redirect_stderr(StringIO()) as err:
+                with self.assertRaises(SystemExit) as rejected:
+                    mixer_control.main(["--confirm-local-profile-save",
+                                        "--if-preview-revision", "v1-" + "a" * 64,
+                                        "save-current-profile", "mine"])
+            self.assertEqual(rejected.exception.code, 4)
+            saved.assert_called_once_with(
+                "mine", if_revision="v1-" + "a" * 64, confirmed=True)
+            preview.assert_called_once_with("mine")
+            write.assert_not_called()
+        data = json.loads(out.getvalue())
+        self.assertEqual(data["status"], "profile-capture-stale")
+        self.assertFalse(data["profile_written"])
+        self.assertEqual(data["fresh_preview"], current_plan)
+        self.assertNotIn("PRIVATE", err.getvalue())
+
+    def test_capture_cli_refresh_failure_is_sanitized_and_does_not_apply(self):
+        with (mock.patch("audiohub.mixer_control.capture_current_profile",
+                         side_effect=mixer_control.StaleMixerPreview("SENSITIVE")),
+              mock.patch("audiohub.mixer_control.preview_current_profile",
+                         side_effect=mixer_control.MixerControlUnavailable("PRIVATE PATH"))):
+            with redirect_stdout(StringIO()) as out, redirect_stderr(StringIO()) as err:
+                with self.assertRaises(SystemExit) as rejected:
+                    mixer_control.main(["--confirm-local-profile-save",
+                                        "--if-preview-revision", "v1-" + "a" * 64,
+                                        "save-current-profile", "mine"])
+        self.assertEqual(rejected.exception.code, 4)
+        self.assertEqual(out.getvalue(), "")
+        self.assertIn("Fresh preview unavailable", err.getvalue())
+        self.assertNotIn("SENSITIVE", err.getvalue())
+        self.assertNotIn("PRIVATE PATH", err.getvalue())
+
+    def test_capture_cli_rejects_mixed_or_missing_confirmations(self):
+        bad = (
+            ["save-current-profile", "mine"],
+            ["--confirm-local-profile-save", "save-current-profile", "mine"],
+            ["--if-preview-revision", "v1-" + "a" * 64, "save-current-profile", "mine"],
+            ["--preview", "--confirm-local-profile-save", "save-current-profile", "mine"],
+            ["--preview", "--if-preview-revision", "v1-" + "a" * 64,
+             "save-current-profile", "mine"],
+            ["--preview", "--confirm-local-mixer-change", "save-current-profile", "mine"],
+            ["--confirm-local-profile-save", "--if-preview-revision", "v1-" + "a" * 64,
+             "--wait-for-supervisor", "save-current-profile", "mine"],
+            ["--confirm-local-profile-save", "--if-preview-revision", "v1-" + "a" * 64,
+             "--compare-baseline", "invalid", "save-current-profile", "mine"],
+        )
+        for argv in bad:
+            with self.subTest(args=argv):
+                with (mock.patch("audiohub.mixer_control.capture_current_profile") as capture,
+                      mock.patch("audiohub.mixer_control.preview_current_profile") as preview,
+                      mock.patch("audiohub.mixer_control.change") as changed):
+                    with redirect_stdout(StringIO()), redirect_stderr(StringIO()):
+                        with self.assertRaises(SystemExit) as rejected:
+                            mixer_control.main(argv)
+                    self.assertEqual(rejected.exception.code, 2)
+                    capture.assert_not_called()
+                    preview.assert_not_called()
+                    changed.assert_not_called()
+
     def test_wait_for_supervisor_accepts_matching_complete_ack_without_sleep(self):
         saved = defaults()
         observed = {
