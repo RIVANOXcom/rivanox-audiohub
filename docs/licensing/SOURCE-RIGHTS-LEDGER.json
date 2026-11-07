@@ -235,14 +235,14 @@
       "model_c_eligible": false
     },
     {
-      "path": "src/audiohub/mixer_control.py",
+      "path": "src/audiohub/mixer.py",
       "origin_status": "pending-human-review",
       "rightsholder_verified": false,
       "third_party_origin_checked": false,
       "model_c_eligible": false
     },
     {
-      "path": "src/audiohub/mixer.py",
+      "path": "src/audiohub/mixer_control.py",
       "origin_status": "pending-human-review",
       "rightsholder_verified": false,
       "third_party_origin_checked": false,
@@ -396,14 +396,14 @@
       "model_c_eligible": false
     },
     {
-      "path": "tests/test_mixer_control.py",
+      "path": "tests/test_mixer.py",
       "origin_status": "pending-human-review",
       "rightsholder_verified": false,
       "third_party_origin_checked": false,
       "model_c_eligible": false
     },
     {
-      "path": "tests/test_mixer.py",
+      "path": "tests/test_mixer_control.py",
       "origin_status": "pending-human-review",
       "rightsholder_verified": false,
       "third_party_origin_checked": false,
