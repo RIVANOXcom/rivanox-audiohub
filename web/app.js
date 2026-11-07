@@ -37,6 +37,7 @@
   let statusChecked = false;
   let statusRequestId = 0;
   let statusReceivedAt = null;
+  let lastManualStatusRequestAt = -Infinity;
   const byId = id => document.getElementById(id);
   const tr = key => words[key] || key;
   const displayName = channel => previewLabels[channel] || tr("input" + SLOT_INDEX[channel]);
@@ -360,6 +361,18 @@
       byId("routing-export-status").textContent = tr("routingExportUnavailable");
     }
   }
+  function requestRoutingRecheck() {
+    // Human-triggered checks are independent of the five-second auto poll,
+    // but throttle rapid clicks to avoid unnecessary local network traffic.
+    const now = performance.now();
+    if (now >= lastManualStatusRequestAt &&
+        now - lastManualStatusRequestAt < 2000) return;
+    lastManualStatusRequestAt = now;
+    const feedback = byId("routing-recheck-status");
+    if (feedback) feedback.textContent = tr("routingRecheckRequested");
+    // Existing newest-response-wins protection also applies to this request.
+    return readDeviceStatus();
+  }
   async function readDeviceStatus() {
     // Only the most recent poll may update health or its visible state.
     const requestId = ++statusRequestId;
@@ -391,6 +404,7 @@
     renderRoutingSummary();
     byId("routing-export-status").textContent = "";
     byId("routing-observations-reset-status").textContent = "";
+    byId("routing-recheck-status").textContent = "";
   }
   async function setLanguage(language) {
     // Late locale replies must not overwrite newer user choices.
@@ -416,6 +430,7 @@
   }
   byId("language").addEventListener("change", event => setLanguage(event.target.value));
   byId("routing-export").addEventListener("click", downloadRoutingDiagnostics);
+  byId("routing-recheck").addEventListener("click", requestRoutingRecheck);
   byId("routing-observations-reset").addEventListener("click", resetManualSoundObservations);
   byId("master").addEventListener("input", event => {
     state.master = Number(event.target.value);
