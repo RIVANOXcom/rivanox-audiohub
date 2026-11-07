@@ -291,6 +291,13 @@
       "model_c_eligible": false
     },
     {
+      "path": "src/audiohub/usb_soundcheck.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
       "path": "src/audiohub/webserver.py",
       "origin_status": "pending-human-review",
       "rightsholder_verified": false,
@@ -516,6 +523,13 @@
     },
     {
       "path": "tests/test_three_input_pipeline.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "tests/test_usb_soundcheck.py",
       "origin_status": "pending-human-review",
       "rightsholder_verified": false,
       "third_party_origin_checked": false,
