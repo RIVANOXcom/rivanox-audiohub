@@ -144,6 +144,11 @@ class RootfsAuditTests(unittest.TestCase):
             "os.O_EXCL", "secrets.token_hex(12)",
             "stat.S_ISREG", "os.replace(name, path.name",
             "os.fsync(dirfd)",
+            "def atomic_json(path, data):",
+            "except OSError:",
+            "os.unlink(name, dir_fd=dirfd)",
+            "finally:\\n                os.close(dirfd)",
+            "if tmpfd is not None:",
             "def _stop_all_managed_routes(self):",
             "def poll_safely(self):",
             "self._stop_all_managed_routes()",
@@ -1606,6 +1611,36 @@ class RootfsAuditTests(unittest.TestCase):
                 'if set(value) - {"volume", "mute", *EQ_BANDS}:', "if False:"
             ))
             self.assertFalse(audit.inspect(root)["mixer_stored_controls_strict_schema"])
+
+
+    def test_runtime_atomic_cleanup_guard_present(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            self.assertTrue(audit.inspect(root)[
+                "runtime_atomic_cleanup_preserves_error_and_closes_fd"
+            ])
+
+    def test_runtime_atomic_cleanup_missing_fd_close_blocks_native_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/src/audiohub/runtime.py"
+            path.write_text(path.read_text().replace(
+                "finally:\\n                os.close(dirfd)", "pass"
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "runtime_atomic_cleanup_preserves_error_and_closes_fd"
+            ])
+
+    def test_runtime_atomic_cleanup_unlink_missing_blocks_native_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            path = root / "opt/audiohub/src/audiohub/runtime.py"
+            path.write_text(path.read_text().replace(
+                "os.unlink(name, dir_fd=dirfd)", "unlink_skipped = True"
+            ))
+            self.assertFalse(audit.inspect(root)[
+                "runtime_atomic_cleanup_preserves_error_and_closes_fd"
+            ])
 
     def test_mixer_huge_integer_fail_closed_audit_guard_present(self):
         with tempfile.TemporaryDirectory() as tmp:
