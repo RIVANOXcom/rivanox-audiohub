@@ -829,6 +829,12 @@ class BrowserRoutingSummaryTests(unittest.TestCase):
         self.assertIn('aria-describedby="routing-compare-note"', html)
         self.assertIn('byId("routing-compare-file").addEventListener("change", loadRoutingComparison);', source)
         self.assertIn('byId("routing-compare-clear").addEventListener("click", clearRoutingComparison);', source)
+        for field in ("routing-compare-observations-table",
+                      "routing-compare-note-old-usb_output_audio",
+                      "routing-compare-note-diff-bluetooth_source_audio",
+                      "routing-compare-note-new-usb_audio_after_reconnect"):
+            self.assertIn('id="' + field + '"', html)
+        self.assertIn('addEventListener("change", renderManualComparison)', source)
         self.assertIn('byId("routing-history-clear").addEventListener("click", clearRoutingHistory);', source)
         self.assertIn('byId("routing-recheck").addEventListener("click", requestRoutingRecheck);', source)
         self.assertIn('byId("routing-export").addEventListener("click", downloadRoutingDiagnostics);', source)
@@ -866,7 +872,9 @@ class BrowserRoutingSummaryTests(unittest.TestCase):
             "routingCompareCurrentUnavailable", "routingCompareColumnMetric",
             "routingCompareColumnPrevious", "routingCompareColumnCurrent",
             "routingCompareColumnChange", "routingCompareUsb", "routingCompareChanged",
-            "routingCompareUnchanged", "routingCompareUnknown", "routingCompareCleared"
+            "routingCompareUnchanged", "routingCompareUnknown", "routingCompareCleared",
+            "routingCompareObservationsTitle", "routingCompareObservationsNote",
+            "routingCompareObservationsCurrent"
         }
         for code in ("en", "de", "es", "fr", "it"):
             with self.subTest(code=code):
@@ -1116,10 +1124,24 @@ assert.ok(!JSON.stringify(routingHistory).includes("PRIVATE"));
         setup = r'''
 const assert = require("node:assert/strict");
 const keys = ["usb", "active_routes", "bluetooth_sources", "virtual_channel_count"];
+const hearingFields = ["usb_output_audio", "bluetooth_source_audio",
+  "three_inputs_simultaneously_audible",
+  "two_bluetooth_sources_simultaneously_audible",
+  "usb_audio_after_reconnect"];
+const hearingSelects = ["usb", "bluetooth", "three", "dual-bt", "usb-reconnect"];
 const ids = ["routing-compare-table", "routing-compare-status", "routing-compare-file",
+  "routing-compare-observations-table",
+  ...hearingSelects.map(key => "routing-observation-" + key),
   ...keys.flatMap(key => ["routing-compare-old-" + key,
-    "routing-compare-new-" + key, "routing-compare-diff-" + key])];
+    "routing-compare-new-" + key, "routing-compare-diff-" + key]),
+  ...hearingFields.flatMap(key => ["routing-compare-note-old-" + key,
+    "routing-compare-note-new-" + key, "routing-compare-note-diff-" + key])];
 const nodes = Object.fromEntries(ids.map(id => [id, {textContent: "", hidden: true, value: ""}]));
+nodes["routing-observation-usb"].value = "heard";
+nodes["routing-observation-bluetooth"].value = "heard";
+nodes["routing-observation-three"].value = "not_tested";
+nodes["routing-observation-dual-bt"].value = "not_heard";
+nodes["routing-observation-usb-reconnect"].value = "not_tested";
 const byId = id => nodes[id] || null;
 const words = {
   routingCompareUnknown: "Unavailable",
@@ -1131,10 +1153,14 @@ const words = {
   speakerConnected: "USB connected",
   speakerDisconnected: "USB disconnected",
   routingCompareChanged: "Changed",
-  routingCompareUnchanged: "Unchanged"
+  routingCompareUnchanged: "Unchanged",
+  routingHeard: "Heard",
+  routingNotHeard: "Not heard",
+  routingNotTested: "Not tested"
 };
 const tr = key => words[key] || key;
 let comparisonBaseline = null;
+let comparisonManualBaseline = null;
 let comparisonLoadId = 0;
 let deviceHealth = {fresh: true, usb_connected: true,
   active_routes: 3, bluetooth_sources: 2, virtual_channel_count: 3,
@@ -1153,7 +1179,13 @@ const report = {
   virtual_channel_count: 2, owner: "PRIVATE-OWNER",
   mac: "SENSITIVE-MAC", ssid: "SENSITIVE-SSID",
   recent_routing_changes: [{owner: "SECRET-OWNER"}],
-  operator_observations: {usb_output_audio: "heard"}
+  operator_observations: {
+    usb_output_audio: "heard",
+    bluetooth_source_audio: "not_heard",
+    three_inputs_simultaneously_audible: "not_tested",
+    two_bluetooth_sources_simultaneously_audible: "heard",
+    usb_audio_after_reconnect: "PRIVATE-INJECTION"
+  }
 };
 const file = value => ({size: 350, text: async () => JSON.stringify(value)});
 const get = id => nodes[id].textContent;
@@ -1172,9 +1204,16 @@ async function check() {
   assert.deepEqual(Object.keys(safeImportedRoutingReport(report)),
     ["usb_connected", "active_routes", "bluetooth_sources", "virtual_channel_count"]);
   assert.ok(!JSON.stringify(safeImportedRoutingReport(report)).includes("PRIVATE"));
+  assert.deepEqual(Object.keys(safeImportedManualObservations(report)), hearingFields);
+  assert.deepEqual(Object.values(safeImportedManualObservations(report)),
+    ["heard", "not_heard", "not_tested", "heard", null]);
+  assert.deepEqual(Object.values(safeImportedManualObservations({
+    operator_observations: {usb_output_audio: ["heard"], bluetooth_source_audio: "<img>"}
+  })), [null, null, null, null, null]);
 
   renderRoutingComparison();
   assert.equal(nodes["routing-compare-table"].hidden, true);
+  assert.equal(nodes["routing-compare-observations-table"].hidden, true);
   const chosen = fileInput(file(report));
   await loadRoutingComparison({target: chosen});
   assert.equal(chosen.value, "");
@@ -1188,6 +1227,20 @@ async function check() {
   assert.equal(get("routing-compare-diff-active_routes"), "+2");
   assert.equal(get("routing-compare-diff-bluetooth_sources"), "+1");
   assert.equal(get("routing-compare-diff-virtual_channel_count"), "+1");
+  assert.equal(nodes["routing-compare-observations-table"].hidden, false);
+  assert.equal(get("routing-compare-note-old-usb_output_audio"), "Heard");
+  assert.equal(get("routing-compare-note-new-usb_output_audio"), "Heard");
+  assert.equal(get("routing-compare-note-diff-usb_output_audio"), "Unchanged");
+  assert.equal(get("routing-compare-note-old-bluetooth_source_audio"), "Not heard");
+  assert.equal(get("routing-compare-note-diff-bluetooth_source_audio"), "Changed");
+  assert.equal(get("routing-compare-note-diff-three_inputs_simultaneously_audible"), "Unchanged");
+  assert.equal(get("routing-compare-note-diff-two_bluetooth_sources_simultaneously_audible"), "Changed");
+  assert.equal(get("routing-compare-note-old-usb_audio_after_reconnect"), "Unavailable");
+  assert.equal(get("routing-compare-note-diff-usb_audio_after_reconnect"), "Unavailable");
+  // Changing a human dropdown can be compared without changing hardware status.
+  nodes["routing-observation-bluetooth"].value = "not_heard";
+  renderManualComparison();
+  assert.equal(get("routing-compare-note-diff-bluetooth_source_audio"), "Unchanged");
   assert.ok(!JSON.stringify(nodes).includes("PRIVATE"));
   assert.ok(!JSON.stringify(nodes).includes("SENSITIVE"));
   assert.ok(!JSON.stringify(nodes).includes("SECRET"));
@@ -1206,10 +1259,13 @@ async function check() {
   assert.equal(get("routing-compare-new-active_routes"), "Unavailable");
   assert.equal(get("routing-compare-diff-active_routes"), "Unavailable");
   assert.equal(get("routing-compare-old-active_routes"), "1");
+  assert.equal(get("routing-compare-note-diff-usb_output_audio"), "Unchanged");
 
   // Wrong format and unreadable/oversized files fail closed.
   await loadRoutingComparison({target: fileInput(file({...report, status: "pending"}))});
   assert.equal(nodes["routing-compare-table"].hidden, true);
+  assert.equal(nodes["routing-compare-observations-table"].hidden, true);
+  assert.equal(comparisonManualBaseline, null);
   assert.equal(get("routing-compare-status"), "Invalid report");
   await loadRoutingComparison({target: fileInput({size: 65537, text: async () => "{}"})});
   assert.equal(get("routing-compare-status"), "Report too large");
@@ -1236,7 +1292,9 @@ async function check() {
   resolveAfterClear(JSON.stringify(report));
   await pending;
   assert.equal(comparisonBaseline, null);
+  assert.equal(comparisonManualBaseline, null);
   assert.equal(nodes["routing-compare-table"].hidden, true);
+  assert.equal(nodes["routing-compare-observations-table"].hidden, true);
   assert.equal(get("routing-compare-status"), "Comparison cleared");
 }
 check().catch(e => {console.error(e); process.exitCode = 1;});

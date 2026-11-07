@@ -98,3 +98,13 @@
 #routing-compare-table th,#routing-compare-table td{padding:10px 8px;border-bottom:1px solid #355778;overflow-wrap:anywhere}
 #routing-compare-table th{font-weight:600;color:#e1edff}
 #routing-compare-table td{color:#c4d9ed}
+
+/* Human-only hearing notes are visually separate from telemetry differences. */
+.routing-compare-observations-heading{font-size:1rem;color:#e1edff;margin:18px 0 6px}
+.routing-compare-observations-note{font-size:.82rem;color:#bfcfe3;line-height:1.5;margin:0 0 10px}
+#routing-compare-observations-table{width:100%;border-collapse:collapse;font-size:.83rem;text-align:left}
+#routing-compare-observations-table[hidden]{display:none}
+#routing-compare-observations-table caption{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
+#routing-compare-observations-table th,#routing-compare-observations-table td{padding:10px 8px;border-bottom:1px solid #355778;overflow-wrap:anywhere}
+#routing-compare-observations-table th{font-weight:600;color:#e1edff}
+#routing-compare-observations-table td{color:#c4d9ed}

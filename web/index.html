@@ -66,7 +66,7 @@
         <div class="routing-export-actions"><button type="button" id="routing-export" class="routing-export" data-t="routingExport">Download diagnostic report</button><span id="routing-export-status" role="status" aria-live="polite"></span></div>
         <details class="routing-compare-panel">
           <summary data-t="routingCompareTitle">Compare a previous diagnostic report</summary>
-          <p id="routing-compare-note" data-t="routingCompareNote">Choose a previous AudioHub v4 JSON report from this device (maximum 64 KiB). It stays in this browser and is never uploaded. Only sanitized routing counts are compared with a fresh live status; differences are not proof of audible sound or hardware acceptance.</p>
+          <p id="routing-compare-note" data-t="routingCompareNote">Choose a previous AudioHub v4 JSON report from this device (maximum 64 KiB). It stays in this browser and is never uploaded. Sanitized routing counts are compared with recent live status; former human listening notes are compared with your current selections. Neither comparison proves audible sound or hardware acceptance.</p>
           <div class="routing-compare-actions">
             <label for="routing-compare-file" data-t="routingCompareFile">Previous local JSON report</label>
             <input type="file" id="routing-compare-file" accept=".json,application/json" aria-describedby="routing-compare-note" />
@@ -82,6 +82,21 @@
                 <tr><th scope="row" data-t="routingRoutes">Active routes</th><td id="routing-compare-old-active_routes"></td><td id="routing-compare-new-active_routes"></td><td id="routing-compare-diff-active_routes"></td></tr>
                 <tr><th scope="row" data-t="routingBluetooth">Bluetooth sources</th><td id="routing-compare-old-bluetooth_sources"></td><td id="routing-compare-new-bluetooth_sources"></td><td id="routing-compare-diff-bluetooth_sources"></td></tr>
                 <tr><th scope="row" data-t="routingChannels">Detected channels</th><td id="routing-compare-old-virtual_channel_count"></td><td id="routing-compare-new-virtual_channel_count"></td><td id="routing-compare-diff-virtual_channel_count"></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 class="routing-compare-observations-heading" data-t="routingCompareObservationsTitle">Manual listening observations</h3>
+          <p class="routing-compare-observations-note" data-t="routingCompareObservationsNote">These are human-entered notes, not device measurements or proof of sound. Compare the previous report with selections on this page; missing or invalid earlier notes stay unavailable.</p>
+          <div class="routing-compare-table-wrap">
+            <table id="routing-compare-observations-table" hidden>
+              <caption data-t="routingCompareObservationsTitle">Manual listening observations</caption>
+              <thead><tr><th scope="col" data-t="routingCompareColumnMetric">Test</th><th scope="col" data-t="routingCompareColumnPrevious">Previous report</th><th scope="col" data-t="routingCompareObservationsCurrent">Current manual note</th><th scope="col" data-t="routingCompareColumnChange">Change</th></tr></thead>
+              <tbody>
+                <tr><th scope="row" data-t="routingObservationUsb">USB speaker sound</th><td id="routing-compare-note-old-usb_output_audio"></td><td id="routing-compare-note-new-usb_output_audio"></td><td id="routing-compare-note-diff-usb_output_audio"></td></tr>
+                <tr><th scope="row" data-t="routingObservationBluetooth">Bluetooth source sound</th><td id="routing-compare-note-old-bluetooth_source_audio"></td><td id="routing-compare-note-new-bluetooth_source_audio"></td><td id="routing-compare-note-diff-bluetooth_source_audio"></td></tr>
+                <tr><th scope="row" data-t="routingObservationThree">Three inputs audible simultaneously</th><td id="routing-compare-note-old-three_inputs_simultaneously_audible"></td><td id="routing-compare-note-new-three_inputs_simultaneously_audible"></td><td id="routing-compare-note-diff-three_inputs_simultaneously_audible"></td></tr>
+                <tr><th scope="row" data-t="routingObservationDualBluetooth">Two Bluetooth sources audible simultaneously</th><td id="routing-compare-note-old-two_bluetooth_sources_simultaneously_audible"></td><td id="routing-compare-note-new-two_bluetooth_sources_simultaneously_audible"></td><td id="routing-compare-note-diff-two_bluetooth_sources_simultaneously_audible"></td></tr>
+                <tr><th scope="row" data-t="routingObservationUsbReconnect">USB sound after reconnecting speakers</th><td id="routing-compare-note-old-usb_audio_after_reconnect"></td><td id="routing-compare-note-new-usb_audio_after_reconnect"></td><td id="routing-compare-note-diff-usb_audio_after_reconnect"></td></tr>
               </tbody>
             </table>
           </div>
