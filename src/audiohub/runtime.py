@@ -37,6 +37,16 @@ _SOURCE_NAME = re.compile(r"bluez_input\.[a-zA-Z0-9_.:-]{1,100}\Z")
 _BLUETOOTH_MAC = re.compile(r"(?:[0-9A-F]{2}:){5}[0-9A-F]{2}\Z")
 
 
+_RESERVED_BLUETOOTH_MACS = frozenset((
+    "00:00:00:00:00:00", "FF:FF:FF:FF:FF:FF",
+))
+
+
+def _usable_bluetooth_mac(value):
+    return (type(value) is str and _BLUETOOTH_MAC.fullmatch(value) is not None
+            and value not in _RESERVED_BLUETOOTH_MACS)
+
+
 def run(*args, timeout=8):
     # Read at most four MiB; pw-dump is not a trusted memory source.
     return bounded_command_output(args, timeout=timeout)
@@ -269,7 +279,7 @@ class Supervisor:
         filtered = {
             address: channel
             for address, channel in self.assignments.items()
-            if type(address) is str and _BLUETOOTH_MAC.fullmatch(address)
+            if _usable_bluetooth_mac(address)
             and channel in allowed
         }
         unique = {}
@@ -282,7 +292,7 @@ class Supervisor:
         candidate = unique
         for source in sources:
             address = source.get("address")
-            if (type(address) is not str or _BLUETOOTH_MAC.fullmatch(address) is None
+            if (not _usable_bluetooth_mac(address)
                     or address in candidate):
                 continue
             for channel in allowed:
@@ -360,7 +370,7 @@ class Supervisor:
             name = source.get("name")
             channel = self.assignments.get(address)
             target = "audiohub." + channel if channel else None
-            if (type(address) is str and _BLUETOOTH_MAC.fullmatch(address)
+            if (_usable_bluetooth_mac(address)
                     and type(name) is str and _SOURCE_NAME.fullmatch(name)
                     and channel in CHANNELS and channel != getattr(self, "route_plan", default_routes())["lan_slot"] and target in sinks
                     and address not in desired and len(desired) < MAX_BT_INPUTS):

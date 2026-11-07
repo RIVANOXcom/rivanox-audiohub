@@ -171,6 +171,10 @@ def bluetooth_sources(nodes):
         if match is None:
             continue
         name_mac = match.group(1).replace("_", ":").upper()
+        # Reject null and broadcast placeholders, not real device identities.
+        # The controlled manual route policy already prohibits both.
+        if name_mac in ("00:00:00:00:00:00", "FF:FF:FF:FF:FF:FF"):
+            continue
         # Count every valid-named BlueZ profile before checking its optional
         # metadata. A malformed first profile must still veto a second
         # profile claiming the same MAC; neither is safe to route.

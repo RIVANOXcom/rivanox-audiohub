@@ -31,6 +31,23 @@ class DiscoveryTests(unittest.TestCase):
         self.assertEqual(sources[0]["address"], "AA:BB:CC:DD:EE:FF")
 
 
+
+    def test_reserved_null_and_broadcast_bluetooth_macs_are_not_sources(self):
+        for address in ("00:00:00:00:00:00", "FF:FF:FF:FF:FF:FF"):
+            with self.subTest(address=address):
+                name = "bluez_input." + address.replace(":", "_") + ".0"
+                source = node(
+                    9, name, "Audio/Source",
+                    **{"api.bluez5.address": address,
+                       "device.address": address.lower()}
+                )
+                self.assertEqual(bluetooth_sources([source]), [])
+        real = node(10, "bluez_input.AA_BB_CC_DD_EE_FF.0", "Audio/Source")
+        self.assertEqual(
+            [s["address"] for s in bluetooth_sources([real])],
+            ["AA:BB:CC:DD:EE:FF"],
+        )
+
     def test_both_agreeing_bluetooth_metadata_addresses_are_valid(self):
         source = node(
             3, "bluez_input.AA_BB_CC_DD_EE_FF.0", "Audio/Source",

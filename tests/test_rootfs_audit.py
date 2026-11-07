@@ -78,6 +78,11 @@ class RootfsAuditTests(unittest.TestCase):
             '"--capture", source',
             '"--playback", "audiohub." + channel',
             'usb_ready = bool(selected and selected.returncode == 0)',
+            "def _usable_bluetooth_mac(value):",
+            "value not in _RESERVED_BLUETOOTH_MACS",
+            "if _usable_bluetooth_mac(address)",
+            "not _usable_bluetooth_mac(address)",
+            "if (_usable_bluetooth_mac(address)",
             "    def _assign(self, sources):",
             "filtered = {",
             "candidate = unique",
@@ -304,6 +309,8 @@ class RootfsAuditTests(unittest.TestCase):
             "if ident in seen:",
             "if _conflicting_node_ids(nodes):",
             "def bluetooth_sources(nodes):",
+            'if name_mac in ("00:00:00:00:00:00", "FF:FF:FF:FF:FF:FF"):',
+            "continue",
             "if name_mac in seen:",
             "conflicted.add(name_mac)",
             "seen.add(name_mac)",
@@ -1137,6 +1144,57 @@ class RootfsAuditTests(unittest.TestCase):
                 "bluetooth_dual_address_metadata_agrees"
             ])
 
+
+
+    def test_bt_placeholder_mac_discovery_and_routing_guard_present(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            self.assertTrue(audit.inspect(root)[
+                "bluetooth_placeholder_mac_excluded_from_auto_routes"
+            ])
+
+    def test_real_bt_placeholder_mac_guard_matches_actual_source(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            repo = Path(__file__).resolve().parents[1]
+            for filename in ("discovery.py", "runtime.py"):
+                staged = root / "opt/audiohub/src/audiohub" / filename
+                staged.write_bytes((repo / "src/audiohub" / filename).read_bytes())
+            self.assertTrue(audit.inspect(root)[
+                "bluetooth_placeholder_mac_excluded_from_auto_routes"
+            ])
+
+    def test_missing_bt_placeholder_discovery_veto_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            repo = Path(__file__).resolve().parents[1]
+            staged = root / "opt/audiohub/src/audiohub/discovery.py"
+            actual = (repo / "src/audiohub/discovery.py").read_text()
+            unsafe = actual.replace(
+                'if name_mac in ("00:00:00:00:00:00", "FF:FF:FF:FF:FF:FF"):',
+                "if False:",
+            )
+            self.assertNotEqual(unsafe, actual)
+            staged.write_text(unsafe)
+            self.assertFalse(audit.inspect(root)[
+                "bluetooth_placeholder_mac_excluded_from_auto_routes"
+            ])
+
+    def test_missing_bt_placeholder_runtime_veto_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            repo = Path(__file__).resolve().parents[1]
+            staged = root / "opt/audiohub/src/audiohub/runtime.py"
+            actual = (repo / "src/audiohub/runtime.py").read_text()
+            unsafe = actual.replace(
+                "value not in _RESERVED_BLUETOOTH_MACS",
+                "True",
+            )
+            self.assertNotEqual(unsafe, actual)
+            staged.write_text(unsafe)
+            self.assertFalse(audit.inspect(root)[
+                "bluetooth_placeholder_mac_excluded_from_auto_routes"
+            ])
 
     def test_duplicate_bluetooth_mac_prechecked_in_image(self):
         with tempfile.TemporaryDirectory() as tmp:

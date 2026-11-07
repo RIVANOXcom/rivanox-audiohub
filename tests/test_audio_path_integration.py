@@ -356,6 +356,32 @@ class AudioPathTests(unittest.TestCase):
         self.assertEqual(virtual_sinks(values), {})
         self.assertIsNone(choose_usb_output(values))
 
+
+    def test_reserved_bluetooth_macs_never_occupy_auto_slots_or_start_audio(self):
+        for placeholder in ("00:00:00:00:00:00", "FF:FF:FF:FF:FF:FF"):
+            with self.subTest(placeholder=placeholder):
+                s = self.supervisor(assignments={placeholder: "music"})
+                with (mock.patch("audiohub.runtime.atomic_json") as saved,
+                      mock.patch("audiohub.runtime.subprocess.Popen") as started):
+                    s._route([self.src(placeholder)],
+                             {"audiohub.music": 21}, now=0)
+                self.assertEqual(s.assignments, {})
+                self.assertEqual(s.loopbacks, {})
+                saved.assert_called_once()
+                started.assert_not_called()
+
+    def test_rejected_placeholder_does_not_block_valid_bluetooth_auto_route(self):
+        s = self.supervisor(assignments={"00:00:00:00:00:00": "music"})
+        with (mock.patch("audiohub.runtime.atomic_json") as saved,
+              mock.patch("audiohub.runtime.subprocess.Popen",
+                         return_value=Process()) as started):
+            s._route([self.src("00:00:00:00:00:00"), self.src(PHONE)],
+                     {"audiohub.music": 21}, now=0)
+        self.assertEqual(s.assignments, {PHONE: "music"})
+        self.assertEqual(len(s.loopbacks), 1)
+        saved.assert_called_once()
+        started.assert_called_once()
+
     def test_bluetooth_addresses_are_valid_and_ambiguous_mac_fails_closed(self):
         # Two candidate nodes for one MAC are NOT a reliable source;
         # no arbitrary "first valid" capture is routed. Other phones remain.
