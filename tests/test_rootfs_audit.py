@@ -147,7 +147,7 @@ class RootfsAuditTests(unittest.TestCase):
             "def atomic_json(path, data):",
             "except OSError:",
             "os.unlink(name, dir_fd=dirfd)",
-            "finally:\\n                os.close(dirfd)",
+            "finally:\n                os.close(dirfd)",
             "if tmpfd is not None:",
             "def _stop_all_managed_routes(self):",
             "def poll_safely(self):",
@@ -1625,7 +1625,7 @@ class RootfsAuditTests(unittest.TestCase):
             root = self.root(tmp)
             path = root / "opt/audiohub/src/audiohub/runtime.py"
             path.write_text(path.read_text().replace(
-                "finally:\\n                os.close(dirfd)", "pass"
+                "finally:\n                os.close(dirfd)", "pass"
             ))
             self.assertFalse(audit.inspect(root)[
                 "runtime_atomic_cleanup_preserves_error_and_closes_fd"
