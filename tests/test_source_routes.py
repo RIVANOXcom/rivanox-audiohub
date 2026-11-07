@@ -1,5 +1,7 @@
 """Offline source routing policy integration and security tests."""
 import json
+from contextlib import redirect_stderr, redirect_stdout
+from io import StringIO
 import os
 from pathlib import Path
 import stat
@@ -220,3 +222,201 @@ class SourcePolicyTests(unittest.TestCase):
         file.write_bytes(b"x" * (routes.MAX_FILE_BYTES + 1))
         with self.assertRaises((ValueError, PermissionError)):
             routes.load(self.dir)
+
+    def test_route_preview_first_bluetooth_warns_auto_to_manual_without_writes(self):
+        plan = routes.preview_route(
+            "bind-bt", "aa:bb:cc:dd:ee:ff", "music", directory=self.dir)
+        self.assertEqual(plan["mode"], "source-route-preview-only")
+        self.assertEqual(plan["current"]["mode"], "auto")
+        self.assertEqual(plan["proposed"]["mode"], "manual")
+        self.assertEqual(plan["proposed"]["bluetooth"],
+                         {"AA:BB:CC:DD:EE:FF": "music"})
+        self.assertTrue(plan["auto_discovery_would_be_disabled"])
+        self.assertTrue(plan["would_change"])
+        self.assertEqual(plan["bluetooth_bindings_added"], [
+            {"address": "AA:BB:CC:DD:EE:FF", "slot": "music"}])
+        self.assertTrue(plan["proposed_slots"]["laptop"]["lan_reserved"])
+        self.assertFalse(plan["proposed_slots"]["music"][
+            "free_for_manual_assignment"])
+        self.assertTrue(plan["proposed_slots"]["tablet"][
+            "free_for_manual_assignment"])
+        self.assertRegex(plan["revision"], r"^r1-[0-9a-f]{64}$")
+        self.assertFalse(plan["connected_devices_verified"])
+        self.assertFalse(plan["audible_playback_verified"])
+        self.assertFalse(plan["policy_written"])
+        self.assertTrue(plan["separate_confirmation_recommended"])
+        self.assertFalse(self.dir.exists())
+
+    def test_route_preview_set_lan_explains_slot_shift_and_keeps_original(self):
+        routes.set_mode("manual", self.dir)
+        routes.bind_bluetooth("AA:BB:CC:DD:EE:FF", "music", self.dir)
+        before = (self.dir / routes.FILENAME).read_bytes()
+        plan = routes.preview_route("set-lan", "tablet", directory=self.dir)
+        self.assertEqual(plan["lan_slot_change"],
+                         {"from": "laptop", "to": "tablet"})
+        self.assertEqual(plan["current"]["lan_slot"], "laptop")
+        self.assertEqual(plan["proposed"]["lan_slot"], "tablet")
+        self.assertEqual(plan["bluetooth_bindings_removed"], [])
+        self.assertEqual(plan["bluetooth_bindings_added"], [])
+        self.assertEqual((self.dir / routes.FILENAME).read_bytes(), before)
+        self.assertFalse((self.dir / ".source-routes.lock").is_symlink())
+
+    def test_route_preview_auto_mode_clears_manual_bluetooth_bindings_only_in_plan(self):
+        routes.bind_bluetooth("AA:BB:CC:DD:EE:FF", "music", self.dir)
+        routes.bind_bluetooth("11:22:33:44:55:66", "tablet", self.dir)
+        before = (self.dir / routes.FILENAME).read_bytes()
+        plan = routes.preview_route("mode", "auto", directory=self.dir)
+        self.assertEqual(plan["proposed"]["bluetooth"], {})
+        self.assertEqual(plan["source_mode_change"],
+                         {"from": "manual", "to": "auto"})
+        self.assertEqual([x["slot"] for x in plan["bluetooth_bindings_removed"]],
+                         ["tablet", "music"])
+        self.assertEqual((self.dir / routes.FILENAME).read_bytes(), before)
+
+    def test_route_slots_reports_reserved_free_slots_but_no_live_connections(self):
+        routes.bind_bluetooth("AA:BB:CC:DD:EE:FF", "music", self.dir)
+        routes.bind_bluetooth("11:22:33:44:55:66", "tablet", self.dir)
+        before = (self.dir / routes.FILENAME).read_bytes()
+        occupancy = routes.route_slots(directory=self.dir)
+        self.assertEqual(occupancy["free_slots"], [])
+        self.assertEqual(occupancy["slots"]["laptop"]["lan_reserved"], True)
+        self.assertEqual(occupancy["slots"]["music"]["manual_bluetooth_addresses"],
+                         ["AA:BB:CC:DD:EE:FF"])
+        self.assertFalse(occupancy["policy_written"])
+        self.assertFalse(occupancy["connected_devices_verified"])
+        self.assertFalse(occupancy["audible_playback_verified"])
+        self.assertEqual((self.dir / routes.FILENAME).read_bytes(), before)
+
+    def test_route_preview_conflicting_slot_or_excess_bluetooth_fails_with_no_write(self):
+        routes.bind_bluetooth("AA:BB:CC:DD:EE:FF", "music", self.dir)
+        routes.bind_bluetooth("11:22:33:44:55:66", "tablet", self.dir)
+        before = (self.dir / routes.FILENAME).read_bytes()
+        bad = (("set-lan", "music", None),
+               ("bind-bt", "AA:BB:CC:DD:EE:FF", "laptop"),
+               ("bind-bt", "22:33:44:55:66:77", "music"),
+               ("unbind-bt", "FF:EE:DD:CC:BB:AA", None),
+               ("bind-bt", "bad-address", "music"))
+        for action, value, slot in bad:
+            with self.subTest(action=action, value=value):
+                with self.assertRaises(ValueError):
+                    routes.preview_route(action, value, slot,
+                                         directory=self.dir)
+        self.assertEqual((self.dir / routes.FILENAME).read_bytes(), before)
+
+    def test_route_guarded_apply_changes_only_after_exact_preview_confirmation(self):
+        old = routes.preview_route("set-lan", "music", directory=self.dir)
+        self.assertFalse(self.dir.exists())
+        result = routes.set_lan(
+            "music", self.dir, if_revision=old["revision"])
+        self.assertEqual(result["lan_slot"], "music")
+        self.assertEqual(routes.load(self.dir)["lan_slot"], "music")
+        self.assertEqual(stat.S_IMODE((self.dir / routes.FILENAME).stat().st_mode),
+                         0o600)
+        self.assertEqual(stat.S_IMODE(self.dir.stat().st_mode), 0o700)
+
+    def test_route_stale_guard_rejects_unrelated_change_under_writer_lock(self):
+        routes.set_mode("manual", self.dir)
+        plan = routes.preview_route("set-lan", "music", directory=self.dir)
+        routes.bind_bluetooth("AA:BB:CC:DD:EE:FF", "tablet", self.dir)
+        before = (self.dir / routes.FILENAME).read_bytes()
+        with self.assertRaises(routes.StaleRoutePreview):
+            routes.set_lan("music", self.dir,
+                           if_revision=plan["revision"])
+        self.assertEqual((self.dir / routes.FILENAME).read_bytes(), before)
+
+    def test_route_stale_guard_detects_same_contents_aba_replacement(self):
+        routes.set_mode("manual", self.dir)
+        plan = routes.preview_route("set-lan", "music", directory=self.dir)
+        original_policy = routes.load(self.dir)
+        routes.update(lambda current: dict(current), self.dir)
+        self.assertEqual(routes.load(self.dir), original_policy)
+        with self.assertRaises(routes.StaleRoutePreview):
+            routes.set_lan("music", self.dir,
+                           if_revision=plan["revision"])
+        self.assertEqual(routes.load(self.dir), original_policy)
+
+    def test_route_preview_detects_concurrent_policy_replacement_during_read(self):
+        routes.set_mode("manual", self.dir)
+        original_read = routes._read
+        def modified_during_read(fd):
+            policy = original_read(fd)
+            routes.set_lan("music", self.dir)
+            return policy
+        with mock.patch.object(routes, "_read", side_effect=modified_during_read):
+            with self.assertRaises(ValueError):
+                routes.preview_route("mode", "auto", directory=self.dir)
+        self.assertEqual(routes.load(self.dir)["lan_slot"], "music")
+
+    def test_route_preview_rejects_bad_revision_and_no_policy_write(self):
+        for invalid in (None, "v1-" + "a"*64, "r1-" + "a"*63,
+                        "r1-" + "A"*64, "x", True):
+            if invalid is None:
+                continue
+            with self.subTest(token=repr(invalid)):
+                with self.assertRaises(ValueError):
+                    routes.set_lan("music", self.dir, if_revision=invalid)
+                self.assertFalse(self.dir.exists())
+
+    def test_route_cli_preview_and_slots_are_read_only(self):
+        demo = {"mode": "source-route-preview-only", "policy_written": False}
+        slots = {"mode": "source-slots-read-only", "policy_written": False}
+        with (mock.patch.object(routes, "preview_route", return_value=demo) as plan,
+              mock.patch.object(routes, "route_slots", return_value=slots) as free,
+              mock.patch.object(routes, "bind_bluetooth") as bind,
+              mock.patch.object(routes, "set_lan") as lan):
+            with redirect_stdout(StringIO()) as out:
+                routes.main(["--preview", "bind-bt",
+                             "AA:BB:CC:DD:EE:FF", "music"])
+            plan.assert_called_once_with("bind-bt", "AA:BB:CC:DD:EE:FF", "music")
+            self.assertEqual(json.loads(out.getvalue()), demo)
+            with redirect_stdout(StringIO()) as out:
+                routes.main(["slots"])
+            self.assertEqual(json.loads(out.getvalue()), slots)
+            free.assert_called_once()
+            bind.assert_not_called()
+            lan.assert_not_called()
+
+    def test_route_cli_guarded_apply_and_stale_refresh_never_auto_retry(self):
+        preview = {"mode": "source-route-preview-only", "policy_written": False}
+        token = "r1-" + "a"*64
+        with (mock.patch.object(routes, "set_lan", return_value=routes.defaults()) as apply,
+              mock.patch.object(routes, "preview_route", return_value=preview) as plan):
+            with redirect_stdout(StringIO()):
+                routes.main(["--confirm-local-route-change",
+                             "--if-preview-revision", token, "set-lan", "music"])
+            apply.assert_called_once_with("music", if_revision=token)
+            plan.assert_not_called()
+        with (mock.patch.object(routes, "set_lan",
+                                side_effect=routes.StaleRoutePreview("PRIVATE")) as apply,
+              mock.patch.object(routes, "preview_route", return_value=preview) as plan):
+            with redirect_stdout(StringIO()) as out, redirect_stderr(StringIO()) as err:
+                with self.assertRaises(SystemExit) as halted:
+                    routes.main(["--confirm-local-route-change",
+                                 "--if-preview-revision", token, "set-lan", "music"])
+            self.assertEqual(halted.exception.code, 4)
+            self.assertEqual(json.loads(out.getvalue())["status"], "route-preview-stale")
+            self.assertEqual(json.loads(out.getvalue())["fresh_preview"], preview)
+            self.assertNotIn("PRIVATE", err.getvalue())
+            apply.assert_called_once()
+            plan.assert_called_once_with("set-lan", "music", None)
+
+    def test_route_cli_rejects_invalid_mixed_preview_and_confirmation_flags(self):
+        token = "r1-" + "a"*64
+        bad = (
+            ["--preview", "--confirm-local-route-change", "set-lan", "music"],
+            ["--preview", "--if-preview-revision", token, "set-lan", "music"],
+            ["--confirm-local-route-change", "set-lan", "music"],
+            ["--if-preview-revision", token, "set-lan", "music"],
+            ["--preview", "show"],
+            ["--confirm-local-route-change", "--if-preview-revision", token, "slots"],
+        )
+        for argv in bad:
+            with self.subTest(argv=argv):
+                with (mock.patch.object(routes, "update") as writer,
+                      mock.patch.object(routes, "preview_route") as preview):
+                    with redirect_stdout(StringIO()), redirect_stderr(StringIO()):
+                        with self.assertRaises(SystemExit) as failure:
+                            routes.main(argv)
+                    self.assertEqual(failure.exception.code, 2)
+                    writer.assert_not_called()
+                    preview.assert_not_called()
