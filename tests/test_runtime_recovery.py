@@ -330,6 +330,64 @@ class PrivateRuntimeStateTests(unittest.TestCase):
             atomic_json(self.path, {"number": float("nan")})
         self.assertFalse(self.path.exists())
 
+
+    def test_racing_private_directory_creation_rechecks_actual_directory(self):
+        from audiohub import runtime
+        folder = self.private / "created-by-other-writer" / "status.json"
+        real_mkdir = os.mkdir
+        injections = []
+
+        def raced_mkdir(path, mode=0o777, *, dir_fd=None):
+            if path == "created-by-other-writer":
+                real_mkdir(path, mode, dir_fd=dir_fd)
+                injections.append(path)
+                raise FileExistsError("directory created concurrently")
+            return real_mkdir(path, mode, dir_fd=dir_fd)
+
+        with mock.patch.object(runtime.os, "mkdir", side_effect=raced_mkdir):
+            atomic_json(folder, {"ok": True})
+        self.assertEqual(injections, ["created-by-other-writer"])
+        self.assertEqual(read_json(folder, {}), {"ok": True})
+        self.assertEqual(stat.S_IMODE(folder.parent.stat().st_mode), 0o700)
+
+    def test_racing_symlinked_private_directory_remains_rejected(self):
+        from audiohub import runtime
+        outside = self.base / "external"
+        outside.mkdir(mode=0o700)
+        dest = self.private / "created-by-other-writer" / "status.json"
+        real_mkdir = os.mkdir
+
+        def symlink_race(path, mode=0o777, *, dir_fd=None):
+            if path == "created-by-other-writer":
+                os.symlink(outside, path, dir_fd=dir_fd)
+                raise FileExistsError("an attacker substituted a symlink")
+            return real_mkdir(path, mode, dir_fd=dir_fd)
+
+        with mock.patch.object(runtime.os, "mkdir", side_effect=symlink_race):
+            with self.assertRaises(OSError):
+                atomic_json(dest, {"secret": "must not leave image"})
+        self.assertFalse((outside / "status.json").exists())
+        self.assertTrue(dest.parent.is_symlink())
+
+    def test_racing_regular_file_private_directory_remains_rejected(self):
+        from audiohub import runtime
+        dest = self.private / "created-by-other-writer" / "status.json"
+        real_mkdir = os.mkdir
+
+        def file_race(path, mode=0o777, *, dir_fd=None):
+            if path == "created-by-other-writer":
+                handle = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                                 0o600, dir_fd=dir_fd)
+                os.close(handle)
+                raise FileExistsError("a regular file replaced the directory")
+            return real_mkdir(path, mode, dir_fd=dir_fd)
+
+        with mock.patch.object(runtime.os, "mkdir", side_effect=file_race):
+            with self.assertRaises(OSError):
+                atomic_json(dest, {"unsafe": False})
+        self.assertTrue(dest.parent.is_file())
+        self.assertFalse(dest.exists())
+
     def test_create_missing_private_intermediate_directory(self):
         dest = self.private / "inner" / "runtime-status.json"
         atomic_json(dest, {"ok": True})

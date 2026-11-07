@@ -140,6 +140,17 @@ class RootfsAuditTests(unittest.TestCase):
             "not _private_state_shape_bounded(value)",
             "except (OSError, ValueError, TypeError, UnicodeError, RecursionError):",
             "def _private_parent_fd(path, *, create=False):",
+            "except FileNotFoundError:",
+            "if not create:",
+            "os.mkdir(part, 0o700, dir_fd=fd)",
+            "except FileExistsError:",
+            "next_fd = os.open(part, flags, dir_fd=fd)",
+            "os.O_DIRECTORY | os.O_NOFOLLOW",
+            "info.st_uid != os.geteuid()",
+            "stat.S_IMODE(info.st_mode) & 0o077",
+            # End marker for the generated fake helper; needed by the
+            # production audit's function-scoped source inspection.
+            "def _unique_state_json_members(pairs):",
             "os.O_NOFOLLOW", "os.O_NONBLOCK",
             "os.O_EXCL", "secrets.token_hex(12)",
             "stat.S_ISREG", "os.replace(name, path.name",
@@ -1612,6 +1623,59 @@ class RootfsAuditTests(unittest.TestCase):
             ))
             self.assertFalse(audit.inspect(root)["mixer_stored_controls_strict_schema"])
 
+
+
+
+    def test_real_installed_runtime_source_passes_private_directory_race_guard(self):
+        """Catch source/fixture drift before a costly native ARM64 image run."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            real_runtime = (
+                Path(__file__).resolve().parents[1] / "src/audiohub/runtime.py"
+            )
+            staged_runtime = root / "opt/audiohub/src/audiohub/runtime.py"
+            staged_runtime.write_bytes(real_runtime.read_bytes())
+            self.assertTrue(audit.inspect(root)["runtime_private_directory_race_nofollow"])
+
+    def test_race_reopen_must_follow_file_exists_catch_in_real_source(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            real_runtime = (
+                Path(__file__).resolve().parents[1] / "src/audiohub/runtime.py"
+            ).read_text()
+            missing_retry = real_runtime.replace(
+                "                next_fd = os.open(part, flags, dir_fd=fd)\n"
+                "            os.close(fd)",
+                "            os.close(fd)",
+            )
+            self.assertNotEqual(missing_retry, real_runtime)
+            staged_runtime = root / "opt/audiohub/src/audiohub/runtime.py"
+            staged_runtime.write_text(missing_retry)
+            self.assertFalse(audit.inspect(root)["runtime_private_directory_race_nofollow"])
+
+    def test_private_runtime_directory_race_guard_installed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            self.assertTrue(audit.inspect(root)["runtime_private_directory_race_nofollow"])
+
+    def test_private_runtime_missing_concurrent_mkdir_catch_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            source = root / "opt/audiohub/src/audiohub/runtime.py"
+            source.write_text(source.read_text().replace(
+                "except FileExistsError:", "except FileNotFoundError:"
+            ))
+            self.assertFalse(audit.inspect(root)["runtime_private_directory_race_nofollow"])
+
+    def test_private_runtime_following_racing_symlink_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            source = root / "opt/audiohub/src/audiohub/runtime.py"
+            source.write_text(source.read_text().replace(
+                "next_fd = os.open(part, flags, dir_fd=fd)",
+                "next_fd = os.open(part, os.O_RDONLY, dir_fd=fd)"
+            ))
+            self.assertFalse(audit.inspect(root)["runtime_private_directory_race_nofollow"])
 
     def test_runtime_atomic_cleanup_guard_present(self):
         with tempfile.TemporaryDirectory() as tmp:
