@@ -31,6 +31,52 @@ class MixerTests(unittest.TestCase):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 patch_settings(defaults(), {"master": value})
 
+
+    def test_enormous_native_integer_mixer_controls_fail_with_value_error(self):
+        huge = 10 ** 400
+        for value in (huge, -huge):
+            with self.subTest(control="master", negative=value < 0):
+                with self.assertRaises(ValueError):
+                    patch_settings(defaults(), {"master": value})
+            with self.subTest(control="music_volume", negative=value < 0):
+                with self.assertRaises(ValueError):
+                    patch_settings(defaults(), {"music": {"volume": value}})
+            with self.subTest(control="tablet_eq", negative=value < 0):
+                with self.assertRaises(ValueError):
+                    patch_settings(defaults(), {"tablet": {"treble": value}})
+
+    def test_large_integer_current_settings_fail_closed_without_overflow(self):
+        old = defaults()
+        old["master"] = 10**400
+        with self.assertRaises(ValueError):
+            patch_settings(old, {})
+        old = defaults()
+        old["laptop"]["mid"] = -(10**400)
+        with self.assertRaises(ValueError):
+            patch_settings(old, {})
+
+    def test_float_numeric_controls_require_finite_integral_in_range(self):
+        for number in (float("nan"), float("inf"), float("-inf"),
+                       1e300, -1e300, 2.5):
+            with self.subTest(number=repr(number)), self.assertRaises(ValueError):
+                patch_settings(defaults(), {"master": number})
+        with self.assertRaises(ValueError):
+            patch_settings(defaults(), {"music": {"bass": 12.5}})
+        self.assertEqual(patch_settings(defaults(), {"master": 100.0})["master"], 100)
+
+    def test_valid_integer_bounds_still_generate_expected_safe_controls(self):
+        state = patch_settings(defaults(), {
+            "master": 100,
+            "music": {"volume": 0, "bass": -12, "mid": 12, "treble": 0},
+            "laptop": {"volume": 100, "mute": True},
+        })
+        self.assertEqual(state["music"]["bass"], -12)
+        self.assertEqual(state["music"]["mid"], 12)
+        self.assertEqual(state["laptop"]["volume"], 100)
+        cmds = volume_commands(state, {"music": 17, "laptop": 18}, 25)
+        self.assertIn(["wpctl", "set-volume", "17", "0.0"], cmds)
+        self.assertIn(["wpctl", "set-mute", "18", "1"], cmds)
+
     def test_boolean_required_for_mute(self):
         with self.assertRaises(ValueError):
             patch_settings(defaults(), {"music": {"mute": 1}})
