@@ -34,6 +34,21 @@
         </div>
         <p class="routing-freshness" id="routing-freshness" role="status" aria-live="polite" data-t="routingPending">Waiting for first status check</p>
         <p class="routing-diagnostic" id="routing-diagnostic" aria-live="polite" data-t="routingDiagPending">Diagnostic guidance will appear after the first status check.</p>
+        <fieldset class="routing-observations" aria-describedby="routing-observations-note">
+          <legend data-t="routingObservationsTitle">Manual sound observations</legend>
+          <p id="routing-observations-note" data-t="routingObservationsNote">Record what you personally heard during an isolated test. These unverified selections exist only on this page (reloading resets them) and do not approve the hardware or a release. The exported timestamp comes from your browser clock.</p>
+          <div class="routing-observation-grid">
+            <label for="routing-observation-usb"><span data-t="routingObservationUsb">USB speaker sound</span><select id="routing-observation-usb">
+              <option value="not_tested" data-t="routingNotTested">Not tested</option><option value="heard" data-t="routingHeard">Heard</option><option value="not_heard" data-t="routingNotHeard">Not heard</option>
+            </select></label>
+            <label for="routing-observation-bluetooth"><span data-t="routingObservationBluetooth">Bluetooth source sound</span><select id="routing-observation-bluetooth">
+              <option value="not_tested" data-t="routingNotTested">Not tested</option><option value="heard" data-t="routingHeard">Heard</option><option value="not_heard" data-t="routingNotHeard">Not heard</option>
+            </select></label>
+            <label for="routing-observation-three"><span data-t="routingObservationThree">Three inputs audible simultaneously</span><select id="routing-observation-three">
+              <option value="not_tested" data-t="routingNotTested">Not tested</option><option value="heard" data-t="routingHeard">Heard</option><option value="not_heard" data-t="routingNotHeard">Not heard</option>
+            </select></label>
+          </div>
+        </fieldset>
         <div class="routing-export-actions"><button type="button" id="routing-export" class="routing-export" data-t="routingExport">Download diagnostic report</button><span id="routing-export-status" role="status" aria-live="polite"></span></div>
       </section>
       <h2 data-t="channel">Channel</h2>
