@@ -34,6 +34,7 @@
   let words = {};
   let languageRequestId = 0;
   let deviceHealth = null;
+  let statusChecked = false;
   let statusRequestId = 0;
   const byId = id => document.getElementById(id);
   const tr = key => words[key] || key;
@@ -160,9 +161,11 @@
   function renderHardwareStatus() {
     const node = document.querySelector('[data-t="speakerState"]');
     if (!node) return;
-    node.textContent = (deviceHealth && deviceHealth.fresh)
+    const validHealth = deviceHealth && deviceHealth.fresh === true &&
+      typeof deviceHealth.usb_connected === "boolean";
+    node.textContent = validHealth
       ? tr(deviceHealth.usb_connected ? "speakerConnected" : "speakerDisconnected")
-      : tr("speakerState");
+      : tr(statusChecked ? "speakerStatusUnavailable" : "speakerState");
   }
   async function readDeviceStatus() {
     // Only the most recent poll may update health or its visible state.
@@ -177,6 +180,7 @@
       if (requestId !== statusRequestId) return;
       deviceHealth = null;
     }
+    statusChecked = true;
     renderHardwareStatus();
   }
   function translate() {
