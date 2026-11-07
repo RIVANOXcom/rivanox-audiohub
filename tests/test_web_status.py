@@ -1040,6 +1040,8 @@ assert.equal(routingHistory.length, 1);
 assert.deepEqual(Object.keys(routingHistory[0].health),
   ["usb_connected", "active_routes", "bluetooth_sources", "virtual_channel_count"]);
 assert.equal(routingHistory[0].health.active_routes, 0);
+assert.match(routingHistory[0].at_utc, /^\d{4}-\d{2}-\d{2}T/);
+assert.equal(safeRoutingHistoryReport()[0].active_routes, 0);
 renderRoutingSummary();
 assert.equal(routingHistory.length, 1); // Re-render is not another event.
 
@@ -1097,10 +1099,15 @@ assert.ok(!JSON.stringify(routingHistory).includes("PRIVATE"));
         """Click exports a safe, fixed JSON schema and no device identifiers."""
         setup = r'''
 const assert = require("node:assert/strict");
-const Date = class {toISOString() {return "2026-11-07T15:00:00.000Z";}};
+const Date = class {
+  toISOString() {return "2026-11-07T15:00:00.000Z";}
+  toLocaleTimeString() {return "15:00:00";}
+};
 let nowMs = 1000;
 let statusReceivedAt = 1000;
 const performance = {now: () => nowMs};
+const routingHistory = [];
+let lastRoutingHistorySignature = null;
 const elements = {
   "routing-export-status": {textContent: ""},
   "routing-observation-usb": {value: "not_tested"},
@@ -1148,7 +1155,7 @@ const exportContent = () => blobs[blobs.length - 1].parts.join("");
         verify = r'''
 const fields = ["format", "recorded_at_browser_utc", "status", "usb_connected",
   "active_routes", "bluetooth_sources", "virtual_channel_count",
-  "operator_observations", "hardware_verified",
+  "recent_routing_changes", "operator_observations", "hardware_verified",
   "audible_playback_verified", "release_approved"];
 const observations = {
   usb_output_audio: "not_tested",
@@ -1173,13 +1180,14 @@ const checkDownload = expected => {
   return report;
 };
 const unverified = {
+  recent_routing_changes: [],
   operator_observations: observations,
   hardware_verified: false,
   audible_playback_verified: false,
   release_approved: false
 };
 checkDownload({
-  format: "audiohub.routing-diagnostics.v3",
+  format: "audiohub.routing-diagnostics.v4",
   recorded_at_browser_utc: clock, status: "pending",
   usb_connected: null, active_routes: null, bluetooth_sources: null,
   virtual_channel_count: null, ...unverified
@@ -1190,7 +1198,7 @@ deviceHealth = {fresh: true, usb_connected: true,
   mac: "PRIVATE-MAC", ssid: "PRIVATE-WIFI", username: "PRIVATE-OWNER",
   hidden: {key: "SECRET"}};
 checkDownload({
-  format: "audiohub.routing-diagnostics.v3",
+  format: "audiohub.routing-diagnostics.v4",
   recorded_at_browser_utc: clock, status: "recent",
   usb_connected: true, active_routes: 2, bluetooth_sources: 1,
   virtual_channel_count: 3, ...unverified
@@ -1198,6 +1206,41 @@ checkDownload({
 assert.ok(!exportContent().includes("PRIVATE"));
 assert.ok(!exportContent().includes("SECRET"));
 assert.ok(!exportContent().includes("MAC"));
+// The local history includes only strictly validated state transitions.
+captureRoutingHistory(safeRoutingHealth());
+assert.equal(routingHistory.length, 1);
+const eventFields = ["observed_at_browser_utc", "status", "usb_connected",
+  "active_routes", "bluetooth_sources", "virtual_channel_count"];
+const event = {observed_at_browser_utc: clock, status: "recent",
+  usb_connected: true, active_routes: 2, bluetooth_sources: 1,
+  virtual_channel_count: 3};
+downloadRoutingDiagnostics();
+const exportedWithHistory = JSON.parse(exportContent());
+assert.deepEqual(exportedWithHistory.recent_routing_changes, [event]);
+assert.deepEqual(Object.keys(exportedWithHistory.recent_routing_changes[0]), eventFields);
+assert.ok(!exportContent().includes("PRIVATE"));
+assert.ok(!exportContent().includes("SECRET"));
+// A corrupted in-memory entry is independently rechecked and fails closed.
+routingHistory.push({
+  at_utc: "PRIVATE-OWNER",
+  health: {usb_connected: true, active_routes: 99,
+    bluetooth_sources: 1, virtual_channel_count: 3, mac: "PRIVATE-MAC"}
+});
+const corrupted = safeRoutingHistoryReport()[1];
+assert.deepEqual(Object.keys(corrupted), eventFields);
+assert.equal(corrupted.observed_at_browser_utc, null);
+assert.equal(corrupted.status, "unavailable");
+assert.equal(corrupted.active_routes, null);
+assert.ok(!JSON.stringify(safeRoutingHistoryReport()).includes("PRIVATE"));
+// Report output has a strict eight-event cap even if internal state is tampered.
+for (let i = 0; i < 15; i++) {
+  routingHistory.push({at_utc: clock,
+    health: {usb_connected: true, active_routes: i % 4,
+      bluetooth_sources: i % 3, virtual_channel_count: i % 4}});
+}
+assert.equal(safeRoutingHistoryReport().length, 8);
+assert.equal(safeRoutingReport().recent_routing_changes.length, 8);
+routingHistory.length = 0;
 // Operator choices have no automatic hardware-certification side effect.
 elements["routing-observation-usb"].value = "heard";
 elements["routing-observation-bluetooth"].value = "not_heard";
@@ -1242,7 +1285,7 @@ deviceHealth = {fresh: false, usb_connected: true,
   active_routes: 2, bluetooth_sources: 1, virtual_channel_count: 3,
   mac: "PRIVATE-MAC"};
 checkDownload({
-  format: "audiohub.routing-diagnostics.v3",
+  format: "audiohub.routing-diagnostics.v4",
   recorded_at_browser_utc: clock, status: "unavailable",
   usb_connected: null, active_routes: null, bluetooth_sources: null,
   virtual_channel_count: null, ...unverified
