@@ -106,6 +106,9 @@ PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-p
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control list-profiles
 # Preview the profile's effect against the CURRENT mixer (retains all mutes/EQ):
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --preview profile cinema
+# The new profile_impact report highlights each requested volume delta,
+# which inputs remain muted and which volume changes remain inaudible
+# while muted, plus explicit no-unmute, no-EQ-change, no-hardware-proof flags.
 # Separately confirm with the preview's own revision. A stale revision rejects:
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-mixer-change --if-preview-revision v1-REPLACE-WITH-64-HEX-CHARS profile cinema
 
@@ -120,6 +123,31 @@ PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-m
 # COMPLETE PipeWire supervisor command acknowledgement (NOT measured audio):
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-mixer-change --wait-for-supervisor set-mix 20 35 25 0
 ```
+
+A saved profile now has a clearer **read-only selection preview**
+through `--preview profile NAME`. Alongside the existing versioned
+`before`/`after`, `planned_changes` and `revision` output,
+`profile_impact` explicitly displays the named profile, master level
+before/after/signed delta, fixed-order music/laptop/tablet volume
+before/after/signed delta, each input's **preserved mute state**,
+`muted_sources_remaining_muted`, and the
+`volume_change_while_muted` flag. That flag is true only when
+the profile changes a muted input's saved requested volume: it will
+**remain muted**, so the level change is not audible while the mute
+is enforced. A source can still become audible later if an operator
+separately unmutes it; this is not a physical safety certificate.
+`changed=false` clearly indicates no requested volume values differ;
+it does not mean actual playback was measured. The impact is derived
+from exactly the same one-time before/after preview snapshot, with
+no second settings read, and also appears inside `fresh_preview`
+when a guarded profile application is rejected as stale (exit 4).
+`mute_states_preserved`, `stored_eq_preserved` and
+`separate_confirmation_required` remain explicit. This extension
+does **not** add any automatic application, restore, routing, physical
+sound measurement or network API. Only a separate
+`--confirm-local-mixer-change --if-preview-revision REV profile NAME`
+may save the requested levels through the existing exclusive lock.
+All percentages are requested levels, not loudness measurements.
 
 To compare one stored profile with the **currently requested local
 mixer settings** without activating or rewriting anything, run
