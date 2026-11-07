@@ -15,7 +15,9 @@ import struct
 import subprocess
 import sys
 
-from .discovery import choose_usb_output, pipewire_nodes, props
+from .discovery import (_conflicting_node_ids, _parse_pipewire_graph,
+                        choose_usb_output, pipewire_nodes, props, virtual_sinks)
+from .mixer import CHANNELS
 from .process_capture import bounded_command_output
 
 RATE = 48000
@@ -65,13 +67,73 @@ def safe_usb_target():
     return name
 
 
-def run_soundcheck(*, confirmed=False):
+
+def safe_input_target(slot):
+    """Require an actual virtual EQ sink AND direct link to the USB output.
+
+    The explicit route is inspected read-only. No link or a competing output
+    is an UNKNOWN audio path, not proof of no sound; refuse to send test PCM
+    rather than risk silent/HDMI playback through a default sink.
+    """
+    if type(slot) is not str or slot not in CHANNELS:
+        raise SoundcheckUnavailable("Unsupported local input test slot")
+    inspected = bounded_command_output(("pw-dump",), timeout=5)
+    if inspected is None or inspected.returncode != 0:
+        raise SoundcheckUnavailable("Input test unavailable: PipeWire inspection failed")
+    graph = _parse_pipewire_graph(inspected.stdout)
+    if graph is None:
+        raise SoundcheckUnavailable("Input test unavailable: unreliable PipeWire graph")
+    nodes = pipewire_nodes(graph)
+    if _conflicting_node_ids(nodes):
+        raise SoundcheckUnavailable("Input test unavailable: ambiguous PipeWire nodes")
+    target = "audiohub." + slot
+    if target not in virtual_sinks(nodes):
+        raise SoundcheckUnavailable("Input test unavailable: requested EQ sink missing")
+    usb = choose_usb_output(nodes)
+    if usb is None:
+        raise SoundcheckUnavailable("Input test unavailable: USB speaker missing")
+    # Only the EXACT filter-chain playback node is relevant, not a name
+    # supplied by a caller, an arbitrary Link property or a default sink.
+    outputs = [
+        node for node in nodes
+        if props(node).get("node.name") == target + ".output"
+        and type(node.get("id")) is int and 0 <= node["id"] <= 2**31 - 1
+    ]
+    if len(outputs) != 1:
+        raise SoundcheckUnavailable("Input test unavailable: EQ output ambiguous")
+    output_id = outputs[0]["id"]
+    usb_id = usb["id"]
+    direct_usb_link = False
+    for link in graph:
+        if type(link) is not dict or link.get("type") != "PipeWire:Interface:Link":
+            continue
+        info = link.get("info")
+        if type(info) is not dict:
+            continue
+        if info.get("output-node-id") != output_id:
+            continue
+        # A signal from this EQ output routed anywhere else is unsafe
+        # for this diagnostic. Even a concurrently present USB edge is
+        # insufficient if another path is also reachable.
+        input_id = info.get("input-node-id")
+        if type(input_id) is not int or input_id != usb_id:
+            raise SoundcheckUnavailable("Input test unavailable: EQ output not USB-only")
+        direct_usb_link = True
+    if not direct_usb_link:
+        raise SoundcheckUnavailable("Input test unavailable: no direct EQ-to-USB link")
+    return target
+
+def run_soundcheck(*, confirmed=False, through_input=None):
     """Only explicit unprivileged console invocation can send the test pulse."""
     if confirmed is not True:
         raise SoundcheckUnavailable("Explicit isolated USB test confirmation required")
     if os.geteuid() == 0:
         raise SoundcheckUnavailable("Run the USB soundcheck as unprivileged audiohub user")
-    target = safe_usb_target()
+    if through_input is not None and (
+            type(through_input) is not str or through_input not in CHANNELS):
+        raise SoundcheckUnavailable("Unsupported local input test slot")
+    target = (safe_usb_target() if through_input is None
+              else safe_input_target(through_input))
     cmd = [
         "pw-cat", "--playback", "--raw", "--format=s16", "--rate=48000",
         "--channels=2", "--channel-map=stereo", "--target=" + target,
@@ -98,14 +160,21 @@ def main(argv=None):
         "--confirm-isolated-usb-test", action="store_true",
         help="Explicitly opt into a local low-level left then right soundcheck",
     )
+    parser.add_argument(
+        "--through-input", choices=CHANNELS, default=None,
+        metavar="{music,laptop,tablet}",
+        help="Instead of direct USB, test one EQ input only when its direct USB link is observed",
+    )
     args = parser.parse_args(argv)
     try:
-        run_soundcheck(confirmed=args.confirm_isolated_usb_test)
+        run_soundcheck(confirmed=args.confirm_isolated_usb_test,
+                       through_input=args.through_input)
     except SoundcheckUnavailable as exc:
         parser.exit(2, str(exc) + "\n")
     print(
-        "Low-level left-then-right USB audio playback command completed. "
-        "This is NOT proof of audible sound; record what you actually heard."
+        "Low-level left-then-right local audio playback command completed. "
+        "This is NOT proof of audible sound or a complete EQ/mix path; "
+        "record what you actually heard."
     )
 
 
