@@ -631,6 +631,51 @@ def preview_change(patch, *, path=SETTINGS, baseline=None):
     }
 
 
+def _profile_selection_impact(plan, name):
+    """Make one already-computed read-only profile preview human-actionable.
+
+    Derive everything from the SAME before/after snapshots/revision to avoid
+    racing a second settings read. A profile patch is volume-only; any mute
+    difference would violate that safety promise and is refused.
+    """
+    _check_profile_name(name)
+    before, after = plan["before"], plan["after"]
+    controls = []
+    for slot in CHANNELS:
+        old, new = before[slot], after[slot]
+        if old["mute"] != new["mute"]:
+            raise MixerControlUnavailable("Profile preview cannot modify mute state")
+        previous, requested = old["volume"], new["volume"]
+        controls.append({
+            "source": slot,
+            "previous": previous,
+            "requested": requested,
+            "delta": requested - previous,
+            "mute_preserved": True,
+            "stays_muted": old["mute"],
+            "volume_change_while_muted": old["mute"] and previous != requested,
+        })
+    master_before, master_after = before["master"], after["master"]
+    changed = (master_before != master_after
+               or any(row["delta"] != 0 for row in controls))
+    muted = [row["source"] for row in controls if row["stays_muted"]]
+    return {
+        "profile": name,
+        "master": {
+            "previous": master_before, "requested": master_after,
+            "delta": master_after - master_before,
+        },
+        "sources": controls,
+        "changed": changed,
+        "muted_sources_remaining_muted": muted,
+        "mute_states_preserved": True,
+        "stored_eq_preserved": True,
+        "separate_confirmation_required": True,
+        "requested_levels_only": True,
+        "audible_playback_verified": False,
+    }
+
+
 def change(patch, *, path=SETTINGS, confirmed=False, if_revision=None):
     """Apply one bounded, atomic user-requested control patch.
 
@@ -941,6 +986,9 @@ def main(argv=None):
                 extras = ({"baseline": args.compare_baseline}
                           if args.compare_baseline is not None else {})
                 state = preview_change(patch, **extras)
+                if args.action == "profile":
+                    state["profile_impact"] = _profile_selection_impact(
+                        state, args.name)
             else:
                 kwargs = ({"if_revision": args.if_preview_revision}
                           if args.if_preview_revision is not None else {})
@@ -986,6 +1034,9 @@ def main(argv=None):
             extras = ({"baseline": args.compare_baseline}
                       if args.compare_baseline is not None else {})
             refreshed = preview_change(patch, **extras)
+            if args.action == "profile":
+                refreshed["profile_impact"] = _profile_selection_impact(
+                    refreshed, args.name)
         except (MixerControlUnavailable, OSError, PermissionError, ValueError, TypeError):
             parser.exit(4, "AudioHub mixer not changed: preview is outdated. "
                            "Fresh preview unavailable; inspect local settings.\n")

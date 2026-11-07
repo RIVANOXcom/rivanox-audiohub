@@ -1140,7 +1140,12 @@ class LocalMixerControlsTests(unittest.TestCase):
         with (mock.patch("audiohub.mixer_control.saved_profile_patch",
                          return_value=patch) as lookup,
               mock.patch("audiohub.mixer_control.preview_change",
-                         return_value={"mode": "preview-only"}) as preview,
+                         return_value={
+                             "mode": "preview-only",
+                             "before": requested_mix_controls(defaults()),
+                             "after": requested_mix_controls(
+                                 mixer_control.patch_settings(defaults(), patch)),
+                         }) as preview,
               mock.patch("audiohub.mixer_control.change",
                          return_value=defaults()) as changed):
             with redirect_stdout(StringIO()):
@@ -2024,6 +2029,150 @@ class LocalMixerControlsTests(unittest.TestCase):
                     compare.assert_not_called()
                     write.assert_not_called()
                     change.assert_not_called()
+
+    def test_profile_choice_impact_explains_requested_volume_changes_and_mutes(self):
+        prior = defaults()
+        prior["master"] = 70
+        prior["music"].update(volume=60, mute=True, bass=8)
+        prior["laptop"].update(volume=40, mute=False, mid=-6)
+        prior["tablet"].update(volume=10, mute=True, treble=7)
+        mixer_control.change(prior, path=self.settings, confirmed=True)
+        patch = mixer_control._profile_patch({
+            "master": 25, "music": 35, "laptop": 50, "tablet": 10})
+        plan = mixer_control.preview_change(patch, path=self.settings)
+        impact = mixer_control._profile_selection_impact(plan, "cinema")
+        self.assertEqual(impact["profile"], "cinema")
+        self.assertEqual(impact["master"],
+                         {"previous": 70, "requested": 25, "delta": -45})
+        self.assertEqual([row["delta"] for row in impact["sources"]],
+                         [-25, 10, 0])
+        self.assertEqual(impact["muted_sources_remaining_muted"],
+                         ["music", "tablet"])
+        self.assertEqual([row["volume_change_while_muted"]
+                          for row in impact["sources"]], [True, False, False])
+        self.assertEqual([row["stays_muted"] for row in impact["sources"]],
+                         [True, False, True])
+        self.assertTrue(impact["changed"])
+        self.assertTrue(impact["mute_states_preserved"])
+        self.assertTrue(impact["stored_eq_preserved"])
+        self.assertTrue(impact["separate_confirmation_required"])
+        self.assertTrue(impact["requested_levels_only"])
+        self.assertFalse(impact["audible_playback_verified"])
+        self.assertEqual(mixer_control.show(path=self.settings), prior)
+
+    def test_profile_choice_impact_unchanged_levels_explain_still_muted(self):
+        current = defaults()
+        current["music"]["mute"] = True
+        mixer_control.change({"music": {"mute": True}},
+                             path=self.settings, confirmed=True)
+        levels = {"master": current["master"],
+                  **{slot: current[slot]["volume"] for slot in
+                     ("music", "laptop", "tablet")}}
+        plan = mixer_control.preview_change(mixer_control._profile_patch(levels),
+                                            path=self.settings)
+        impact = mixer_control._profile_selection_impact(plan, "same")
+        self.assertFalse(impact["changed"])
+        self.assertEqual(impact["muted_sources_remaining_muted"], ["music"])
+        self.assertEqual([row["delta"] for row in impact["sources"]], [0, 0, 0])
+        self.assertFalse(impact["sources"][0]["volume_change_while_muted"])
+        self.assertFalse(plan["settings_written"])
+
+    def test_profile_choice_impact_rejects_any_unmute_in_preview(self):
+        plan = mixer_control.preview_change({"music": {"mute": False}},
+                                            path=self.settings)
+        bad = dict(plan)
+        bad["after"] = {**plan["after"], "music": {
+            "volume": plan["after"]["music"]["volume"], "mute": True}}
+        with self.assertRaises(mixer_control.MixerControlUnavailable):
+            mixer_control._profile_selection_impact(bad, "cinema")
+
+    def test_profile_choice_cli_preview_renders_impact_without_writing(self):
+        profile_path = self.settings.with_name("volume-profiles.json")
+        mixer_control.save_volume_profile(
+            "cinema", 30, 25, 45, 15, path=profile_path, confirmed=True)
+        mixer_control.change({"music": {"mute": True}, "tablet": {"mute": True}},
+                             path=self.settings, confirmed=True)
+        original_settings = self.settings.read_bytes()
+        original_profiles = profile_path.read_bytes()
+        real_preview = mixer_control.preview_change
+        real_lookup = mixer_control.saved_profile_patch
+        def preview_local(patch, *, baseline=None):
+            return real_preview(patch, path=self.settings, baseline=baseline)
+        def lookup_local(name):
+            return real_lookup(name, path=profile_path)
+        with (mock.patch("audiohub.mixer_control.saved_profile_patch",
+                         side_effect=lookup_local),
+              mock.patch("audiohub.mixer_control.preview_change",
+                         side_effect=preview_local) as preview,
+              mock.patch("audiohub.mixer_control.atomic_json") as write,
+              mock.patch("audiohub.mixer_control.change") as change):
+            with redirect_stdout(StringIO()) as out:
+                mixer_control.main(["--preview", "profile", "cinema"])
+            preview.assert_called_once()
+            write.assert_not_called()
+            change.assert_not_called()
+        result = json.loads(out.getvalue().splitlines()[0])
+        impact = result["profile_impact"]
+        self.assertEqual(impact["profile"], "cinema")
+        self.assertEqual(impact["muted_sources_remaining_muted"],
+                         ["music", "tablet"])
+        self.assertTrue(impact["sources"][0]["volume_change_while_muted"])
+        self.assertTrue(impact["separate_confirmation_required"])
+        self.assertFalse(result["settings_written"])
+        self.assertEqual(self.settings.read_bytes(), original_settings)
+        self.assertEqual(profile_path.read_bytes(), original_profiles)
+
+    def test_profile_choice_stale_guard_refreshes_impact_read_only(self):
+        profile_path = self.settings.with_name("volume-profiles.json")
+        mixer_control.save_volume_profile(
+            "cinema", 20, 30, 40, 50, path=profile_path, confirmed=True)
+        patch = mixer_control.saved_profile_patch("cinema", path=profile_path)
+        old = mixer_control.preview_change(patch, path=self.settings)
+        mixer_control.change({"music": {"mute": True, "volume": 12}},
+                             path=self.settings, confirmed=True)
+        settings_before = self.settings.read_bytes()
+        profile_before = profile_path.read_bytes()
+        real_change = mixer_control.change
+        real_preview = mixer_control.preview_change
+        def changed(patch, *, confirmed=False, if_revision=None):
+            return real_change(patch, path=self.settings, confirmed=confirmed,
+                               if_revision=if_revision)
+        def preview_local(patch, *, baseline=None):
+            return real_preview(patch, path=self.settings, baseline=baseline)
+        with (mock.patch("audiohub.mixer_control.saved_profile_patch",
+                         return_value=patch),
+              mock.patch("audiohub.mixer_control.change", side_effect=changed) as save,
+              mock.patch("audiohub.mixer_control.preview_change",
+                         side_effect=preview_local),
+              mock.patch("audiohub.mixer_control.atomic_json") as write):
+            with redirect_stdout(StringIO()) as out, redirect_stderr(StringIO()):
+                with self.assertRaises(SystemExit) as failed:
+                    mixer_control.main([
+                        "--confirm-local-mixer-change", "--if-preview-revision",
+                        old["revision"], "profile", "cinema"])
+            self.assertEqual(failed.exception.code, 4)
+            save.assert_called_once()
+            write.assert_not_called()
+        payload = json.loads(out.getvalue())
+        impact = payload["fresh_preview"]["profile_impact"]
+        self.assertTrue(impact["sources"][0]["stays_muted"])
+        self.assertTrue(impact["sources"][0]["volume_change_while_muted"])
+        self.assertTrue(impact["separate_confirmation_required"])
+        self.assertFalse(payload["settings_written"])
+        self.assertEqual(self.settings.read_bytes(), settings_before)
+        self.assertEqual(profile_path.read_bytes(), profile_before)
+
+    def test_profile_choice_impact_is_not_attached_to_builtin_presets(self):
+        plan = mixer_control.preview_change(mixer_control.preset_patch("quiet"),
+                                            path=self.settings)
+        self.assertNotIn("profile_impact", plan)
+        with mock.patch("audiohub.mixer_control.preview_change",
+                        return_value=plan) as preview:
+            with redirect_stdout(StringIO()) as out:
+                mixer_control.main(["--preview", "preset", "quiet"])
+            preview.assert_called_once()
+        rendered = json.loads(out.getvalue().splitlines()[0])
+        self.assertNotIn("profile_impact", rendered)
 
     def test_wait_for_supervisor_accepts_matching_complete_ack_without_sleep(self):
         saved = defaults()
