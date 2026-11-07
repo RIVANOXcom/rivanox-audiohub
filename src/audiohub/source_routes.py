@@ -494,7 +494,7 @@ def _bluez_connected_property(output, address):
     """
     if type(output) is not str or not 0 < len(output) <= 4096:
         return None
-    if any(ord(char) < 32 and char not in ("\\n", "\\r", "\\t") for char in output):
+    if any(ord(char) < 32 and char not in (chr(10), chr(13), chr(9)) for char in output):
         return None
     header = "Device " + canonical_mac(address)
     matches = 0
