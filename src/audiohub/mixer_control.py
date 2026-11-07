@@ -26,7 +26,7 @@ LOCK_NAME = ".mixer-settings.lock"
 PROFILE_PATH = SETTINGS.with_name("volume-profiles.json")
 MAX_CUSTOM_PROFILES = 8
 PROFILE_FIELDS = ("master", *CHANNELS)
-_PROFILE_NAME = re.compile(r"[a-z][a-z0-9-]{0,23}\\Z", re.ASCII)
+_PROFILE_NAME = re.compile(r"[a-z][a-z0-9-]{0,23}", re.ASCII)
 
 # Conservative convenience starting points, NOT calibrated output levels.
 # In every preset, existing per-input mute and stored EQ are untouched.
