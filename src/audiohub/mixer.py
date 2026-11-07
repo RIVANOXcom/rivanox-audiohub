@@ -45,7 +45,10 @@ def patch_settings(current, patch):
     """Apply a partial API patch with strict field and type validation."""
     if not isinstance(current, dict) or not isinstance(patch, dict):
         raise ValueError("settings must be objects")
-    if set(patch) - (set(CHANNELS) | {"master"}):
+    allowed = set(CHANNELS) | {"master"}
+    if set(current) - allowed:
+        raise ValueError("unknown stored mixer control")
+    if set(patch) - allowed:
         raise ValueError("unknown control")
     result = defaults()
     for name in CHANNELS:
@@ -53,6 +56,8 @@ def patch_settings(current, patch):
             value = current[name]
             if not isinstance(value, dict):
                 raise ValueError("invalid current channel")
+            if set(value) - {"volume", "mute", *EQ_BANDS}:
+                raise ValueError("unknown stored mixer channel control")
             result[name].update(value)
     if "master" in current:
         result["master"] = current["master"]
