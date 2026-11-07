@@ -108,6 +108,12 @@ def main(argv=None):
     mute = commands.add_parser("mute", help="Set a channel mute (on/off)")
     mute.add_argument("slot", choices=CHANNELS)
     mute.add_argument("value", choices=("on", "off"))
+    mix = commands.add_parser(
+        "set-mix", help="Atomically set master and all three input volumes 0..100"
+    )
+    mix.add_argument("master", type=int)
+    for slot in CHANNELS:
+        mix.add_argument(slot, type=int)
     args = parser.parse_args(argv)
     try:
         if args.action == "show":
@@ -117,6 +123,11 @@ def main(argv=None):
                 patch = {"master": args.percent}
             elif args.action == "set-volume":
                 patch = {args.slot: {"volume": args.percent}}
+            elif args.action == "set-mix":
+                # One validated atomic snapshot prevents partial intermediate
+                # levels during a supervised poll; preserve every mute/EQ.
+                patch = {"master": args.master}
+                patch.update({slot: {"volume": getattr(args, slot)} for slot in CHANNELS})
             else:
                 patch = {args.slot: {"mute": args.value == "on"}}
             state = change(patch, confirmed=args.confirm_local_mixer_change)
