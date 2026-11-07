@@ -14,14 +14,21 @@ DEFAULT_VOLUME = {"music": 65, "laptop": 50, "tablet": 50}
 
 
 def _integer(value, lower, upper):
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        raise ValueError("integer value required")
-    if not math.isfinite(value) or int(value) != value:
-        raise ValueError("finite integer required")
-    number = int(value)
-    if not lower <= number <= upper:
+    """Validate integer controls without converting arbitrary-size ints to float.
+
+    math.isfinite(10**400) raises OverflowError instead of rejecting the
+    value as an ordinary invalid control. Bound native ints before any
+    conversion; accept only finite, integral builtin floats in range.
+    """
+    if type(value) is int:
+        if lower <= value <= upper:
+            return value
         raise ValueError("value out of range")
-    return number
+    if type(value) is not float:
+        raise ValueError("integer value required")
+    if not math.isfinite(value) or not lower <= value <= upper or not value.is_integer():
+        raise ValueError("finite integer in range required")
+    return int(value)
 
 
 def defaults():
