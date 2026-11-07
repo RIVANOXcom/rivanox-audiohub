@@ -26,6 +26,10 @@ class MixerControlUnavailable(RuntimeError):
     """Sanitized local status; never echo untrusted private file contents."""
 
 
+class StaleMixerPreview(MixerControlUnavailable):
+    """A conditional write was refused because the preview became stale."""
+
+
 def _existing_state(path, dirfd):
     """Reject malformed existing state instead of overwriting with defaults."""
     try:
@@ -222,7 +226,7 @@ def change(patch, *, path=SETTINGS, confirmed=False, if_revision=None):
         else:
             current, actual_revision = _state_with_revision(path, dirfd)
             if actual_revision != if_revision:
-                raise MixerControlUnavailable("Mixer preview no longer current")
+                raise StaleMixerPreview("Mixer preview no longer current")
         try:
             desired = patch_settings(current, patch)
         except (TypeError, ValueError):
@@ -373,6 +377,23 @@ def main(argv=None):
                           if args.if_preview_revision is not None else {})
                 state = change(patch, confirmed=args.confirm_local_mixer_change,
                                **kwargs)
+    except StaleMixerPreview:
+        # The guarded save was rejected UNDER the writer lock. Offer only a
+        # fresh read-only projection so the operator can decide again. It is
+        # never silently applied, even if a concurrent writer changed state.
+        try:
+            refreshed = preview_change(patch)
+        except (MixerControlUnavailable, OSError, PermissionError, ValueError, TypeError):
+            parser.exit(4, "AudioHub mixer not changed: preview is outdated. "
+                           "Fresh preview unavailable; inspect local settings.\n")
+        print(json.dumps({
+            "status": "preview-stale",
+            "settings_written": False,
+            "fresh_preview": refreshed,
+            "audible_playback_verified": False,
+        }, sort_keys=True))
+        parser.exit(4, "AudioHub mixer not changed: review the fresh preview "
+                       "and explicitly confirm with its new revision.\n")
     except (MixerControlUnavailable, OSError, PermissionError, ValueError) as exc:
         # Local file state must never be echoed on error, including exceptions
         # with filesystem paths or arbitrary untrusted keys.

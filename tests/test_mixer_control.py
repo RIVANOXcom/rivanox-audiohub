@@ -537,6 +537,100 @@ class LocalMixerControlsTests(unittest.TestCase):
             changed.assert_called_once_with(
                 {"master": 35}, confirmed=True, if_revision=token)
 
+    def test_stale_cli_shows_fresh_read_only_plan_and_exit_code_four(self):
+        mixer_control.change({"master": 48}, path=self.settings, confirmed=True)
+        stale = mixer_control.preview_change({"master": 25}, path=self.settings)
+        mixer_control.change({"music": {"bass": 5}},
+                             path=self.settings, confirmed=True)
+        current_bytes = self.settings.read_bytes()
+        original_change = mixer_control.change
+        original_preview = mixer_control.preview_change
+        def local_change(patch, *, confirmed=False, if_revision=None):
+            return original_change(patch, path=self.settings, confirmed=confirmed,
+                                   if_revision=if_revision)
+        def local_preview(patch):
+            return original_preview(patch, path=self.settings)
+        with (mock.patch("audiohub.mixer_control.change",
+                         side_effect=local_change) as change,
+              mock.patch("audiohub.mixer_control.preview_change",
+                         side_effect=local_preview) as preview,
+              mock.patch("audiohub.mixer_control.atomic_json",
+                         wraps=mixer_control.atomic_json) as writer):
+            with redirect_stdout(StringIO()) as stdout, redirect_stderr(StringIO()) as stderr:
+                with self.assertRaises(SystemExit) as caught:
+                    mixer_control.main([
+                        "--confirm-local-mixer-change", "--if-preview-revision",
+                        stale["revision"], "set-master", "25"
+                    ])
+            self.assertEqual(caught.exception.code, 4)
+            change.assert_called_once_with(
+                {"master": 25}, confirmed=True, if_revision=stale["revision"])
+            preview.assert_called_once_with({"master": 25})
+            writer.assert_not_called()
+        data = json.loads(stdout.getvalue())
+        self.assertEqual(data["status"], "preview-stale")
+        self.assertFalse(data["settings_written"])
+        self.assertFalse(data["audible_playback_verified"])
+        new_plan = data["fresh_preview"]
+        self.assertEqual(new_plan["before"]["master"], 48)
+        self.assertEqual(new_plan["after"]["master"], 25)
+        self.assertEqual(new_plan["would_change"], ["master"])
+        self.assertEqual(new_plan["mode"], "preview-only")
+        self.assertFalse(new_plan["settings_written"])
+        self.assertNotEqual(new_plan["revision"], stale["revision"])
+        self.assertIn("explicitly confirm", stderr.getvalue())
+        self.assertEqual(self.settings.read_bytes(), current_bytes)
+
+    def test_stale_cli_refresh_failure_never_leaks_private_state(self):
+        with (mock.patch("audiohub.mixer_control.change",
+                         side_effect=mixer_control.StaleMixerPreview("private-path")) as changed,
+              mock.patch("audiohub.mixer_control.preview_change",
+                         side_effect=mixer_control.MixerControlUnavailable("private-secret")) as preview):
+            with redirect_stdout(StringIO()) as stdout, redirect_stderr(StringIO()) as stderr:
+                with self.assertRaises(SystemExit) as caught:
+                    mixer_control.main([
+                        "--confirm-local-mixer-change", "--if-preview-revision",
+                        "v1-" + "a" * 64, "set-master", "20"
+                    ])
+            self.assertEqual(caught.exception.code, 4)
+            changed.assert_called_once()
+            preview.assert_called_once_with({"master": 20})
+        self.assertEqual(stdout.getvalue(), "")
+        self.assertIn("Fresh preview unavailable", stderr.getvalue())
+        self.assertNotIn("private-secret", stderr.getvalue())
+        self.assertNotIn("private-path", stderr.getvalue())
+
+    def test_invalid_revision_is_not_misreported_as_stale_preview(self):
+        with (mock.patch("audiohub.mixer_control.change",
+                         side_effect=mixer_control.MixerControlUnavailable("invalid revision")) as changed,
+              mock.patch("audiohub.mixer_control.preview_change") as preview):
+            with redirect_stdout(StringIO()) as stdout, redirect_stderr(StringIO()) as stderr:
+                with self.assertRaises(SystemExit) as caught:
+                    mixer_control.main([
+                        "--confirm-local-mixer-change", "--if-preview-revision",
+                        "v1-" + "x" * 64, "mute-all"
+                    ])
+            self.assertEqual(caught.exception.code, 2)
+            changed.assert_called_once()
+            preview.assert_not_called()
+        self.assertEqual(stdout.getvalue(), "")
+        self.assertIn("not changed or unavailable", stderr.getvalue())
+
+    def test_refresh_is_not_attempted_on_successful_guarded_change(self):
+        with (mock.patch("audiohub.mixer_control.change",
+                         return_value=defaults()) as changed,
+              mock.patch("audiohub.mixer_control.preview_change") as preview):
+            with redirect_stdout(StringIO()) as stdout:
+                mixer_control.main([
+                    "--confirm-local-mixer-change", "--if-preview-revision",
+                    "v1-" + "a" * 64, "set-volume", "music", "22"
+                ])
+            changed.assert_called_once_with(
+                {"music": {"volume": 22}},
+                confirmed=True, if_revision="v1-" + "a" * 64)
+            preview.assert_not_called()
+        self.assertNotIn("preview-stale", stdout.getvalue())
+
     def test_wait_for_supervisor_accepts_matching_complete_ack_without_sleep(self):
         saved = defaults()
         observed = {
