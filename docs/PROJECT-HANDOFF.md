@@ -1137,3 +1137,42 @@ operator/CEO release GO are NOT verified. Effective
 AGPL-3.0-only, 83 source rights and nine OS copyright
 gaps pending; Model C not approved. No install, flash,
 merge, deploy, payments, permissions or public release.
+
+
+## 2026-11-07: Draft PR89 — reject placeholder BlueZ MAC identities
+
+PAPA MissionPilot PAPA-18B8B3C6 / AH-003, AH-007, AH-009.
+New isolated Draft PR89 stacks only on unchanged PR88 HEAD
+00a5bfe014b2a1d263b15c0a57dbb3a10d911430. The manual source_routes.canonical_mac() explicitly
+rejected all-zero and all-FF Bluetooth MAC addresses, but
+PipeWire bluetooth_sources() and runtime auto routing accepted
+both as plausible uniquely identifying audio sources. Malformed
+or placeholder BlueZ metadata could therefore be misclassified
+as an eligible BT input; invalid previous auto-assignments
+could reserve a legitimate music/tablet slot. Discovery now
+rejects 00:00:00:00:00:00 and FF:FF:FF:FF:FF:FF after parsing
+a source name and BEFORE it can enter eligible source metadata.
+Runtime _usable_bluetooth_mac() applies the same exclusion
+to recovered auto assignments, newly detected sources and
+managed route admission. This is conservative identity hygiene,
+NOT proof of pairing, cryptographic sender identity, hardware,
+or permission to use a private LAN receiver. Three source
+regressions verify both placeholder addresses are not seen,
+neither can occupy a virtual slot or spawn a player, and a
+real eligible source remains routeable even with a stored
+placeholder. Installed-rootfs
+bluetooth_placeholder_mac_excluded_from_auto_routes gate plus
+synthetic/real positive and two adversarial tests. Native
+104/104 expected only after a completed exact-head ARM64 build.
+Parent PR88 Source #42321853667 SUCCESS 785/785, native
+#42321824435 still pending at creation (Workbench #3156).
+Parent PR87 Source #42321534345 SUCCESS 778/778, corrected
+native #42321528857 still pending at creation (Workbench #3155).
+First PR87 native #42319853661 FAILED false-negative audit;
+no legitimate native success or artifact claimed.
+All PRs Draft/unmerged, main untouched. Effective AGPL-3.0-only,
+83 source rights to review and nine missing OS copyright
+notice paths; proposed Model C unapproved. Pi4/Edifier
+3 simultaneous audible sources/2 A2DP/24h, authenticated
+owner-phone WiFi, and operator/legal/CEO release GO unverified.
+No install, flash, merge, deploy, payments, permissions or release.
