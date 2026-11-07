@@ -226,6 +226,32 @@
       ? tr(deviceHealth.usb_connected ? "speakerConnected" : "speakerDisconnected")
       : tr(statusChecked ? "speakerStatusUnavailable" : "speakerState");
   }
+  function renderRoutingSummary() {
+    // Only read the existing sanitized /api/status fields. A stale, missing
+    // or malformed snapshot must never display zero as a real measurement.
+    const bounds = [
+      ["active_routes", "routing-routes", 3],
+      ["bluetooth_sources", "routing-bluetooth", 2],
+      ["virtual_channel_count", "routing-channels", 3]
+    ];
+    const usable = deviceHealth && deviceHealth.fresh === true &&
+      typeof deviceHealth.usb_connected === "boolean" &&
+      bounds.every(([key, , limit]) => Number.isInteger(deviceHealth[key]) &&
+        deviceHealth[key] >= 0 && deviceHealth[key] <= limit);
+    for (const [key, id] of bounds) {
+      const node = byId(id);
+      if (node) {
+        const value = usable ? String(deviceHealth[key]) : "—";
+        if (node.textContent !== value) node.textContent = value;
+      }
+    }
+    const freshness = byId("routing-freshness");
+    if (freshness) {
+      const text = tr(usable ? "routingRecent" :
+        (statusChecked ? "routingUnavailable" : "routingPending"));
+      if (freshness.textContent !== text) freshness.textContent = text;
+    }
+  }
   async function readDeviceStatus() {
     // Only the most recent poll may update health or its visible state.
     const requestId = ++statusRequestId;
@@ -241,12 +267,14 @@
     }
     statusChecked = true;
     renderHardwareStatus();
+    renderRoutingSummary();
   }
   function translate() {
     document.querySelectorAll("[data-t]").forEach(node => { node.textContent = tr(node.dataset.t); });
     byId("master").setAttribute("aria-label", tr("master"));
     drawChannels();
     renderHardwareStatus();
+    renderRoutingSummary();
   }
   async function setLanguage(language) {
     // Late locale replies must not overwrite newer user choices.
