@@ -140,6 +140,14 @@ class RootfsAuditTests(unittest.TestCase):
             "not _private_state_shape_bounded(value)",
             "except (OSError, ValueError, TypeError, UnicodeError, RecursionError):",
             "def _private_parent_fd(path, *, create=False):",
+            "except FileNotFoundError:",
+            "if not create:",
+            "os.mkdir(part, 0o700, dir_fd=fd)",
+            "except FileExistsError:",
+            "next_fd = os.open(part, flags, dir_fd=fd)",
+            "os.O_DIRECTORY | os.O_NOFOLLOW",
+            "info.st_uid != os.geteuid()",
+            "stat.S_IMODE(info.st_mode) & 0o077",
             "os.O_NOFOLLOW", "os.O_NONBLOCK",
             "os.O_EXCL", "secrets.token_hex(12)",
             "stat.S_ISREG", "os.replace(name, path.name",
@@ -1612,6 +1620,31 @@ class RootfsAuditTests(unittest.TestCase):
             ))
             self.assertFalse(audit.inspect(root)["mixer_stored_controls_strict_schema"])
 
+
+
+    def test_private_runtime_directory_race_guard_installed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            self.assertTrue(audit.inspect(root)["runtime_private_directory_race_nofollow"])
+
+    def test_private_runtime_missing_concurrent_mkdir_catch_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            source = root / "opt/audiohub/src/audiohub/runtime.py"
+            source.write_text(source.read_text().replace(
+                "except FileExistsError:", "except FileNotFoundError:"
+            ))
+            self.assertFalse(audit.inspect(root)["runtime_private_directory_race_nofollow"])
+
+    def test_private_runtime_following_racing_symlink_blocks_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            source = root / "opt/audiohub/src/audiohub/runtime.py"
+            source.write_text(source.read_text().replace(
+                "next_fd = os.open(part, flags, dir_fd=fd)",
+                "next_fd = os.open(part, os.O_RDONLY, dir_fd=fd)"
+            ))
+            self.assertFalse(audit.inspect(root)["runtime_private_directory_race_nofollow"])
 
     def test_runtime_atomic_cleanup_guard_present(self):
         with tempfile.TemporaryDirectory() as tmp:
