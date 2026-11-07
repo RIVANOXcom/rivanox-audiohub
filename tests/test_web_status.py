@@ -513,7 +513,7 @@ class BoundedStatusHTTPResourceTests(unittest.TestCase):
 def preview_status_reader_source():
     """Extract the shipped status poller, not a duplicate test implementation."""
     source = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
-    start = source.index("  async function readDeviceStatus() {")
+    start = source.index("  function requestRoutingRecheck() {")
     end = source.index("\n  function translate()", start)
     return source[start:end]
 
@@ -527,6 +527,8 @@ class BrowserStatusPollOrderTests(unittest.TestCase):
         self.assertEqual(body.count("if (requestId !== statusRequestId) return;"), 2)
         self.assertIn('fetch("./api/status", {cache: "no-store"})', body)
         self.assertIn("renderHardwareStatus();", body)
+        self.assertIn("return readDeviceStatus();", body)
+        self.assertIn("now - lastManualStatusRequestAt < 2000", body)
 
     @unittest.skipUnless(shutil.which("node"), "Node.js runtime unavailable")
     def test_actual_status_poller_latest_response_wins_over_stale_success_and_error(self):
@@ -598,6 +600,77 @@ check().catch(e => {console.error(e); process.exitCode = 1;});
         result = subprocess.run(
             ["node", "-e", setup + "\n" + preview_status_reader_source() + "\n" + verify],
             capture_output=True, text=True, timeout=15, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+
+
+    @unittest.skipUnless(shutil.which("node"), "Node.js runtime unavailable")
+    def test_manual_status_recheck_uses_live_api_and_limits_rapid_clicks(self):
+        """Execute actual shipping on-demand check with the existing poller."""
+        setup = r'''
+const assert = require("node:assert/strict");
+let statusRequestId = 0;
+let deviceHealth = null;
+let statusChecked = false;
+let statusReceivedAt = null;
+let lastManualStatusRequestAt = -Infinity;
+let nowMs = 1000;
+const performance = {now: () => nowMs};
+const feedback = {textContent: ""};
+const byId = id => id === "routing-recheck-status" ? feedback : null;
+const tr = key => key === "routingRecheckRequested"
+  ? "Status recheck requested" : key;
+let rendered = 0;
+const renderHardwareStatus = () => {rendered++;};
+const renderRoutingSummary = () => {};
+const pending = [];
+const fetch = () => new Promise((resolve, reject) => pending.push({resolve, reject}));
+'''
+        verify = r'''
+async function check() {
+  const first = requestRoutingRecheck();
+  assert.equal(pending.length, 1);
+  assert.equal(feedback.textContent, "Status recheck requested");
+  assert.equal(requestRoutingRecheck(), undefined);
+  assert.equal(pending.length, 1);
+  pending[0].resolve({ok: true, json: async () =>
+    ({fresh: true, usb_connected: true})});
+  await first;
+  assert.equal(deviceHealth.usb_connected, true);
+  assert.equal(statusChecked, true);
+  assert.equal(statusReceivedAt, 1000);
+
+  // A new manual click after the throttle window gets a fresh request;
+  // network failure must not leave an old successful measurement visible.
+  nowMs = 3001;
+  const failed = requestRoutingRecheck();
+  assert.equal(pending.length, 2);
+  pending[1].reject(new Error("device disconnected"));
+  await failed;
+  assert.equal(deviceHealth, null);
+  assert.equal(statusReceivedAt, null);
+
+  // An overlapping scheduled poll still wins, regardless of which
+  // response finishes last.
+  nowMs = 5002;
+  const manual = requestRoutingRecheck();
+  const scheduled = readDeviceStatus();
+  assert.equal(pending.length, 4);
+  pending[3].resolve({ok: true, json: async () =>
+    ({fresh: true, usb_connected: false})});
+  await scheduled;
+  pending[2].resolve({ok: true, json: async () =>
+    ({fresh: true, usb_connected: true})});
+  await manual;
+  assert.equal(deviceHealth.usb_connected, false);
+  assert.equal(rendered > 0, true);
+}
+check().catch(e => {console.error(e); process.exitCode = 1;});
+'''
+        result = subprocess.run(
+            ["node", "-e", setup + "\n" + preview_status_reader_source() + "\n" + verify],
+            capture_output=True, text=True, timeout=15, check=False,
+        )
         self.assertEqual(result.returncode, 0, result.stderr)
 
 
@@ -741,6 +814,9 @@ class BrowserRoutingSummaryTests(unittest.TestCase):
         self.assertNotIn('method: "POST"', source)
         self.assertIn('role="status"', html)
         self.assertIn("Read-only device counts", html)
+        self.assertIn('id="routing-recheck"', html)
+        self.assertIn('id="routing-recheck-status" role="status"', html)
+        self.assertIn('byId("routing-recheck").addEventListener("click", requestRoutingRecheck);', source)
         self.assertIn('byId("routing-export").addEventListener("click", downloadRoutingDiagnostics);', source)
         for field in ("routing-observation-usb", "routing-observation-bluetooth",
                       "routing-observation-three", "routing-observation-dual-bt",
@@ -757,7 +833,8 @@ class BrowserRoutingSummaryTests(unittest.TestCase):
         keys = {
             "routingTitle", "routingNotice", "routingRoutes",
             "routingBluetooth", "routingChannels", "routingPending",
-            "routingRecent", "routingUnavailable", "routingDiagPending",
+            "routingRecent", "routingUnavailable", "routingRecheck",
+            "routingRecheckRequested", "routingDiagPending",
             "routingDiagUnavailable", "routingDiagUsbMissing",
             "routingDiagNoChannels", "routingDiagNoRoutes",
             "routingDiagNoBluetooth", "routingDiagCountsAvailable",
