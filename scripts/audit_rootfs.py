@@ -172,6 +172,28 @@ def inspect(root: Path) -> dict[str, bool]:
         )
     except OSError:
         checks["pipewire_node_identity_ambiguity_fails_closed"] = False
+    # Null or broadcast Bluetooth addresses are placeholders, not unique
+    # devices: reject them consistently in BlueZ discovery and auto routing.
+    try:
+        discovery = (source / "discovery.py").read_text()
+        runtime = (source / "runtime.py").read_text()
+        begin = discovery.index("def bluetooth_sources(nodes):")
+        end = discovery.index("def virtual_sinks(nodes):", begin)
+        bluetooth = discovery[begin:end]
+        checks["bluetooth_placeholder_mac_excluded_from_auto_routes"] = all(
+            marker in bluetooth for marker in (
+                'if name_mac in ("00:00:00:00:00:00", "FF:FF:FF:FF:FF:FF"):',
+                "continue",
+            )
+        ) and all(marker in runtime for marker in (
+            "def _usable_bluetooth_mac(value):",
+            "value not in _RESERVED_BLUETOOTH_MACS",
+            "if _usable_bluetooth_mac(address)",
+            "not _usable_bluetooth_mac(address)",
+            "if (_usable_bluetooth_mac(address)",
+        ))
+    except (OSError, ValueError):
+        checks["bluetooth_placeholder_mac_excluded_from_auto_routes"] = False
     # Contradictory BlueZ identity metadata must not silently select one
     # sender MAC and admit a different physical source for audio capture.
     try:
