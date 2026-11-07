@@ -966,3 +966,34 @@ secure authenticated phone WiFi, legal or operator/CEO release GO.
 effective AGPL-3.0-only, Model C unapproved. All PRs Draft and
 unmerged; no flash, installation, permission changes, deploy,
 payments, merge or release.
+
+
+## 2026-11-07: Draft PR85 — reject unknown persisted mixer keys
+
+PAPA MissionPilot PAPA-18B8B3C6 / AH-003, AH-007. Isolated
+Draft PR85 stacks solely on unchanged PR84 HEAD 8ccb75a93825bca7930c84121fd3057689fec49f.
+Previously mixer.patch_settings() rejected unknown top-level/channel
+keys in new patches but did not check them in already persisted
+current settings before result[name].update(value). Unexpected
+stored JSON keys could be silently propagated. Now new and stored
+mixer settings follow the same explicit closed master/three-source
+schema; unexpected top-level or channel fields raise ValueError
+before commands. Partial legacy settings remain accepted with
+defaults filled. Three source tests cover unexpected saved
+top-level fields, unexpected saved per-input fields even when a
+valid new patch is present, and valid partial saved state.
+Installed image rootfs guard mixer_stored_controls_strict_schema
+adds positive and two negative synthetic tests; target 100/100
+native only after exact-head independent ARM64 success.
+Parent PR84 Source #42316717527 SUCCESS 758/758, native ARM64
+#42316686826 was pending when branch created; no artifacts claimed.
+Earlier PR83 Source #42315477578 SUCCESS 751/751 and native
+#42315438859 SUCCESS actual 98/98, compressed image SHA256
+bddc0484080a8746774bec56b7210311a57b4df8d4ec44fe3c384a3ff5709283,
+temporary GitHub alpha test ZIP #13550717341 SHA256
+7b77c308e3a772719e2351808b956d8ac9fa45a42f87bf435dcf20bbd04fc29e.
+No Pi4 Edifier audible 3-way/two A2DP/24h, authenticated phone
+owner WiFi, human/legal/CEO release GO; 83 source rights and
+nine OS notices remain, effective AGPL-3.0-only, Model C unapproved.
+All PRs Draft/unmerged; no flashing/install, merge, deploy,
+payments, permissions change or official release.
