@@ -19,6 +19,7 @@ import stat
 import time
 
 from .mixer import CHANNELS
+from .process_capture import bounded_command_output
 
 SCHEMA = "audiohub-source-routes/1"
 FILENAME = "source-routes.json"
@@ -484,12 +485,96 @@ def read_source_report(*, path=None, now=None):
 
 
 
+
+def _bluez_connected_property(output, address):
+    """Accept only the uniquely identified BlueZ device Connected=yes/no.
+
+    Ignore all peer names; fail closed on ambiguous devices, duplicate flags,
+    malformed output or control bytes. Never echo raw BlueZ output.
+    """
+    if type(output) is not str or not 0 < len(output) <= 4096:
+        return None
+    if any(ord(char) < 32 and char not in (chr(10), chr(13), chr(9)) for char in output):
+        return None
+    header = "Device " + canonical_mac(address)
+    matches = 0
+    flags = []
+    for line in output.splitlines():
+        item = line.strip()
+        if item.startswith("Device "):
+            if item == header or item.startswith(header + " "):
+                matches += 1
+            else:
+                return None
+        elif item.startswith("Connected:"):
+            value = item[len("Connected:"):].strip()
+            if value not in ("yes", "no"):
+                return None
+            flags.append(value == "yes")
+    return flags[0] if matches == 1 and len(flags) == 1 else None
+
+
+def probe_bluez_connections(*, directory=None, status_path=None, now=None):
+    """Opt-in read-only local BlueZ device property for manual BT slots.
+
+    BlueZ Connected=true proves a local BlueZ property ONLY, not A2DP
+    streaming, decoded audio, owner authentication or audible playback.
+    """
+    report = read_source_report(path=status_path, now=now)
+    report["bluez_probe"] = "not_attempted"
+    for slot in CHANNELS:
+        report["inputs"][slot]["bluez_connected_property"] = None
+    if not report["observations_available"]:
+        report["bluez_probe"] = "runtime_evidence_unavailable"
+        return report
+    directory = Path(directory) if directory is not None else (
+        Path.home() / ".config" / "audiohub")
+    try:
+        fd = _private_dir(directory, create=False)
+    except (OSError, ValueError):
+        report["bluez_probe"] = "policy_unavailable"
+        return report
+    try:
+        plan, revision = _stable_policy(fd)
+        if plan["mode"] != "manual":
+            report["bluez_probe"] = "automatic_assignments_not_probed"
+            return report
+        slots = {slot for slot in CHANNELS
+                 if report["inputs"][slot]["configured_role"] == "bluetooth_assigned"}
+        if (set(plan["bluetooth"].values()) != slots
+                or report["inputs"][plan["lan_slot"]]["configured_role"] != "lan_reserved"):
+            report["bluez_probe"] = "runtime_policy_mismatch"
+            return report
+        pending = {}
+        for address, slot in sorted(plan["bluetooth"].items()):
+            result = bounded_command_output(
+                ("bluetoothctl", "info", address), timeout=3, max_bytes=4096)
+            pending[slot] = (
+                _bluez_connected_property(result.stdout, address)
+                if result is not None and result.returncode == 0 else None
+            )
+        new_plan, new_revision = _stable_policy(fd)
+        if new_revision != revision or new_plan != plan:
+            report["bluez_probe"] = "policy_changed_during_probe"
+            return report
+        for slot, value in pending.items():
+            report["inputs"][slot]["bluez_connected_property"] = value
+        report["bluez_probe"] = "manual_assignments_queried"
+    except (OSError, ValueError, TypeError, UnicodeError):
+        report["bluez_probe"] = "policy_unavailable"
+    finally:
+        os.close(fd)
+    return report
+
+
 def main(argv=None):
     import argparse
     parser = argparse.ArgumentParser(
         description="Local-only AudioHub lab routing; not owner onboarding or Bluetooth trust")
     parser.add_argument("--preview", action="store_true",
                         help="Preview a routing change without writing policy or devices")
+    parser.add_argument("--probe-bluetooth", action="store_true",
+                        help="Status only: read manual BlueZ connection property, never connect or pair")
     parser.add_argument("--confirm-local-route-change", action="store_true",
                         help="Explicitly approve a revision-guarded local routing policy change")
     parser.add_argument("--if-preview-revision", metavar="REV",
@@ -512,13 +597,17 @@ def main(argv=None):
     try:
         if args.action in ("show", "slots", "status"):
             if (args.preview or args.confirm_local_route_change
-                    or args.if_preview_revision is not None):
+                    or args.if_preview_revision is not None
+                    or (args.probe_bluetooth and args.action != "status")):
                 raise ValueError("Status-only actions do not accept route changes")
             if args.action == "status":
-                value = read_source_report()
+                value = (probe_bluez_connections() if args.probe_bluetooth
+                         else read_source_report())
             else:
                 value = load() if args.action == "show" else route_slots()
         else:
+            if args.probe_bluetooth:
+                raise ValueError("BlueZ inspection is only permitted on read-only status")
             target = (args.slot if args.action == "set-lan" else
                       args.value if args.action == "mode" else args.address)
             slot = args.slot if args.action == "bind-bt" else None

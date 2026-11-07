@@ -478,6 +478,9 @@ PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes show
 # New: LOCAL runtime evidence per mixer input, no identity, no writes:
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes status
 
+# Optional read-only BlueZ connection-property check of manual Bluetooth slots:
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes --probe-bluetooth status
+
 # New: read-only reservation map. Shows free inputs, not connected devices:
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes slots
 
@@ -529,6 +532,37 @@ node IDs, SSID, peer names, passwords or raw PipeWire records. It is
 **not** added to the anonymous HTTP status API, and it creates no
 files, locks, processes, Bluetooth pairing or network connections.
 `source_routes status` rejects all change/approval/preview flags.
+For additional **actual BlueZ link-state evidence**, an operator may
+explicitly run `python3 -m audiohub.source_routes --probe-bluetooth status`
+on the authorized local machine. Unlike the default status command,
+this uses an **on-demand**, bounded `bluetoothctl info ADDRESS` call
+(maximum two manually assigned devices, 3 seconds each, 4096 bytes
+output, argv-only subprocess, discarded stderr, no shell), strictly
+extracting one matching BlueZ Device header and exactly one
+`Connected: yes/no` property. Input addresses come only from
+the existing private validated manual routing policy; **they are
+never included in the JSON output, journal logs or HTTP API**.
+Each manually assigned slot receives
+`bluez_connected_property=true/false/null`; null means missing
+or ambiguous connection evidence. Even `true` means only
+BlueZ's local device Connected property was yes at query time,
+**not** that A2DP audio was streaming, PipeWire delivered PCM,
+the speaker was audible, or the device is owner-trusted. Accordingly
+`bluetooth_connected`, `audio_stream_available`, and
+`audible_playback` remain explicitly `unverified`.
+
+This optional query is **not** run by the supervisor or default
+`status`, and cannot pair, scan, connect, trust, change policy,
+unmute or save anything. The flag is refused for all commands except
+`status`; no query runs if the last runtime snapshot is stale,
+unavailable or inconsistent, the policy uses auto discovery, or
+manual assignments differ from the runtime snapshot. Private policy
+replacement during the probe invalidates all readings (including
+same-content ABA replacements). It is deliberately opt-in so
+unavailable BlueZ devices do not delay normal source routing.
+Owner enrollment, actual A2DP playback and acoustic/USB hardware
+acceptance remain separate release gates.
+
 A free slot in `source_routes slots` is still only a
 reservation-policy fact. Actual Bluetooth connection and PCM delivery
 need separate device-specific hardware evidence before release.
