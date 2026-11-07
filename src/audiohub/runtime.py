@@ -19,7 +19,7 @@ from pathlib import Path
 from .discovery import bluetooth_sources, choose_usb_output, pipewire_nodes, virtual_sinks
 from .audio_graph import summarize_links
 from .process_capture import bounded_command_output
-from .mixer import CHANNELS, defaults, effective_master_gain, patch_settings, volume_commands
+from .mixer import CHANNELS, defaults, effective_master_gain, patch_settings, requested_mix_controls, volume_commands
 from .source_routes import defaults as default_routes, load as load_routes
 
 CONFIG = Path.home() / ".config" / "audiohub"
@@ -466,8 +466,17 @@ class Supervisor:
         self.settings = state
         self._route(sources if self.route_policy_valid else [],
                     sinks if (usb_ready and self.route_policy_valid) else {})
+        # Acknowledgement requires a selected USB output, all three virtual
+        # inputs, and successful return codes for every wpctl mixer command.
+        # This is NOT measurement of hardware output, latency, EQ, or sound.
+        commands_accepted = (
+            requested_mix_controls(state)
+            if usb_ready and all("audiohub." + c in sinks for c in CHANNELS)
+            else None
+        )
         atomic_json(STATE, {
             "usb_output": bool(output),
+            "mixer_controls_accepted": commands_accepted,
             "usb_route_ready": usb_ready,
             # Positive graph evidence only. Missing direct links may reflect
             # PipeWire intermediary adapter nodes, never prove audio absence.

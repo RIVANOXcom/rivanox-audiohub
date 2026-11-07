@@ -83,6 +83,23 @@ def patch_settings(current, patch):
     return result
 
 
+def requested_mix_controls(settings):
+    """Return bounded local levels/mutes only; never claim audible output.
+
+    EQ is intentionally excluded: the currently installed filter-chain EQ is
+    not dynamically reconfigured by the local mixer control interface.
+    """
+    valid = patch_settings(defaults(), settings)
+    return {
+        "master": valid["master"],
+        **{
+            channel: {"volume": valid[channel]["volume"],
+                      "mute": valid[channel]["mute"]}
+            for channel in CHANNELS
+        },
+    }
+
+
 def pipewire_filter_config(settings):
     """Render three stereo virtual sinks (requires actual PipeWire validation)."""
     settings = patch_settings(defaults(), settings)

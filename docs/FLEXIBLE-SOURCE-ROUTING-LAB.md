@@ -44,6 +44,9 @@ change is introduced:
 # Read only; does not create or change a file:
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control show
 
+# Read-only: requested levels vs recent, complete supervisor command acknowledgement:
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control status
+
 # Each mutation needs an explicit flag and a separate console invocation:
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-mixer-change set-master 20
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-mixer-change set-volume music 35
@@ -70,6 +73,17 @@ invalid number or unsafe existing state rejects the entire request;
 it never resets settings as a fallback. The existing supervisor observes
 the new settings on a later poll (normally every five seconds) and
 retains its existing fail-closed gain controls.
+
+The read-only `status` command compares private saved master/input
+level/mute settings against the last **successful set of PipeWire control
+commands**, provided the supervisor reported a unique USB output, all three
+EQ sinks and a complete recent poll (15 seconds or less). It reports
+`accepted`, `pending` or `unavailable`, never equates status with
+measured volume or audible sound. A missing/stale/unsafe/legacy supervisor
+snapshot is **unavailable**, not success. The comparison stays entirely on
+the unprivileged local console, writes nothing, returns no MAC/SSID/device
+identity and adds no public web API; `audible_playback_verified` remains
+false regardless of command outcome.
 
 These controls change **requested software volume and mute**, not the
 physical speaker amplifier or measured sound pressure. Keep physical

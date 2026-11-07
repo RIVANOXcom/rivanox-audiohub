@@ -13,7 +13,8 @@ from io import StringIO
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from audiohub import mixer_control
-from audiohub.mixer import defaults
+from audiohub.mixer import defaults, requested_mix_controls
+from audiohub import runtime
 
 
 class LocalMixerControlsTests(unittest.TestCase):
@@ -210,6 +211,124 @@ class LocalMixerControlsTests(unittest.TestCase):
                     "--confirm-local-mixer-change", "set-mix", "20", "15", "35"
                 ])
             change.assert_not_called()
+
+    def test_local_application_status_accepts_only_current_complete_ack(self):
+        runtime_path = self.root / "runtime" / "status.json"
+        expected = requested_mix_controls(defaults())
+        self.assertEqual(mixer_control.application_status(
+            path=self.settings, runtime_path=runtime_path, now=1000
+        )["supervisor"], "unavailable")
+        runtime.atomic_json(runtime_path, {
+            "updated_at": 995, "usb_route_ready": True,
+            "mixer_controls_accepted": expected,
+        })
+        accepted = mixer_control.application_status(
+            path=self.settings, runtime_path=runtime_path, now=1000
+        )
+        self.assertEqual(accepted["supervisor"], "accepted")
+        self.assertFalse(accepted["audible_playback_verified"])
+        self.assertEqual(accepted["requested"], expected)
+        self.assertFalse(self.settings.exists())  # status is read-only
+        mixer_control.change({"master": 30}, path=self.settings, confirmed=True)
+        pending = mixer_control.application_status(
+            path=self.settings, runtime_path=runtime_path, now=1000
+        )
+        self.assertEqual(pending["supervisor"], "pending")
+        self.assertEqual(pending["requested"]["master"], 30)
+        self.assertFalse(pending["audible_playback_verified"])
+
+    def test_local_status_refuses_stale_untrusted_or_incomplete_claim(self):
+        runtime_path = self.root / "runtime" / "status.json"
+        expected = requested_mix_controls(defaults())
+        snapshot = {"updated_at": 1000, "usb_route_ready": True,
+                    "mixer_controls_accepted": expected}
+        def check(status, now=1000):
+            runtime.atomic_json(runtime_path, status)
+            return mixer_control.application_status(
+                path=self.settings, runtime_path=runtime_path, now=now
+            )["supervisor"]
+        self.assertEqual(check(snapshot), "accepted")
+        self.assertEqual(check(snapshot, now=1016), "unavailable")
+        self.assertEqual(check(snapshot, now=999), "unavailable")
+        self.assertEqual(check({**snapshot, "updated_at": True}), "unavailable")
+        self.assertEqual(check({**snapshot, "usb_route_ready": False}), "unavailable")
+        self.assertEqual(check({**snapshot, "mixer_controls_accepted": None}), "unavailable")
+        self.assertEqual(check({
+            **snapshot, "mixer_controls_accepted": {"master": 70}
+        }), "unavailable")
+        # bool compares equal to 1 in Python: never accept type confusion.
+        forged = dict(expected)
+        forged["master"] = True
+        self.assertEqual(check({
+            **snapshot, "mixer_controls_accepted": forged
+        }), "unavailable")
+        target = self.root / "untrusted-status.json"
+        target.write_text(json.dumps(snapshot))
+        runtime_path.unlink()
+        runtime_path.symlink_to(target)
+        self.assertEqual(mixer_control.application_status(
+            path=self.settings, runtime_path=runtime_path, now=1000
+        )["supervisor"], "unavailable")
+
+    def test_local_status_cli_does_not_mutate_or_claim_audio_proof(self):
+        payload = {"requested": requested_mix_controls(defaults()),
+                   "supervisor": "accepted", "audible_playback_verified": False}
+        with mock.patch("audiohub.mixer_control.application_status",
+                        return_value=payload) as status:
+            with mock.patch("audiohub.mixer_control.change") as change:
+                with redirect_stdout(StringIO()) as stdout:
+                    mixer_control.main(["status"])
+                self.assertIn('"supervisor": "accepted"', stdout.getvalue())
+                self.assertIn("no hardware audio was measured", stdout.getvalue())
+                status.assert_called_once_with()
+                change.assert_not_called()
+
+    def test_supervisor_ack_requires_usb_and_all_three_eq_sinks(self):
+        from types import SimpleNamespace
+        supervisor = object.__new__(runtime.Supervisor)
+        supervisor.settings = defaults()
+        supervisor.route_plan = runtime.default_routes()
+        supervisor.assignments = {}
+        supervisor.loopbacks = {}
+        supervisor.retry_state = {}
+        supervisor.route_failures_total = 0
+        supervisor.output_switch_failures = 0
+        self.assertIsNotNone(requested_mix_controls(defaults()))
+        graph = {"links_inspected": True,
+                 "eq_output_to_usb_direct_link": {c: False for c in ("music", "laptop", "tablet")}}
+        captured = []
+        ids = {"audiohub.music": 11, "audiohub.laptop": 12, "audiohub.tablet": 13}
+        result = SimpleNamespace(returncode=0, stdout=b"[]")
+        with (mock.patch("audiohub.runtime.run", return_value=result) as pipe,
+              mock.patch("audiohub.runtime.pipewire_nodes", return_value=[]),
+              mock.patch("audiohub.runtime.summarize_links", return_value=graph),
+              mock.patch("audiohub.runtime.choose_usb_output", return_value={"id": 99}),
+              mock.patch("audiohub.runtime.bluetooth_sources", return_value=[]),
+              mock.patch("audiohub.runtime.virtual_sinks", return_value=ids),
+              mock.patch("audiohub.runtime.load_routes", return_value=runtime.default_routes()),
+              mock.patch("audiohub.runtime.read_json", return_value=defaults()),
+              mock.patch("audiohub.runtime.atomic_json", side_effect=lambda p, s: captured.append(s)),
+              mock.patch.object(supervisor, "_route")):
+            supervisor.poll()
+            self.assertEqual(captured[-1]["mixer_controls_accepted"],
+                             requested_mix_controls(defaults()))
+            self.assertTrue(captured[-1]["usb_route_ready"])
+            self.assertTrue(any(x.args[0] == "wpctl" for x in pipe.call_args_list))
+        captured.clear()
+        with (mock.patch("audiohub.runtime.run", return_value=result),
+              mock.patch("audiohub.runtime.pipewire_nodes", return_value=[]),
+              mock.patch("audiohub.runtime.summarize_links", return_value=graph),
+              mock.patch("audiohub.runtime.choose_usb_output", return_value={"id": 99}),
+              mock.patch("audiohub.runtime.bluetooth_sources", return_value=[]),
+              mock.patch("audiohub.runtime.virtual_sinks", return_value={
+                  "audiohub.music": 11, "audiohub.laptop": 12,
+              }),
+              mock.patch("audiohub.runtime.load_routes", return_value=runtime.default_routes()),
+              mock.patch("audiohub.runtime.read_json", return_value=defaults()),
+              mock.patch("audiohub.runtime.atomic_json", side_effect=lambda p, s: captured.append(s)),
+              mock.patch.object(supervisor, "_route")):
+            supervisor.poll()
+        self.assertIsNone(captured[-1]["mixer_controls_accepted"])
 
     def test_computed_supervisor_commands_reflect_saved_levels_and_mutes(self):
         from audiohub.mixer import volume_commands
