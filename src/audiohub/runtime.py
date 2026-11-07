@@ -199,13 +199,18 @@ def atomic_json(path, data):
         os.replace(name, path.name, src_dir_fd=dirfd, dst_dir_fd=dirfd)
         os.fsync(dirfd)
     finally:
-        if tmpfd is not None:
-            os.close(tmpfd)
         try:
-            os.unlink(name, dir_fd=dirfd)
-        except FileNotFoundError:
-            pass
-        os.close(dirfd)
+            if tmpfd is not None:
+                os.close(tmpfd)
+        finally:
+            try:
+                os.unlink(name, dir_fd=dirfd)
+            except OSError:
+                # Cleanup is best-effort: preserve the primary write failure.
+                # A removed temp file is already gone after successful replace.
+                pass
+            finally:
+                os.close(dirfd)
 
 
 def backoff_seconds(failures):
