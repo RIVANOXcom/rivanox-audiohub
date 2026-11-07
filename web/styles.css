@@ -40,3 +40,13 @@
 .routing-export:hover{background:#294c73}
 .routing-export:focus-visible{outline:3px solid #d8a1ff;outline-offset:3px}
 #routing-export-status{color:#c6d9f0;font-size:.82rem;line-height:1.45}
+
+/* Explicit manual observations for offline alpha testing; not device proof. */
+.routing-observations{margin:18px 0 0;padding:14px 16px;border:1px solid #436588;border-radius:12px;min-width:0}
+.routing-observations legend{padding:0 8px;font-weight:650;color:#f3f7ff}
+#routing-observations-note{color:#bfcee3;font-size:.82rem;line-height:1.5;margin:0 0 12px}
+.routing-observation-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.routing-observation-grid label{display:flex;flex-direction:column;gap:8px;color:#dae7fa;font-size:.83rem;min-width:0}
+.routing-observation-grid select{font:inherit;min-width:0;width:100%;min-height:44px;border:1px solid #7b9bbf;border-radius:8px;background:#0c1d35;color:#f3f7ff;padding:8px}
+.routing-observation-grid select:focus-visible{outline:2px solid #d8a1ff;outline-offset:3px}
+@media(max-width:700px){.routing-observation-grid{grid-template-columns:1fr}}
