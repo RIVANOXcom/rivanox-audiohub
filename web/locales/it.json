@@ -14,6 +14,8 @@
   "routingPending": "In attesa del primo controllo",
   "routingRecent": "Stato recuperato negli ultimi 15 secondi",
   "routingUnavailable": "Stato dell'instradamento non disponibile",
+  "routingRecheck": "Ricontrolla ora lo stato del dispositivo",
+  "routingRecheckRequested": "Nuova verifica richiesta. Controlla lo stato attuale qui sopra.",
   "routingDiagPending": "I suggerimenti diagnostici appariranno dopo il primo controllo.",
   "routingDiagUnavailable": "Nessun rapporto recente. Verifica che il servizio di stato locale di AudioHub sia attivo.",
   "routingDiagUsbMissing": "Altoparlanti USB non rilevati. Controlla la connessione USB al Raspberry Pi.",
