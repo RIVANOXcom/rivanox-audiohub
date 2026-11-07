@@ -686,6 +686,21 @@ def inspect(root: Path) -> dict[str, bool]:
         )
     except OSError:
         checks["mixer_stored_controls_strict_schema"] = False
+    # Best-effort temporary-state cleanup must never turn a failed
+    # atomic write into an unclosed private directory descriptor.
+    try:
+        runtime = (source / "runtime.py").read_text()
+        checks["runtime_atomic_cleanup_preserves_error_and_closes_fd"] = all(
+            token in runtime for token in (
+                "def atomic_json(path, data):",
+                "except OSError:",
+                "os.unlink(name, dir_fd=dirfd)",
+                "finally:\n                os.close(dirfd)",
+                "if tmpfd is not None:",
+            )
+        )
+    except OSError:
+        checks["runtime_atomic_cleanup_preserves_error_and_closes_fd"] = False
     # User-owned mixer JSON can contain a large integer within the bounded
     # JSON file: it must raise ValueError, never math.isfinite(int) OverflowError.
     try:
