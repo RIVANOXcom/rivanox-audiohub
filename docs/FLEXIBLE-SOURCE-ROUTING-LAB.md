@@ -77,6 +77,11 @@ PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-m
 # One atomic update to master, then music, laptop and tablet levels:
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-mixer-change set-mix 20 35 25 0
 
+# Compare one saved profile against the CURRENT requested (not audible) mixer levels:
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control compare-profile-current cinema
+# JSON: saved_volumes, current_volumes, changed fields with signed delta
+# (current minus saved), profile_revision and mixer_revision. Read-only.
+
 # Compare two existing saved profiles directly, no confirmation and NO writes:
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control compare-profiles cinema cinema-alt
 # JSON shows all four values side by side, plus only differences and signed
@@ -115,6 +120,29 @@ PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-m
 # COMPLETE PipeWire supervisor command acknowledgement (NOT measured audio):
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-mixer-change --wait-for-supervisor set-mix 20 35 25 0
 ```
+
+To compare one stored profile with the **currently requested local
+mixer settings** without activating or rewriting anything, run
+`compare-profile-current NAME`. The command reports the saved and
+current requested master/music/laptop/tablet percentages and a
+fixed-order `differences` list for changed fields only. Each entry
+has `control`, `saved`, `current` and signed `delta` equal to
+current minus saved; `same_levels=true` with an empty list means
+the two requested four-value configurations match. Both
+`profile_revision=p1-...` and `mixer_revision=v1-...` indicate
+which source generations were read, **not** a physical speaker or
+PipeWire measurement. The command checks both files before and after
+reading the validated catalogs/settings and refuses a concurrent
+replacement of either one, including same-content (ABA) replacements.
+A missing mixer settings file is compared against the documented
+default requested values, never interpreted as live audio.
+This operation neither creates files or locks, nor saves settings,
+unmutes an input, adjusts stored EQ, applies a profile or changes a
+profile. No confirmation flags, `--preview` or version-guard
+mutation flags are accepted for this read-only comparison.
+Use the existing separate `--preview profile NAME` and confirmed
+guarded `profile NAME` commands only if you intentionally want
+to activate the stored requested volume levels.
 
 To compare two existing saved profiles without changing anything, run
 `compare-profiles FIRST SECOND`. This read-only command validates and
