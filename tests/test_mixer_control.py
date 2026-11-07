@@ -313,7 +313,7 @@ class LocalMixerControlsTests(unittest.TestCase):
             self.assertEqual(captured[-1]["mixer_controls_accepted"],
                              requested_mix_controls(defaults()))
             self.assertTrue(captured[-1]["usb_route_ready"])
-            self.assertTrue(any(x.args[0][0] == "wpctl" for x in pipe.call_args_list))
+            self.assertTrue(any(x.args[0] == "wpctl" for x in pipe.call_args_list))
         captured.clear()
         with (mock.patch("audiohub.runtime.run", return_value=result),
               mock.patch("audiohub.runtime.pipewire_nodes", return_value=[]),
