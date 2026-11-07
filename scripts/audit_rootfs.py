@@ -705,7 +705,7 @@ def inspect(root: Path) -> dict[str, bool]:
                 "info.st_uid != os.geteuid()",
                 "stat.S_IMODE(info.st_mode) & 0o077",
             )
-        ) and opener.index("except FileExistsError:") < opener.index(
+        ) and opener.index("except FileExistsError:") < opener.rindex(
             "next_fd = os.open(part, flags, dir_fd=fd)"
         )
     except (OSError, ValueError):
