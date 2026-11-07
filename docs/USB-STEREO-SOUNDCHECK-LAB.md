@@ -38,6 +38,38 @@ a supported local user session as `audiohub` first. Do not execute as root,
 expose this command via HTTP, add it to first boot or install a privileged
 service for it.
 
+## Optional EQ-input isolation test (still manual)
+
+After an authorized operator has checked the **direct USB** left/right
+signal, they can ask whether the same quiet pattern passes through exactly
+one of the three virtual AudioHub EQ inputs. This adds no pairing or UDP
+receiver requirement and does not change any PipeWire setting.
+
+Choose exactly **one** internal slot per invocation (these technical names
+are not fixed consumer device categories):
+
+```sh
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.usb_soundcheck --confirm-isolated-usb-test --through-input music
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.usb_soundcheck --confirm-isolated-usb-test --through-input laptop
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.usb_soundcheck --confirm-isolated-usb-test --through-input tablet
+```
+
+Each command requires its own explicit operator action. The code checks
+the live bounded PipeWire graph, insists on the selected `audiohub.<slot>`
+virtual sink and its unique filter playback node, and **requires an
+observed direct Link from that filter output to the same USB speaker**.
+If a direct link cannot be observed, or a second destination such as
+HDMI appears, it **refuses to send PCM**. Actual PipeWire installations
+may use intermediate adapter nodes instead of such a direct link, so a
+rejection is **inconclusive**, not proof that the real output is broken.
+No privileged `wpctl` changes or default-sink fallback are attempted.
+
+The tests are **one input at a time**; they do NOT demonstrate
+simultaneous three-way mixing, correct EQ response, safe clipping,
+Bluetooth capture or human-audible sound. Record actual L/R observations
+and any rejected step separately; never treat the process exit status as
+an automatic hardware acceptance or release permission.
+
 ## Exactly what it does
 
 - Executes one bounded, local `pw-dump` inspection and accepts only a
