@@ -48,9 +48,15 @@ PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control show
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control status
 
 # Preview WITHOUT storing a change, creating a lock or applying any audio:
+# The JSON now includes an opaque "revision": "v1-<64 lowercase hex digits>".
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --preview mute-all
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --preview unmute-selected music laptop
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --preview set-mix 20 35 25 0
+
+# After inspecting the JSON preview, COPY its exact revision into the next
+# explicitly confirmed command. If any settings changed meanwhile, this
+# request FAILS CLOSED (no mixer settings are rewritten):
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-mixer-change --if-preview-revision v1-REPLACE-WITH-64-HEX-CHARS set-master 20
 
 # Each mutation needs an explicit flag and a separate console invocation:
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-mixer-change set-master 20
@@ -84,10 +90,23 @@ created when settings do not yet exist. Corrupt, unsafe or symlinked
 existing settings refuse the preview instead of silently replacing
 them. `--preview` refuses an accompanying change-confirmation flag,
 and it is invalid for read-only `show` and `status` commands.
-A preview is NOT reserved: another local writer may change the
-settings before the operator separately runs a confirmed command.
-Always inspect current controls again before deciding. No network
-API or actual hardware verification is added.
+A preview now also returns an opaque version token `revision` prefixed
+`v1-`, derived from the entire validated settings snapshot **including
+EQ** and its private file generation. The operator may copy that token
+into the next confirmed command using `--if-preview-revision REV`.
+Only an exact matching revision is accepted under the existing exclusive
+writer lock: any intervening settings change (including EQ alone or
+A→B→A return to the same values) rejects the entire write rather than
+silently overwriting someone else's settings. Two competing conditional
+writers cannot both commit from the same snapshot. Missing settings may
+be previewed without creating any directory or lock; its revision also
+works for the first confirmed update. A preview is NOT a reservation;
+the token is a one-use generation comparison, not an authentication
+credential. Never combine `--if-preview-revision` with `--preview`,
+`show` or `status`, and explicit `--confirm-local-mixer-change` remains
+mandatory. If the guarded change fails, re-run `--preview` and decide
+again; never force an older token. No network API or actual hardware
+verification is added.
 
 The three names `music`, `laptop` and `tablet` are internal stable input
 slots, **not** fixed categories of physical device. All levels are

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import fcntl
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -107,15 +108,62 @@ def application_status(*, path=SETTINGS, runtime_path=STATE, now=None):
             "audible_playback_verified": False}
 
 
+def _state_identity(path, dirfd):
+    """Stat one private regular file, without traversing a symlink."""
+    try:
+        st = os.stat(path.name, dir_fd=dirfd, follow_symlinks=False)
+    except FileNotFoundError:
+        return None
+    if (not stat.S_ISREG(st.st_mode) or st.st_nlink != 1
+            or st.st_uid != os.geteuid()
+            or stat.S_IMODE(st.st_mode) & 0o077):
+        raise MixerControlUnavailable("Unsafe private mixer settings file")
+    return (st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns, st.st_ctime_ns)
+
+
+def _state_with_revision(path, dirfd):
+    """Read validated settings from one stable file generation, no writes.
+
+    Atomic CLI replacements change inode identity even if values return to
+    their original state (A -> B -> A). Reject a concurrent change during
+    the read, rather than issuing a revision from mismatched snapshots.
+    """
+    before = _state_identity(path, dirfd)
+    current = _existing_state(path, dirfd)
+    if before != _state_identity(path, dirfd):
+        raise MixerControlUnavailable("Private mixer settings changed during read")
+    data = json.dumps({"identity": before, "settings": current},
+                      sort_keys=True, separators=(",", ":"), allow_nan=False)
+    return current, "v1-" + hashlib.sha256(data.encode("utf-8")).hexdigest()
+
+
+def _preview_snapshot(*, path=SETTINGS):
+    """Read a preview generation without creating directories or lock files."""
+    if os.geteuid() == 0:
+        raise MixerControlUnavailable("Use the unprivileged audiohub account")
+    path = Path(path)
+    try:
+        dirfd = _private_parent_fd(path, create=False)
+    except FileNotFoundError:
+        # A never-initialized mixer still has a deterministic preview version.
+        raw = json.dumps({"identity": None, "settings": defaults()},
+                         sort_keys=True, separators=(",", ":"), allow_nan=False)
+        return defaults(), "v1-" + hashlib.sha256(raw.encode("utf-8")).hexdigest()
+    try:
+        return _state_with_revision(path, dirfd)
+    finally:
+        os.close(dirfd)
+
+
 def preview_change(patch, *, path=SETTINGS):
     """Show a validated prospective request; no lock, write, or audio action.
 
-    A preview is a snapshot rather than a reservation: another local writer
-    may save different settings before an independently confirmed action.
+    The returned opaque revision may be passed to an independently confirmed
+    change, which compares it UNDER the existing exclusive writer lock.
     Return only known volume/mute fields, never private routes or IDs.
     """
     try:
-        current = show(path=path)
+        current, revision = _preview_snapshot(path=path)
         before = requested_mix_controls(current)
         after = requested_mix_controls(patch_settings(current, patch))
     except (TypeError, ValueError):
@@ -129,6 +177,7 @@ def preview_change(patch, *, path=SETTINGS):
                 changes.append(slot + "." + field)
     return {
         "mode": "preview-only",
+        "revision": revision,
         "before": before,
         "after": after,
         "would_change": changes,
@@ -138,7 +187,7 @@ def preview_change(patch, *, path=SETTINGS):
     }
 
 
-def change(patch, *, path=SETTINGS, confirmed=False):
+def change(patch, *, path=SETTINGS, confirmed=False, if_revision=None):
     """Apply one bounded, atomic user-requested control patch.
 
     Lock serializes concurrent *CLI writers*. The running supervisor reads
@@ -147,6 +196,11 @@ def change(patch, *, path=SETTINGS, confirmed=False):
     """
     if confirmed is not True:
         raise MixerControlUnavailable("Explicit local mixer change confirmation required")
+    if if_revision is not None and (
+            type(if_revision) is not str or len(if_revision) != 67
+            or not if_revision.startswith("v1-")
+            or any(ch not in "0123456789abcdef" for ch in if_revision[3:])):
+        raise MixerControlUnavailable("Invalid preview revision")
     if os.geteuid() == 0:
         raise MixerControlUnavailable("Use the unprivileged audiohub account")
     path = Path(path)
@@ -163,7 +217,12 @@ def change(patch, *, path=SETTINGS, confirmed=False):
                 or stat.S_IMODE(st.st_mode) & 0o077):
             raise MixerControlUnavailable("Unsafe private mixer settings lock")
         fcntl.flock(lockfd, fcntl.LOCK_EX)
-        current = _existing_state(path, dirfd)
+        if if_revision is None:
+            current = _existing_state(path, dirfd)
+        else:
+            current, actual_revision = _state_with_revision(path, dirfd)
+            if actual_revision != if_revision:
+                raise MixerControlUnavailable("Mixer preview no longer current")
         try:
             desired = patch_settings(current, patch)
         except (TypeError, ValueError):
@@ -238,6 +297,8 @@ def main(argv=None):
                         help="Explicitly approve an atomic local settings update")
     parser.add_argument("--preview", action="store_true",
                         help="Show requested changes without writing any settings")
+    parser.add_argument("--if-preview-revision", metavar="REV",
+                        help="Require matching revision from a recent --preview before saving")
     parser.add_argument("--wait-for-supervisor", action="store_true",
                         help="After confirmed save, check for software acceptance for up to 10 seconds")
     commands = parser.add_subparsers(dest="action", required=True)
@@ -274,6 +335,10 @@ def main(argv=None):
                                          or not args.confirm_local_mixer_change
                                          or args.action in ("show", "status")):
             raise MixerControlUnavailable("Supervisor wait requires confirmed change")
+        if args.if_preview_revision is not None and (
+                args.preview or not args.confirm_local_mixer_change
+                or args.action in ("show", "status")):
+            raise MixerControlUnavailable("Preview revision requires confirmed change")
         if args.action == "show":
             state = show()
         elif args.action == "status":
@@ -304,7 +369,10 @@ def main(argv=None):
             if args.preview:
                 state = preview_change(patch)
             else:
-                state = change(patch, confirmed=args.confirm_local_mixer_change)
+                kwargs = ({"if_revision": args.if_preview_revision}
+                          if args.if_preview_revision is not None else {})
+                state = change(patch, confirmed=args.confirm_local_mixer_change,
+                               **kwargs)
     except (MixerControlUnavailable, OSError, PermissionError, ValueError) as exc:
         # Local file state must never be echoed on error, including exceptions
         # with filesystem paths or arbitrary untrusted keys.
