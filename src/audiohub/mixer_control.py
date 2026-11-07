@@ -23,6 +23,28 @@ from .runtime import SETTINGS, STATE, _private_parent_fd, read_json, atomic_json
 
 LOCK_NAME = ".mixer-settings.lock"
 
+# Conservative convenience starting points, NOT calibrated output levels.
+# In every preset, existing per-input mute and stored EQ are untouched.
+# Volume order: master, music, laptop, tablet.
+PRESET_VOLUMES = {
+    "quiet": (15, 25, 25, 25),
+    "balanced": (30, 40, 40, 40),
+    "music-priority": (30, 55, 20, 20),
+}
+
+
+def preset_patch(name):
+    """Generate one explicit, schema-validated volume-only profile patch."""
+    if type(name) is not str or name not in PRESET_VOLUMES:
+        raise MixerControlUnavailable("Unknown local mixer preset")
+    master, music, laptop, tablet = PRESET_VOLUMES[name]
+    return {
+        "master": master,
+        "music": {"volume": music},
+        "laptop": {"volume": laptop},
+        "tablet": {"volume": tablet},
+    }
+
 
 class MixerControlUnavailable(RuntimeError):
     """Sanitized local status; never echo untrusted private file contents."""
@@ -405,6 +427,11 @@ def main(argv=None):
         help="Atomically restore one or two explicitly named inputs, never all three",
     )
     restore.add_argument("slots", nargs="+", choices=CHANNELS)
+    preset = commands.add_parser(
+        "preset",
+        help="Request one conservative named volume preset, without unmuting or changing EQ",
+    )
+    preset.add_argument("name", choices=tuple(PRESET_VOLUMES))
     mix = commands.add_parser(
         "set-mix", help="Atomically set master and all three input volumes 0..100"
     )
@@ -457,6 +484,10 @@ def main(argv=None):
                 if len(args.slots) > 2 or len(args.slots) != len(set(args.slots)):
                     raise MixerControlUnavailable("Select one or two distinct inputs")
                 patch = {slot: {"mute": False} for slot in args.slots}
+            elif args.action == "preset":
+                # Single atomic settings update; only requested master and
+                # per-input volumes are changed. Keep mute and EQ intact.
+                patch = preset_patch(args.name)
             else:
                 patch = {args.slot: {"mute": args.value == "on"}}
             if args.preview:
