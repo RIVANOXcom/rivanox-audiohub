@@ -41,6 +41,7 @@
   const routingHistory = [];
   let lastRoutingHistorySignature = null;
   let comparisonBaseline = null;
+  let comparisonManualBaseline = null;
   let comparisonLoadId = 0;
   const byId = id => document.getElementById(id);
   const tr = key => words[key] || key;
@@ -371,10 +372,52 @@
       virtual_channel_count: report.virtual_channel_count
     };
   }
+  function comparisonObservationFields() {
+    return ["usb_output_audio", "bluetooth_source_audio",
+      "three_inputs_simultaneously_audible",
+      "two_bluetooth_sources_simultaneously_audible",
+      "usb_audio_after_reconnect"];
+  }
+  function safeImportedManualObservations(report) {
+    // Historic listening notes are human entries, NOT playback telemetry.
+    // Invalid or missing values stay unknown instead of "not tested".
+    const values = report && report.operator_observations;
+    const obj = values && typeof values === "object" && !Array.isArray(values)
+      ? values : null;
+    const safe = {};
+    for (const field of comparisonObservationFields()) {
+      const value = obj && Object.prototype.hasOwnProperty.call(obj, field)
+        ? obj[field] : null;
+      safe[field] = ["heard", "not_heard", "not_tested"].includes(value)
+        ? value : null;
+    }
+    return safe;
+  }
+  function renderManualComparison() {
+    const table = byId("routing-compare-observations-table");
+    if (!table) return;
+    table.hidden = !comparisonBaseline;
+    if (!comparisonBaseline) return;
+    const current = manualSoundObservations();
+    const format = value => tr(value === "heard" ? "routingHeard" :
+      value === "not_heard" ? "routingNotHeard" :
+      value === "not_tested" ? "routingNotTested" : "routingCompareUnknown");
+    for (const field of comparisonObservationFields()) {
+      const previous = comparisonManualBaseline
+        ? comparisonManualBaseline[field] : null;
+      const latest = current[field];
+      byId("routing-compare-note-old-" + field).textContent = format(previous);
+      byId("routing-compare-note-new-" + field).textContent = format(latest);
+      byId("routing-compare-note-diff-" + field).textContent = previous === null
+        ? tr("routingCompareUnknown") : tr(previous === latest
+          ? "routingCompareUnchanged" : "routingCompareChanged");
+    }
+  }
   function renderRoutingComparison() {
     const table = byId("routing-compare-table");
     if (!table) return;
     table.hidden = !comparisonBaseline;
+    renderManualComparison();
     if (!comparisonBaseline) return;
     const current = safeRoutingHealth();
     for (const key of ["usb", "active_routes", "bluetooth_sources",
@@ -404,6 +447,7 @@
     if (input) input.value = ""; // Permit reselecting the same local file.
     if (!file) return;
     comparisonBaseline = null;
+    comparisonManualBaseline = null;
     renderRoutingComparison();
     const feedback = byId("routing-compare-status");
     if (!Number.isSafeInteger(file.size) || file.size > 65536) {
@@ -417,10 +461,12 @@
       const projection = safeImportedRoutingReport(parsed);
       if (!projection) throw new Error("invalid report");
       comparisonBaseline = projection;
+      comparisonManualBaseline = safeImportedManualObservations(parsed);
       renderRoutingComparison();
     } catch (_) {
       if (requestId !== comparisonLoadId) return;
       comparisonBaseline = null;
+      comparisonManualBaseline = null;
       renderRoutingComparison();
       if (feedback) feedback.textContent = tr("routingCompareInvalid");
     }
@@ -428,6 +474,7 @@
   function clearRoutingComparison() {
     ++comparisonLoadId; // Also prevents pending older reads from taking over.
     comparisonBaseline = null;
+    comparisonManualBaseline = null;
     const fileInput = byId("routing-compare-file");
     if (fileInput) fileInput.value = "";
     renderRoutingComparison();
@@ -460,6 +507,7 @@
     if (feedback) feedback.textContent = tr("routingObservationsCleared");
     const exportStatus = byId("routing-export-status");
     if (exportStatus) exportStatus.textContent = "";
+    renderManualComparison();
   }
   function safeRoutingHistoryReport() {
     // Each historical item is independently revalidated before local export.
@@ -603,6 +651,9 @@
   byId("routing-compare-file").addEventListener("change", loadRoutingComparison);
   byId("routing-compare-clear").addEventListener("click", clearRoutingComparison);
   byId("routing-observations-reset").addEventListener("click", resetManualSoundObservations);
+  for (const id of ["usb", "bluetooth", "three", "dual-bt", "usb-reconnect"]) {
+    byId("routing-observation-" + id).addEventListener("change", renderManualComparison);
+  }
   byId("master").addEventListener("input", event => {
     state.master = Number(event.target.value);
     byId("master-value").textContent = state.master + "%";
