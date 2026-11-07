@@ -77,6 +77,11 @@ PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-m
 # One atomic update to master, then music, laptop and tablet levels:
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-mixer-change set-mix 20 35 25 0
 
+# Compare two existing saved profiles directly, no confirmation and NO writes:
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control compare-profiles cinema cinema-alt
+# JSON shows all four values side by side, plus only differences and signed
+# delta (right minus left). No active mixer or profile file is modified.
+
 # Clone an existing custom profile to a NEW name, never overwriting either:
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --preview copy-profile cinema cinema-alt
 # Review source, destination, stored levels and profile_revision from the output.
@@ -110,6 +115,28 @@ PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-m
 # COMPLETE PipeWire supervisor command acknowledgement (NOT measured audio):
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-mixer-change --wait-for-supervisor set-mix 20 35 25 0
 ```
+
+To compare two existing saved profiles without changing anything, run
+`compare-profiles FIRST SECOND`. This read-only command validates and
+reads a single stable generation of the private catalog and produces
+`mode=profile-compare-only`, `left_volumes` and `right_volumes` for
+master/music/laptop/tablet, a fixed-order `differences` list and
+`same_levels`. Each changed level includes `control`, `left`,
+`right` and a signed `delta` representing **right minus left**:
+positive means the second saved requested percentage is greater;
+negative means it is lower. A completely identical four-level
+configuration reports `same_levels=true` and `differences=[]`
+even if the profile names differ. These are saved **requested**
+percentages, not speaker loudness or measured gain, and no EQ or
+mute change is implied. `profile_revision=p1-...` identifies the
+compared private catalog generation and cannot infer live audio
+status. No file, directory, lock, mixer setting, profile or PipeWire
+command is created/written. The command requires two distinct,
+existing safe names and refuses unsafe/corrupt/symlinked catalog state
+or a simultaneous catalog replacement. Confirmation flags, mutation
+revision tokens and `--preview` are deliberately not accepted:
+comparison itself is always read-only. Keep the returned private
+profile values local, not in public logs.
 
 To duplicate an existing private volume profile safely, use
 `--preview copy-profile SOURCE NEW-NAME`. It reads the validated
