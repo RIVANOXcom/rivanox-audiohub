@@ -66,7 +66,7 @@
         <div class="routing-export-actions"><button type="button" id="routing-export" class="routing-export" data-t="routingExport">Download diagnostic report</button><span id="routing-export-status" role="status" aria-live="polite"></span></div>
         <details class="routing-compare-panel">
           <summary data-t="routingCompareTitle">Compare a previous diagnostic report</summary>
-          <p id="routing-compare-note" data-t="routingCompareNote">Choose a previous AudioHub v4 JSON report from this device (maximum 64 KiB). It stays in this browser and is never uploaded. Only sanitized routing counts are compared with a fresh live status; differences are not proof of audible sound or hardware acceptance.</p>
+          <p id="routing-compare-note" data-t="routingCompareNote">Choose a previous AudioHub v4 JSON report from this device (maximum 64 KiB). It stays in this browser and is never uploaded. Sanitized routing counts are compared with recent live status; former human listening notes are compared with your current selections. Neither comparison proves audible sound or hardware acceptance.</p>
           <div class="routing-compare-actions">
             <label for="routing-compare-file" data-t="routingCompareFile">Previous local JSON report</label>
             <input type="file" id="routing-compare-file" accept=".json,application/json" aria-describedby="routing-compare-note" />
