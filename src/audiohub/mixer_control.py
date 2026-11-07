@@ -104,6 +104,37 @@ def application_status(*, path=SETTINGS, runtime_path=STATE, now=None):
             "audible_playback_verified": False}
 
 
+def preview_change(patch, *, path=SETTINGS):
+    """Show a validated prospective request; no lock, write, or audio action.
+
+    A preview is a snapshot rather than a reservation: another local writer
+    may save different settings before an independently confirmed action.
+    Return only known volume/mute fields, never private routes or IDs.
+    """
+    try:
+        current = show(path=path)
+        before = requested_mix_controls(current)
+        after = requested_mix_controls(patch_settings(current, patch))
+    except (TypeError, ValueError):
+        raise MixerControlUnavailable("Invalid mixer preview setting") from None
+    changes = []
+    if before["master"] != after["master"]:
+        changes.append("master")
+    for slot in CHANNELS:
+        for field in ("volume", "mute"):
+            if before[slot][field] != after[slot][field]:
+                changes.append(slot + "." + field)
+    return {
+        "mode": "preview-only",
+        "before": before,
+        "after": after,
+        "would_change": changes,
+        "settings_written": False,
+        "supervisor_applied": False,
+        "audible_playback_verified": False,
+    }
+
+
 def change(patch, *, path=SETTINGS, confirmed=False):
     """Apply one bounded, atomic user-requested control patch.
 
@@ -148,6 +179,8 @@ def main(argv=None):
     )
     parser.add_argument("--confirm-local-mixer-change", action="store_true",
                         help="Explicitly approve an atomic local settings update")
+    parser.add_argument("--preview", action="store_true",
+                        help="Show requested changes without writing any settings")
     commands = parser.add_subparsers(dest="action", required=True)
     commands.add_parser("show", help="Read-only current private mixer controls")
     commands.add_parser("status", help="Local saved vs supervisor-accepted levels (not sound)")
@@ -175,6 +208,9 @@ def main(argv=None):
         mix.add_argument(slot, type=int)
     args = parser.parse_args(argv)
     try:
+        if args.preview and (args.confirm_local_mixer_change
+                             or args.action in ("show", "status")):
+            raise MixerControlUnavailable("Preview is read-only for change commands")
         if args.action == "show":
             state = show()
         elif args.action == "status":
@@ -202,13 +238,19 @@ def main(argv=None):
                 patch = {slot: {"mute": False} for slot in args.slots}
             else:
                 patch = {args.slot: {"mute": args.value == "on"}}
-            state = change(patch, confirmed=args.confirm_local_mixer_change)
+            if args.preview:
+                state = preview_change(patch)
+            else:
+                state = change(patch, confirmed=args.confirm_local_mixer_change)
     except (MixerControlUnavailable, OSError, PermissionError, ValueError) as exc:
         # Local file state must never be echoed on error, including exceptions
         # with filesystem paths or arbitrary untrusted keys.
         parser.exit(2, "AudioHub mixer not changed or unavailable.\n")
     print(json.dumps(state, sort_keys=True))
-    if args.action == "status":
+    if args.preview:
+        print("Preview only: no settings saved and no PipeWire command applied. "
+              "Another local writer may change settings before separate confirmation.")
+    elif args.action == "status":
         print("Supervisor acceptance means a recent complete set of PipeWire commands "
               "returned successfully; no hardware audio was measured.")
     elif args.action != "show":
