@@ -1625,6 +1625,34 @@ class RootfsAuditTests(unittest.TestCase):
 
 
 
+
+    def test_real_installed_runtime_source_passes_private_directory_race_guard(self):
+        """Catch source/fixture drift before a costly native ARM64 image run."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            real_runtime = (
+                Path(__file__).resolve().parents[1] / "src/audiohub/runtime.py"
+            )
+            staged_runtime = root / "opt/audiohub/src/audiohub/runtime.py"
+            staged_runtime.write_bytes(real_runtime.read_bytes())
+            self.assertTrue(audit.inspect(root)["runtime_private_directory_race_nofollow"])
+
+    def test_race_reopen_must_follow_file_exists_catch_in_real_source(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.root(tmp)
+            real_runtime = (
+                Path(__file__).resolve().parents[1] / "src/audiohub/runtime.py"
+            ).read_text()
+            missing_retry = real_runtime.replace(
+                "                next_fd = os.open(part, flags, dir_fd=fd)\n"
+                "            os.close(fd)",
+                "            os.close(fd)",
+            )
+            self.assertNotEqual(missing_retry, real_runtime)
+            staged_runtime = root / "opt/audiohub/src/audiohub/runtime.py"
+            staged_runtime.write_text(missing_retry)
+            self.assertFalse(audit.inspect(root)["runtime_private_directory_race_nofollow"])
+
     def test_private_runtime_directory_race_guard_installed(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = self.root(tmp)
