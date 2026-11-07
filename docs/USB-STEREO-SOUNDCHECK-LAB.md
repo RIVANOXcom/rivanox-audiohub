@@ -70,6 +70,58 @@ Bluetooth capture or human-audible sound. Record actual L/R observations
 and any rejected step separately; never treat the process exit status as
 an automatic hardware acceptance or release permission.
 
+## Three simultaneous virtual input probe (separate, experimental mode)
+
+A newly available **explicit** local console option can open three
+`pw-cat` playback streams to the three separate AudioHub EQ sinks at once,
+with one original, low-amplitude marker tone per input. This is an **operator
+tool for an isolated and already authorized test bench**, not normal audio
+playback, a Bluetooth emulation, secure network input, or evidence of actual
+three-source audio mixing.
+
+After the same operator approval, low physical speaker-volume precondition,
+unprivileged `audiohub` account and local Pi4 USB-only bench isolation
+described above:
+
+```sh
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.usb_soundcheck --confirm-isolated-usb-test --three-input-mix-probe
+```
+
+The two flags are deliberate: the CLI refuses to play if confirmation is
+omitted and does not run this mode at boot, through HTTP or through any
+other user action. `--three-input-mix-probe` is mutually exclusive with
+`--through-input`.
+
+The program takes **one bounded read-only PipeWire graph snapshot**, then
+checks all three virtual sinks and their unique EQ-output nodes, verifies
+explicit direct links to the same unambiguous USB speaker, and refuses
+the entire experiment if **any** direct EQ-output link targets another
+device (including HDMI). Some legitimate PipeWire graphs use intermediate
+adapter nodes, so inability to prove these direct edges produces an
+**inconclusive refusal**, not an audio defect diagnosis.
+
+Only after all checks pass are three ordinary, non-privileged `pw-cat`
+processes created. Three threads feed them simultaneously, with original
+stereo sine wave markers at 440/554/659 Hz for approximately two seconds.
+Each stream is amplitude-limited to 2/3 percent of full-scale; even the
+worst-case three-way in-phase signal sum remains at most 2 percent of S16
+full-scale **before** unknown device amplification and EQ processing. A
+10 ms fade at both ends avoids a hard waveform click. The program
+uses no music, input files, microphone, Bluetooth pairing, network,
+volume settings or PipeWire route creation. All playback subprocesses
+are terminated/reaped on success and failure. An unsuccessful player
+returns a generic failure, never a claim about speaker sound.
+
+**Interpretation is limited.** A process-level pass confirms only three
+short player invocations completed after a snapshot of expected routing
+topology. It does **not** prove synchronized audible playback,
+real-world three-source mixing, Bluetooth A2DP capture, correct EQ curves,
+stable volumes, clipping protection, USB recoverability, safety at the
+speakers, or a hardware/release GO. An authorized human should separately
+report what was audible on the physical bench, whether each marker was
+heard concurrently and whether the system clipped or dropped audio,
+without recording private identifiers.
+
 ## Exactly what it does
 
 - Executes one bounded, local `pw-dump` inspection and accepts only a
