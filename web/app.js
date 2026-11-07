@@ -251,6 +251,21 @@
         (statusChecked ? "routingUnavailable" : "routingPending"));
       if (freshness.textContent !== text) freshness.textContent = text;
     }
+    // Suggestions are based only on bounded, sanitized counters. They
+    // never claim proof of sound, ownership, pairing or hardware fitness.
+    let guidance = statusChecked ? "routingDiagUnavailable" : "routingDiagPending";
+    if (usable) {
+      if (!deviceHealth.usb_connected) guidance = "routingDiagUsbMissing";
+      else if (deviceHealth.virtual_channel_count === 0) guidance = "routingDiagNoChannels";
+      else if (deviceHealth.active_routes === 0) guidance = "routingDiagNoRoutes";
+      else if (deviceHealth.bluetooth_sources === 0) guidance = "routingDiagNoBluetooth";
+      else guidance = "routingDiagCountsAvailable";
+    }
+    const diagnostic = byId("routing-diagnostic");
+    if (diagnostic) {
+      const text = tr(guidance);
+      if (diagnostic.textContent !== text) diagnostic.textContent = text;
+    }
   }
   async function readDeviceStatus() {
     // Only the most recent poll may update health or its visible state.

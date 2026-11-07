@@ -30,3 +30,6 @@
 .routing-metric span{display:block;font-size:.84rem;line-height:1.4;color:#c5d5ef;margin-top:5px}
 .routing-freshness{color:#a9c9ef;font-size:.82rem;margin:14px 0 0}
 @media(max-width:560px){.routing-summary{padding:18px}.routing-metrics{grid-template-columns:1fr}.routing-metric{display:flex;align-items:center;gap:16px}.routing-metric strong{min-width:28px}.routing-metric span{margin:0}}
+
+/* Operator hints are read-only suggestions, never hardware acceptance results. */
+.routing-diagnostic{margin:12px 0 0;padding:12px 14px;border-left:3px solid #79b6e9;border-radius:0 8px 8px 0;background:#101e32;color:#d8e9ff;font-size:.86rem;line-height:1.55}
