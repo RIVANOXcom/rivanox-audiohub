@@ -933,3 +933,36 @@ phone-owner WiFi, legal rights and CEO release signoff still absent,
 83 source rights and nine OS notices unresolved; effective
 AGPL-3.0-only, proposed Model C not approved, no GO/deploy/flash/
 merge/install/permissions change.
+
+
+## 2026-11-07: Draft PR84 — huge native mixer integers reject without OverflowError
+
+PAPA MissionPilot PAPA-18B8B3C6 / AH-003, AH-007. New isolated
+Draft PR84 stacks ONLY on unchanged Draft PR83 exact HEAD
+10004892e8b318c6e487e00d18cf0e0efc6461df. Reproduced a genuine control validation flaw:
+math.isfinite(10**400) raises OverflowError ("int too large to
+convert to float") in Python. Previous mixer._integer used that
+expression before bounds checking, so a syntactically valid large
+JSON integer in owner-controlled settings could fail via an
+unexpected OverflowError rather than controlled ValueError. The
+fixed _integer bounds exact native int before any conversion,
+rejects non-builtin integer/float types (including bool), and
+accepts only finite integral builtin float in range, preserving
+all legal controls. Four new source regressions cover +/-10**400
+in master/channel/EQ and in loaded current state, invalid
+floating values, and retained legal boundary mixer commands.
+One new installed-rootfs guard
+mixer_huge_integer_controls_fail_closed, plus positive and two
+negative synthetic fixture tests, targets native 99/99 only after
+an independent successful ARM64 image build.
+Parent PR83 Source #42315477578 SUCCESS 751/751, independent native
+#42315438859 SUCCESS actual 98/98 rootfs; compressed Pi image
+SHA256 bddc0484080a8746774bec56b7210311a57b4df8d4ec44fe3c384a3ff5709283,
+temporary GitHub test ZIP artifact #13550717341 SHA256
+7b77c308e3a772719e2351808b956d8ac9fa45a42f87bf435dcf20bbd04fc29e,
+Workbench #3147. No actual Pi4+Edifier 3-source/two Bluetooth/24h,
+secure authenticated phone WiFi, legal or operator/CEO release GO.
+83 source rights and nine OS copyright paths remain unreviewed,
+effective AGPL-3.0-only, Model C unapproved. All PRs Draft and
+unmerged; no flash, installation, permission changes, deploy,
+payments, merge or release.
