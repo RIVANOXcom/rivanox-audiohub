@@ -2174,6 +2174,197 @@ class LocalMixerControlsTests(unittest.TestCase):
         rendered = json.loads(out.getvalue().splitlines()[0])
         self.assertNotIn("profile_impact", rendered)
 
+    def test_profile_choices_empty_private_directory_is_read_only(self):
+        path = self.settings.with_name("volume-profiles.json")
+        result = mixer_control.profile_selection_overview(
+            path=path, settings_path=self.settings)
+        self.assertEqual(result["mode"], "profile-choices-read-only")
+        self.assertEqual(result["profile_count"], 0)
+        self.assertEqual(result["profiles"], [])
+        self.assertEqual(result["profile_limit"], 8)
+        self.assertEqual(result["current_requested_volumes"], {
+            "master": 70, "music": 65, "laptop": 50, "tablet": 50})
+        self.assertIsNone(result["profile_revision"])
+        self.assertRegex(result["mixer_revision"], r"^v1-[a-f0-9]{64}$")
+        self.assertTrue(result["apply_requires_separate_confirmation"])
+        self.assertFalse(result["profile_written"])
+        self.assertFalse(result["mixer_settings_written"])
+        self.assertFalse(result["audible_playback_verified"])
+        self.assertFalse(path.parent.exists())
+
+    def test_profile_choices_read_only_sorted_impacts_and_retained_mutes(self):
+        path = self.settings.with_name("volume-profiles.json")
+        mixer_control.save_volume_profile(
+            "z-work", 30, 50, 40, 20, path=path, confirmed=True)
+        mixer_control.save_volume_profile(
+            "a-night", 15, 25, 30, 40, path=path, confirmed=True)
+        mixer_control.change({
+            "master": 30,
+            "music": {"volume": 50, "mute": True, "bass": 6},
+            "laptop": {"volume": 60, "mute": False, "mid": -5},
+            "tablet": {"volume": 40, "mute": True, "treble": 7},
+        }, path=self.settings, confirmed=True)
+        before_settings = self.settings.read_bytes()
+        before_profiles = path.read_bytes()
+        with mock.patch("audiohub.mixer_control.atomic_json") as writes:
+            result = mixer_control.profile_selection_overview(
+                path=path, settings_path=self.settings)
+            writes.assert_not_called()
+        self.assertEqual([row["name"] for row in result["profiles"]],
+                         ["a-night", "z-work"])
+        self.assertEqual(result["profile_count"], 2)
+        self.assertEqual(result["current_requested_volumes"], {
+            "master": 30, "music": 50, "laptop": 60, "tablet": 40})
+        night, work = result["profiles"]
+        self.assertEqual(night["requested_volumes"], {
+            "master": 15, "music": 25, "laptop": 30, "tablet": 40})
+        self.assertEqual(night["deltas_from_current"], {
+            "master": -15, "music": -25, "laptop": -30, "tablet": 0})
+        self.assertEqual(night["would_change"], ["master", "music", "laptop"])
+        self.assertEqual(night["muted_sources_remaining_muted"],
+                         ["music", "tablet"])
+        self.assertEqual(night["volume_changes_while_muted"], ["music"])
+        self.assertFalse(night["already_matches"])
+        self.assertEqual(work["deltas_from_current"], {
+            "master": 0, "music": 0, "laptop": -20, "tablet": -20})
+        self.assertEqual(work["would_change"], ["laptop", "tablet"])
+        self.assertEqual(work["volume_changes_while_muted"], ["tablet"])
+        self.assertRegex(result["profile_revision"], r"^p1-[a-f0-9]{64}$")
+        self.assertRegex(result["mixer_revision"], r"^v1-[a-f0-9]{64}$")
+        self.assertEqual(result["preview_selected_with"], "--preview profile NAME")
+        self.assertTrue(result["mute_states_preserved"])
+        self.assertTrue(result["stored_eq_preserved"])
+        self.assertTrue(result["apply_requires_separate_confirmation"])
+        self.assertEqual(self.settings.read_bytes(), before_settings)
+        self.assertEqual(path.read_bytes(), before_profiles)
+
+    def test_profile_choices_exact_match_can_remain_muted(self):
+        path = self.settings.with_name("volume-profiles.json")
+        mixer_control.save_volume_profile(
+            "current", 70, 65, 50, 50, path=path, confirmed=True)
+        mixer_control.change({"music": {"mute": True}},
+                             path=self.settings, confirmed=True)
+        result = mixer_control.profile_selection_overview(
+            path=path, settings_path=self.settings)
+        choice = result["profiles"][0]
+        self.assertTrue(choice["already_matches"])
+        self.assertEqual(choice["would_change"], [])
+        self.assertEqual(choice["muted_sources_remaining_muted"], ["music"])
+        self.assertEqual(choice["volume_changes_while_muted"], [])
+        self.assertFalse(result["mixer_settings_written"])
+
+    def test_profile_choices_rejects_catalog_generation_replacement_during_read(self):
+        path = self.settings.with_name("volume-profiles.json")
+        mixer_control.save_volume_profile(
+            "first", 20, 30, 40, 50, path=path, confirmed=True)
+        real_read = mixer_control._state_with_revision
+        def replace_catalog(settings_path, dirfd):
+            result = real_read(settings_path, dirfd)
+            snapshot = mixer_control.list_volume_profiles(path=path)
+            mixer_control.atomic_json(path, snapshot)
+            return result
+        with mock.patch("audiohub.mixer_control._state_with_revision",
+                        side_effect=replace_catalog) as read:
+            with self.assertRaises(mixer_control.MixerControlUnavailable):
+                mixer_control.profile_selection_overview(
+                    path=path, settings_path=self.settings)
+            read.assert_called_once()
+        self.assertFalse(self.settings.exists())
+
+    def test_profile_choices_rejects_mixer_generation_replacement_during_read(self):
+        path = self.settings.with_name("volume-profiles.json")
+        mixer_control.save_volume_profile(
+            "first", 20, 30, 40, 50, path=path, confirmed=True)
+        mixer_control.change({"master": 29}, path=self.settings, confirmed=True)
+        real_read = mixer_control._state_with_revision
+        def replace_settings(settings_path, dirfd):
+            result = real_read(settings_path, dirfd)
+            mixer_control.atomic_json(self.settings,
+                                      mixer_control.show(path=self.settings))
+            return result
+        with mock.patch("audiohub.mixer_control._state_with_revision",
+                        side_effect=replace_settings):
+            with self.assertRaises(mixer_control.MixerControlUnavailable):
+                mixer_control.profile_selection_overview(
+                    path=path, settings_path=self.settings)
+
+    def test_profile_choices_rejects_corrupt_symlink_and_unsafe_catalog(self):
+        path = self.settings.with_name("volume-profiles.json")
+        path.parent.mkdir(mode=0o700)
+        private = self.root / "private.txt"
+        private.write_text("PRIVATE-DATA")
+        path.symlink_to(private)
+        with self.assertRaises(mixer_control.MixerControlUnavailable):
+            mixer_control.profile_selection_overview(
+                path=path, settings_path=self.settings)
+        self.assertEqual(private.read_text(), "PRIVATE-DATA")
+        path.unlink()
+        for payload in (b"{", b'{"version":1,"profiles":{"x":{}}}',
+                        b'{"version":1,"profiles":{},"secret":"bad"}'):
+            path.write_bytes(payload)
+            path.chmod(0o600)
+            before = path.read_bytes()
+            with self.assertRaises(mixer_control.MixerControlUnavailable):
+                mixer_control.profile_selection_overview(
+                    path=path, settings_path=self.settings)
+            self.assertEqual(path.read_bytes(), before)
+        path.write_text('{"version":1,"profiles":{}}')
+        path.chmod(0o644)
+        with self.assertRaises(mixer_control.MixerControlUnavailable):
+            mixer_control.profile_selection_overview(
+                path=path, settings_path=self.settings)
+
+    def test_profile_choices_refuses_unrelated_directory_or_file_names(self):
+        path = self.settings.with_name("volume-profiles.json")
+        for catalog, settings_path in (
+            (self.settings, self.settings),
+            (path, self.root / "other" / "settings.json"),
+            (path.with_name("profiles-other.json"), self.settings),
+        ):
+            with self.subTest(catalog=str(catalog), settings=str(settings_path)):
+                with self.assertRaises(mixer_control.MixerControlUnavailable):
+                    mixer_control.profile_selection_overview(
+                        path=catalog, settings_path=settings_path)
+        self.assertFalse(path.parent.exists())
+
+    def test_profile_choices_cli_read_only_and_no_implicit_save(self):
+        report = {
+            "mode": "profile-choices-read-only", "profiles": [
+                {"name": "cinema", "requested_volumes": {
+                    "master": 20, "music": 30, "laptop": 40, "tablet": 50}}],
+            "profile_count": 1, "profile_limit": 8,
+            "profile_written": False, "mixer_settings_written": False,
+            "audible_playback_verified": False,
+        }
+        with (mock.patch("audiohub.mixer_control.profile_selection_overview",
+                         return_value=report) as choices,
+              mock.patch("audiohub.mixer_control.atomic_json") as write,
+              mock.patch("audiohub.mixer_control.change") as change):
+            with redirect_stdout(StringIO()) as out:
+                mixer_control.main(["profile-choices"])
+            choices.assert_called_once_with()
+            write.assert_not_called()
+            change.assert_not_called()
+        self.assertEqual(json.loads(out.getvalue()), report)
+
+    def test_profile_choices_cli_rejects_confirmation_or_write_related_flags(self):
+        for prefix in (
+            ["--preview"], ["--confirm-local-mixer-change"],
+            ["--confirm-local-profile-save"], ["--wait-for-supervisor"],
+            ["--if-preview-revision", "v1-" + "a" * 64],
+            ["--if-profile-revision", "p1-" + "a" * 64],
+            ["--compare-baseline", "b1-no"],
+        ):
+            with self.subTest(flags=prefix):
+                with (mock.patch("audiohub.mixer_control.profile_selection_overview") as choices,
+                      mock.patch("audiohub.mixer_control.atomic_json") as write):
+                    with redirect_stdout(StringIO()), redirect_stderr(StringIO()):
+                        with self.assertRaises(SystemExit) as failure:
+                            mixer_control.main(prefix + ["profile-choices"])
+                    self.assertEqual(failure.exception.code, 2)
+                    choices.assert_not_called()
+                    write.assert_not_called()
+
     def test_wait_for_supervisor_accepts_matching_complete_ack_without_sleep(self):
         saved = defaults()
         observed = {
