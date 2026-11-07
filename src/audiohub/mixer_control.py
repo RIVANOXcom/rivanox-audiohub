@@ -13,9 +13,10 @@ import json
 import os
 from pathlib import Path
 import stat
+import time
 
-from .mixer import CHANNELS, defaults, patch_settings
-from .runtime import SETTINGS, _private_parent_fd, read_json, atomic_json
+from .mixer import CHANNELS, defaults, patch_settings, requested_mix_controls
+from .runtime import SETTINGS, STATE, _private_parent_fd, read_json, atomic_json
 
 LOCK_NAME = ".mixer-settings.lock"
 
@@ -52,6 +53,43 @@ def show(*, path=SETTINGS):
         return _existing_state(Path(path), dirfd)
     finally:
         os.close(dirfd)
+
+
+def _valid_acknowledged_controls(value):
+    if type(value) is not dict or set(value) != {"master", *CHANNELS}:
+        return False
+    if type(value["master"]) is not int or not 0 <= value["master"] <= 100:
+        return False
+    for slot in CHANNELS:
+        ctl = value[slot]
+        if (type(ctl) is not dict or set(ctl) != {"volume", "mute"}
+                or type(ctl["volume"]) is not int or not 0 <= ctl["volume"] <= 100
+                or type(ctl["mute"]) is not bool):
+            return False
+    return True
+
+
+def application_status(*, path=SETTINGS, runtime_path=STATE, now=None):
+    """Read-only, private local comparison; never claim audible sound.
+
+    'accepted' means every requested mixer command returned successfully on a
+    recent complete supervisor poll with USB + all three EQ sinks present.
+    'pending' means a newer/different requested level has not been observed.
+    Missing, stale, unsafe, or legacy status is ALWAYS unavailable.
+    """
+    requested = requested_mix_controls(show(path=path))
+    snapshot = read_json(runtime_path, {})
+    at = snapshot.get("updated_at")
+    now = int(time.time()) if now is None else now
+    fresh = (type(now) is int and type(at) is int and 0 <= now - at <= 15)
+    acknowledged = snapshot.get("mixer_controls_accepted")
+    if (not fresh or snapshot.get("usb_route_ready") is not True
+            or not _valid_acknowledged_controls(acknowledged)):
+        state = "unavailable"
+    else:
+        state = "accepted" if acknowledged == requested else "pending"
+    return {"requested": requested, "supervisor": state,
+            "audible_playback_verified": False}
 
 
 def change(patch, *, path=SETTINGS, confirmed=False):
@@ -100,6 +138,7 @@ def main(argv=None):
                         help="Explicitly approve an atomic local settings update")
     commands = parser.add_subparsers(dest="action", required=True)
     commands.add_parser("show", help="Read-only current private mixer controls")
+    commands.add_parser("status", help="Local saved vs supervisor-accepted levels (not sound)")
     master = commands.add_parser("set-master", help="Set master requested volume 0..100")
     master.add_argument("percent", type=int)
     channel = commands.add_parser("set-volume", help="Set a channel volume 0..100")
@@ -118,6 +157,8 @@ def main(argv=None):
     try:
         if args.action == "show":
             state = show()
+        elif args.action == "status":
+            state = application_status()
         else:
             if args.action == "set-master":
                 patch = {"master": args.percent}
@@ -136,7 +177,10 @@ def main(argv=None):
         # with filesystem paths or arbitrary untrusted keys.
         parser.exit(2, "AudioHub mixer not changed or unavailable.\n")
     print(json.dumps(state, sort_keys=True))
-    if args.action != "show":
+    if args.action == "status":
+        print("Supervisor acceptance means a recent complete set of PipeWire commands "
+              "returned successfully; no hardware audio was measured.")
+    elif args.action != "show":
         print("Saved locally; running supervisor applies validated gains on its next poll. "
               "No physical output or audible playback was verified.")
 
