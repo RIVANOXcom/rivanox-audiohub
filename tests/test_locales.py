@@ -309,7 +309,8 @@ class BrowserLocaleInputEditTests(unittest.TestCase):
         source = PREVIEW.read_text(encoding="utf-8")
         self.assertIn('maxLength: 64, autoComplete: "off"', source)
         self.assertNotIn('maxLength: 32, autoComplete: "off"', source)
-        self.assertIn('renameStatus.textContent = hasInvalidName() ?', source)
+        self.assertIn('renameStatus.textContent = invalid ? tr("invalidInputName") : "";', source)
+        self.assertIn('setNameInvalid(invalid);', source)
         self.assertIn('const hasInvalidName = () => {', source)
 
     def test_invalid_name_feedback_is_exposed_to_assistive_technology(self):
