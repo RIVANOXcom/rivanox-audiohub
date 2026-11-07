@@ -173,6 +173,48 @@ def change(patch, *, path=SETTINGS, confirmed=False):
         os.close(dirfd)
 
 
+def wait_for_supervisor(saved, *, checks=10):
+    """Bounded follow-up for a saved request; never measure actual sound.
+
+    The supervisor may acknowledge only the *current* private settings.
+    If another local writer changes the request, report 'superseded' rather
+    than attributing that writer's acknowledgement to this invocation.
+    This reads status only; it never re-applies an update automatically.
+    """
+    expected = requested_mix_controls(saved)
+    if type(checks) is not int or not 0 <= checks <= 10:
+        raise ValueError("Invalid bounded supervisor wait")
+    result = "unavailable"
+    pending = None
+    for attempt in range(checks + 1):
+        try:
+            current = application_status()
+        except (MixerControlUnavailable, OSError, ValueError, TypeError):
+            current = {}
+        if type(current) is not dict:
+            current = {}
+        current_requested = current.get("requested")
+        if current_requested is not None and current_requested != expected:
+            result = "superseded"
+            pending = None
+            break
+        if current_requested == expected and current.get("supervisor") == "accepted":
+            result = "accepted"
+            pending = []
+            break
+        if current_requested == expected and current.get("supervisor") == "pending":
+            result = "pending"
+            pending = current.get("pending_controls")
+        else:
+            result = "unavailable"
+            pending = None
+        if attempt < checks:
+            time.sleep(1)
+    return {"settings_written": True, "saved_request": expected,
+            "delivery_state": result, "pending_controls": pending,
+            "audible_playback_verified": False}
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(
         description="Offline-only AudioHub levels and mute, not a remote mixer API"
@@ -181,6 +223,8 @@ def main(argv=None):
                         help="Explicitly approve an atomic local settings update")
     parser.add_argument("--preview", action="store_true",
                         help="Show requested changes without writing any settings")
+    parser.add_argument("--wait-for-supervisor", action="store_true",
+                        help="After confirmed save, check for software acceptance for up to 10 seconds")
     commands = parser.add_subparsers(dest="action", required=True)
     commands.add_parser("show", help="Read-only current private mixer controls")
     commands.add_parser("status", help="Local saved vs supervisor-accepted levels (not sound)")
@@ -211,6 +255,10 @@ def main(argv=None):
         if args.preview and (args.confirm_local_mixer_change
                              or args.action in ("show", "status")):
             raise MixerControlUnavailable("Preview is read-only for change commands")
+        if args.wait_for_supervisor and (args.preview
+                                         or not args.confirm_local_mixer_change
+                                         or args.action in ("show", "status")):
+            raise MixerControlUnavailable("Supervisor wait requires confirmed change")
         if args.action == "show":
             state = show()
         elif args.action == "status":
@@ -246,6 +294,15 @@ def main(argv=None):
         # Local file state must never be echoed on error, including exceptions
         # with filesystem paths or arbitrary untrusted keys.
         parser.exit(2, "AudioHub mixer not changed or unavailable.\n")
+    if args.wait_for_supervisor:
+        report = wait_for_supervisor(state)
+        print(json.dumps(report, sort_keys=True))
+        print("Settings saved locally. Only recent complete supervisor command "
+              "acceptance is checked; no audible output was measured.")
+        if report["delivery_state"] != "accepted":
+            parser.exit(3, "Settings saved, but supervisor confirmation not obtained. "
+                           "Inspect the local status before any further change.\n")
+        return
     print(json.dumps(state, sort_keys=True))
     if args.preview:
         print("Preview only: no settings saved and no PipeWire command applied. "
