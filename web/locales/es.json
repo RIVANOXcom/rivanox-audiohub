@@ -5,6 +5,7 @@
   "previewNotice": "Estos controles muestran la interfaz; todavía no controlan el audio real.",
   "speaker": "Altavoces USB",
   "speakerState": "Detección de hardware pendiente",
+  "speakerStatusUnavailable": "Estado del hardware no disponible",
   "channel": "Canal",
   "music": "Móvil · Música",
   "laptop": "Portátil",

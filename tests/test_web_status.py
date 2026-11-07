@@ -534,6 +534,7 @@ class BrowserStatusPollOrderTests(unittest.TestCase):
 const assert = require("node:assert/strict");
 let statusRequestId = 0;
 let deviceHealth = null;
+let statusChecked = false;
 const events = [];
 const renderHardwareStatus = () => {
   events.push(deviceHealth === null ? "unknown"
@@ -594,6 +595,107 @@ check().catch(e => {console.error(e); process.exitCode = 1;});
             ["node", "-e", setup + "\n" + preview_status_reader_source() + "\n" + verify],
             capture_output=True, text=True, timeout=15, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
+
+
+def preview_hardware_view_source():
+    """Use the real shipped status renderer and poller together."""
+    source = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
+    start = source.index("  function renderHardwareStatus() {")
+    end = source.index("\n  function translate() {", start)
+    return source[start:end]
+
+
+class BrowserStatusClarityTests(unittest.TestCase):
+    """Unavailable telemetry must never be described as unplugged hardware."""
+
+    def test_five_languages_have_explicit_unavailable_hardware_status(self):
+        base = (ROOT / "web" / "locales")
+        for lang in ("en", "de", "es", "fr", "it"):
+            with self.subTest(lang=lang):
+                labels = json.loads((base / (lang + ".json")).read_text(encoding="utf-8"))
+                self.assertTrue(labels["speakerStatusUnavailable"].strip())
+                self.assertNotEqual(labels["speakerStatusUnavailable"], labels["speakerState"])
+                self.assertNotEqual(labels["speakerStatusUnavailable"], labels["speakerDisconnected"])
+
+    @unittest.skipUnless(shutil.which("node"), "Node.js runtime unavailable")
+    def test_shipping_renderer_distinguishes_initial_connected_disconnected_and_unavailable(self):
+        setup = r'''
+const assert = require("node:assert/strict");
+const speaker = {textContent: ""};
+const document = {querySelector(sel) {
+  assert.equal(sel, '[data-t="speakerState"]');
+  return speaker;
+}};
+let words = {
+  speakerState: "Checking hardware",
+  speakerConnected: "USB speakers connected",
+  speakerDisconnected: "USB speakers disconnected",
+  speakerStatusUnavailable: "Hardware status unavailable"
+};
+const tr = key => words[key] || key;
+let deviceHealth = null;
+let statusChecked = false;
+let statusRequestId = 0;
+const pending = [];
+const fetch = () => new Promise((resolve, reject) => pending.push({resolve, reject}));
+'''
+        verify = r'''
+async function check() {
+  renderHardwareStatus();
+  assert.equal(speaker.textContent, "Checking hardware");
+  assert.equal(statusChecked, false);
+
+  const connected = readDeviceStatus();
+  pending[0].resolve({ok: true, json: async () =>
+    ({fresh: true, usb_connected: true})});
+  await connected;
+  assert.equal(speaker.textContent, "USB speakers connected");
+
+  const disconnected = readDeviceStatus();
+  pending[1].resolve({ok: true, json: async () =>
+    ({fresh: true, usb_connected: false})});
+  await disconnected;
+  assert.equal(speaker.textContent, "USB speakers disconnected");
+
+  const stale = readDeviceStatus();
+  pending[2].resolve({ok: true, json: async () =>
+    ({fresh: false, usb_connected: true})});
+  await stale;
+  assert.equal(speaker.textContent, "Hardware status unavailable");
+
+  words.speakerStatusUnavailable = "Hardwarestatus nicht verfügbar";
+  renderHardwareStatus();
+  assert.equal(speaker.textContent, "Hardwarestatus nicht verfügbar");
+
+  const failure = readDeviceStatus();
+  pending[3].reject(new Error("API offline"));
+  await failure;
+  assert.equal(speaker.textContent, "Hardwarestatus nicht verfügbar");
+
+  const malformed = readDeviceStatus();
+  pending[4].resolve({ok: true, json: async () =>
+    ({fresh: true, usb_connected: "yes"})});
+  await malformed;
+  assert.equal(speaker.textContent, "Hardwarestatus nicht verfügbar");
+
+  const slow = readDeviceStatus();
+  const latest = readDeviceStatus();
+  pending[6].resolve({ok: true, json: async () =>
+    ({fresh: true, usb_connected: true})});
+  await latest;
+  pending[5].resolve({ok: true, json: async () =>
+    ({fresh: false, usb_connected: false})});
+  await slow;
+  assert.equal(speaker.textContent, "USB speakers connected");
+  assert.equal(statusChecked, true);
+}
+check().catch(e => {console.error(e); process.exitCode = 1;});
+'''
+        result = subprocess.run(
+            ["node", "-e", setup + "\n" + preview_hardware_view_source() + "\n" + verify],
+            capture_output=True, text=True, timeout=15, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -5,6 +5,7 @@
   "previewNotice": "Ces réglages présentent l'interface ; ils ne contrôlent pas encore la sortie audio.",
   "speaker": "Enceintes USB",
   "speakerState": "Détection matérielle en attente",
+  "speakerStatusUnavailable": "État du matériel indisponible",
   "channel": "Canal",
   "music": "Téléphone · Musique",
   "laptop": "Ordinateur portable",
