@@ -294,15 +294,28 @@
     return {
       usb_output_audio: observation("usb"),
       bluetooth_source_audio: observation("bluetooth"),
-      three_inputs_simultaneously_audible: observation("three")
+      three_inputs_simultaneously_audible: observation("three"),
+      two_bluetooth_sources_simultaneously_audible: observation("dual-bt"),
+      usb_audio_after_reconnect: observation("usb-reconnect")
     };
+  }
+  function resetManualSoundObservations() {
+    // Reset only human-entered hearing notes. Never change live routing state.
+    for (const id of ["usb", "bluetooth", "three", "dual-bt", "usb-reconnect"]) {
+      const node = byId("routing-observation-" + id);
+      if (node) node.value = "not_tested";
+    }
+    const feedback = byId("routing-observations-reset-status");
+    if (feedback) feedback.textContent = tr("routingObservationsCleared");
+    const exportStatus = byId("routing-export-status");
+    if (exportStatus) exportStatus.textContent = "";
   }
   function safeRoutingReport() {
     const summary = safeRoutingHealth();
     // Fixed key list: no MACs, names, SSIDs, URLs, addresses, audio payloads
     // or raw diagnostics ever reach the downloaded local JSON.
     return {
-      format: "audiohub.routing-diagnostics.v2",
+      format: "audiohub.routing-diagnostics.v3",
       // Browser time is only a self-reported observation timestamp.
       recorded_at_browser_utc: new Date().toISOString(),
       status: summary ? "recent" : (statusChecked ? "unavailable" : "pending"),
@@ -361,6 +374,7 @@
     renderHardwareStatus();
     renderRoutingSummary();
     byId("routing-export-status").textContent = "";
+    byId("routing-observations-reset-status").textContent = "";
   }
   async function setLanguage(language) {
     // Late locale replies must not overwrite newer user choices.
@@ -386,6 +400,7 @@
   }
   byId("language").addEventListener("change", event => setLanguage(event.target.value));
   byId("routing-export").addEventListener("click", downloadRoutingDiagnostics);
+  byId("routing-observations-reset").addEventListener("click", resetManualSoundObservations);
   byId("master").addEventListener("input", event => {
     state.master = Number(event.target.value);
     byId("master-value").textContent = state.master + "%";
