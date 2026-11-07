@@ -25,7 +25,7 @@
   "routingExportRequested": "Download requested. Check your browser's downloads.",
   "routingExportUnavailable": "Report download unavailable in this browser.",
   "routingObservationsTitle": "Manual sound observations",
-  "routingObservationsNote": "Record what you personally heard during an isolated test. These unverified selections stay in this browser session until the page is closed and do not approve the hardware or a release. The exported timestamp comes from your browser clock.",
+  "routingObservationsNote": "Record what you personally heard during an isolated test. These unverified selections exist only on this page (reloading resets them) and do not approve the hardware or a release. The exported timestamp comes from your browser clock.",
   "routingObservationUsb": "USB speaker sound",
   "routingObservationBluetooth": "Bluetooth source sound",
   "routingObservationThree": "Three inputs audible simultaneously",
