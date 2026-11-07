@@ -144,9 +144,18 @@ def safe_three_input_targets():
     nodes = pipewire_nodes(graph)
     if _conflicting_node_ids(nodes):
         raise SoundcheckUnavailable("Mix probe unavailable: ambiguous PipeWire nodes")
+    # Unlike the one-speaker operator check, a concurrent three-input probe
+    # deliberately refuses *any* second USB sink even when an Edifier could
+    # be preferred by the general discovery policy.
+    physical_usb = [
+        node for node in nodes
+        if props(node).get("media.class") == "Audio/Sink"
+        and type(props(node).get("node.name")) is str
+        and props(node)["node.name"].startswith("alsa_output.usb-")
+    ]
     usb = choose_usb_output(nodes)
-    if usb is None or type(usb.get("id")) is not int:
-        raise SoundcheckUnavailable("Mix probe unavailable: USB speaker not identified")
+    if len(physical_usb) != 1 or usb is None or type(usb.get("id")) is not int:
+        raise SoundcheckUnavailable("Mix probe unavailable: USB speaker not unambiguous")
     usb_id = usb["id"]
     sink_names = virtual_sinks(nodes)
     output_ids = {}
