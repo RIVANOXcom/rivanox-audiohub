@@ -726,6 +726,13 @@ class BrowserRoutingSummaryTests(unittest.TestCase):
         self.assertIn('role="status"', html)
         self.assertIn("Read-only device counts", html)
         self.assertIn('byId("routing-export").addEventListener("click", downloadRoutingDiagnostics);', source)
+        for field in ("routing-observation-usb", "routing-observation-bluetooth",
+                      "routing-observation-three"):
+            self.assertIn('id="' + field + '"', html)
+        self.assertIn('aria-describedby="routing-observations-note"', html)
+        self.assertIn('value="not_tested"', html)
+        self.assertIn('value="heard"', html)
+        self.assertIn('value="not_heard"', html)
 
     def test_five_locale_labels_have_safe_nonplayback_disclaimer(self):
         keys = {
@@ -735,7 +742,10 @@ class BrowserRoutingSummaryTests(unittest.TestCase):
             "routingDiagUnavailable", "routingDiagUsbMissing",
             "routingDiagNoChannels", "routingDiagNoRoutes",
             "routingDiagNoBluetooth", "routingDiagCountsAvailable",
-            "routingExport", "routingExportRequested", "routingExportUnavailable"
+            "routingExport", "routingExportRequested", "routingExportUnavailable",
+            "routingObservationsTitle", "routingObservationsNote", "routingObservationUsb",
+            "routingObservationBluetooth", "routingObservationThree",
+            "routingNotTested", "routingHeard", "routingNotHeard"
         }
         for code in ("en", "de", "es", "fr", "it"):
             with self.subTest(code=code):
@@ -865,7 +875,13 @@ assert.equal(get("routing-diagnostic"), "Wiedergabe manuell prüfen");
         """Click exports a safe, fixed JSON schema and no device identifiers."""
         setup = r'''
 const assert = require("node:assert/strict");
-const elements = {"routing-export-status": {textContent: ""}};
+const Date = class {toISOString() {return "2026-11-07T15:00:00.000Z";}};
+const elements = {
+  "routing-export-status": {textContent: ""},
+  "routing-observation-usb": {value: "not_tested"},
+  "routing-observation-bluetooth": {value: "not_tested"},
+  "routing-observation-three": {value: "not_tested"}
+};
 const byId = id => elements[id] || null;
 const tr = key => ({
   routingExportRequested: "Download requested",
@@ -901,9 +917,16 @@ const document = {
 const exportContent = () => blobs[blobs.length - 1].parts.join("");
 '''
         verify = r'''
-const fields = ["format", "status", "usb_connected", "active_routes",
-  "bluetooth_sources", "virtual_channel_count",
+const fields = ["format", "recorded_at_browser_utc", "status", "usb_connected",
+  "active_routes", "bluetooth_sources", "virtual_channel_count",
+  "operator_observations", "hardware_verified",
   "audible_playback_verified", "release_approved"];
+const observations = {
+  usb_output_audio: "not_tested",
+  bluetooth_source_audio: "not_tested",
+  three_inputs_simultaneously_audible: "not_tested"
+};
+const clock = "2026-11-07T15:00:00.000Z";
 const checkDownload = expected => {
   downloadRoutingDiagnostics();
   const report = JSON.parse(exportContent());
@@ -918,9 +941,15 @@ const checkDownload = expected => {
   assert.equal(revoked[revoked.length - 1], "blob:local-report");
   return report;
 };
-const unverified = {audible_playback_verified: false, release_approved: false};
+const unverified = {
+  operator_observations: observations,
+  hardware_verified: false,
+  audible_playback_verified: false,
+  release_approved: false
+};
 checkDownload({
-  format: "audiohub.routing-diagnostics.v1", status: "pending",
+  format: "audiohub.routing-diagnostics.v2",
+  recorded_at_browser_utc: clock, status: "pending",
   usb_connected: null, active_routes: null, bluetooth_sources: null,
   virtual_channel_count: null, ...unverified
 });
@@ -930,18 +959,36 @@ deviceHealth = {fresh: true, usb_connected: true,
   mac: "PRIVATE-MAC", ssid: "PRIVATE-WIFI", username: "PRIVATE-OWNER",
   hidden: {key: "SECRET"}};
 checkDownload({
-  format: "audiohub.routing-diagnostics.v1", status: "recent",
+  format: "audiohub.routing-diagnostics.v2",
+  recorded_at_browser_utc: clock, status: "recent",
   usb_connected: true, active_routes: 2, bluetooth_sources: 1,
   virtual_channel_count: 3, ...unverified
 });
 assert.ok(!exportContent().includes("PRIVATE"));
 assert.ok(!exportContent().includes("SECRET"));
 assert.ok(!exportContent().includes("MAC"));
+// Operator choices have no automatic hardware-certification side effect.
+elements["routing-observation-usb"].value = "heard";
+elements["routing-observation-bluetooth"].value = "not_heard";
+elements["routing-observation-three"].value = "heard";
+assert.deepEqual(manualSoundObservations(), {
+  usb_output_audio: "heard",
+  bluetooth_source_audio: "not_heard",
+  three_inputs_simultaneously_audible: "heard"
+});
+assert.equal(safeRoutingReport().hardware_verified, false);
+assert.equal(safeRoutingReport().audible_playback_verified, false);
+assert.equal(safeRoutingReport().release_approved, false);
+// Unknown or injected select values are not copied to the report.
+elements["routing-observation-usb"].value = "PRIVATE-NAME";
+assert.equal(manualSoundObservations().usb_output_audio, "not_tested");
+elements["routing-observation-usb"].value = "not_tested";
 deviceHealth = {fresh: false, usb_connected: true,
   active_routes: 2, bluetooth_sources: 1, virtual_channel_count: 3,
   mac: "PRIVATE-MAC"};
 checkDownload({
-  format: "audiohub.routing-diagnostics.v1", status: "unavailable",
+  format: "audiohub.routing-diagnostics.v2",
+  recorded_at_browser_utc: clock, status: "unavailable",
   usb_connected: null, active_routes: null, bluetooth_sources: null,
   virtual_channel_count: null, ...unverified
 });
