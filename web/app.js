@@ -40,6 +40,8 @@
   let lastManualStatusRequestAt = -Infinity;
   const routingHistory = [];
   let lastRoutingHistorySignature = null;
+  let comparisonBaseline = null;
+  let comparisonLoadId = 0;
   const byId = id => document.getElementById(id);
   const tr = key => words[key] || key;
   const displayName = channel => previewLabels[channel] || tr("input" + SLOT_INDEX[channel]);
@@ -348,6 +350,89 @@
       const text = tr(guidance);
       if (diagnostic.textContent !== text) diagnostic.textContent = text;
     }
+    renderRoutingComparison();
+  }
+  function safeImportedRoutingReport(report) {
+    // A local file is untrusted input. Accept ONLY the v4 fixed scalar
+    // status fields, not names, history, metadata or the human observations.
+    if (!report || typeof report !== "object" || Array.isArray(report) ||
+        report.format !== "audiohub.routing-diagnostics.v4" ||
+        report.status !== "recent" ||
+        typeof report.usb_connected !== "boolean") return null;
+    const limits = [["active_routes", 3], ["bluetooth_sources", 2],
+      ["virtual_channel_count", 3]];
+    if (!limits.every(([key, max]) =>
+      Number.isInteger(report[key]) && report[key] >= 0 && report[key] <= max))
+      return null;
+    return {
+      usb_connected: report.usb_connected,
+      active_routes: report.active_routes,
+      bluetooth_sources: report.bluetooth_sources,
+      virtual_channel_count: report.virtual_channel_count
+    };
+  }
+  function renderRoutingComparison() {
+    const table = byId("routing-compare-table");
+    if (!table) return;
+    table.hidden = !comparisonBaseline;
+    if (!comparisonBaseline) return;
+    const current = safeRoutingHealth();
+    for (const key of ["usb", "active_routes", "bluetooth_sources",
+      "virtual_channel_count"]) {
+      const field = key === "usb" ? "usb_connected" : key;
+      const previous = comparisonBaseline[field];
+      const latest = current ? current[field] : null;
+      const format = value => value === null ? tr("routingCompareUnknown") :
+        key === "usb" ? tr(value ? "speakerConnected" : "speakerDisconnected") :
+          String(value);
+      byId("routing-compare-old-" + key).textContent = format(previous);
+      byId("routing-compare-new-" + key).textContent = format(latest);
+      byId("routing-compare-diff-" + key).textContent = latest === null
+        ? tr("routingCompareUnknown") : key === "usb"
+          ? tr(latest === previous ? "routingCompareUnchanged" : "routingCompareChanged")
+          : latest === previous ? "0" : (latest > previous ? "+" : "") +
+            String(latest - previous);
+    }
+    const status = byId("routing-compare-status");
+    if (status) status.textContent = tr(current ?
+      "routingCompareReady" : "routingCompareCurrentUnavailable");
+  }
+  async function loadRoutingComparison(event) {
+    const requestId = ++comparisonLoadId;
+    const input = event.target;
+    const file = input && input.files && input.files[0];
+    if (input) input.value = ""; // Permit reselecting the same local file.
+    if (!file) return;
+    comparisonBaseline = null;
+    renderRoutingComparison();
+    const feedback = byId("routing-compare-status");
+    if (!Number.isSafeInteger(file.size) || file.size > 65536) {
+      if (feedback) feedback.textContent = tr("routingCompareTooLarge");
+      return;
+    }
+    try {
+      if (typeof file.text !== "function") throw new Error("unsupported");
+      const parsed = JSON.parse(await file.text());
+      if (requestId !== comparisonLoadId) return; // Ignore an older file read.
+      const projection = safeImportedRoutingReport(parsed);
+      if (!projection) throw new Error("invalid report");
+      comparisonBaseline = projection;
+      renderRoutingComparison();
+    } catch (_) {
+      if (requestId !== comparisonLoadId) return;
+      comparisonBaseline = null;
+      renderRoutingComparison();
+      if (feedback) feedback.textContent = tr("routingCompareInvalid");
+    }
+  }
+  function clearRoutingComparison() {
+    ++comparisonLoadId; // Also prevents pending older reads from taking over.
+    comparisonBaseline = null;
+    const fileInput = byId("routing-compare-file");
+    if (fileInput) fileInput.value = "";
+    renderRoutingComparison();
+    const feedback = byId("routing-compare-status");
+    if (feedback) feedback.textContent = tr("routingCompareCleared");
   }
   function manualSoundObservations() {
     // Explicit human observations, never sourced from device telemetry.
@@ -486,6 +571,8 @@
     byId("routing-observations-reset-status").textContent = "";
     byId("routing-recheck-status").textContent = "";
     byId("routing-history-status").textContent = "";
+    if (!comparisonBaseline) byId("routing-compare-status").textContent =
+      tr("routingCompareNoFile");
   }
   async function setLanguage(language) {
     // Late locale replies must not overwrite newer user choices.
@@ -513,6 +600,8 @@
   byId("routing-export").addEventListener("click", downloadRoutingDiagnostics);
   byId("routing-recheck").addEventListener("click", requestRoutingRecheck);
   byId("routing-history-clear").addEventListener("click", clearRoutingHistory);
+  byId("routing-compare-file").addEventListener("change", loadRoutingComparison);
+  byId("routing-compare-clear").addEventListener("click", clearRoutingComparison);
   byId("routing-observations-reset").addEventListener("click", resetManualSoundObservations);
   byId("master").addEventListener("input", event => {
     state.master = Number(event.target.value);
