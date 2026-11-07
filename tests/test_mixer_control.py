@@ -428,6 +428,144 @@ class LocalMixerControlsTests(unittest.TestCase):
                         change.assert_not_called()
                         preview.assert_not_called()
 
+    def test_wait_for_supervisor_accepts_matching_complete_ack_without_sleep(self):
+        saved = defaults()
+        observed = {
+            "requested": requested_mix_controls(saved), "supervisor": "accepted",
+            "pending_controls": [], "audible_playback_verified": False,
+        }
+        with mock.patch("audiohub.mixer_control.application_status",
+                        return_value=observed) as status:
+            with mock.patch("audiohub.mixer_control.time.sleep") as sleep:
+                report = mixer_control.wait_for_supervisor(saved)
+        self.assertEqual(report["delivery_state"], "accepted")
+        self.assertEqual(report["pending_controls"], [])
+        self.assertTrue(report["settings_written"])
+        self.assertFalse(report["audible_playback_verified"])
+        self.assertEqual(report["saved_request"], requested_mix_controls(saved))
+        status.assert_called_once_with()
+        sleep.assert_not_called()
+
+    def test_wait_for_supervisor_observes_pending_then_acceptance(self):
+        saved = defaults()
+        saved["master"] = 22
+        expected = requested_mix_controls(saved)
+        statuses = [
+            {"requested": expected, "supervisor": "pending",
+             "pending_controls": ["master"]},
+            {"requested": expected, "supervisor": "accepted",
+             "pending_controls": []},
+        ]
+        with mock.patch("audiohub.mixer_control.application_status",
+                        side_effect=statuses) as status:
+            with mock.patch("audiohub.mixer_control.time.sleep") as sleep:
+                result = mixer_control.wait_for_supervisor(saved, checks=2)
+        self.assertEqual(result["delivery_state"], "accepted")
+        self.assertEqual(result["pending_controls"], [])
+        self.assertEqual(status.call_count, 2)
+        sleep.assert_called_once_with(1)
+
+    def test_wait_for_supervisor_timeout_keeps_unconfirmed_request(self):
+        saved = defaults()
+        expected = requested_mix_controls(saved)
+        status = {"requested": expected, "supervisor": "pending",
+                  "pending_controls": ["music.mute"]}
+        with mock.patch("audiohub.mixer_control.application_status",
+                        return_value=status) as read:
+            with mock.patch("audiohub.mixer_control.time.sleep") as sleep:
+                result = mixer_control.wait_for_supervisor(saved, checks=2)
+        self.assertEqual(result["delivery_state"], "pending")
+        self.assertEqual(result["pending_controls"], ["music.mute"])
+        self.assertTrue(result["settings_written"])
+        self.assertFalse(result["audible_playback_verified"])
+        self.assertEqual(read.call_count, 3)
+        self.assertEqual(sleep.call_count, 2)
+
+    def test_wait_for_supervisor_unsafe_status_fails_closed(self):
+        saved = defaults()
+        with mock.patch("audiohub.mixer_control.application_status",
+                        side_effect=mixer_control.MixerControlUnavailable("private")) as read:
+            with mock.patch("audiohub.mixer_control.time.sleep") as sleep:
+                result = mixer_control.wait_for_supervisor(saved, checks=1)
+        self.assertEqual(result["delivery_state"], "unavailable")
+        self.assertIsNone(result["pending_controls"])
+        self.assertTrue(result["settings_written"])
+        self.assertEqual(read.call_count, 2)
+        sleep.assert_called_once_with(1)
+
+    def test_wait_for_supervisor_detects_concurrent_supersession(self):
+        saved = defaults()
+        superseding = requested_mix_controls(defaults())
+        superseding["master"] = 3
+        with mock.patch("audiohub.mixer_control.application_status",
+                        return_value={"requested": superseding,
+                                      "supervisor": "accepted",
+                                      "pending_controls": []}):
+            with mock.patch("audiohub.mixer_control.time.sleep") as sleep:
+                result = mixer_control.wait_for_supervisor(saved)
+        self.assertEqual(result["delivery_state"], "superseded")
+        self.assertIsNone(result["pending_controls"])
+        self.assertFalse(result["audible_playback_verified"])
+        sleep.assert_not_called()
+
+    def test_wait_flag_requires_confirmed_mutation_and_never_previews(self):
+        for argv in (
+            ["--wait-for-supervisor", "mute-all"],
+            ["--wait-for-supervisor", "--preview", "mute-all"],
+            ["--wait-for-supervisor", "show"],
+            ["--wait-for-supervisor", "status"],
+            ["--wait-for-supervisor", "--confirm-local-mixer-change", "status"],
+        ):
+            with self.subTest(argv=argv):
+                with (mock.patch("audiohub.mixer_control.change") as change,
+                      mock.patch("audiohub.mixer_control.preview_change") as preview,
+                      mock.patch("audiohub.mixer_control.wait_for_supervisor") as wait):
+                    with self.assertRaises(SystemExit) as err, redirect_stderr(StringIO()):
+                        mixer_control.main(argv)
+                    self.assertEqual(err.exception.code, 2)
+                    change.assert_not_called()
+                    preview.assert_not_called()
+                    wait.assert_not_called()
+
+    def test_wait_flag_reports_saved_pending_as_nonzero_without_retrying(self):
+        saved = defaults()
+        expected = requested_mix_controls(saved)
+        report = {"saved_request": expected, "settings_written": True,
+                  "delivery_state": "pending", "pending_controls": ["master"],
+                  "audible_playback_verified": False}
+        with (mock.patch("audiohub.mixer_control.change",
+                         return_value=saved) as change,
+              mock.patch("audiohub.mixer_control.wait_for_supervisor",
+                         return_value=report) as wait):
+            with redirect_stdout(StringIO()) as stdout, redirect_stderr(StringIO()) as stderr:
+                with self.assertRaises(SystemExit) as err:
+                    mixer_control.main(["--confirm-local-mixer-change",
+                                        "--wait-for-supervisor", "set-master", "25"])
+            self.assertEqual(err.exception.code, 3)
+            self.assertIn('"settings_written": true', stdout.getvalue())
+            self.assertIn('"delivery_state": "pending"', stdout.getvalue())
+            self.assertIn("Settings saved", stderr.getvalue())
+            change.assert_called_once_with({"master": 25}, confirmed=True)
+            wait.assert_called_once_with(saved)
+
+    def test_wait_flag_success_returns_ack_report_without_claiming_sound(self):
+        saved = defaults()
+        report = {"saved_request": requested_mix_controls(saved),
+                  "settings_written": True, "delivery_state": "accepted",
+                  "pending_controls": [], "audible_playback_verified": False}
+        with (mock.patch("audiohub.mixer_control.change", return_value=saved) as change,
+              mock.patch("audiohub.mixer_control.wait_for_supervisor",
+                         return_value=report) as wait):
+            with redirect_stdout(StringIO()) as output:
+                mixer_control.main(["--confirm-local-mixer-change",
+                                    "--wait-for-supervisor", "mute-all"])
+            self.assertIn('"delivery_state": "accepted"', output.getvalue())
+            self.assertIn("no audible output was measured", output.getvalue())
+            change.assert_called_once_with({
+                slot: {"mute": True} for slot in ("music", "laptop", "tablet")
+            }, confirmed=True)
+            wait.assert_called_once_with(saved)
+
     def test_local_application_status_accepts_only_current_complete_ack(self):
         runtime_path = self.root / "runtime" / "status.json"
         expected = requested_mix_controls(defaults())
