@@ -77,14 +77,44 @@ PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-m
 # One atomic update to master, then music, laptop and tablet levels:
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-mixer-change set-mix 20 35 25 0
 
+# Three conservative BUILT-IN volume presets; preview before any save:
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --preview preset quiet
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --preview preset balanced
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --preview preset music-priority
+# Use the preview's exact revision to avoid overwriting another local change:
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-mixer-change --if-preview-revision v1-REPLACE-WITH-64-HEX-CHARS preset quiet
+
 # Confirm and save, then wait at most ten seconds for a matching recent,
 # COMPLETE PipeWire supervisor command acknowledgement (NOT measured audio):
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-mixer-change --wait-for-supervisor set-mix 20 35 25 0
 ```
 
+Built-in local `preset NAME` offers three convenient **volume-only**
+starting points. All requests are one schema-validated, locked, 0600
+atomic settings save, not independent partial changes.
+
+| Preset | Master | Music | Laptop | Tablet |
+| --- | ---: | ---: | ---: | ---: |
+| `quiet` | 15 | 25 | 25 | 25 |
+| `balanced` | 30 | 40 | 40 | 40 |
+| `music-priority` | 30 | 55 | 20 | 20 |
+
+These are **requested percentage levels**, not calibrated loudness,
+physical speaker dB, measured SPL, proof of clipping protection or
+certified hearing-safe settings. Importantly, presets do **not** unmute
+any input, change stored EQ bands or alter source routing; existing
+mute and EQ values are preserved exactly. Confirm any preset using
+`--confirm-local-mixer-change` (and preferably the exact
+`--if-preview-revision` from a separate read-only preview).
+`--wait-for-supervisor` remains optional and checks only software
+acknowledgement, not measured sound. Presets do not automatically
+restore a prior configuration; inspect the preview and keep the
+physical output low. The names are a fixed allowlist, with no user
+provided arbitrary volume numbers, paths or commands.
+
 The optional `--preview` applies to all change commands:
-`set-master`, `set-volume`, `mute`, `mute-all`, `unmute-selected`
-and `set-mix`. It outputs only validated requested master/input
+`set-master`, `set-volume`, `mute`, `mute-all`, `unmute-selected`,
+`preset` and `set-mix`. It outputs only validated requested master/input
 volume and mute values (`before` and `after`) and a deterministic
 `would_change` list, plus readable `planned_changes` entries with
 `control`, `previous` and `current` values. It also emits a
