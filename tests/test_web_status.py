@@ -540,6 +540,7 @@ const renderHardwareStatus = () => {
   events.push(deviceHealth === null ? "unknown"
     : (deviceHealth.usb_connected ? "connected" : "disconnected"));
 };
+const renderRoutingSummary = () => {};
 const pending = [];
 const fetch = () => new Promise((resolve, reject) => pending.push({resolve, reject}));
 '''
@@ -633,6 +634,7 @@ let words = {
   speakerStatusUnavailable: "Hardware status unavailable"
 };
 const tr = key => words[key] || key;
+const byId = () => null; // No summary metrics in this speaker-only test.
 let deviceHealth = null;
 let statusChecked = false;
 let statusRequestId = 0;
@@ -696,6 +698,129 @@ check().catch(e => {console.error(e); process.exitCode = 1;});
             capture_output=True, text=True, timeout=15, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
 
+
+
+def preview_routing_summary_source():
+    """Run the actual browser routing renderer rather than a copied version."""
+    source = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
+    start = source.index("  function renderRoutingSummary() {")
+    end = source.index("\n  async function readDeviceStatus()", start)
+    return source[start:end]
+
+
+class BrowserRoutingSummaryTests(unittest.TestCase):
+    """Read-only routing diagnostics do not turn missing health into zero."""
+
+    def test_existing_status_api_drives_localized_read_only_summary(self):
+        html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
+        source = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
+        for key in ("routing-routes", "routing-bluetooth", "routing-channels",
+                    "routing-freshness"):
+            self.assertIn('id="' + key + '"', html)
+        for key in ("active_routes", "bluetooth_sources", "virtual_channel_count"):
+            self.assertIn('"' + key + '"', preview_routing_summary_source())
+        self.assertIn("renderRoutingSummary();", source)
+        self.assertIn('fetch("./api/status", {cache: "no-store"})', source)
+        self.assertNotIn('method: "POST"', source)
+        self.assertIn('role="status"', html)
+        self.assertIn("Read-only device counts", html)
+
+    def test_five_locale_labels_have_safe_nonplayback_disclaimer(self):
+        keys = {
+            "routingTitle", "routingNotice", "routingRoutes",
+            "routingBluetooth", "routingChannels", "routingPending",
+            "routingRecent", "routingUnavailable"
+        }
+        for code in ("en", "de", "es", "fr", "it"):
+            with self.subTest(code=code):
+                messages = json.loads(
+                    (ROOT / "web" / "locales" / (code + ".json")).read_text(encoding="utf-8")
+                )
+                self.assertTrue(keys.issubset(messages))
+                self.assertTrue(all(messages[key].strip() for key in keys))
+                self.assertNotEqual(messages["routingPending"], messages["routingRecent"])
+                self.assertNotEqual(messages["routingUnavailable"], messages["routingRecent"])
+
+    @unittest.skipUnless(shutil.which("node"), "Node.js runtime unavailable")
+    def test_shipped_routing_renderer_fails_closed_and_retranslates(self):
+        setup = r'''
+const assert = require("node:assert/strict");
+const ids = ["routing-routes", "routing-bluetooth",
+             "routing-channels", "routing-freshness"];
+const elements = Object.fromEntries(ids.map(id => [id, {textContent: ""}]));
+const byId = id => elements[id] || null;
+const get = id => elements[id].textContent;
+let words = {
+  routingPending: "Waiting for first status check",
+  routingRecent: "Recent device report",
+  routingUnavailable: "Routing status unavailable"
+};
+const tr = key => words[key] || key;
+let deviceHealth = null;
+let statusChecked = false;
+'''
+        verify = r'''
+function values() {
+  return ["routing-routes", "routing-bluetooth", "routing-channels"].map(get);
+}
+renderRoutingSummary();
+assert.deepEqual(values(), ["—", "—", "—"]);
+assert.equal(get("routing-freshness"), "Waiting for first status check");
+
+statusChecked = true;
+// Invalid, stale or missing snapshots must not claim zero audio routes.
+for (const snapshot of [null, {}, {fresh: false, usb_connected: true,
+    active_routes: 3, bluetooth_sources: 2, virtual_channel_count: 3},
+    {fresh: true, usb_connected: "yes", active_routes: 2,
+     bluetooth_sources: 1, virtual_channel_count: 2}]) {
+  deviceHealth = snapshot;
+  renderRoutingSummary();
+  assert.deepEqual(values(), ["—", "—", "—"]);
+  assert.equal(get("routing-freshness"), "Routing status unavailable");
+}
+// A genuine zero is meaningful only in a fresh, complete, bounded report.
+deviceHealth = {fresh: true, usb_connected: false,
+  active_routes: 0, bluetooth_sources: 0, virtual_channel_count: 0};
+renderRoutingSummary();
+assert.deepEqual(values(), ["0", "0", "0"]);
+assert.equal(get("routing-freshness"), "Recent device report");
+
+// Different valid counts do not leak source identifiers or assert audible sound.
+deviceHealth = {fresh: true, usb_connected: true,
+  active_routes: 3, bluetooth_sources: 2, virtual_channel_count: 3,
+  mac: "PRIVATE-DEVICE-MAC", ssid: "PRIVATE-SSID"};
+renderRoutingSummary();
+assert.deepEqual(values(), ["3", "2", "3"]);
+assert.ok(!JSON.stringify(elements).includes("PRIVATE"));
+
+// Accept no string coercion, negative counts, fractions, arrays or oversized data.
+for (const bad of [
+  {active_routes: "2", bluetooth_sources: 1, virtual_channel_count: 1},
+  {active_routes: -1, bluetooth_sources: 1, virtual_channel_count: 1},
+  {active_routes: 4, bluetooth_sources: 1, virtual_channel_count: 1},
+  {active_routes: 2, bluetooth_sources: 3, virtual_channel_count: 1},
+  {active_routes: 2, bluetooth_sources: 1, virtual_channel_count: 4},
+  {active_routes: 2.5, bluetooth_sources: 1, virtual_channel_count: 1},
+  {active_routes: 2, bluetooth_sources: [], virtual_channel_count: 1}
+]) {
+  deviceHealth = {fresh: true, usb_connected: true, ...bad};
+  renderRoutingSummary();
+  assert.deepEqual(values(), ["—", "—", "—"]);
+}
+// Locale changes translate the status without altering fresh counts.
+deviceHealth = {fresh: true, usb_connected: true,
+  active_routes: 2, bluetooth_sources: 1, virtual_channel_count: 3};
+words.routingRecent = "Aktueller Gerätebericht";
+renderRoutingSummary();
+assert.deepEqual(values(), ["2", "1", "3"]);
+assert.equal(get("routing-freshness"), "Aktueller Gerätebericht");
+'''
+        program = setup + "\n" + preview_routing_summary_source() + "\n" + verify
+        result = subprocess.run(
+            ["node", "-e", program],
+            capture_output=True, text=True, timeout=15, check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
 
 if __name__ == "__main__":
     unittest.main()

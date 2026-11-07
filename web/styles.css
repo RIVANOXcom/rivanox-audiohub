@@ -19,3 +19,14 @@
 /* Name validation: show the same error state visually and to assistive tech. */
 .channel-name-input[aria-invalid="true"]{border-color:#ffb5b5;box-shadow:0 0 0 1px #ffb5b5}
 .channel-name-status[data-invalid="true"]{color:#ffcece}
+
+/* Read-only, sanitized device metrics. Values are unknown without fresh status. */
+.routing-summary{background:#17233a;border:1px solid #293e60;border-radius:18px;padding:20px 22px;margin:-10px 0 26px}
+.routing-summary h2{margin:0 0 6px}
+.routing-explainer{color:#b9c9e4;font-size:.85rem;line-height:1.45;margin:0 0 16px}
+.routing-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.routing-metric{background:#101d31;border:1px solid #39516f;border-radius:12px;padding:14px 16px;min-width:0}
+.routing-metric strong{display:block;font-size:1.8rem;line-height:1.2;font-variant-numeric:tabular-nums;color:#f2f7ff}
+.routing-metric span{display:block;font-size:.84rem;line-height:1.4;color:#c5d5ef;margin-top:5px}
+.routing-freshness{color:#a9c9ef;font-size:.82rem;margin:14px 0 0}
+@media(max-width:560px){.routing-summary{padding:18px}.routing-metrics{grid-template-columns:1fr}.routing-metric{display:flex;align-items:center;gap:16px}.routing-metric strong{min-width:28px}.routing-metric span{margin:0}}
