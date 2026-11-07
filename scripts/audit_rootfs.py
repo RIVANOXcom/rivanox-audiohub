@@ -686,6 +686,30 @@ def inspect(root: Path) -> dict[str, bool]:
         )
     except OSError:
         checks["mixer_stored_controls_strict_schema"] = False
+    # Concurrent local state writers can both discover a missing private
+    # ancestor; FileExistsError is a safe race only when reopening succeeds
+    # with O_DIRECTORY|O_NOFOLLOW. Never follow an injected symlink or file.
+    try:
+        runtime = (source / "runtime.py").read_text()
+        start = runtime.index("def _private_parent_fd(path, *, create=False):")
+        end = runtime.index("def _unique_state_json_members(", start)
+        opener = runtime[start:end]
+        checks["runtime_private_directory_race_nofollow"] = all(
+            token in opener for token in (
+                "except FileNotFoundError:",
+                "if not create:",
+                "os.mkdir(part, 0o700, dir_fd=fd)",
+                "except FileExistsError:",
+                "next_fd = os.open(part, flags, dir_fd=fd)",
+                "os.O_DIRECTORY | os.O_NOFOLLOW",
+                "info.st_uid != os.geteuid()",
+                "stat.S_IMODE(info.st_mode) & 0o077",
+            )
+        ) and opener.index("except FileExistsError:") < opener.index(
+            "next_fd = os.open(part, flags, dir_fd=fd)"
+        )
+    except (OSError, ValueError):
+        checks["runtime_private_directory_race_nofollow"] = False
     # Best-effort temporary-state cleanup must never turn a failed
     # atomic write into an unclosed private directory descriptor.
     try:
