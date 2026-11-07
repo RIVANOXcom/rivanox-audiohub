@@ -428,6 +428,115 @@ class LocalMixerControlsTests(unittest.TestCase):
                         change.assert_not_called()
                         preview.assert_not_called()
 
+    def test_preview_revision_lets_operator_commit_only_same_generation(self):
+        original = mixer_control.change(
+            {"master": 50, "music": {"volume": 42, "bass": 3}},
+            path=self.settings, confirmed=True)
+        preview = mixer_control.preview_change(
+            {"master": 15}, path=self.settings)
+        self.assertRegex(preview["revision"], r"^v1-[0-9a-f]{64}$")
+        self.assertEqual(preview["would_change"], ["master"])
+        result = mixer_control.change(
+            {"master": 15}, path=self.settings,
+            confirmed=True, if_revision=preview["revision"])
+        self.assertEqual(result["master"], 15)
+        self.assertEqual(result["music"]["bass"], original["music"]["bass"])
+        self.assertNotEqual(
+            mixer_control.preview_change({"master": 25},
+                                         path=self.settings)["revision"],
+            preview["revision"])
+
+    def test_preview_revision_rejects_concurrent_value_or_eq_change(self):
+        mixer_control.change({"master": 50}, path=self.settings, confirmed=True)
+        preview = mixer_control.preview_change({"master": 20}, path=self.settings)
+        mixer_control.change(
+            {"music": {"bass": 4}}, path=self.settings, confirmed=True)
+        prior = self.settings.read_bytes()
+        with self.assertRaisesRegex(
+                mixer_control.MixerControlUnavailable, "no longer current"):
+            mixer_control.change({"master": 20}, path=self.settings,
+                                 confirmed=True, if_revision=preview["revision"])
+        self.assertEqual(self.settings.read_bytes(), prior)
+        self.assertEqual(mixer_control.show(path=self.settings)["master"], 50)
+
+    def test_preview_revision_rejects_aba_restore_of_identical_values(self):
+        mixer_control.change({"master": 30}, path=self.settings, confirmed=True)
+        preview = mixer_control.preview_change({"master": 25}, path=self.settings)
+        mixer_control.change({"master": 40}, path=self.settings, confirmed=True)
+        mixer_control.change({"master": 30}, path=self.settings, confirmed=True)
+        self.assertEqual(mixer_control.show(path=self.settings)["master"], 30)
+        before = self.settings.read_bytes()
+        with self.assertRaisesRegex(
+                mixer_control.MixerControlUnavailable, "no longer current"):
+            mixer_control.change({"master": 25}, path=self.settings,
+                                 confirmed=True, if_revision=preview["revision"])
+        self.assertEqual(self.settings.read_bytes(), before)
+
+    def test_default_revision_is_read_only_and_guards_first_save(self):
+        preview = mixer_control.preview_change({"master": 35}, path=self.settings)
+        self.assertEqual(preview["before"]["master"], defaults()["master"])
+        self.assertFalse(self.settings.parent.exists())
+        after = mixer_control.change({"master": 35}, path=self.settings,
+                                     confirmed=True, if_revision=preview["revision"])
+        self.assertEqual(after["master"], 35)
+        self.assertEqual(stat.S_IMODE(self.settings.stat().st_mode), 0o600)
+        self.assertEqual(stat.S_IMODE(self.settings.parent.stat().st_mode), 0o700)
+
+    def test_same_revision_two_simultaneous_writers_only_one_succeeds(self):
+        mixer_control.change({"master": 50}, path=self.settings, confirmed=True)
+        token = mixer_control.preview_change(
+            {"master": 25}, path=self.settings)["revision"]
+        def apply(level):
+            try:
+                mixer_control.change({"master": level}, path=self.settings,
+                                     confirmed=True, if_revision=token)
+                return True
+            except mixer_control.MixerControlUnavailable:
+                return False
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            futures = [pool.submit(apply, level) for level in (20, 30)]
+            results = [future.result(timeout=8) for future in futures]
+        self.assertCountEqual(results, [True, False])
+        self.assertIn(mixer_control.show(path=self.settings)["master"], (20, 30))
+
+    def test_bad_revision_refuses_without_creating_any_settings(self):
+        for token in ("", "v1-", "v1-" + "A" * 64, "v1-" + "a" * 63,
+                      "v1-" + "x" * 64, 123, True):
+            with self.subTest(token=repr(token)):
+                with self.assertRaises(mixer_control.MixerControlUnavailable):
+                    mixer_control.change({"master": 22}, path=self.settings,
+                                         confirmed=True, if_revision=token)
+                self.assertFalse(self.settings.parent.exists())
+
+    def test_revision_cli_requires_explicit_consent_and_rejects_preview_combo(self):
+        token = "v1-" + "a" * 64
+        for argv in (
+            ["--if-preview-revision", token, "set-master", "25"],
+            ["--preview", "--if-preview-revision", token, "set-master", "25"],
+            ["--if-preview-revision", token, "show"],
+            ["--if-preview-revision", token, "status"],
+            ["--confirm-local-mixer-change", "--if-preview-revision", token, "show"],
+        ):
+            with self.subTest(argv=argv):
+                with (mock.patch("audiohub.mixer_control.change") as changed,
+                      mock.patch("audiohub.mixer_control.preview_change") as preview):
+                    with self.assertRaises(SystemExit) as failed, redirect_stderr(StringIO()):
+                        mixer_control.main(argv)
+                    self.assertEqual(failed.exception.code, 2)
+                    changed.assert_not_called()
+                    preview.assert_not_called()
+
+    def test_revision_cli_passes_guard_to_same_existing_atomic_change(self):
+        token = "v1-" + "b" * 64
+        with mock.patch("audiohub.mixer_control.change",
+                        return_value=defaults()) as changed:
+            with redirect_stdout(StringIO()):
+                mixer_control.main(["--confirm-local-mixer-change",
+                                    "--if-preview-revision", token,
+                                    "set-master", "35"])
+            changed.assert_called_once_with(
+                {"master": 35}, confirmed=True, if_revision=token)
+
     def test_wait_for_supervisor_accepts_matching_complete_ack_without_sleep(self):
         saved = defaults()
         observed = {
