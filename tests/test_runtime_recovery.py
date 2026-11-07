@@ -113,6 +113,71 @@ class PrivateRuntimeStateTests(unittest.TestCase):
         self.assertEqual(stat.S_IMODE(self.path.stat().st_mode), 0o600)
         self.assertEqual(self.path.stat().st_nlink, 1)
 
+
+    def test_failed_state_replace_retains_primary_error_if_temp_cleanup_fails(self):
+        from audiohub import runtime
+        original_parent = runtime._private_parent_fd
+        seen = []
+
+        def opened_parent(path, *, create=False):
+            fd = original_parent(path, create=create)
+            seen.append(fd)
+            return fd
+
+        atomic_json(self.path, {"previous": 1})
+        with (mock.patch.object(runtime, "_private_parent_fd", side_effect=opened_parent),
+              mock.patch.object(runtime.os, "replace",
+                                side_effect=OSError("primary replace failed")),
+              mock.patch.object(runtime.os, "unlink",
+                                side_effect=PermissionError("temp cleanup failed"))):
+            with self.assertRaisesRegex(OSError, "primary replace failed"):
+                atomic_json(self.path, {"next": 2})
+        self.assertEqual(read_json(self.path, {}), {"previous": 1})
+        self.assertEqual(len(seen), 1)
+        with self.assertRaises(OSError):
+            os.fstat(seen[0])
+
+    def test_failed_state_fsync_still_closes_directory_on_cleanup_failure(self):
+        from audiohub import runtime
+        original_parent = runtime._private_parent_fd
+        seen = []
+
+        def opened_parent(path, *, create=False):
+            fd = original_parent(path, create=create)
+            seen.append(fd)
+            return fd
+
+        with (mock.patch.object(runtime, "_private_parent_fd", side_effect=opened_parent),
+              mock.patch.object(runtime.os, "fsync",
+                                side_effect=OSError("primary fsync failed")),
+              mock.patch.object(runtime.os, "unlink",
+                                side_effect=PermissionError("temp cleanup failed"))):
+            with self.assertRaisesRegex(OSError, "primary fsync failed"):
+                atomic_json(self.path, {"next": 2})
+        self.assertFalse(self.path.exists())
+        self.assertEqual(len(seen), 1)
+        with self.assertRaises(OSError):
+            os.fstat(seen[0])
+
+    def test_successful_state_replace_keeps_success_on_spurious_unlink_failure(self):
+        from audiohub import runtime
+        original_parent = runtime._private_parent_fd
+        seen = []
+
+        def opened_parent(path, *, create=False):
+            fd = original_parent(path, create=create)
+            seen.append(fd)
+            return fd
+
+        with (mock.patch.object(runtime, "_private_parent_fd", side_effect=opened_parent),
+              mock.patch.object(runtime.os, "unlink",
+                                side_effect=PermissionError("spurious cleanup failure"))):
+            atomic_json(self.path, {"persisted": True})
+        self.assertEqual(read_json(self.path, {}), {"persisted": True})
+        self.assertEqual(len(seen), 1)
+        with self.assertRaises(OSError):
+            os.fstat(seen[0])
+
     def test_two_updates_are_atomic_and_leave_no_tmp(self):
         atomic_json(self.path, {"first": True})
         atomic_json(self.path, {"second": True})
