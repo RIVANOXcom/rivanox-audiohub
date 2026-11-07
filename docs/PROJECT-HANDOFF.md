@@ -997,3 +997,39 @@ owner WiFi, human/legal/CEO release GO; 83 source rights and
 nine OS notices remain, effective AGPL-3.0-only, Model C unapproved.
 All PRs Draft/unmerged; no flashing/install, merge, deploy,
 payments, permissions change or official release.
+
+
+## 2026-11-07: Draft PR86 — runtime atomic state cleanup cannot obscure failure
+
+PAPA MissionPilot PAPA-18B8B3C6 / AH-007, AH-009.
+New isolated Draft PR86 stacks ONLY on unchanged Draft PR85
+HEAD 68a87dcc600558904340674eab6fa663594459c6. Runtime state writer atomic_json()
+previously handled a cleanup FileNotFoundError but could propagate
+another os.unlink() failure in finally, masking the original
+os.replace/fsync failure and skipping os.close(dirfd). This
+differs from the already hardened EQ configuration writer and
+was still open in the private runtime JSON module. Nested
+finally ensures the private directory FD is closed even when
+cleanup raises, with best-effort temp unlink preserving primary
+write errors. Three genuine tempfile fault-injection tests
+verify failed replace plus failed cleanup retains original
+exception and prior JSON, failed fsync plus failed cleanup
+retains original and releases FD, successful replace plus
+spurious unlink failure leaves complete state and closes FD.
+Installed-rootfs audit adds
+runtime_atomic_cleanup_preserves_error_and_closes_fd gate
+plus a positive/two adversarial synthetic tests; target native
+101/101 only upon independent exact-head ARM64 completion.
+Parent PR85 Source #42317005420 SUCCESS 764/764 and native
+#42316977944 pending at branch creation. PR84 Source
+#42316717527 SUCCESS 758/758 and native #42316686826 pending;
+earlier PR83 native #42315438859 actual 98/98,
+image SHA256 bddc0484080a8746774bec56b7210311a57b4df8d4ec44fe3c384a3ff5709283,
+temporary GitHub alpha ZIP #13550717341 digest
+7b77c308e3a772719e2351808b956d8ac9fa45a42f87bf435dcf20bbd04fc29e.
+All PRs Draft/unmerged, main unchanged. No Pi4/Edifier
+audible 3-way/two-BT/24h soak, secure owner phone WiFi,
+legal/hardware/CEO GO; 83 source rights, nine OS copyright
+gaps, AGPL-3.0-only effective, Model C unapproved.
+No SD flash/install, deploy, merge, payments, permission
+changes or public release.
