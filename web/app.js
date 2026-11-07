@@ -76,6 +76,30 @@
     container.append(label, range);
     return container;
   }
+  // Locale requests can finish while someone is typing. Keep that unsaved,
+  // browser-only draft and the focused control when rebuilding translated cards.
+  function captureChannelEditState(target) {
+    const drafts = Object.create(null);
+    for (const channel of CHANNELS) {
+      const input = byId(channel + "-display-name");
+      if (input && input.dataset.editing === "true") drafts[channel] = input.value;
+    }
+    const focused = document.activeElement;
+    const focusedId = focused && target.contains(focused) ? focused.id : null;
+    const selection = focusedId && focused.type === "text" &&
+      typeof focused.selectionStart === "number" &&
+      typeof focused.selectionEnd === "number"
+      ? [focused.selectionStart, focused.selectionEnd] : null;
+    return {drafts, focusedId, selection};
+  }
+  function restoreChannelEditState(snapshot) {
+    const focused = snapshot.focusedId && byId(snapshot.focusedId);
+    if (!focused) return;
+    focused.focus({preventScroll: true});
+    if (snapshot.selection && typeof focused.setSelectionRange === "function") {
+      focused.setSelectionRange(snapshot.selection[0], snapshot.selection[1]);
+    }
+  }
   // Keep screen-reader slider names in sync with renamed display inputs.
   function updateChannelControlLabels(channel) {
     for (const key of ["volume", ...BANDS]) {
@@ -85,6 +109,7 @@
   }
   function drawChannels() {
     const target = byId("channels");
+    const editState = captureChannelEditState(target);
     target.replaceChildren();
     for (const channel of CHANNELS) {
       const card = document.createElement("section");
@@ -121,11 +146,17 @@
         value: displayName(channel)
       });
       nameInput.className = "channel-name-input";
+      if (editState.drafts[channel] !== undefined) {
+        nameInput.value = editState.drafts[channel];
+        nameInput.dataset.editing = "true";
+      }
+      nameInput.addEventListener("input", () => { nameInput.dataset.editing = "true"; });
       nameInput.setAttribute("aria-label", tr("inputName") + ": " + tr("input" + SLOT_INDEX[channel]));
       const renameStatus = document.createElement("span");
       renameStatus.className = "channel-name-status";
       renameStatus.setAttribute("role", "status");
       nameInput.addEventListener("change", () => {
+        nameInput.dataset.editing = "false";
         const name = validName(nameInput.value);
         const fallback = tr("input" + SLOT_INDEX[channel]);
         if (!name || CHANNELS.some(slot => slot !== channel &&
@@ -157,6 +188,7 @@
       for (const band of BANDS) card.append(control(band, -12, 12, state[channel][band], channel, " dB"));
       target.append(card);
     }
+    restoreChannelEditState(editState);
   }
   function renderHardwareStatus() {
     const node = document.querySelector('[data-t="speakerState"]');
