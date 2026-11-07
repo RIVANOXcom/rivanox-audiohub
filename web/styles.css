@@ -15,3 +15,7 @@
 .support-feature-secondary{background:#172a48;border:1px solid #7094c7;color:#edf3ff}
 .support-feature-secondary:hover{background:#283f66;color:#fff;text-decoration:none}
 @media(max-width:800px){.support-feature{grid-template-columns:minmax(0,1fr);padding:20px}}
+
+/* Name validation: show the same error state visually and to assistive tech. */
+.channel-name-input[aria-invalid="true"]{border-color:#ffb5b5;box-shadow:0 0 0 1px #ffb5b5}
+.channel-name-status[data-invalid="true"]{color:#ffcece}

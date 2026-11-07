@@ -309,8 +309,20 @@ class BrowserLocaleInputEditTests(unittest.TestCase):
         source = PREVIEW.read_text(encoding="utf-8")
         self.assertIn('maxLength: 64, autoComplete: "off"', source)
         self.assertNotIn('maxLength: 32, autoComplete: "off"', source)
-        self.assertIn('renameStatus.textContent = hasInvalidName() ?', source)
+        self.assertIn('renameStatus.textContent = invalid ? tr("invalidInputName") : "";', source)
+        self.assertIn('setNameInvalid(invalid);', source)
         self.assertIn('const hasInvalidName = () => {', source)
+
+    def test_invalid_name_feedback_is_exposed_to_assistive_technology(self):
+        source = PREVIEW.read_text(encoding="utf-8")
+        styles = (ROOT / "web" / "styles.css").read_text(encoding="utf-8")
+        self.assertIn('renameStatus.id = inputId + "-feedback";', source)
+        self.assertIn('nameInput.setAttribute("aria-describedby", renameStatus.id);', source)
+        self.assertIn('nameInput.setAttribute("aria-invalid", String(invalid));', source)
+        self.assertIn('renameStatus.setAttribute("role", "status");', source)
+        self.assertIn('.channel-name-input[aria-invalid="true"]', styles)
+        self.assertIn('.channel-name-status[data-invalid="true"]', styles)
+        self.assertNotIn('method: "POST"', source)
 
     def test_draft_and_focus_are_captured_before_replacing_cards(self):
         source = PREVIEW.read_text(encoding="utf-8")
@@ -403,6 +415,11 @@ words = {
 drawChannels();
 const newName = byId("music-display-name");
 assert.notEqual(newName, oldName);
+const musicFeedback = root.children[0].children[1].children[3];
+assert.equal(musicFeedback.id, "music-display-name-feedback");
+assert.equal(musicFeedback.attributes.role, "status");
+assert.equal(newName.attributes["aria-describedby"], musicFeedback.id);
+assert.equal(newName.attributes["aria-invalid"], "false");
 assert.equal(newName.value, "Living room TV");
 assert.equal(newName.dataset.editing, "true");
 assert.equal(document.activeElement, newName);
@@ -418,6 +435,8 @@ newName.handlers.change();
 assert.equal(newName.dataset.editing, "false");
 assert.equal(previewLabels.music, "Living room TV");
 assert.equal(saved.length, 1);
+assert.equal(newName.attributes["aria-invalid"], "false");
+assert.equal(musicFeedback.textContent, "previewNamesOnly");
 assert.equal(byId("music-volume").attributes["aria-label"],
              "Lautstärke: Living room TV");
 
@@ -444,6 +463,8 @@ tabletName.value = emoji;
 tabletName.handlers.input();
 const tabletFeedback = root.children[2].children[1].children[3];
 assert.equal(tabletFeedback.textContent, "");
+assert.equal(tabletName.attributes["aria-invalid"], "false");
+assert.equal(tabletName.attributes["aria-describedby"], tabletFeedback.id);
 tabletName.handlers.change();
 assert.equal(previewLabels.tablet, emoji);
 
@@ -454,17 +475,41 @@ laptopName.value = "A".repeat(33);
 laptopName.handlers.input();
 const laptopFeedback = root.children[1].children[1].children[3];
 assert.equal(laptopFeedback.textContent, "Ungültiger Name");
+assert.equal(laptopFeedback.id, "laptop-display-name-feedback");
+assert.equal(laptopName.attributes["aria-describedby"], laptopFeedback.id);
+assert.equal(laptopName.attributes["aria-invalid"], "true");
+assert.equal(laptopFeedback.dataset.invalid, "true");
 laptopName.handlers.change();
 assert.equal(laptopName.value, "Eingang 2");
 assert.equal(previewLabels.laptop, undefined);
+assert.equal(laptopName.attributes["aria-invalid"], "false");
+assert.equal(laptopFeedback.dataset.invalid, "false");
 
 // Duplicate input names must also receive immediate feedback.
 laptopName.value = emoji;
 laptopName.handlers.input();
 assert.equal(laptopFeedback.textContent, "Ungültiger Name");
+assert.equal(laptopName.attributes["aria-invalid"], "true");
 laptopName.value = "Studio";
 laptopName.handlers.input();
 assert.equal(laptopFeedback.textContent, "");
+assert.equal(laptopName.attributes["aria-invalid"], "false");
+assert.equal(laptopFeedback.dataset.invalid, "false");
+
+// An invalid draft stays invalid and translated across asynchronous redraws.
+laptopName.value = "B".repeat(33);
+laptopName.handlers.input();
+laptopName.focus();
+words.invalidInputName = "Nombre inválido";
+drawChannels();
+const newLaptop = byId("laptop-display-name");
+const newLaptopFeedback = root.children[1].children[1].children[3];
+assert.equal(newLaptop.value, "B".repeat(33));
+assert.equal(newLaptop.attributes["aria-invalid"], "true");
+assert.equal(newLaptop.attributes["aria-describedby"], newLaptopFeedback.id);
+assert.equal(newLaptopFeedback.dataset.invalid, "true");
+assert.equal(newLaptopFeedback.textContent, "Nombre inválido");
+assert.equal(document.activeElement, newLaptop);
 '''
         result = subprocess.run(
             ["node", "-e", setup + "\n" + preview_validator_source() + "\n" +
