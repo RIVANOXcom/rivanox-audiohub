@@ -1847,6 +1847,184 @@ class LocalMixerControlsTests(unittest.TestCase):
         self.assertIn("not changed or unavailable", err.getvalue())
         self.assertNotIn("PRIVATE-UNTRUSTED-FILENAME", err.getvalue())
 
+    def test_compare_profile_to_current_displays_signed_level_deltas_without_writes(self):
+        path = self.settings.with_name("volume-profiles.json")
+        mixer_control.save_volume_profile(
+            "cinema", 25, 60, 40, 0, path=path, confirmed=True)
+        mixer_control.change({
+            "master": 45, "music": {"volume": 20, "mute": True, "bass": 6},
+            "laptop": {"volume": 40, "mute": True, "treble": 3},
+            "tablet": {"volume": 80, "mid": -4},
+        }, path=self.settings, confirmed=True)
+        profile_bytes, mixer_bytes = path.read_bytes(), self.settings.read_bytes()
+        with mock.patch("audiohub.mixer_control.atomic_json") as write:
+            result = mixer_control.compare_profile_to_current(
+                "cinema", path=path, settings_path=self.settings)
+            write.assert_not_called()
+        self.assertEqual(result["mode"], "profile-vs-current-only")
+        self.assertEqual(result["profile"], "cinema")
+        self.assertEqual(result["saved_volumes"], {
+            "master": 25, "music": 60, "laptop": 40, "tablet": 0})
+        self.assertEqual(result["current_volumes"], {
+            "master": 45, "music": 20, "laptop": 40, "tablet": 80})
+        self.assertEqual(result["differences"], [
+            {"control": "master", "saved": 25, "current": 45, "delta": 20},
+            {"control": "music", "saved": 60, "current": 20, "delta": -40},
+            {"control": "tablet", "saved": 0, "current": 80, "delta": 80},
+        ])
+        self.assertFalse(result["same_levels"])
+        self.assertRegex(result["profile_revision"], r"^p1-[0-9a-f]{64}$")
+        self.assertRegex(result["mixer_revision"], r"^v1-[0-9a-f]{64}$")
+        self.assertFalse(result["profile_written"])
+        self.assertFalse(result["mixer_settings_written"])
+        self.assertFalse(result["audible_playback_verified"])
+        self.assertEqual(path.read_bytes(), profile_bytes)
+        self.assertEqual(self.settings.read_bytes(), mixer_bytes)
+
+    def test_compare_profile_to_current_equal_levels_show_no_differences(self):
+        path = self.settings.with_name("volume-profiles.json")
+        mixer_control.save_volume_profile(
+            "defaultmix", 70, 65, 50, 50, path=path, confirmed=True)
+        result = mixer_control.compare_profile_to_current(
+            "defaultmix", path=path, settings_path=self.settings)
+        self.assertEqual(result["differences"], [])
+        self.assertTrue(result["same_levels"])
+        self.assertFalse(self.settings.exists())
+
+    def test_compare_profile_to_current_defaults_are_requested_not_actual_audio(self):
+        path = self.settings.with_name("volume-profiles.json")
+        mixer_control.save_volume_profile(
+            "quiet", 15, 25, 25, 25, path=path, confirmed=True)
+        result = mixer_control.compare_profile_to_current(
+            "quiet", path=path, settings_path=self.settings)
+        self.assertEqual(result["current_volumes"], {
+            "master": 70, "music": 65, "laptop": 50, "tablet": 50})
+        self.assertEqual([d["delta"] for d in result["differences"]],
+                         [55, 40, 25, 25])
+        self.assertFalse(result["audible_playback_verified"])
+        self.assertFalse(self.settings.exists())
+
+    def test_compare_profile_to_current_absent_catalog_never_creates_config(self):
+        path = self.settings.with_name("volume-profiles.json")
+        with self.assertRaises(mixer_control.MixerControlUnavailable):
+            mixer_control.compare_profile_to_current(
+                "missing", path=path, settings_path=self.settings)
+        self.assertFalse(path.parent.exists())
+
+    def test_compare_profile_to_current_missing_invalid_name_and_insecure_catalog(self):
+        path = self.settings.with_name("volume-profiles.json")
+        mixer_control.save_volume_profile(
+            "known", 20, 30, 40, 50, path=path, confirmed=True)
+        before = path.read_bytes()
+        for name in ("missing", "../private", "UPPER", "a_b", ""):
+            with self.subTest(name=name):
+                with self.assertRaises(mixer_control.MixerControlUnavailable):
+                    mixer_control.compare_profile_to_current(
+                        name, path=path, settings_path=self.settings)
+        self.assertEqual(path.read_bytes(), before)
+        path.chmod(0o644)
+        with self.assertRaises(mixer_control.MixerControlUnavailable):
+            mixer_control.compare_profile_to_current(
+                "known", path=path, settings_path=self.settings)
+
+    def test_compare_profile_to_current_rejects_settings_replacement_during_read(self):
+        path = self.settings.with_name("volume-profiles.json")
+        mixer_control.save_volume_profile(
+            "cinema", 20, 30, 40, 50, path=path, confirmed=True)
+        mixer_control.change({"master": 21}, path=self.settings, confirmed=True)
+        original = mixer_control._state_with_revision
+        def replace_during_read(p, dirfd):
+            snapshot = original(p, dirfd)
+            if p.name == "settings.json":
+                mixer_control.atomic_json(self.settings,
+                                          mixer_control.show(path=self.settings))
+            return snapshot
+        with mock.patch("audiohub.mixer_control._state_with_revision",
+                        side_effect=replace_during_read) as read:
+            with self.assertRaises(mixer_control.MixerControlUnavailable):
+                mixer_control.compare_profile_to_current(
+                    "cinema", path=path, settings_path=self.settings)
+            read.assert_called_once()
+        self.assertEqual(mixer_control.list_volume_profiles(path=path)[
+            "profiles"]["cinema"]["master"], 20)
+
+    def test_compare_profile_to_current_rejects_catalog_replacement_during_read(self):
+        path = self.settings.with_name("volume-profiles.json")
+        mixer_control.save_volume_profile(
+            "cinema", 20, 30, 40, 50, path=path, confirmed=True)
+        original = mixer_control._state_with_revision
+        def replace_catalog_during_read(p, dirfd):
+            snapshot = original(p, dirfd)
+            if p.name == "settings.json":
+                catalog = mixer_control.list_volume_profiles(path=path)
+                mixer_control.atomic_json(path, catalog)
+            return snapshot
+        with mock.patch("audiohub.mixer_control._state_with_revision",
+                        side_effect=replace_catalog_during_read):
+            with self.assertRaises(mixer_control.MixerControlUnavailable):
+                mixer_control.compare_profile_to_current(
+                    "cinema", path=path, settings_path=self.settings)
+        self.assertFalse(self.settings.exists())
+
+    def test_compare_profile_to_current_rejects_unrelated_config_paths(self):
+        path = self.settings.with_name("volume-profiles.json")
+        mixer_control.save_volume_profile(
+            "cinema", 20, 30, 40, 50, path=path, confirmed=True)
+        for target, settings in (
+            (path, self.root / "other" / "settings.json"),
+            (self.settings, self.settings),
+            (path, path),
+        ):
+            with self.subTest(target=str(target), settings=str(settings)):
+                with self.assertRaises(mixer_control.MixerControlUnavailable):
+                    mixer_control.compare_profile_to_current(
+                        "cinema", path=target, settings_path=settings)
+
+    def test_compare_profile_to_current_cli_is_read_only_and_valid(self):
+        report = {
+            "mode": "profile-vs-current-only", "profile": "cinema",
+            "saved_volumes": {"master": 20, "music": 30, "laptop": 40, "tablet": 50},
+            "current_volumes": {"master": 40, "music": 30, "laptop": 40, "tablet": 50},
+            "differences": [
+                {"control": "master", "saved": 20, "current": 40, "delta": 20}],
+            "same_levels": False, "profile_revision": "p1-" + "a" * 64,
+            "mixer_revision": "v1-" + "b" * 64,
+            "profile_written": False, "mixer_settings_written": False,
+            "audible_playback_verified": False,
+        }
+        with (mock.patch("audiohub.mixer_control.compare_profile_to_current",
+                         return_value=report) as compare,
+              mock.patch("audiohub.mixer_control.atomic_json") as write,
+              mock.patch("audiohub.mixer_control.change") as change):
+            with redirect_stdout(StringIO()) as stdout:
+                mixer_control.main(["compare-profile-current", "cinema"])
+            compare.assert_called_once_with("cinema")
+            write.assert_not_called()
+            change.assert_not_called()
+        self.assertEqual(json.loads(stdout.getvalue())["differences"],
+                         report["differences"])
+
+    def test_compare_profile_to_current_cli_rejects_every_mutation_switch(self):
+        for prefix in (
+            ["--preview"], ["--confirm-local-mixer-change"],
+            ["--confirm-local-profile-save"], ["--wait-for-supervisor"],
+            ["--if-preview-revision", "v1-" + "a" * 64],
+            ["--if-profile-revision", "p1-" + "a" * 64],
+            ["--compare-baseline", "b1-no"],
+        ):
+            with self.subTest(flags=prefix):
+                with (mock.patch("audiohub.mixer_control.compare_profile_to_current") as compare,
+                      mock.patch("audiohub.mixer_control.atomic_json") as write,
+                      mock.patch("audiohub.mixer_control.change") as change):
+                    with redirect_stdout(StringIO()), redirect_stderr(StringIO()):
+                        with self.assertRaises(SystemExit) as fail:
+                            mixer_control.main(prefix + [
+                                "compare-profile-current", "cinema"])
+                    self.assertEqual(fail.exception.code, 2)
+                    compare.assert_not_called()
+                    write.assert_not_called()
+                    change.assert_not_called()
+
     def test_wait_for_supervisor_accepts_matching_complete_ack_without_sleep(self):
         saved = defaults()
         observed = {
