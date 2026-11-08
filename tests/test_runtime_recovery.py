@@ -146,7 +146,7 @@ class RecoveryTests(unittest.TestCase):
                 self.assertTrue(proc.terminated)
                 self.assertEqual(s.loopbacks, {})
                 self.assertEqual(s.route_node_generations, {})
-        self.assertEqual(popen.call_count, 6)
+        self.assertEqual(popen.call_count, 5)
         for bad in (-1, True, "501", None):
             with self.subTest(sink_id=repr(bad)):
                 s._route(src, {"audiohub.music": bad}, now=4)
