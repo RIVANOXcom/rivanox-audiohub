@@ -1436,9 +1436,11 @@ check("usb", {fresh: true, usb_connected: false, active_routes: 0,
 assert.deepEqual(stepKeys(), ["routingRecoverUsbPower",
   "routingRecoverUsbCable", "routingRecoverRecheck"]);
 check("channels", {fresh: true, usb_connected: true, active_routes: 0,
-                   bluetooth_sources: 0, virtual_channel_count: 0});
+                   bluetooth_sources: 0, virtual_channel_count: 0}, 4);
+assert.equal(stepKeys()[0], "routingRecoverUsbReturned");
 check("routes", {fresh: true, usb_connected: true, active_routes: 0,
-                 bluetooth_sources: 1, virtual_channel_count: 3});
+                 bluetooth_sources: 1, virtual_channel_count: 3}, 4);
+assert.equal(stepKeys()[0], "routingRecoverBtReturned");
 check("bluetooth", {fresh: true, usb_connected: true, active_routes: 1,
                     bluetooth_sources: 0, virtual_channel_count: 3});
 assert.ok(stepKeys().includes("routingRecoverBluetoothTrust"));
