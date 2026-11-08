@@ -73,6 +73,49 @@ or volume adjustments as separate actions. The running PipeWire
 supervisor applies the requested mutes on a later poll, and a
 successful file update cannot prove the effect or audible audio.
 
+### Manually restore only the two originally changed mutes
+
+The original read-only `--preview isolate-input music` response also
+contains a bounded `comparison_baseline` starting with `b1-`.
+**Keep this original baseline locally** if you wish to restore the two
+other input mutes after a separately authorized isolation test. It
+contains requested volume, EQ and mute settings; never paste it into
+public logs, screenshots, telemetry or support messages. A baseline
+is operator-supplied, **not an authenticated backup**.
+
+After the controlled test, the operator can inspect a restore plan,
+substituting the actual captured `b1-...` token:
+
+```sh
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --preview restore-isolation music b1-REPLACE-WITH-ORIGINAL-CAPTURED-BASELINE
+```
+
+The command **refuses** to propose restoring the previous mutes unless
+the entire current mixer settings state (master, all three inputs'
+volume/mute/EQ) still exactly matches the result expected after the
+original isolation. Any independent change to any mixer control, even
+if later reverted to the same values, invalidates the previous
+revision. The new read-only plan lists precisely which two other
+mutes would revert and shows a **fresh** `v1-...` revision. Review
+`before`, `after`, `would_change` and the exact selected slot;
+never infer real audio from the preview.
+
+Only after **separate local consent** may the operator enter:
+
+```sh
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-mixer-change --if-preview-revision v1-REPLACE-WITH-FRESH-RESTORE-PREVIEW-REVISION restore-isolation music b1-REPLACE-WITH-ORIGINAL-CAPTURED-BASELINE
+```
+
+The existing private lock and revision-guarded atomic writer restore
+**only the prior mute state of the two other inputs**, never the
+selected input's mute, master volume, gain, EQ, Bluetooth connections
+or source routing. Previously muted sources stay muted. If
+the restore preview reports a mismatch, a fresh status inspection is
+necessary; do not force a restore or automatically unmute channels.
+The feature neither stores a rollback file nor schedules an automatic
+write, and an accepted software command is still not evidence of
+Edifier output.
+
 The command does not attach to the web UI, enable the unsafe
 Windows UDP receiver, modify BlueZ trust, open a port, or grant
 release approval. Repeat tests individually only with separate
