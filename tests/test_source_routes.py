@@ -681,6 +681,132 @@ class SourcePolicyTests(unittest.TestCase):
         self.assertEqual((self.dir / routes.FILENAME).read_bytes(), original)
         self.assertEqual(namefile.read_bytes(), prev)
 
+    def test_local_input_board_shows_real_private_reservation_with_requested_mixer_controls(self):
+        from audiohub import mixer_control
+        first, second = "AA:BB:CC:DD:EE:FF", "11:22:33:44:55:66"
+        routes.bind_bluetooth(first, "music", self.dir)
+        routes.bind_bluetooth(second, "tablet", self.dir)
+        names = {"music": "Living Room", "laptop": "Console", "tablet": "Kitchen"}
+        report = routes.route_slots(self.dir)
+        mixer = {
+            "requested": {
+                "master": 27,
+                "music": {"volume": 41, "mute": True},
+                "laptop": {"volume": 35, "mute": False},
+                "tablet": {"volume": 16, "mute": False},
+            },
+            "supervisor": "pending", "audible_playback_verified": False,
+        }
+        original = (self.dir / routes.FILENAME).read_bytes()
+        value = routes.format_local_input_board(report, mixer)
+        self.assertIn("AudioHub private local input overview", value)
+        self.assertIn("Requested master: 27%", value)
+        self.assertIn("Mixer supervisor: pending", value)
+        self.assertIn("music: Bluetooth manually assigned", value)
+        self.assertIn("requested 41% | mute yes", value)
+        self.assertIn("laptop: LAN reserved", value)
+        self.assertIn("tablet: Bluetooth manually assigned", value)
+        self.assertIn("requested 16% | mute no", value)
+        self.assertNotIn(first, value)
+        self.assertNotIn(second, value)
+        self.assertNotIn("Living Room", value)
+        self.assertNotIn("connected", value)
+        named = routes.format_local_input_board(report, mixer, input_names=names)
+        self.assertIn("music [Living Room]: Bluetooth manually assigned", named)
+        self.assertIn("laptop [Console]: LAN reserved", named)
+        self.assertIn("tablet [Kitchen]: Bluetooth manually assigned", named)
+        self.assertIn("not source identities", named)
+        self.assertEqual((self.dir / routes.FILENAME).read_bytes(), original)
+
+        existing_slots = routes.route_slots
+        with (mock.patch.object(routes, "route_slots",
+                                side_effect=lambda: existing_slots(self.dir)) as slots_read,
+              mock.patch.object(mixer_control, "application_status",
+                                return_value=mixer) as mixer_read,
+              mock.patch.object(input_profiles, "load_labels",
+                                return_value=names) as names_read,
+              mock.patch.object(routes, "update") as route_write,
+              mock.patch.object(mixer_control, "change") as mixer_write,
+              redirect_stdout(StringIO()) as output):
+            routes.main(["--format", "text", "--with-input-names", "board"])
+            slots_read.assert_called_once_with()
+            mixer_read.assert_called_once_with()
+            names_read.assert_called_once_with()
+            route_write.assert_not_called()
+            mixer_write.assert_not_called()
+        self.assertEqual(output.getvalue().strip(), named)
+        self.assertEqual((self.dir / routes.FILENAME).read_bytes(), original)
+
+    def test_local_board_auto_and_missing_supervisor_never_claim_hardware(self):
+        report = routes.route_slots(self.dir)
+        self.assertFalse(self.dir.exists())
+        mixer = {"requested": {
+            "master": 0,
+            "music": {"volume": 0, "mute": False},
+            "laptop": {"volume": 0, "mute": False},
+            "tablet": {"volume": 0, "mute": False},
+        }, "supervisor": "unavailable", "audible_playback_verified": False}
+        view = routes.format_local_input_board(report, mixer)
+        self.assertIn("Automatic discovery; actual source not confirmed", view)
+        self.assertIn("LAN reserved (not proof of active receiver)", view)
+        self.assertIn("Mixer supervisor: unavailable", view)
+        self.assertIn("NOT synchronized", view)
+        self.assertIn("No Bluetooth identity", view)
+        self.assertFalse(self.dir.exists())
+
+    def test_local_board_rejects_invalid_mixer_and_corrupt_route_data_without_output(self):
+        from audiohub import mixer_control
+        report = routes.route_slots(self.dir)
+        ok = {"requested": {
+            "master": 30,
+            "music": {"volume": 40, "mute": False},
+            "laptop": {"volume": 40, "mute": True},
+            "tablet": {"volume": 40, "mute": False},
+        }, "supervisor": "accepted", "audible_playback_verified": False}
+        malformed = [
+            {**ok, "supervisor": "audible"},
+            {**ok, "audible_playback_verified": True},
+            {**ok, "requested": {**ok["requested"], "master": True}},
+            {**ok, "requested": {**ok["requested"], "music": {"volume": 101, "mute": False}}},
+            {**ok, "requested": {**ok["requested"], "tablet": {"volume": 40, "mute": "no"}}},
+            {**ok, "requested": {**ok["requested"], "laptop": {"volume": 40, "mute": False, "mac": "private"}}},
+        ]
+        for data in malformed:
+            with self.subTest(data=repr(data)), self.assertRaises(ValueError):
+                routes.format_local_input_board(report, data)
+        bad_report = dict(report)
+        bad_report["slots"] = {**report["slots"], "music": {**report["slots"]["music"], "manual_bluetooth_addresses": ["SECRET"]}}
+        with self.assertRaises(ValueError):
+            routes.format_local_input_board(bad_report, ok)
+        for args in (
+            ["board"],
+            ["--preview", "--format", "text", "board"],
+            ["--format", "text", "--confirm-local-route-change", "board"],
+            ["--format", "text", "--if-preview-revision", "r1-" + "a"*64, "board"],
+            ["--format", "text", "--probe-bluetooth", "board"],
+        ):
+            with (self.subTest(args=args),
+                  mock.patch.object(mixer_control, "application_status") as mixer_read,
+                  mock.patch.object(routes, "route_slots") as slots_read,
+                  redirect_stdout(StringIO()) as out,
+                  redirect_stderr(StringIO()) as err):
+                with self.assertRaises(SystemExit) as invalid:
+                    routes.main(args)
+                self.assertEqual(invalid.exception.code, 2)
+                self.assertEqual(out.getvalue(), "")
+                mixer_read.assert_not_called()
+                slots_read.assert_not_called()
+        with (mock.patch.object(routes, "route_slots", return_value=report),
+              mock.patch.object(mixer_control, "application_status",
+                                side_effect=mixer_control.MixerControlUnavailable("SECRET-DEVICE")),
+              redirect_stdout(StringIO()) as stdout,
+              redirect_stderr(StringIO()) as stderr):
+            with self.assertRaises(SystemExit) as unavailable:
+                routes.main(["--format", "text", "board"])
+        self.assertEqual(unavailable.exception.code, 2)
+        self.assertEqual(stdout.getvalue(), "")
+        self.assertNotIn("SECRET", stderr.getvalue())
+
     def test_private_names_flag_refuses_json_direct_changes_and_confirmation(self):
         routes.bind_bluetooth("AA:BB:CC:DD:EE:FF", "music", self.dir)
         version = routes.preview_route("unbind-slot", "music",

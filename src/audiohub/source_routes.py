@@ -813,6 +813,71 @@ def format_route_slots_text(report, *, input_names=None):
     ])
 
 
+def format_local_input_board(slots_report, mixer_report, *, input_names=None):
+    """Combine two owner-LOCAL read-only snapshots without exposing BT IDs.
+
+    The source policy and mixer status are NOT an atomic cross-file snapshot.
+    Never claim a configured source is connected, audible or accepted by USB.
+    """
+    # Reuse the strict existing privacy/syntax and complete policy validity
+    # checks rather than interpreting an untrusted/partially valid slot map.
+    format_route_slots_text(slots_report, input_names=input_names)
+    input_names = _validated_input_display_names(input_names)
+    if (type(mixer_report) is not dict
+            or mixer_report.get("supervisor") not in (
+                "accepted", "pending", "unavailable")
+            or mixer_report.get("audible_playback_verified") is not False):
+        raise ValueError("Invalid private mixer status")
+    requested = mixer_report.get("requested")
+    if (type(requested) is not dict
+            or set(requested) != {"master", *CHANNELS}
+            or type(requested["master"]) is not int
+            or not 0 <= requested["master"] <= 100):
+        raise ValueError("Invalid private mixer requests")
+    for slot in CHANNELS:
+        controls = requested[slot]
+        if (type(controls) is not dict or set(controls) != {"volume", "mute"}
+                or type(controls["volume"]) is not int
+                or not 0 <= controls["volume"] <= 100
+                or type(controls["mute"]) is not bool):
+            raise ValueError("Invalid private mixer channel")
+    marks = {True: "yes", False: "no"}
+    lines = [
+        "AudioHub private local input overview (read-only)",
+        "Source policy: " + slots_report["route_policy"],
+        "Requested master: " + str(requested["master"]) + "%",
+        "Mixer supervisor: " + mixer_report["supervisor"] +
+        " (software-only; not proof of sound)",
+    ]
+    for slot in CHANNELS:
+        reservation = slots_report["slots"][slot]
+        if reservation["lan_reserved"]:
+            role = "LAN reserved (not proof of active receiver)"
+        elif reservation["manual_bluetooth_addresses"]:
+            role = "Bluetooth manually assigned (not proof of connection)"
+        elif slots_report["route_policy"] == "auto":
+            role = "Automatic discovery; actual source not confirmed"
+        else:
+            role = "Unreserved"
+        controls = requested[slot]
+        lines.append(
+            _captioned_slot(slot, input_names) + ": " + role +
+            " | requested " + str(controls["volume"]) + "%" +
+            " | mute " + marks[controls["mute"]]
+        )
+    lines.append(
+        "Route and mixer settings are independently sampled, NOT synchronized; "
+        "recheck both before a local change."
+    )
+    lines.append(
+        "No Bluetooth identity, A2DP stream, PCM samples, live speaker level "
+        "or audible playback was verified."
+    )
+    if input_names is not None:
+        lines.append(_INPUT_NAMES_ONLY_NOTE)
+    return "\n".join(lines)
+
+
 def format_route_preview_text(report, *, input_names=None):
     """One-screen privacy-safe plan comparison for a separate local approval."""
     if (type(report) is not dict or report.get("mode") != "source-route-preview-only"
@@ -968,6 +1033,7 @@ def main(argv=None):
     sub.add_parser("show")
     sub.add_parser("slots", help="Read-only reserved and free mixer slot overview")
     sub.add_parser("status", help="Read-only anonymized observed runtime source states")
+    sub.add_parser("board", help="Local text-only input map with requested mixer volume/mute")
     lan = sub.add_parser("set-lan")
     lan.add_argument("slot", choices=CHANNELS)
     swap = sub.add_parser(
@@ -1003,17 +1069,25 @@ def main(argv=None):
     try:
         if (args.with_input_names and
                 (args.format != "text" or
-                 (args.action not in ("slots", "status") and not args.preview))):
+                 (args.action not in ("slots", "status", "board") and not args.preview))):
             raise ValueError("Private input names require read-only local text output")
-        if args.action in ("show", "slots", "status"):
+        if args.action in ("show", "slots", "status", "board"):
             if (args.preview or args.confirm_local_route_change
                     or args.if_preview_revision is not None
                     or (args.probe_bluetooth and args.action != "status")
-                    or (args.format != "json" and args.action not in ("status", "slots"))):
+                    or (args.format != "json" and args.action not in ("status", "slots", "board"))
+                    or (args.action == "board" and args.format != "text")):
                 raise ValueError("Status-only actions do not accept route changes")
             if args.action == "status":
                 value = (probe_bluez_connections() if args.probe_bluetooth
                          else read_source_report())
+            elif args.action == "board":
+                # No call into network, device-control or source-policy writers.
+                from .mixer_control import application_status, MixerControlUnavailable
+                try:
+                    value = (route_slots(), application_status())
+                except (MixerControlUnavailable, OSError, ValueError, TypeError):
+                    raise ValueError("Private mixer status unavailable") from None
             else:
                 value = load() if args.action == "show" else route_slots()
         else:
@@ -1090,6 +1164,11 @@ def main(argv=None):
             print(format_source_status_text(value, input_names=input_names))
         elif args.action == "slots":
             print(format_route_slots_text(value, input_names=input_names))
+        elif args.action == "board":
+            try:
+                print(format_local_input_board(*value, input_names=input_names))
+            except (OSError, ValueError, UnicodeError, TypeError):
+                parser.exit(2, "AudioHub private input overview unavailable.\n")
         else:
             print(format_route_preview_text(value, input_names=input_names))
     else:
