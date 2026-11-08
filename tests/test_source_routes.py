@@ -107,8 +107,7 @@ class SourcePolicyTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     routes.preview_route("swap-lan", slot, directory=folder)
                 with self.assertRaises(ValueError):
-                    routes.swap_lan_with_bluetooth(slot, folder,
-                                                  if_revision="r1-" + "a"*64)
+                    routes._proposed(routes.load(folder), "swap-lan", slot)
                 if before is None:
                     self.assertFalse(folder.exists())
                 else:
