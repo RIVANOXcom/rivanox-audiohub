@@ -840,6 +840,10 @@ class BrowserEqOwnerGuideTests(unittest.TestCase):
         self.assertIn('id="eq-guide-neutral-command" readonly', html)
         self.assertIn('id="eq-guide-preset-choice"', html)
         self.assertIn('id="eq-guide-preset-curve" role="status"', html)
+        self.assertIn('id="eq-guide-restore-hint" data-t="eqGuideRestoreHint"', html)
+        self.assertIn("comparison_baseline", html)
+        self.assertIn("restore-eq", html)
+        self.assertNotIn("b1-ORIGINAL", html)
         for preset in ("flat", "warm", "voice", "detail"):
             self.assertIn('value="' + preset + '"', html)
         self.assertIn('aria-describedby="eq-guide-neutral-note eq-guide-neutral-feedback"', html)
@@ -869,7 +873,7 @@ class BrowserEqOwnerGuideTests(unittest.TestCase):
             "eqGuideNeutralCopyCommand", "eqGuidePresetChoice",
             "eqGuidePresetFlat", "eqGuidePresetWarm",
             "eqGuidePresetVoice", "eqGuidePresetDetail",
-            "eqGuidePresetExampleOnly",
+            "eqGuidePresetExampleOnly", "eqGuideRestoreHint",
         }
         for code in ("en", "de", "es", "fr", "it"):
             with self.subTest(locale=code):
@@ -883,6 +887,8 @@ class BrowserEqOwnerGuideTests(unittest.TestCase):
                                     for term in ("not", "keine", "no", "pas", "non")))
                 self.assertTrue(any(term in loc["eqGuideCompareNotice"].lower()
                                     for term in ("not", "nicht", "no", "pas", "non")))
+                self.assertIn("comparison_baseline", loc["eqGuideRestoreHint"])
+                self.assertIn("restore-eq", loc["eqGuideRestoreHint"])
 
     @unittest.skipUnless(shutil.which("node"), "Node.js runtime unavailable")
     def test_real_eq_browser_commands_fail_closed_and_copy_only_readonly(self):

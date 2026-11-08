@@ -168,6 +168,7 @@
   "eqGuidePresetVoice": "Voice · forward mids",
   "eqGuidePresetDetail": "Detail · gentle treble emphasis",
   "eqGuidePresetExampleOnly": "unverified starting point, not live sound",
+  "eqGuideRestoreHint": "Before trying a new profile, keep the original comparison_baseline shown by the Pi-local preview. To recover that saved three-band EQ, preview restore-eq with the token at the Pi, inspect the differences, then separately confirm its fresh revision. Never enter the token in the browser. Undoing saved EQ does not load PipeWire or prove audible sound.",
   "sustainabilityEyebrow": "Independent open-source development",
   "sustainabilityTitle": "Help keep AudioHub improving",
   "sustainabilityDescription": "Your voluntary support helps fund Pi hardware tests, security improvements, accessibility, and maintenance.",

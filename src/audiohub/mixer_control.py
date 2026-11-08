@@ -168,6 +168,60 @@ def restore_isolation(slot, baseline, *, path=SETTINGS,
                   path=path, confirmed=True, if_revision=if_revision)
 
 
+def _saved_eq_baseline_patch(slot, baseline):
+    """Three previous EQ gains from a bounded operator-supplied snapshot.
+
+    b1 tokens are NOT authenticated history and must never imply that
+    PipeWire was running the curve or that an automatic rollback is safe.
+    Only the selected fixed slot's EQ bands are taken from the snapshot.
+    """
+    if type(slot) is not str or slot not in CHANNELS:
+        raise MixerControlUnavailable("Unknown local EQ input")
+    previous = _decode_baseline(baseline)
+    return {slot: {band: previous[slot][band] for band in EQ_BANDS}}
+
+
+def preview_restore_saved_eq(slot, baseline, *, path=SETTINGS):
+    """Inspect a candidate EQ restore without writing or creating files.
+
+    The token can be operator supplied, so it is explicitly untrusted. A
+    future actual save requires a separate reviewed exact mixer revision.
+    Unrelated master, volumes, mutes, source EQ and routing are preserved.
+    """
+    patch = _saved_eq_baseline_patch(slot, baseline)
+    plan = preview_change(patch, path=path)
+    return {
+        **plan,
+        "operation": "restore-eq",
+        "target_input": slot,
+        "scope": "selected_input_three_saved_eq_bands_only",
+        "baseline_trust": "operator_supplied_not_authenticated",
+        "baseline_eq_db": dict(patch[slot]),
+        "saved_eq_changes": [item for item in plan["eq_changes"]
+                             if item["source"] == slot],
+        "eq_staging_separate": True,
+        "requires_separate_revision_guarded_confirmation": True,
+    }
+
+
+def restore_saved_eq(slot, baseline, *, path=SETTINGS,
+                     confirmed=False, if_revision=None):
+    """Save only the selected previous EQ curve, with explicit CAS consent.
+
+    Re-read the private mixer via the safe preview. The existing exclusive
+    writer lock then requires the SAME exact generation and rejects ABA.
+    This never reconfigures the running PipeWire filters.
+    """
+    if confirmed is not True or type(if_revision) is not str:
+        raise MixerControlUnavailable(
+            "EQ restore requires separate exact-revision local confirmation")
+    plan = preview_restore_saved_eq(slot, baseline, path=path)
+    if if_revision != plan["revision"]:
+        raise StaleMixerPreview("Private mixer EQ restore preview is stale")
+    return change(_saved_eq_baseline_patch(slot, baseline),
+                  path=path, confirmed=True, if_revision=if_revision)
+
+
 def preset_patch(name):
     """Generate one explicit, schema-validated volume-only profile patch."""
     if type(name) is not str or name not in PRESET_VOLUMES:
@@ -1057,6 +1111,15 @@ def main(argv=None):
     )
     sound_eq.add_argument("slot", choices=CHANNELS)
     sound_eq.add_argument("name", choices=tuple(EQ_PRESET_CURVES))
+    restore_eq = commands.add_parser(
+        "restore-eq",
+        help="Preview or separately confirm restoring ONE input's three saved "
+             "EQ bands from an operator-retained b1-... baseline. Token is "
+             "untrusted; neither saved settings nor live PipeWire change "
+             "without separate exact-revision consent.",
+    )
+    restore_eq.add_argument("slot", choices=CHANNELS)
+    restore_eq.add_argument("baseline", help="b1-... from a prior private EQ preview")
     commands.add_parser(
         "mute-all", help="Atomically request mute on all three inputs"
     )
@@ -1132,12 +1195,12 @@ def main(argv=None):
         if args.action in (
                 "isolate-input", "restore-isolation", "set-eq",
                 "copy-eq", "reset-eq", "swap-eq", "set-eq-curve",
-                "eq-preset") and (
+                "eq-preset", "restore-eq") and (
                 args.confirm_local_profile_save
                 or args.if_profile_revision is not None
-                or (args.action == "restore-isolation"
+                or (args.action in ("restore-isolation", "restore-eq")
                     and args.compare_baseline is not None)
-                or (args.action in ("swap-eq", "eq-preset") and (
+                or (args.action in ("swap-eq", "eq-preset", "restore-eq") and (
                     args.compare_baseline is not None
                     or args.wait_for_supervisor))
                 or (args.preview and (
@@ -1225,6 +1288,21 @@ def main(argv=None):
                     args.slot, args.baseline,
                     confirmed=args.confirm_local_mixer_change,
                     if_revision=args.if_preview_revision)
+        elif args.action == "restore-eq":
+            if args.preview:
+                state = preview_restore_saved_eq(args.slot, args.baseline)
+            else:
+                saved = restore_saved_eq(
+                    args.slot, args.baseline,
+                    confirmed=args.confirm_local_mixer_change,
+                    if_revision=args.if_preview_revision)
+                state = {
+                    "requested_eq_settings_saved": True,
+                    "pipewire_eq_staged": False,
+                    "pipewire_eq_live_applied": False,
+                    "next_step": "Preview and separately stage EQ in audiohub.eq_setup",
+                    "settings": saved,
+                }
         elif args.action == "list-profiles":
             state = list_volume_profiles()
         elif args.action == "profile-choices":
@@ -1354,6 +1432,29 @@ def main(argv=None):
                         [args.left, args.right] if args.action == "swap-eq" else None
                     )
                     state["eq_staging_separate"] = True
+                if args.action in ("set-eq", "set-eq-curve",
+                                   "eq-preset", "reset-eq"):
+                    # Make undo discoverable at the time the operator still
+                    # has the genuine pre-change snapshot. The b1 token is
+                    # portable but NOT cryptographically authenticated; it
+                    # must only ever suggest another separately reviewed
+                    # revision-guarded Pi-local preview, never apply one.
+                    saved_before = _decode_baseline(
+                        state["comparison_baseline"])[args.slot]
+                    state["eq_restore_guide"] = {
+                        "target_input": args.slot,
+                        "previous_saved_eq_db": {
+                            band: saved_before[band] for band in EQ_BANDS
+                        },
+                        "operator_retained_baseline": state["comparison_baseline"],
+                        "preview_command":
+                            "PYTHONPATH=/opt/audiohub/src python3 -m "
+                            "audiohub.mixer_control --preview restore-eq " +
+                            args.slot + " " + state["comparison_baseline"],
+                        "baseline_authenticated": False,
+                        "separate_owner_confirmation_required": True,
+                        "live_eq_applied": False,
+                    }
                 if args.action == "profile":
                     state["profile_impact"] = _profile_selection_impact(
                         state, args.name)
@@ -1388,6 +1489,22 @@ def main(argv=None):
         parser.exit(4, "Profile not copied: review the fresh copy preview "
                        "and separately confirm its new profile revision.\n")
     except StaleMixerPreview:
+        if args.action == "restore-eq":
+            # A discarded revision never authorizes a later restore. This
+            # fresh read is a suggestion only: the owner must review again.
+            try:
+                refreshed = preview_restore_saved_eq(args.slot, args.baseline)
+            except (MixerControlUnavailable, OSError, ValueError, TypeError):
+                parser.exit(4, "EQ not restored: mixer changed. "
+                               "Fresh preview unavailable.\n")
+            print(json.dumps({
+                "status": "eq-restore-stale",
+                "settings_written": False,
+                "fresh_preview": refreshed,
+                "audible_playback_verified": False,
+            }, sort_keys=True))
+            parser.exit(4, "EQ not restored: review a fresh preview and "
+                           "separately confirm its new revision.\n")
         if args.action == "swap-eq":
             # A stale EQ exchange must never offer a preview computed using
             # old curve values. Re-snapshot BOTH sides, then verify that the
