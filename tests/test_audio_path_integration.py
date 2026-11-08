@@ -699,6 +699,140 @@ class EqSetupFileSafetyTests(unittest.TestCase):
                 self.assertFalse(self.config(home).parent.exists())
                 self.assertEqual(settings.read_bytes(), before)
 
+    def test_eq_overview_identifies_exact_fixed_profile_shapes_and_custom_curve(self):
+        from audiohub import mixer_control
+        for name, expected in (
+                ("warm", {"bass": 3, "mid": 0, "treble": -1}),
+                ("voice", {"bass": -2, "mid": 3, "treble": 1}),
+                ("detail", {"bass": 0, "mid": 1, "treble": 3})):
+            with self.subTest(name=name):
+                self.assertEqual(
+                    mixer_control.eq_preset_patch("music", name)["music"],
+                    expected)
+                self.assertEqual(eq_setup._saved_eq_profile_shape(expected),
+                                 name.capitalize())
+        self.assertEqual(eq_setup._saved_eq_profile_shape(
+            {"bass": 0, "mid": 0, "treble": 0}), "Flat")
+        self.assertEqual(eq_setup._saved_eq_profile_shape(
+            {"bass": 3, "mid": 0, "treble": 0}), "Custom")
+        for curve in (
+                None, [], {}, {"bass": True, "mid": 0, "treble": 0},
+                {"bass": "3", "mid": 0, "treble": 0},
+                {"bass": 13, "mid": 0, "treble": 0},
+                {"bass": 0, "mid": 0, "treble": 0, "secret": 1},
+                {"bass": 0, "mid": 0},
+        ):
+            with self.subTest(invalid=curve):
+                with self.assertRaises(ValueError):
+                    eq_setup._saved_eq_profile_shape(curve)
+
+    def test_eq_overview_real_stage_and_saved_curves_readonly_all_states(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = self.home(tmp)
+            settings = home / "private" / "settings.json"
+            mixer_control.change({
+                "master": 31,
+                "music": {"bass": 3, "mid": 0, "treble": -1},
+                "laptop": {"bass": -2, "mid": 3, "treble": 1},
+                "tablet": {"bass": 1, "mid": 4, "treble": -2},
+            }, path=settings, confirmed=True)
+            saved_before = settings.read_bytes()
+            with (mock.patch.object(Path, "home", return_value=home),
+                  mock.patch.object(eq_setup, "SETTINGS", settings)):
+                with redirect_stdout(StringIO()) as out:
+                    eq_setup.main(["--compare-staged", "--format", "overview"])
+                missing = out.getvalue()
+                self.assertIn("ON-DISK STAGE: MISSING", missing)
+                self.assertIn("music   Warm", missing)
+                self.assertIn("laptop  Voice", missing)
+                self.assertIn("tablet  Custom", missing)
+                self.assertIn("bass +3 dB", missing)
+                self.assertIn("treble -1 dB", missing)
+                self.assertIn("NOT VERIFIED: current PipeWire load", missing)
+                self.assertNotIn(str(home), missing)
+                self.assertNotIn("1363", missing)
+                self.assertFalse(self.config(home).parent.exists())
+                self.assertEqual(settings.read_bytes(), saved_before)
+
+                plan = eq_setup.preview_saved_eq()
+                eq_setup.stage_saved_eq(plan["revision"], confirmed=True)
+                stage = self.config(home).read_bytes()
+                with redirect_stdout(StringIO()) as out:
+                    eq_setup.main(["--format", "overview", "--compare-staged"])
+                matched = out.getvalue()
+                self.assertIn("ON-DISK STAGE: MATCHES", matched)
+                self.assertIn("entire staged file digest", matched)
+                self.assertIn("ALL three inputs as one file", matched)
+                self.assertIn("STILL UNVERIFIED", matched)
+                self.assertEqual(self.config(home).read_bytes(), stage)
+                self.assertEqual(settings.read_bytes(), saved_before)
+
+                mixer_control.change({"tablet": {"treble": -1}},
+                                     path=settings, confirmed=True)
+                new_settings = settings.read_bytes()
+                with redirect_stdout(StringIO()) as out:
+                    eq_setup.main(["--compare-staged", "--format", "overview"])
+                differing = out.getvalue()
+                self.assertIn("ON-DISK STAGE: DIFFERS", differing)
+                self.assertIn("--preview-saved", differing)
+                self.assertIn("Custom", differing)
+                self.assertEqual(self.config(home).read_bytes(), stage)
+                self.assertEqual(settings.read_bytes(), new_settings)
+
+                target = self.config(home)
+                target.unlink()
+                other = home / "private-note"
+                other.write_text("SECRET DEVICE IDENTIFIER")
+                target.symlink_to(other)
+                with redirect_stdout(StringIO()) as out:
+                    eq_setup.main(["--compare-staged", "--format", "overview"])
+                unsafe = out.getvalue()
+                self.assertIn("ON-DISK STAGE: UNAVAILABLE", unsafe)
+                self.assertIn("No automatic repair", unsafe)
+                self.assertNotIn("SECRET DEVICE IDENTIFIER", unsafe)
+                self.assertNotIn(str(home), unsafe)
+                self.assertEqual(other.read_text(), "SECRET DEVICE IDENTIFIER")
+                self.assertEqual(settings.read_bytes(), new_settings)
+
+    def test_eq_overview_format_never_mutates_and_existing_output_unchanged(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = self.home(tmp)
+            settings = home / "private" / "settings.json"
+            mixer_control.change({"music": {"bass": 3, "treble": -1}},
+                                 path=settings, confirmed=True)
+            raw = settings.read_bytes()
+            with (mock.patch.object(Path, "home", return_value=home),
+                  mock.patch.object(eq_setup, "SETTINGS", settings)):
+                with redirect_stdout(StringIO()) as out:
+                    eq_setup.main(["--compare-staged"])
+                unchanged = json.loads(out.getvalue())
+                with redirect_stdout(StringIO()) as out:
+                    eq_setup.main(["--compare-staged", "--format", "json"])
+                self.assertEqual(json.loads(out.getvalue()), unchanged)
+                self.assertNotIn("profile", unchanged)
+                with redirect_stdout(StringIO()) as out:
+                    eq_setup.main(["--compare-staged", "--format", "text"])
+                self.assertIn("Saved requests", out.getvalue())
+                for args in (
+                    ["--format", "overview"],
+                    ["--preview-saved", "--format", "overview"],
+                    ["--stage-saved", "--format", "overview"],
+                    ["--compare-staged", "--format", "overview",
+                     "--confirm-local-eq-stage"],
+                    ["--compare-staged", "--format", "overview",
+                     "--if-preview-revision", "v1-" + "a" * 64],
+                    ["--compare-staged", "--format", "OVERVIEW"],
+                ):
+                    with (self.subTest(args=args),
+                          redirect_stdout(StringIO()) as out,
+                          redirect_stderr(StringIO())):
+                        with self.assertRaises(SystemExit) as failed:
+                            eq_setup.main(args)
+                        self.assertEqual(failed.exception.code, 2)
+                        self.assertEqual(out.getvalue(), "")
+                self.assertFalse(self.config(home).parent.exists())
+                self.assertEqual(settings.read_bytes(), raw)
+
     def test_saved_eq_preview_and_operator_guarded_staging_no_live_restart(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = self.home(tmp)
