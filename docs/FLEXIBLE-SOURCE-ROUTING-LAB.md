@@ -15,6 +15,30 @@ start a network service. Names (e.g. TV, Console, Office PC) are
 independent of source transport and are managed by a separate
 browser-only preview and local private console prototype.
 
+### Private names on local routing diagnostics (development draft)
+
+Local input names from `input_profiles` are now usable directly in the
+operator's read-only source diagnostics. For example, an input named
+`Living room` appears as `music [Living room]` next to the
+current reservation, runtime observation or proposed route. This is
+an **opt-in** display using `source_routes --format text
+--with-input-names` for `status`, `slots` or `--preview ACTION`
+only. It opens the existing owner-private 0700 directory and validated
+0600 `input-labels.json` file, without creating a directory, lock,
+new setting, Bluetooth discovery request or network service.
+Malformed/private-unsafe labels cause a sanitized local refusal, not
+a fallback that silently hides bad data. Names are never added to the
+default JSON output, HTTP status, exports, device routing or saved policy.
+
+An operator-selected name may reveal personal information, so never
+capture or share the opt-in text view without redaction. Input names are
+**display-only**, do not authenticate a source, and can be renamed
+independently of the routing revision. Always confirm a proposed
+change using the stable technical slot name and the exact private route
+revision; `--with-input-names` cannot accompany any mutation or
+confirmation. A matching display name is not evidence that a device
+is connected, sending audio or playing through USB.
+
 The default source policy retains the previous test-image behavior:
 
 | Stable sink | Default reserved input | Human-readable name |
@@ -490,6 +514,18 @@ PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes --probe-bluetooth
 # Read-only source reservation map: JSON for scripts, or private text summary:
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes slots
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes --format text slots
+
+# Optional: display REAL owner-private, locally saved INPUT NAMES alongside
+# technical slot IDs in the local HUMAN-READABLE view (not in JSON or HTTP).
+# First set an optional label via the existing private, audiohub-user CLI:
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.input_profiles set music "Living room"
+# This opt-in display is sensitive if user-selected names identify people,
+# rooms or workplaces; use only at an authorized local terminal.
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes --format text --with-input-names slots
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes --format text --with-input-names status
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes --format text --with-input-names --preview move-bt music tablet
+# Technical slot IDs (music/laptop/tablet), NOT display names, remain the
+# only accepted input arguments for separately confirmed route changes.
 
 # One-screen anonymized before/after previews of safe route changes:
 # Preview never writes policy, never creates a lock or connects any device.
