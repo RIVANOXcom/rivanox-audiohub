@@ -73,6 +73,48 @@ two-Bluetooth-plus-LAN simultaneous stereo PCM, USB hotplug/24h
 and secure phone-first-owner enrollment remain independent release
 gates, and a running `pw-loopback` is not proof of PCM delivery.
 
+## Experimental Windows LAN audio: recover a recreated PipeWire output
+
+The third independent input remains an **explicitly unsafe, manually
+enabled, unauthenticated LAN/Windows Scream prototype**. It is NOT
+running in the normal image and is not ready for public networks,
+owner-first phone setup or a released installation. No change here
+opens a port, enables the receiver, authenticates the sender or
+alters the route assignment.
+
+The owner-local `network_laptop.check_audio_target` helper now
+returns a private **(virtual EQ sink node ID, selected USB output
+node ID)** pair from the already bounded PipeWire graph, but only
+after the exact virtual sink is found, the USB output is unambiguous,
+and the pinned `wpctl set-default` operation succeeds. These node
+IDs are process-local technical generation markers, not public
+status data or proof of actual audio. A browser cannot request
+them or run the receiver.
+
+Inside an explicitly opted-in LAN test session, the receiver now
+remembers this pair for the currently managed `pw-cat` process.
+The existing three-second health check compares the latest safe
+graph with the generation used to start playback. If PipeWire
+recreates either node while the player process is still technically
+alive, the receiver stops the old player, **drops all buffered PCM**
+and waits its existing two-second recovery interval before starting
+one new player on the **same manually approved** virtual EQ target.
+No stale PCM can be replayed across an output generation change.
+When both node IDs are unchanged, playback continues without
+an unnecessary restart. Failed USB selection, vanished/ambiguous
+targets and untrusted senders still fail closed.
+
+A separately authorized bench test should (1) record manual
+low-volume Edifier USB output, (2) run only the existing isolated
+Scream test from the expected fixed Windows source, (3) recreate
+the virtual sink or disconnect/replug the USB output using the
+operator-approved procedure, (4) verify old playback stops and a
+fresh stream can resume without stale sound, and (5) confirm the
+other two already authorized Bluetooth input routes remain
+unmodified. Reconnect behavior in mocks is a source-code result
+only; full three-source physical stereo PCM/latency and reliable
+USB hotplug/24-hour observation remain release blockers.
+
 ## USB / Bluetooth reconnect checklist in the existing browser status panel
 
 The five-language **Audio routing status** panel now shows an ordered
