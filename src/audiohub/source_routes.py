@@ -206,6 +206,22 @@ def _proposed(plan, action, value, slot=None):
         old_lan_slot = new["lan_slot"]
         new["lan_slot"] = value
         new["bluetooth"][owners[0]] = old_lan_slot
+    elif action == "swap-bt":
+        # Move two explicitly assigned Bluetooth inputs in one valid policy
+        # generation instead of temporary unbinding either source.
+        if (new["mode"] != "manual"
+                or type(value) is not str or value not in CHANNELS
+                or type(slot) is not str or slot not in CHANNELS
+                or slot == value or new["lan_slot"] in (value, slot)):
+            raise ValueError("Swap needs two distinct manually assigned BT slots")
+        from_device = [mac for mac, dest in new["bluetooth"].items()
+                       if dest == value]
+        to_device = [mac for mac, dest in new["bluetooth"].items()
+                     if dest == slot]
+        if len(from_device) != 1 or len(to_device) != 1:
+            raise ValueError("Both Bluetooth input slots must be manually assigned")
+        new["bluetooth"][from_device[0]] = slot
+        new["bluetooth"][to_device[0]] = value
     elif action == "bind-bt":
         mac = canonical_mac(value)
         if type(slot) is not str or slot not in CHANNELS:
@@ -394,6 +410,14 @@ def swap_lan_with_bluetooth(slot, directory=None, *, if_revision=None):
     if if_revision is None:
         raise ValueError("LAN/Bluetooth swap requires a reviewed preview revision")
     return update(lambda plan: _proposed(plan, "swap-lan", slot),
+                  directory, if_revision=_check_revision(if_revision))
+
+
+def swap_bluetooth_inputs(first, second, directory=None, *, if_revision=None):
+    """One confirmed private generation exchanges two occupied BT slots."""
+    if if_revision is None:
+        raise ValueError("Bluetooth input swap requires preview confirmation")
+    return update(lambda plan: _proposed(plan, "swap-bt", first, second),
                   directory, if_revision=_check_revision(if_revision))
 
 
@@ -736,6 +760,10 @@ def main(argv=None):
     swap = sub.add_parser(
         "swap-lan", help="Swap LAN with one manual Bluetooth slot; preview and confirmation required")
     swap.add_argument("slot", choices=CHANNELS)
+    bt_swap = sub.add_parser(
+        "swap-bt", help="Exchange two occupied manual Bluetooth slots; confirmation required")
+    bt_swap.add_argument("first_slot", choices=CHANNELS)
+    bt_swap.add_argument("second_slot", choices=CHANNELS)
     bt = sub.add_parser("bind-bt")
     bt.add_argument("address")
     bt.add_argument("slot", choices=CHANNELS)
@@ -761,8 +789,10 @@ def main(argv=None):
             if args.probe_bluetooth or args.format != "json":
                 raise ValueError("Formatting and BlueZ inspection are status-only")
             target = (args.slot if args.action in ("set-lan", "swap-lan") else
+                      args.first_slot if args.action == "swap-bt" else
                       args.value if args.action == "mode" else args.address)
-            slot = args.slot if args.action == "bind-bt" else None
+            slot = (args.slot if args.action == "bind-bt" else
+                    args.second_slot if args.action == "swap-bt" else None)
             if args.preview:
                 if args.confirm_local_route_change or args.if_preview_revision is not None:
                     raise ValueError("Preview must be read-only")
@@ -774,12 +804,15 @@ def main(argv=None):
                 revision = args.if_preview_revision
                 if revision is not None:
                     _check_revision(revision)
-                if args.action == "swap-lan" and revision is None:
-                    raise ValueError("LAN/Bluetooth swap requires prior preview confirmation")
+                if args.action in ("swap-lan", "swap-bt") and revision is None:
+                    raise ValueError("Input swap requires prior preview confirmation")
                 if args.action == "set-lan":
                     value = set_lan(args.slot, if_revision=revision)
                 elif args.action == "swap-lan":
                     value = swap_lan_with_bluetooth(args.slot, if_revision=revision)
+                elif args.action == "swap-bt":
+                    value = swap_bluetooth_inputs(
+                        args.first_slot, args.second_slot, if_revision=revision)
                 elif args.action == "bind-bt":
                     value = bind_bluetooth(args.address, args.slot,
                                            if_revision=revision)
