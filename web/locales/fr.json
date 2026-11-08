@@ -140,7 +140,7 @@
   "eqGuidePreviewLabel": "1. Prévisualiser les trois bandes sur le Pi (sans enregistrer)",
   "eqGuideCopyPreview": "Copier la commande d’aperçu",
   "eqGuideCompareLabel": "2. Examiner les courbes EQ enregistrées et le fichier préparé sur Pi",
-  "eqGuideCompareNotice": "La vue Pi indique les courbes EQ enregistrées, l'état du fichier préparé complet et un facteur estimé de marge de gain. Les boosts EQ ou plusieurs sources peuvent réduire le gain maître prévu. Cela ne prouve ni un limiteur, ni un EQ PipeWire chargé, ni un son audible. Le navigateur ne change rien.",
+  "eqGuideCompareNotice": "La vue Pi indique les courbes EQ enregistrées, l'état du fichier préparé complet et un facteur estimé de marge de gain. Les boosts EQ ou plusieurs sources peuvent réduire le gain maître prévu. Cela ne prouve pas la présence d'un limiteur, le chargement de l'EQ PipeWire ni un son audible. Le navigateur ne change rien.",
   "eqGuideCopyCompare": "Copier la commande d’état",
   "eqGuideCopied": "Commande copiée. Vérifiez-la localement avant exécution.",
   "eqGuideCopyUnavailable": "Presse-papiers indisponible. Sélectionnez et copiez manuellement la commande en lecture seule.",
