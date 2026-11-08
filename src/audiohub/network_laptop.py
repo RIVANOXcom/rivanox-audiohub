@@ -104,7 +104,8 @@ def check_audio_target(target=TARGET):
     if result is None or result.returncode != 0:
         raise RuntimeError("PipeWire node inspection failed")
     nodes = pipewire_nodes(result.stdout)
-    if target not in virtual_sinks(nodes):
+    sinks = virtual_sinks(nodes)
+    if target not in sinks:
         raise RuntimeError("Laptop virtual sink unavailable")
     output = choose_usb_output(nodes)
     if output is None:
@@ -116,6 +117,11 @@ def check_audio_target(target=TARGET):
     )
     if selected is None or selected.returncode != 0:
         raise RuntimeError("USB output routing not ready")
+    # Only validated, bounded PipeWire graph node IDs. This represents
+    # the currently observed sink/output generation, NOT audible PCM or
+    # proof of a safe/authenticated network sender. Never log these IDs.
+    return (sinks[target], output["id"])
+
 
 def close_player(process):
     if process is None:
@@ -147,6 +153,7 @@ def serve(sender_ip, bind_ip, port, *, unsafe_lan_test=False, prefill_packets=1,
     check_audio_target(target)
     counters = ReceiverCounters()
     player = None
+    player_generation = None
     retry_after = 0.0
     last_written_at = None
     next_health_check = 0.0
@@ -154,11 +161,12 @@ def serve(sender_ip, bind_ip, port, *, unsafe_lan_test=False, prefill_packets=1,
     next_report_at = None
 
     def stop_player():
-        nonlocal player, last_written_at
+        nonlocal player, last_written_at, player_generation
         if player is not None:
             close_player(player)
             counters.player_stopped += 1
         player = None
+        player_generation = None
         last_written_at = None
         backlog.clear()  # Never replay stale audio across player/USB loss.
 
@@ -195,11 +203,22 @@ def serve(sender_ip, bind_ip, port, *, unsafe_lan_test=False, prefill_packets=1,
                     elif now >= next_health_check:
                         next_health_check = now + HEALTH_CHECK_SECONDS
                         try:
-                            check_audio_target(target)
+                            observed_generation = check_audio_target(target)
                         except RuntimeError:
                             counters.output_lost += 1
                             stop_player()
                             retry_after = now + 2.0
+                        else:
+                            # pw-cat can remain alive while PipeWire silently
+                            # replaces the USB output or virtual EQ target
+                            # node under the SAME readable name. Reusing that
+                            # stale player's pipe may produce no sound.
+                            if (player_generation is not None
+                                    and observed_generation is not None
+                                    and observed_generation != player_generation):
+                                counters.output_lost += 1
+                                stop_player()
+                                retry_after = now + 2.0
 
                 try:
                     packet, peer = udp.recvfrom(2048)
@@ -230,7 +249,7 @@ def serve(sender_ip, bind_ip, port, *, unsafe_lan_test=False, prefill_packets=1,
                         continue
                     retry_after = time.monotonic() + 2.0
                     try:
-                        check_audio_target(target)
+                        starting_generation = check_audio_target(target)
                         player = subprocess.Popen(
                             player_command(target), stdin=subprocess.PIPE,
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
@@ -242,6 +261,7 @@ def serve(sender_ip, bind_ip, port, *, unsafe_lan_test=False, prefill_packets=1,
                         # Start the no-progress deadline before the first PCM write:
                         # a blocked pipe with zero successful writes must not live forever.
                         last_written_at = now
+                        player_generation = starting_generation
                         next_health_check = now + HEALTH_CHECK_SECONDS
                         counters.player_started += 1
                     except (OSError, RuntimeError):
