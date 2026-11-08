@@ -15,6 +15,41 @@ start a network service. Names (e.g. TV, Console, Office PC) are
 independent of source transport and are managed by a separate
 browser-only preview and local private console prototype.
 
+### Atomic full three-input layout (experimental local operator feature)
+
+A manual three-source configuration previously required two or more separate
+swap/move operations to rotate all assignments. That creates extra policy
+generations, confirmation work and avoidable intermediate source
+interruptions. The new `source_routes --preview layout LAN_TO BT_FROM_1
+BT_TO_1 BT_FROM_2 BT_TO_2` models a **complete three-way arrangement
+in one validation step**. On the separately confirmed
+`--confirm-local-route-change --if-preview-revision REV layout ...`, the
+existing exclusive lock and exact private revision guard atomically
+replace the route policy with all three target slots. No transient
+unassigned configuration is stored. Source identities are preserved
+from the private policy, selected by their **current** Bluetooth input
+slot instead of exposing or re-entering MAC addresses. The two
+currently assigned BT input slots must match the two FROM slots exactly;
+the new LAN and two BT destinations must be three distinct mixer slots.
+The operation refuses automatic mode, zero/one BT assignment, invalid
+slots, incomplete or duplicate FROMs, conflicting TOs and stale/ABA
+revisions. No automatic retries or implicit new BT pairing/enrollment.
+
+For a concise read-only view before approval, use `--format text`,
+optionally `--with-input-names` to reveal local 0600 input display
+names. The preview lists Current/Proposed positions, reports the
+private revision and warns that running routes might restart after the
+next supervisor poll. The input names are **not** the source identities:
+always use stable technical slot IDs for FROM/TO. A valid proposed
+layout is only a policy arrangement, **not evidence of** paired,
+connected, simultaneously streaming, or audible hardware; managed
+audio may temporarily drop even without intermediate policy writes.
+The capability does not enable the unauthenticated LAN receiver,
+pair/trust BlueZ, expose any server API, alter first-claim auth or
+approve a release. The web what-if layout planner remains separate:
+it does not read current authenticated assignments and cannot issue
+this local confirmation.
+
 ### Private names on local routing diagnostics (development draft)
 
 Local input names from `input_profiles` are now usable directly in the
@@ -549,6 +584,21 @@ PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes --confirm-local-r
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes --format text --preview move-bt music tablet
 # Privately verify before/after slot assignment and exact r1-... revision.
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes --confirm-local-route-change --if-preview-revision r1-REPLACE-WITH-64-HEX-CHARS move-bt music tablet
+
+# Rearrange ALL THREE currently assigned source roles in ONE atomic
+# private policy revision, without unbinding Bluetooth or typing MACs:
+# PRECONDITION: manual policy, LAN currently laptop, exactly two manually
+# assigned Bluetooth sources currently in music and tablet.
+# TARGET: LAN moves to music, the BT currently in music goes to tablet,
+# and the BT currently in tablet goes to laptop.
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes --format text --preview layout music music tablet tablet laptop
+# Read the entire Current/Proposed private text view, inspect the exact r1-
+# revision, and independently approve that exact current generation:
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes --confirm-local-route-change --if-preview-revision r1-REPLACE-WITH-64-HEX-CHARS layout music music tablet tablet laptop
+# Argument order: layout NEW_LAN_SLOT CURRENT_BT1_SLOT NEW_BT1_SLOT
+#                        CURRENT_BT2_SLOT NEW_BT2_SLOT
+# BT1/BT2 refer to the BT source currently assigned to the named OLD slot,
+# NOT sorted device addresses or the Bluetooth source 1/2 display aliases.
 
 # Release ONE manually assigned Bluetooth source by fixed mixer slot,
 # without copying its private device MAC. The source is no longer eligible
