@@ -139,3 +139,12 @@
 #routing-guide-command{display:block;width:100%;box-sizing:border-box;min-height:100px;background:#102039;border:1px solid #729cc3;border-radius:9px;padding:13px;color:#f3f8ff;line-height:1.5;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.79rem;resize:vertical;overflow-wrap:anywhere}
 #routing-guide-command:focus-visible,.routing-plan-options select:focus-visible{outline:3px solid #b4e1ff;outline-offset:2px}
 .routing-plan-command .routing-plan-scope{margin-bottom:0}
+
+
+/* Read-only before/after roles inferred from operator selection, not the Pi. */
+.routing-guide-comparison{margin:14px 0;padding:12px 14px;border:1px solid #405775;border-radius:10px;background:#102039}
+.routing-guide-comparison h4{margin:0 0 8px;font-size:.9rem;color:#f4f8ff}
+.routing-guide-comparison p{font-size:.83rem;line-height:1.5;color:#c2d5ec;margin:0 0 10px}
+.routing-guide-comparison ul{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;list-style:none;padding:0;margin:0}
+.routing-guide-comparison li{min-width:0;border:1px solid #365272;border-radius:8px;background:#172c48;padding:10px;overflow-wrap:anywhere;font-size:.82rem;line-height:1.5;color:#eef7ff}
+@media(max-width:740px){.routing-guide-comparison ul{grid-template-columns:minmax(0,1fr)}}
