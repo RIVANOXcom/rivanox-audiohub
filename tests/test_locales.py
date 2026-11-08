@@ -905,11 +905,19 @@ class ControlsFirstDashboardTests(unittest.TestCase):
         dom.close()
         self.assertEqual(dom.stack, [], "Advanced panels are not properly closed")
         self.assertEqual(dom.sequence, [
-            "routing-tools-panel", "routing-history-panel",
-            "routing-compare-panel", "routing-plan-disclosure"
+            "eq-operator-guide", "routing-tools-panel",
+            "routing-history-panel", "routing-compare-panel",
+            "routing-plan-disclosure"
         ])
-        for name in ("routing-tools-panel", "routing-plan-disclosure"):
+        for name in ("eq-operator-guide", "routing-tools-panel",
+                     "routing-plan-disclosure"):
             self.assertNotIn("open", dom.panel_attrs[name])
+        for identity in (
+                "eq-guide-slot", "eq-guide-preview-command",
+                "eq-guide-copy-preview", "eq-guide-compare-command",
+                "eq-guide-copy-compare", "eq-guide-copy-status"):
+            with self.subTest(identity=identity):
+                self.assertIn("eq-operator-guide", dom.belongs_to[identity])
         for identity in (
                 "routing-history-list", "routing-history-clear",
                 "routing-observation-usb", "routing-observation-three",
@@ -929,6 +937,8 @@ class ControlsFirstDashboardTests(unittest.TestCase):
                          "routing-recheck"):
             self.assertNotIn("routing-tools-panel", dom.belongs_to[identity])
             self.assertNotIn("routing-plan-disclosure", dom.belongs_to[identity])
+            self.assertNotIn("eq-operator-guide", dom.belongs_to[identity])
+        self.assertIn('<summary data-t="eqGuideTitle">', markup)
         self.assertIn('<summary data-t="routingToolsTitle">', markup)
         self.assertIn('<summary data-t="routingPlanDisclosureTitle">', markup)
 
