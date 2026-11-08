@@ -560,7 +560,7 @@ class SourcePolicyTests(unittest.TestCase):
             stale = original_preview("unbind-slot", "music", directory=self.dir)
             routes.update(lambda current: dict(current), self.dir)
             after = (self.dir / routes.FILENAME).read_bytes()
-            with redirect_stdout(StringIO()), redirect_stderr(StringIO()):
+            with redirect_stdout(StringIO()) as out, redirect_stderr(StringIO()):
                 with self.assertRaises(SystemExit) as rejected:
                     routes.main(["--confirm-local-route-change",
                                  "--if-preview-revision", stale["revision"],
