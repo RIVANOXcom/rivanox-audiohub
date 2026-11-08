@@ -168,6 +168,7 @@
   "eqGuidePresetVoice": "Sprache · betonte Mitten",
   "eqGuidePresetDetail": "Detail · sanft mehr Höhen",
   "eqGuidePresetExampleOnly": "unvermessener Ausgangspunkt, kein Live-Klang",
+  "eqGuideRestoreHint": "Vor einem neuen Profil den ursprünglichen comparison_baseline-Wert aus der lokalen Pi-Vorschau sicher aufbewahren. Für die Rücknahme am Pi restore-eq mit diesem Wert vorprüfen, Änderungen kontrollieren und erst danach eine neue Revision separat bestätigen. Den Wert niemals in den Browser eingeben. Gespeicherter EQ ist weder aktivierter PipeWire-EQ noch hörbarer Ton.",
   "sustainabilityEyebrow": "Unabhängige Open-Source-Entwicklung",
   "sustainabilityTitle": "Hilf mit, AudioHub weiterzuentwickeln",
   "sustainabilityDescription": "Deine freiwillige Unterstützung hilft bei Raspberry-Pi-Hardwaretests, Sicherheit, Barrierefreiheit und Wartung.",
