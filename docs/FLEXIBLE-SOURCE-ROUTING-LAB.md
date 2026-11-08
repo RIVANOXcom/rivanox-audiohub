@@ -51,6 +51,40 @@ mixer status are read from two **independent** file generations;
 they are NOT a synchronized transaction and may change during
 inspection. Re-check before a separately confirmed operation.
 
+#### Actionable requested-level and software-pending checks
+
+The same `--format text board` overview now calls out **why an
+assigned input might be silent or waiting**, without guessing about
+physical audio. It adds a conspicuous local `CHECK` on the requested
+master level when it is zero, on each input's requested mute or
+zero-percent volume, and for exact fixed-name controls whose current
+software acknowledgement is pending (`master`,
+`music/laptop/tablet.volume` or `.mute`). A pending supervisor may
+list one or several specific controls; accepted software controls
+produce no spurious warning. When the software supervisor is stale or
+unavailable, the view explains that no current acknowledgement can
+be obtained rather than implying that the requested settings have
+taken effect.
+
+For example, an operator troubleshooting an inaudible Bluetooth
+input sees its manual *assignment*, its `requested 0% | mute yes`
+settings and `CHECK: requested mute is ON; requested level is 0%`;
+if `music.mute` has not been acknowledged, `software
+acknowledgement pending: mute` appears on that input. The board does
+not query BlueZ, restart a route, change gain, unmute anything,
+connect to LAN, read arbitrary runtime metadata, or expose
+Bluetooth identities. The set of pending control names is checked
+against the exact seven existing mixer control identifiers and
+invalid/inconsistent reports are refused, not printed.
+
+All checks refer **only to requested settings and software
+acknowledgements**, not active PCM, actual playback or an automatic
+recommendation to raise volume. A 0% master or an enabled mute is
+a *possible* explanation for silence, not evidence that a speaker
+or source is otherwise healthy. Recheck the two independent source
+policy and mixer snapshots before any separately authorized action;
+the view remains a completely read-only local diagnostic.
+
 **Trust limits:** `requested` volume and `mute` are settings,
 not measured PipeWire gain. The supervisor's `accepted` state only
 means a recent software acknowledgement, not speaker output.

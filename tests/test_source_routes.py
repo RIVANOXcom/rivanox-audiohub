@@ -695,7 +695,8 @@ class SourcePolicyTests(unittest.TestCase):
                 "laptop": {"volume": 35, "mute": False},
                 "tablet": {"volume": 16, "mute": False},
             },
-            "supervisor": "pending", "audible_playback_verified": False,
+            "supervisor": "pending", "pending_controls": ["music.mute"],
+            "audible_playback_verified": False,
         }
         original = (self.dir / routes.FILENAME).read_bytes()
         value = routes.format_local_input_board(report, mixer)
@@ -745,7 +746,8 @@ class SourcePolicyTests(unittest.TestCase):
             "music": {"volume": 0, "mute": False},
             "laptop": {"volume": 0, "mute": False},
             "tablet": {"volume": 0, "mute": False},
-        }, "supervisor": "unavailable", "audible_playback_verified": False}
+        }, "supervisor": "unavailable", "pending_controls": None,
+           "audible_playback_verified": False}
         view = routes.format_local_input_board(report, mixer)
         self.assertIn("Automatic discovery; actual source not confirmed", view)
         self.assertIn("LAN reserved (not proof of active receiver)", view)
@@ -762,7 +764,8 @@ class SourcePolicyTests(unittest.TestCase):
             "music": {"volume": 40, "mute": False},
             "laptop": {"volume": 40, "mute": True},
             "tablet": {"volume": 40, "mute": False},
-        }, "supervisor": "accepted", "audible_playback_verified": False}
+        }, "supervisor": "accepted", "pending_controls": [],
+           "audible_playback_verified": False}
         malformed = [
             {**ok, "supervisor": "audible"},
             {**ok, "audible_playback_verified": True},
@@ -806,6 +809,85 @@ class SourcePolicyTests(unittest.TestCase):
         self.assertEqual(unavailable.exception.code, 2)
         self.assertEqual(stdout.getvalue(), "")
         self.assertNotIn("SECRET", stderr.getvalue())
+
+    def test_board_pinpoints_requested_silence_and_pending_software_controls(self):
+        routes.bind_bluetooth("AA:BB:CC:DD:EE:FF", "music", self.dir)
+        report = routes.route_slots(self.dir)
+        values = {
+            "requested": {
+                "master": 0,
+                "music": {"volume": 0, "mute": True},
+                "laptop": {"volume": 65, "mute": False},
+                "tablet": {"volume": 22, "mute": False},
+            },
+            "supervisor": "pending",
+            "pending_controls": ["master", "music.volume", "music.mute"],
+            "audible_playback_verified": False,
+        }
+        before = (self.dir / routes.FILENAME).read_bytes()
+        view = routes.format_local_input_board(report, values)
+        self.assertIn("Requested master: 0%", view)
+        self.assertIn("Requested master level is 0%", view)
+        self.assertIn("Requested master level awaits software acknowledgement", view)
+        self.assertIn("requested mute is ON", view)
+        self.assertIn("requested level is 0%", view)
+        self.assertIn("software acknowledgement pending: volume, mute", view)
+        self.assertIn("music: Bluetooth manually assigned", view)
+        self.assertIn("cannot diagnose actual PCM or speaker sound", view)
+        self.assertNotIn("AA:BB:CC:DD:EE:FF", view)
+        self.assertNotIn("CHECK:", view.split("laptop:")[1].split("tablet:")[0])
+        self.assertEqual((self.dir / routes.FILENAME).read_bytes(), before)
+
+        # No check should imply sound or pending work when all requested
+        # settings were freshly acknowledged in the software snapshot.
+        accepted = {**values, "supervisor": "accepted",
+                    "pending_controls": [],
+                    "requested": {**values["requested"], "master": 70,
+                                  "music": {"volume": 28, "mute": False}}}
+        clean = routes.format_local_input_board(report, accepted)
+        self.assertNotIn("CHECK:", clean)
+        self.assertIn("Mixer supervisor: accepted (software-only", clean)
+        self.assertNotIn("connected devices", clean)
+
+    def test_board_fails_closed_on_forged_pending_fields_and_inconsistent_states(self):
+        report = routes.route_slots(self.dir)
+        valid = {
+            "requested": {
+                "master": 65,
+                "music": {"volume": 55, "mute": False},
+                "laptop": {"volume": 50, "mute": False},
+                "tablet": {"volume": 50, "mute": False},
+            },
+            "supervisor": "pending",
+            "pending_controls": ["music.volume"],
+            "audible_playback_verified": False,
+        }
+        forged = [
+            {**valid, "pending_controls": ["music.address"]},
+            {**valid, "pending_controls": ["SECRET-BLUETOOTH-MAC"]},
+            {**valid, "pending_controls": ["music.volume", "music.volume"]},
+            {**valid, "pending_controls": ["music.volume", 1]},
+            {**valid, "pending_controls": "music.volume"},
+            {**valid, "pending_controls": []},
+            {**valid, "pending_controls": None},
+            {**valid, "supervisor": "accepted"},
+            {**valid, "supervisor": "unavailable"},
+            {**valid, "supervisor": "accepted", "pending_controls": ["master"]},
+            {**valid, "supervisor": "unavailable", "pending_controls": []},
+            {**valid, "pending_controls": ["master"] * 10},
+        ]
+        for snapshot in forged:
+            with self.subTest(snapshot=repr(snapshot)), self.assertRaises(ValueError):
+                routes.format_local_input_board(report, snapshot)
+        self.assertFalse(self.dir.exists())
+        # Missing/stale supervisor status is a useful CHECK, not proof that
+        # a requested mixer command was accepted or that audio was heard.
+        unavailable = {**valid, "supervisor": "unavailable",
+                       "pending_controls": None}
+        output = routes.format_local_input_board(report, unavailable)
+        self.assertIn("No current software acknowledgement", output)
+        self.assertNotIn("music.volume", output)
+        self.assertNotIn("SECRET", output)
 
     def test_private_names_flag_refuses_json_direct_changes_and_confirmation(self):
         routes.bind_bluetooth("AA:BB:CC:DD:EE:FF", "music", self.dir)
