@@ -730,7 +730,7 @@ for (const invalid of [
   ["music", "tablet", "music", "laptop", "tablet"],
   ["music", "tablet", "laptop", "music;rm", "tablet"],
   ["music", "tablet", "laptop", "music", "laptop;touch"],
-  ["music", "tablet", "laptop", "laptop", "tablet"],
+  ["music", "tablet", "laptop", "unused", "tablet"],
   ["music", "tablet", "laptop", "music", null],
   ["unknown", "tablet", "laptop", "music", "tablet"]
 ]) assert.equal(buildLocalRoutingPreview(...invalid), null);
