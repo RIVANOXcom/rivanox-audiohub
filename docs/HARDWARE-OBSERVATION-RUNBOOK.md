@@ -215,7 +215,7 @@ No master/input volume, mute, third-source EQ, source route or Bluetooth
 trust is changed. A source change between preview and confirmation is
 **never** silently accepted: review a new preview. Saved EQ remains
 **not staged and not live**; use the separate `audiohub.eq_setup`
-preview/approval process below before an independently authorized
+preview/approval process described earlier before an independently authorized
 PipeWire reload in an isolated lab. A requested EQ boost can clip;
 keep levels conservative and do not interpret the save as measured sound.
 
