@@ -773,6 +773,64 @@ class LocalMixerControlsTests(unittest.TestCase):
                 writer.assert_not_called()
         self.assertFalse(self.settings.parent.exists())
 
+    def test_eq_previews_offer_recoverable_original_curve_before_approval(self):
+        mixer_control.change({
+            "music": {"bass": -3, "mid": 2, "treble": -1},
+            "laptop": {"bass": 4, "mid": -2, "treble": 5},
+        }, path=self.settings, confirmed=True)
+        raw = self.settings.read_bytes()
+        original_preview = mixer_control.preview_change
+        with mock.patch(
+                "audiohub.mixer_control.preview_change",
+                side_effect=lambda patch, **kw: original_preview(
+                    patch, path=self.settings, **kw)):
+            for request in (
+                ["--preview", "eq-preset", "music", "voice"],
+                ["--preview", "set-eq-curve", "music", "1", "0", "-2"],
+                ["--preview", "reset-eq", "music"],
+                ["--preview", "set-eq", "music", "bass", "4"],
+            ):
+                with self.subTest(request=request), redirect_stdout(StringIO()) as out:
+                    mixer_control.main(request)
+                    plan = json.loads(out.getvalue().splitlines()[0])
+                    hint = plan["eq_restore_guide"]
+                    self.assertEqual(hint["target_input"], "music")
+                    self.assertEqual(hint["previous_saved_eq_db"],
+                                     {"bass": -3, "mid": 2, "treble": -1})
+                    self.assertEqual(hint["operator_retained_baseline"],
+                                     plan["comparison_baseline"])
+                    self.assertTrue(hint["preview_command"].startswith(
+                        "PYTHONPATH=/opt/audiohub/src python3 -m "
+                        "audiohub.mixer_control --preview restore-eq music b1-"))
+                    self.assertFalse(hint["baseline_authenticated"])
+                    self.assertTrue(hint["separate_owner_confirmation_required"])
+                    self.assertFalse(hint["live_eq_applied"])
+                    self.assertFalse(plan["settings_written"])
+                    self.assertEqual(self.settings.read_bytes(), raw)
+
+    def test_restore_eq_baseline_is_untrusted_candidate_not_claimed_history(self):
+        mixer_control.change({
+            "master": 33, "music": {"bass": 2, "mid": 2, "treble": 2},
+        }, path=self.settings, confirmed=True)
+        arbitrary = mixer_control.defaults()
+        arbitrary["music"].update({"bass": -12, "mid": 12, "treble": -8})
+        forged_but_valid = mixer_control._baseline_token(arbitrary)
+        raw = self.settings.read_bytes()
+        plan = mixer_control.preview_restore_saved_eq(
+            "music", forged_but_valid, path=self.settings)
+        self.assertEqual(plan["baseline_eq_db"],
+                         {"bass": -12, "mid": 12, "treble": -8})
+        self.assertEqual(plan["baseline_trust"],
+                         "operator_supplied_not_authenticated")
+        self.assertEqual(len(plan["saved_eq_changes"]), 3)
+        self.assertEqual(self.settings.read_bytes(), raw)
+        # Even this valid-looking untrusted token does not authorize a save.
+        with self.assertRaises(mixer_control.MixerControlUnavailable):
+            mixer_control.restore_saved_eq(
+                "music", forged_but_valid, path=self.settings,
+                confirmed=False, if_revision=plan["revision"])
+        self.assertEqual(self.settings.read_bytes(), raw)
+
     def test_fixed_eq_sound_presets_have_reviewable_bounded_values(self):
         expected = {
             "warm": {"bass": 3, "mid": 0, "treble": -1},
