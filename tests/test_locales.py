@@ -520,3 +520,141 @@ assert.equal(document.activeElement, newLaptop);
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def preview_routing_planner_source():
+    """Run actual shipped JS planner/renderer in Node with a minimal DOM."""
+    source = PREVIEW.read_text(encoding="utf-8")
+    start = source.index("  function planRoutingLayout(lan, bt1, bt2) {")
+    end = source.index("  function statusIsRecent() {", start)
+    return source[start:end]
+
+
+class BrowserRoutingPlannerTests(unittest.TestCase):
+    def test_five_language_preview_controls_have_identical_supported_keys(self):
+        required = {
+            "routingPlanTitle", "routingPlanNotice", "routingPlanLan",
+            "routingPlanBt1", "routingPlanBt2", "routingPlanUnused",
+            "routingPlanValid", "routingPlanConflict", "routingPlanReset",
+            "routingPlanResetDone", "routingPlanScope"
+        }
+        for lang in ("en", "de", "es", "fr", "it"):
+            with self.subTest(lang=lang):
+                data = json.loads((LOCALES / (lang + ".json")).read_text(encoding="utf-8"))
+                self.assertTrue(required.issubset(data))
+                self.assertTrue(all(data[key].strip() for key in required))
+                for key in ("sourceHint1", "sourceHint2", "sourceHint3"):
+                    self.assertIn("sourceHint" + key[-1], data)
+        markup = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
+        for id_ in ("routing-plan-lan", "routing-plan-bt1", "routing-plan-bt2",
+                    "routing-plan-status", "routing-plan-list", "routing-plan-reset"):
+            self.assertIn('id="' + id_ + '"', markup)
+        self.assertIn('aria-live="polite"', markup)
+        self.assertIn('data-t="routingPlanScope"', markup)
+        self.assertIn('value="unused"', markup)
+        self.assertNotIn('method: "POST"', PREVIEW.read_text(encoding="utf-8"))
+
+    def test_routing_layout_is_browser_only_and_does_not_expose_device_ids(self):
+        source = preview_routing_planner_source()
+        self.assertIn("new Set(selected).size !== selected.length", source)
+        self.assertIn('status.dataset.invalid = String(layout === null);', source)
+        self.assertIn('list.replaceChildren();', source)
+        self.assertIn('row.textContent =', source)
+        for absent in ("fetch(", "localStorage", "innerHTML", "bluetoothctl",
+                       "writeFile", "POST", "MAC", "source_routes"):
+            self.assertNotIn(absent, source)
+
+    @unittest.skipUnless(shutil.which("node"), "Node.js runtime unavailable")
+    def test_shipped_planner_conflicts_accessible_labels_reset_and_locale(self):
+        setup = r"""
+const assert = require("node:assert/strict");
+const CHANNELS = ["music", "laptop", "tablet"];
+const SLOT_INDEX = {music: 1, laptop: 2, tablet: 3};
+const elements = Object.create(null);
+for (const role of ["lan", "bt1", "bt2"]) {
+  elements["routing-plan-" + role] = {value: ""};
+}
+elements["routing-plan-status"] = {dataset: {}, textContent: ""};
+elements["routing-plan-reset-status"] = {textContent: ""};
+elements["routing-plan-list"] = {
+  children: [],
+  attributes: {},
+  setAttribute(name, value) {this.attributes[name] = value;},
+  replaceChildren() {this.children = [];},
+  append(value) {this.children.push(value);}
+};
+const byId = id => {
+  assert.ok(elements[id], "unknown DOM element: " + id);
+  return elements[id];
+};
+const document = {createElement(tag) {
+  assert.equal(tag, "li");
+  return {textContent: ""};
+}};
+let words = {
+  routingPlanTitle: "Example layout",
+  routingPlanLan: "LAN",
+  routingPlanBt1: "Bluetooth A",
+  routingPlanBt2: "Bluetooth B",
+  routingPlanUnused: "Unassigned",
+  routingPlanValid: "Example only",
+  routingPlanConflict: "Conflict",
+  routingPlanResetDone: "Restored",
+  input1: "Input 1", input2: "Input 2", input3: "Input 3"
+};
+const tr = key => words[key] || key;
+"""
+        checks = r"""
+const slots = elements["routing-plan-list"];
+const status = elements["routing-plan-status"];
+const lan = elements["routing-plan-lan"];
+const bt1 = elements["routing-plan-bt1"];
+const bt2 = elements["routing-plan-bt2"];
+assert.deepEqual(planRoutingLayout("laptop", "music", "tablet"), [
+  {slot: "music", role: "bt1"},
+  {slot: "laptop", role: "lan"},
+  {slot: "tablet", role: "bt2"}
+]);
+for (const [a, b, c] of [
+  ["music", "music", "tablet"],
+  ["laptop", "music", "music"],
+  ["invalid", "music", "tablet"],
+  ["laptop", "evil", "tablet"],
+  ["unused", "music", "tablet"],
+  ["laptop", 17, "tablet"]
+]) assert.equal(planRoutingLayout(a, b, c), null);
+assert.deepEqual(planRoutingLayout("music", "unused", "unused"), [
+  {slot: "music", role: "lan"},
+  {slot: "laptop", role: "unused"},
+  {slot: "tablet", role: "unused"}
+]);
+lan.value = "music"; bt1.value = "music"; bt2.value = "unused";
+renderRoutingPlan();
+assert.equal(status.textContent, "Conflict");
+assert.equal(status.dataset.invalid, "true");
+assert.equal(slots.children.length, 0);
+lan.value = "tablet"; bt1.value = "music"; bt2.value = "unused";
+renderRoutingPlan();
+assert.equal(status.textContent, "Example only");
+assert.equal(status.dataset.invalid, "false");
+assert.deepEqual(slots.children.map(item => item.textContent), [
+  "Input 1: Bluetooth A", "Input 2: Unassigned", "Input 3: LAN"
+]);
+words.input1 = "Eingang 1";
+words.routingPlanBt1 = "Bluetooth-Quelle A";
+words.routingPlanTitle = "Beispielbelegung";
+renderRoutingPlan();
+assert.equal(slots.attributes["aria-label"], "Beispielbelegung");
+assert.equal(slots.children[0].textContent, "Eingang 1: Bluetooth-Quelle A");
+resetRoutingPlan();
+assert.deepEqual([lan.value, bt1.value, bt2.value],
+  ["laptop", "music", "tablet"]);
+assert.equal(elements["routing-plan-reset-status"].textContent, "Restored");
+assert.equal(slots.children.length, 3);
+assert.equal(status.dataset.invalid, "false");
+"""
+        script = setup + "\n" + preview_routing_planner_source() + "\n" + checks
+        result = subprocess.run(
+            ["node", "-e", script], capture_output=True, text=True, timeout=15,
+            check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
