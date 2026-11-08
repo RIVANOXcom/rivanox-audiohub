@@ -180,3 +180,16 @@
 #eq-guide-copy-status{color:#c5e3fc;font-size:.84rem;line-height:1.4}
 .eq-guide-fields select:focus-visible,#eq-guide-preview-command:focus-visible,#eq-guide-compare-command:focus-visible,.eq-guide-actions button:focus-visible{outline:3px solid #d8a1ff;outline-offset:2px}
 @media(max-width:560px){.eq-operator-guide{padding:12px}.eq-guide-fields label,.eq-guide-fields select{width:100%}}
+
+/* Copy/swap is a bounded two-slot read-only CLI helper, not a browser EQ API. */
+.eq-guide-transfer{min-width:0;margin:20px 0 0;padding:16px;border:1px solid #4b6c91;border-radius:10px}
+.eq-guide-transfer legend{padding:0 6px;font-size:.93rem;font-weight:700;color:#e7f3ff}
+.eq-guide-transfer>p{color:#c8d9ed;font-size:.85rem;line-height:1.55;margin:10px 0 15px}
+.eq-guide-transfer .eq-guide-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.eq-guide-transfer .eq-guide-fields label{min-width:0}
+.eq-guide-transfer .eq-guide-fields select{width:100%;min-width:0}
+.eq-guide-transfer>label{display:block;margin:12px 0 8px;font-size:.87rem;font-weight:600;color:#ecf5ff}
+#eq-guide-transfer-command{box-sizing:border-box;display:block;width:100%;max-width:100%;min-height:80px;padding:12px;border-radius:8px;border:1px solid #729cc3;background:#102039;color:#f3f8ff;font:.79rem/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;resize:vertical;overflow-wrap:anywhere}
+#eq-guide-transfer-feedback[data-invalid="true"]{color:#ffcece}
+#eq-guide-transfer-command:focus-visible{outline:3px solid #d8a1ff;outline-offset:2px}
+@media(max-width:740px){.eq-guide-transfer .eq-guide-fields{grid-template-columns:minmax(0,1fr)}.eq-guide-transfer{padding:12px}}
