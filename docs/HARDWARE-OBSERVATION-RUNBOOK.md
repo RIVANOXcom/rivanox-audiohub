@@ -251,7 +251,7 @@ command or approves a change.
 The second button copies the fixed, read-only status command:
 
 ```sh
-PYTHONPATH=/opt/audiohub/src python3 -m audiohub.eq_setup --compare-staged --format text
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.eq_setup --compare-staged --format overview
 ```
 
 Both can **only** be run by a separately authorized operator in the
@@ -397,31 +397,55 @@ curve is a **saved request**, not automatically staged, not loaded
 into PipeWire and not evidence of audible playback. The owner must
 separately preview/authorize EQ staging and any physical lab test.
 
-### Read the EQ stage status without interpreting JSON
+### One-stop Pi-local saved EQ, preset-shape and stage overview
 
-For an owner at the Pi console, the same **read-only** comparison is
-also available as concise plain English, including safe next-step hints:
+Before trying another sound profile or comparing a saved change with
+the PipeWire stage, the owner can use **one read-only command**:
+
+```sh
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.eq_setup --compare-staged --format overview
+```
+
+It shows ALL THREE technical inputs' saved bass/mid/treble dB gains,
+and labels a row **Flat**, **Warm**, **Voice**, **Detail** or **Custom**
+from exact saved three-band numbers. These are only **shape matches**:
+the application cannot infer whether the owner selected that preset,
+whether a profile is acoustically calibrated, whether PipeWire loaded
+the EQ or whether any actual audio is audible. A Custom curve is a
+valid saved curve, **not** an error.
+
+The report also displays ONE on-disk stage result for the **entire**
+three-input EQ configuration: `MATCHES`, `DIFFERS`, `MISSING`
+or `UNAVAILABLE`. A match means the complete staged file's digest
+equals the digest generated from the current stable saved mixer
+revision; this is **not** separate per-input live verification. A
+difference or missing stage suggests reviewing:
+
+```sh
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.eq_setup --preview-saved
+```
+
+Any subsequent EQ staging requires an independent fresh revision and
+operator confirmation using the separately documented Pi-local
+transaction. An unavailable/unsafe stage is **not** automatically
+repaired or read through a symlink. No comparison executes a reload
+or changes settings.
+
+The older detailed read-only text format still works:
 
 ```sh
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.eq_setup --compare-staged --format text
 ```
 
-The human-readable report labels the stage as `matches saved`,
-`differs from saved`, `missing`, or `unavailable`, prints only
-the three technical inputs' saved bass/mid/treble gains, and explains
-the next explicit operator action. For a mismatch/missing file it
-suggests reviewing `--preview-saved` before *separately* consenting to
-staging. An unsafe destination never yields an automatic repair.
-For a match it explains that a matching file **does not prove that
-PipeWire has loaded the filter or that audio is audible**.
-
-JSON remains the unchanged default for scripts; `--format json` is
-explicitly supported with `--compare-staged`. The format switch is
-not permitted with staging, preview-saved or bare installer mode.
-Neither presentation reads device identifiers, edits settings,
-stages/restarts PipeWire, connects Bluetooth, nor authorizes a release.
-The stage status is an on-disk comparison only; hardware verification
-and a separately authorized lab reload remain independent.
+Existing JSON integrations are unchanged: bare `--compare-staged`
+and explicit `--format json` have the same fields as before. The
+`--format overview` option is only legal with `--compare-staged`;
+it cannot be mixed with a stage operation, an approval token, a
+preview-saved action or bare installer invocation. No device
+identifiers, EQ file bodies or private paths are printed.
+**The browser only copies the local command**, without fetching
+the Pi's private mixer or exposing its revision. Physical audio,
+owner trust, stage reload and public release are separate reviews.
 
 ### Tune all three bands of one input in one reviewed change
 

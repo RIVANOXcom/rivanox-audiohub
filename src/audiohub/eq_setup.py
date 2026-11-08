@@ -260,6 +260,82 @@ def format_staged_eq_text(report):
     return "\n".join(lines)
 
 
+def _saved_eq_profile_shape(curve):
+    """Classify a bounded on-disk EQ curve, never infer the selected preset.
+
+    A gain triple matching a shipped preset does NOT prove the operator
+    selected that preset, that the stage is current, or that sound is audible.
+    """
+    if (type(curve) is not dict or set(curve) != set(EQ_BANDS)
+            or any(type(curve[band]) is not int or
+                   not -12 <= curve[band] <= 12 for band in EQ_BANDS)):
+        raise ValueError("Invalid saved EQ values")
+    values = tuple(curve[band] for band in EQ_BANDS)
+    if values == (0, 0, 0):
+        return "Flat"
+    for name, profile in mixer_control.EQ_PRESET_CURVES.items():
+        if values == profile:
+            return name.capitalize()
+    return "Custom"
+
+
+def format_staged_eq_overview(report):
+    """Readable one-stop local view of saved curves and global stage state.
+
+    Reuses the existing safe, stable-generation stage comparison report:
+    NEVER re-read private files for names, never fetch live PipeWire state,
+    never call staging, never imply per-input stage verification.
+    """
+    explanations = {
+        "matches_saved": (
+            "MATCHES saved configuration (entire staged file digest)",
+            "No separate staging needed for these saved values. "
+            "PipeWire load and audible output are STILL UNVERIFIED.",
+        ),
+        "differs_from_saved": (
+            "DIFFERS from saved configuration (entire staged file digest)",
+            "The disk stage may be out of date. Review --preview-saved "
+            "and separately approve a fresh revision before staging.",
+        ),
+        "missing": (
+            "MISSING staged configuration file",
+            "Review --preview-saved first. Staging requires a separately "
+            "approved exact mixer revision; nothing is repaired here.",
+        ),
+        "unavailable": (
+            "UNAVAILABLE / UNSAFE stage inspection",
+            "Check local ownership and private file safety. No automatic "
+            "repair, staging or PipeWire restart.",
+        ),
+    }
+    if type(report) is not dict or report.get("staging_status") not in explanations:
+        raise ValueError("Invalid staged EQ overview status")
+    equalizer = report.get("equalizer")
+    if type(equalizer) is not dict or set(equalizer) != set(CHANNELS):
+        raise ValueError("Invalid saved EQ overview inputs")
+    # Validate everything before constructing a possibly misleading partial
+    # overview. The returned 'shape' is not claimed as a selected preset.
+    rows = []
+    for slot in CHANNELS:
+        curve = equalizer[slot]
+        shape = _saved_eq_profile_shape(curve)
+        gains = "  ".join(f"{band} {curve[band]:+d} dB" for band in EQ_BANDS)
+        rows.append(f"  {slot:<7} {shape:<7} (shape match) | {gains}")
+    status, guidance = explanations[report["staging_status"]]
+    return "\n".join([
+        "AudioHub EQ overview — Pi-local, read-only",
+        "SAVED EQ (not necessarily staged or audible):",
+        *rows,
+        "A named shape match is not proof of preset selection or calibration.",
+        "ON-DISK STAGE: " + status,
+        guidance,
+        "Stage comparison covers ALL three inputs as one file, "
+        "not independent per-input live filters.",
+        "No mixer settings written, no stage changed, no PipeWire restart.",
+        "NOT VERIFIED: current PipeWire load, active EQ, audible speakers.",
+    ])
+
+
 def stage_saved_eq(revision, *, confirmed=False):
     """Only stage a checked mixer generation; never restart PipeWire.
 
@@ -314,8 +390,9 @@ def main(argv=()):
                         help="Read-only compare saved EQ to actual staged config; NOT live audio")
     parser.add_argument("--confirm-local-eq-stage", action="store_true")
     parser.add_argument("--if-preview-revision", metavar="REV")
-    parser.add_argument("--format", choices=("json", "text"), default=None,
-                        help="Only with --compare-staged; default is JSON")
+    parser.add_argument("--format", choices=("json", "text", "overview"),
+                        default=None,
+                        help="Only with --compare-staged; default JSON remains unchanged")
     args = parser.parse_args(argv)
     if args.format is not None and not args.compare_staged:
         parser.error("--format requires --compare-staged")
@@ -346,6 +423,8 @@ def main(argv=()):
             parser.exit(2, "AudioHub local staged EQ comparison unavailable.\\n")
         if args.format == "text":
             print(format_staged_eq_text(output))
+        elif args.format == "overview":
+            print(format_staged_eq_overview(output))
         else:
             print(json.dumps(output, sort_keys=True))
     else:

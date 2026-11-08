@@ -46,9 +46,9 @@
         <div class="eq-guide-actions">
           <button type="button" id="eq-guide-copy-preview" data-t="eqGuideCopyPreview">Copy preview command</button>
         </div>
-        <label for="eq-guide-compare-command" data-t="eqGuideCompareLabel">2. Read saved versus staged EQ status at the Pi</label>
-        <textarea id="eq-guide-compare-command" readonly rows="2" spellcheck="false" aria-describedby="eq-guide-note eq-guide-compare-note">PYTHONPATH=/opt/audiohub/src python3 -m audiohub.eq_setup --compare-staged --format text</textarea>
-        <p id="eq-guide-compare-note" data-t="eqGuideCompareNotice">Even a matching on-disk stage does not prove it is loaded or audible. Saving and staging require separate owner-local confirmation; neither happens here.</p>
+        <label for="eq-guide-compare-command" data-t="eqGuideCompareLabel">2. Check saved EQ shapes and on-disk stage in one Pi overview</label>
+        <textarea id="eq-guide-compare-command" readonly rows="2" spellcheck="false" aria-describedby="eq-guide-note eq-guide-compare-note">PYTHONPATH=/opt/audiohub/src python3 -m audiohub.eq_setup --compare-staged --format overview</textarea>
+        <p id="eq-guide-compare-note" data-t="eqGuideCompareNotice">The overview shows stored dB values and preset-shape matches, not selected or active presets. The stage is checked as one on-disk file for all three inputs. Even an exact match does not prove live PipeWire or audible sound. No changes occur here.</p>
         <div class="eq-guide-actions">
           <button type="button" id="eq-guide-copy-compare" data-t="eqGuideCopyCompare">Copy status command</button>
           <span id="eq-guide-copy-status" role="status" aria-live="polite"></span>
