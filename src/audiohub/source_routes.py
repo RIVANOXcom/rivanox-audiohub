@@ -428,6 +428,21 @@ def interpret_source_status(status, *, now=None):
                  and status.get("source_slot_observations_version") == 1
                  and type(status.get("source_slot_observations_version")) is int
                  and policy_ok is True and _valid_source_observations(raw))
+    # Only accept a fixed, anonymous, same-poll PipeWire topology summary.
+    # Old/stale status files have UNKNOWN link evidence; raw graph IDs never
+    # enter this local report. A missing direct edge is not proof of silence.
+    graph_inspected = status.get("pipewire_graph_inspection_available")
+    direct_links = status.get("eq_output_usb_direct_links")
+    graph_valid = (
+        available and type(graph_inspected) is bool
+        and type(direct_links) is list
+        and len(direct_links) <= len(CHANNELS)
+        and all(type(slot) is str and slot in CHANNELS for slot in direct_links)
+        and len(set(direct_links)) == len(direct_links)
+        and (graph_inspected or not direct_links)
+    )
+    graph_available = graph_inspected if graph_valid else None
+    observed_direct = set(direct_links) if graph_available is True else set()
     inputs = {}
     for slot in CHANNELS:
         details = raw[slot] if available else None
@@ -456,6 +471,9 @@ def interpret_source_status(status, *, now=None):
             "managed_loopback_process_running": process_running,
             "virtual_sink_observed": virtual_sink,
             "usb_route_ready": usb,
+            "eq_to_usb_direct_link_observed": (
+                slot in observed_direct if graph_available is True else None
+            ),
             "bluetooth_connected": "unverified",
             "audio_stream_available": "unverified",
             "audible_playback": "unverified",
@@ -466,11 +484,13 @@ def interpret_source_status(status, *, now=None):
         "observations_available": bool(available),
         "status_age_seconds": now - updated if fresh else None,
         "route_policy_valid": policy_ok if fresh and type(policy_ok) is bool else None,
+        "pipewire_graph_inspection_available": graph_available,
         "inputs": inputs,
         "interpretation": (
-            "Source node seen is only a PipeWire observation; a managed "
-            "loopback process running is not proof of Bluetooth connection, "
-            "delivered PCM, an audible speaker, or hardware acceptance."
+            "Source nodes, managed loopback processes and EQ-to-USB direct "
+            "links are PipeWire observations, not PCM or sound measurements. "
+            "No direct link observed may mean intermediary adapter nodes. "
+            "Bluetooth audio, an audible speaker and hardware remain unverified."
         ),
         "source_settings_written": False,
         "hardware_verified": False,

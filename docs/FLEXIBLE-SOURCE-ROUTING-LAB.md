@@ -520,6 +520,24 @@ report adds `configured_role`, `configured`,
 prove pairing or A2DP connection; a running routing subprocess does
 not prove audio packets arrived or a USB speaker is audible.
 
+Local `source_routes status` now also exposes per-slot
+`eq_to_usb_direct_link_observed=true/false/null` and
+`pipewire_graph_inspection_available=true/false/null`.
+These values come from the supervisor's **same** bounded `pw-dump`
+snapshot that supplied the other source observations. `true` means
+the PipeWire graph contained an explicit link between the given EQ
+output node and selected USB output node. `false` means a valid graph
+was inspected but that **direct** edge was not observed; legitimate
+adapter or intermediary nodes may be involved, so this does **not**
+mean disconnected or silent. `null` means no trustworthy recent
+graph evidence (including an older runtime format, corrupt fields,
+invalid routing policy or unavailable graph). The parser accepts
+only the fixed music/laptop/tablet slot names with no duplicates or
+device IDs. Neither Bluetooth A2DP, PCM samples, clipping, nor audible
+speaker playback is proved; all remain explicitly unverified.
+No scan, subprocess, audio change, private identifier, file write,
+new network API or elevated privilege is introduced by this display.
+
 Source evidence comes from one **unmodified** owner-private
 `runtime-status.json` snapshot, never a fresh Bluetooth scan.
 `fresh` requires a trusted supervisor timestamp within 30 seconds;
