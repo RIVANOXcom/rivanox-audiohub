@@ -738,7 +738,8 @@ def preview_change(patch, *, path=SETTINGS, baseline=None):
         previous = _decode_baseline(baseline) if baseline is not None else None
         current, revision = _preview_snapshot(path=path)
         before = requested_mix_controls(current)
-        after = requested_mix_controls(patch_settings(current, patch))
+        desired = patch_settings(current, patch)
+        after = requested_mix_controls(desired)
     except (TypeError, ValueError):
         raise MixerControlUnavailable("Invalid mixer preview setting") from None
     changes = []
@@ -752,6 +753,12 @@ def preview_change(patch, *, path=SETTINGS, baseline=None):
         previous, current, fields=("volume", "mute", *EQ_BANDS)
     ) if previous is not None else None)
     planned = _control_differences(before, after)
+    eq_changes = [
+        {"source": slot, "band": band, "before": current[slot][band],
+         "after": desired[slot][band]}
+        for slot in CHANNELS for band in EQ_BANDS
+        if current[slot][band] != desired[slot][band]
+    ]
     return {
         "mode": "preview-only",
         "revision": revision,
@@ -763,6 +770,8 @@ def preview_change(patch, *, path=SETTINGS, baseline=None):
         "before": before,
         "after": after,
         "would_change": changes,
+        "eq_changes": eq_changes,
+        "eq_live_applied": False,
         "settings_written": False,
         "supervisor_applied": False,
         "audible_playback_verified": False,
@@ -945,6 +954,14 @@ def main(argv=None):
     mute = commands.add_parser("mute", help="Set a channel mute (on/off)")
     mute.add_argument("slot", choices=CHANNELS)
     mute.add_argument("value", choices=("on", "off"))
+    eq = commands.add_parser(
+        "set-eq",
+        help="Save one bounded 3-band EQ setting for explicit later PipeWire "
+             "filter staging (NOT a live EQ change). Requires revision preview",
+    )
+    eq.add_argument("slot", choices=CHANNELS)
+    eq.add_argument("band", choices=EQ_BANDS)
+    eq.add_argument("db", type=int, help="Integer gain -12..12 dB")
     commands.add_parser(
         "mute-all", help="Atomically request mute on all three inputs"
     )
@@ -1017,7 +1034,7 @@ def main(argv=None):
         # Isolation can change two channels. A basic boolean confirmation is
         # intentionally insufficient: require the EXACT reviewed mixer
         # generation to prevent applying an old choice to a newer mix.
-        if args.action in ("isolate-input", "restore-isolation") and (
+        if args.action in ("isolate-input", "restore-isolation", "set-eq") and (
                 args.confirm_local_profile_save
                 or args.if_profile_revision is not None
                 or (args.action == "restore-isolation"
@@ -1144,6 +1161,12 @@ def main(argv=None):
                 # levels during a supervised poll; preserve every mute/EQ.
                 patch = {"master": args.master}
                 patch.update({slot: {"volume": getattr(args, slot)} for slot in CHANNELS})
+            elif args.action == "set-eq":
+                # This stores a bounded EQ parameter; the running PipeWire
+                # filter graph is NOT reconfigured. Stage separately.
+                if not -12 <= args.db <= 12:
+                    raise MixerControlUnavailable("Local EQ must be -12..12 dB")
+                patch = {args.slot: {args.band: args.db}}
             elif args.action == "isolate-input":
                 # The selected source's mute, volume, EQ and routing stay
                 # untouched. Never implicitly unmute a source in a lab.
@@ -1181,6 +1204,14 @@ def main(argv=None):
                           if args.if_preview_revision is not None else {})
                 state = change(patch, confirmed=args.confirm_local_mixer_change,
                                **kwargs)
+                if args.action == "set-eq":
+                    state = {
+                        "requested_eq_settings_saved": True,
+                        "pipewire_eq_staged": False,
+                        "pipewire_eq_live_applied": False,
+                        "next_step": "Preview and separately stage EQ in audiohub.eq_setup",
+                        "settings": state,
+                    }
     except StaleProfilePreview:
         # Failed compare-and-save is a no-op. A new read-only plan requires
         # the operator to review and submit another explicit confirmation.
