@@ -858,7 +858,7 @@ class ControlsFirstDashboardTests(unittest.TestCase):
         self.assertIn('id="routing-routes"', markup)
         self.assertIn('id="routing-freshness"', markup)
         self.assertIn('id="routing-diagnostic"', markup)
-        ids = re.findall(r'\\bid="([^"]+)"', markup)
+        ids = re.findall(r'\bid="([^"]+)"', markup)
         self.assertEqual(len(ids), len(set(ids)), "Duplicate HTML id breaks JS events")
         for identity in (
                 "channels", "master", "master-value", "routing-recheck",
