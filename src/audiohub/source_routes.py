@@ -524,6 +524,82 @@ def interpret_source_status(status, *, now=None):
     }
 
 
+# Fixed translations only: never pass raw PipeWire, BlueZ or policy text
+# to the human-readable terminal view.
+_SOURCE_ROLE_LABELS = {
+    "unknown": "Unknown",
+    "lan_reserved": "LAN reserved",
+    "bluetooth_assigned": "Bluetooth assigned",
+    "unassigned": "Unassigned",
+}
+_SOURCE_NEXT_LABELS = {
+    "refresh_private_supervisor_status": "Refresh private supervisor status",
+    "inspect_usb_default_output": "Inspect USB default output",
+    "inspect_eq_virtual_sink": "Inspect EQ virtual sink",
+    "assign_source_or_leave_unused": "Assign a source or leave this input unused",
+    "verify_opt_in_lan_receiver": "Verify the opt-in LAN receiver",
+    "inspect_bluetooth_device_connection": "Inspect Bluetooth device connection",
+    "inspect_bluetooth_pipewire_source": "Inspect Bluetooth PipeWire source",
+    "inspect_managed_loopback": "Inspect managed loopback process",
+    "inspect_pipewire_graph": "Inspect PipeWire graph",
+    "inspect_possible_intermediary_links": "Check intermediary PipeWire links",
+    "verify_actual_speaker_audio": "Test actual speaker audio manually",
+}
+
+
+def format_source_status_text(report):
+    """Render safe fixed-field guidance for the authorized local terminal.
+
+    Never print raw device identifiers or free-form upstream values. This
+    output neither probes the hardware nor confirms actual audio delivery.
+    """
+    if (type(report) is not dict or type(report.get("inputs")) is not dict
+            or set(report["inputs"]) != set(CHANNELS)
+            or type(report.get("observations_available")) is not bool):
+        raise ValueError("Invalid private source report")
+    status = ("available" if report["observations_available"]
+              else "unknown (missing, unsafe or stale)")
+    lines = [
+        "AudioHub local source diagnostics (read-only)",
+        "Runtime evidence: " + status,
+    ]
+    fields = (
+        ("USB", "usb_route_ready"),
+        ("BT node", "bluetooth_source_node_seen"),
+        ("Loopback", "managed_loopback_process_running"),
+        ("EQ-to-USB direct", "eq_to_usb_direct_link_observed"),
+        ("BlueZ property", "bluez_connected_property"),
+    )
+    marks = {True: "yes", False: "no", None: "?"}
+    for slot in CHANNELS:
+        item = report["inputs"][slot]
+        if type(item) is not dict:
+            raise ValueError("Invalid private source slot")
+        role = item.get("configured_role")
+        check = item.get("next_local_check")
+        if (type(role) is not str or role not in _SOURCE_ROLE_LABELS
+                or type(check) is not str or check not in _SOURCE_NEXT_LABELS):
+            raise ValueError("Invalid private source guidance")
+        values = []
+        for label, key in fields:
+            value = item.get(key)
+            if type(value) not in (bool, type(None)):
+                raise ValueError("Invalid private source field")
+            values.append(label + ": " + marks[value])
+        lines.append(slot + " (" + _SOURCE_ROLE_LABELS[role] + ")")
+        lines.append("  " + " | ".join(values))
+        lines.append("  Next: " + _SOURCE_NEXT_LABELS[check])
+    lines.append(
+        "Note: direct PipeWire links and optional BlueZ properties are not "
+        "proof of PCM samples or audible sound."
+    )
+    lines.append(
+        "BlueZ property is queried ONLY with --probe-bluetooth; "
+        "? also means unqueried/unavailable."
+    )
+    return "\n".join(lines)
+
+
 def read_source_report(*, path=None, now=None):
     """Read one local owner-private runtime status JSON without writing."""
     from .runtime import STATE, read_json
@@ -622,6 +698,8 @@ def main(argv=None):
         description="Local-only AudioHub lab routing; not owner onboarding or Bluetooth trust")
     parser.add_argument("--preview", action="store_true",
                         help="Preview a routing change without writing policy or devices")
+    parser.add_argument("--format", choices=("json", "text"), default="json",
+                        help="Status only: JSON (default) or safe human-readable text")
     parser.add_argument("--probe-bluetooth", action="store_true",
                         help="Status only: read manual BlueZ connection property, never connect or pair")
     parser.add_argument("--confirm-local-route-change", action="store_true",
@@ -647,7 +725,8 @@ def main(argv=None):
         if args.action in ("show", "slots", "status"):
             if (args.preview or args.confirm_local_route_change
                     or args.if_preview_revision is not None
-                    or (args.probe_bluetooth and args.action != "status")):
+                    or (args.probe_bluetooth and args.action != "status")
+                    or (args.format != "json" and args.action != "status")):
                 raise ValueError("Status-only actions do not accept route changes")
             if args.action == "status":
                 value = (probe_bluez_connections() if args.probe_bluetooth
@@ -655,8 +734,8 @@ def main(argv=None):
             else:
                 value = load() if args.action == "show" else route_slots()
         else:
-            if args.probe_bluetooth:
-                raise ValueError("BlueZ inspection is only permitted on read-only status")
+            if args.probe_bluetooth or args.format != "json":
+                raise ValueError("Formatting and BlueZ inspection are status-only")
             target = (args.slot if args.action == "set-lan" else
                       args.value if args.action == "mode" else args.address)
             slot = args.slot if args.action == "bind-bt" else None
@@ -695,7 +774,10 @@ def main(argv=None):
     except (OSError, ValueError, UnicodeError, TypeError):
         # Do not echo private device addresses, policy JSON or filesystem paths.
         parser.exit(2, "AudioHub route not changed or unavailable.\\n")
-    print(json.dumps(value, sort_keys=True))
+    if args.action == "status" and args.format == "text":
+        print(format_source_status_text(value))
+    else:
+        print(json.dumps(value, sort_keys=True))
 
 
 if __name__ == "__main__":
