@@ -640,6 +640,128 @@ class SourcePolicyTests(unittest.TestCase):
             bind.assert_not_called()
             lan.assert_not_called()
 
+    def test_private_route_map_text_shows_slots_without_identifiers_or_writes(self):
+        mac1, mac2 = "AA:BB:CC:DD:EE:FF", "11:22:33:44:55:66"
+        routes.bind_bluetooth(mac1, "music", self.dir)
+        routes.bind_bluetooth(mac2, "tablet", self.dir)
+        before = (self.dir / routes.FILENAME).read_bytes()
+        original = routes.route_slots
+        with (mock.patch.object(
+                routes, "route_slots",
+                side_effect=lambda: original(self.dir)) as reader,
+              mock.patch.object(routes, "update") as writer):
+            with redirect_stdout(StringIO()) as out:
+                routes.main(["--format", "text", "slots"])
+            reader.assert_called_once_with()
+            writer.assert_not_called()
+        content = out.getvalue()
+        self.assertIn("source reservations (read-only)", content)
+        self.assertIn("music: Bluetooth source 2", content)
+        self.assertIn("laptop: LAN reserved", content)
+        self.assertIn("tablet: Bluetooth source 1", content)
+        self.assertIn("No connection, PCM or audible speaker", content)
+        self.assertNotIn(mac1, content)
+        self.assertNotIn(mac2, content)
+        self.assertNotIn("r1-", content)
+        self.assertEqual((self.dir / routes.FILENAME).read_bytes(), before)
+        expected = routes.route_slots(self.dir)
+        self.assertEqual(routes.format_route_slots_text(expected).strip(),
+                         content.strip())
+        self.assertEqual(json.loads(json.dumps(expected)), expected)
+
+    def test_private_route_preview_text_changes_and_exact_revision_without_mac(self):
+        mac1, mac2 = "AA:BB:CC:DD:EE:FF", "11:22:33:44:55:66"
+        routes.bind_bluetooth(mac1, "music", self.dir)
+        routes.bind_bluetooth(mac2, "tablet", self.dir)
+        before = (self.dir / routes.FILENAME).read_bytes()
+        original = routes.preview_route
+        with (mock.patch.object(
+                routes, "preview_route",
+                side_effect=lambda action, value, slot=None:
+                original(action, value, slot, directory=self.dir)) as reader,
+              mock.patch.object(routes, "update") as writer,
+              mock.patch.object(routes, "swap_bluetooth_inputs") as apply):
+            with redirect_stdout(StringIO()) as out:
+                routes.main(["--format", "text", "--preview",
+                             "swap-bt", "music", "tablet"])
+            reader.assert_called_once_with("swap-bt", "music", "tablet")
+            writer.assert_not_called()
+            apply.assert_not_called()
+        display = out.getvalue()
+        preview = routes.preview_route("swap-bt", "music", "tablet",
+                                       directory=self.dir)
+        self.assertIn(preview["revision"], display)
+        self.assertIn("Current:", display)
+        self.assertIn("Proposed:", display)
+        self.assertIn("music: Bluetooth source 2", display)
+        self.assertIn("music: Bluetooth source 1", display)
+        self.assertIn("laptop: LAN reserved", display)
+        self.assertIn("Change requested: yes", display)
+        self.assertIn("No routing policy or devices were changed", display)
+        self.assertNotIn(mac1, display)
+        self.assertNotIn(mac2, display)
+        self.assertEqual((self.dir / routes.FILENAME).read_bytes(), before)
+        self.assertEqual(routes.format_route_preview_text(preview).strip(),
+                         display.strip())
+
+    def test_route_text_preview_warns_auto_discovery_before_manual_binding(self):
+        mac = "AA:BB:CC:DD:EE:FF"
+        folder = self.root / "not-yet-configured"
+        original = routes.preview_route
+        with mock.patch.object(
+                routes, "preview_route",
+                side_effect=lambda action, value, slot=None:
+                original(action, value, slot, directory=folder)):
+            with redirect_stdout(StringIO()) as out:
+                routes.main(["--format", "text", "--preview",
+                             "bind-bt", mac, "music"])
+        display = out.getvalue()
+        self.assertIn("automatic Bluetooth discovery would be disabled", display)
+        self.assertIn("Mode: auto", display)
+        self.assertIn("Mode: manual", display)
+        self.assertIn("Bluetooth source 1", display)
+        self.assertNotIn(mac, display)
+        self.assertFalse(folder.exists())
+        original_slots = routes.route_slots
+        with mock.patch.object(routes, "route_slots",
+                               side_effect=lambda: original_slots(folder)):
+            with redirect_stdout(StringIO()) as out:
+                routes.main(["--format", "text", "slots"])
+        self.assertIn("AudioHub current source reservations", out.getvalue())
+
+    def test_private_route_text_renderers_reject_malformed_or_forged_reports(self):
+        mac = "AA:BB:CC:DD:EE:FF"
+        routes.bind_bluetooth(mac, "music", self.dir)
+        slots = routes.route_slots(self.dir)
+        preview = routes.preview_route("swap-lan", "music",
+                                       directory=self.dir)
+        for change in (
+            lambda x: x["slots"]["music"].update(
+                {"manual_bluetooth_addresses": ["FAKE:DEVICE:DATA"]}),
+            lambda x: x["slots"]["music"].update(
+                {"free_for_manual_assignment": True}),
+            lambda x: x.update({"revision": "SECRET\\nINJECT"}),
+            lambda x: x.update({"free_slots": ["SECRET"]}),
+            lambda x: x.update({"connected_devices_verified": True}),
+        ):
+            invalid = json.loads(json.dumps(slots))
+            change(invalid)
+            with self.assertRaises((ValueError, KeyError, TypeError)):
+                routes.format_route_slots_text(invalid)
+        for change in (
+            lambda x: x.update({"revision": "SECRET\\nINJECT"}),
+            lambda x: x.update({"would_change": False}),
+            lambda x: x["current"].update({"lan_slot": "SECRET"}),
+            lambda x: x.update({"action": "SECRET\\nINJECT"}),
+            lambda x: x.update({"policy_written": True}),
+            lambda x: x["proposed"]["bluetooth"].update({mac: "music"}),
+        ):
+            invalid = json.loads(json.dumps(preview))
+            change(invalid)
+            with self.assertRaises((ValueError, KeyError, TypeError)):
+                routes.format_route_preview_text(invalid)
+        self.assertNotIn(mac, routes.format_route_preview_text(preview))
+
     def test_route_cli_guarded_apply_and_stale_refresh_never_auto_retry(self):
         preview = {"mode": "source-route-preview-only", "policy_written": False}
         token = "r1-" + "a"*64
@@ -942,9 +1064,7 @@ class LocalSourceStatusTests(unittest.TestCase):
             self.assertEqual(json.loads(out.getvalue()), report)
         for invalid in (
             ["--format", "text", "show"],
-            ["--format", "text", "slots"],
             ["--format", "text", "set-lan", "music"],
-            ["--format", "text", "--preview", "mode", "auto"],
             ["--format", "text", "--confirm-local-route-change",
              "--if-preview-revision", "r1-" + "a"*64, "set-lan", "music"],
             ["--format", "text", "--preview", "status"],

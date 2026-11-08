@@ -487,13 +487,18 @@ PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes --format text --p
 # Optional read-only BlueZ connection-property check of manual Bluetooth slots:
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes --probe-bluetooth status
 
-# New: read-only reservation map. Shows free inputs, not connected devices:
+# Read-only source reservation map: JSON for scripts, or private text summary:
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes slots
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes --format text slots
 
-# New: what-if routing preview. NO policy file or lock is created:
+# One-screen anonymized before/after previews of safe route changes:
+# Preview never writes policy, never creates a lock or connects any device.
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes --format text --preview set-lan music
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes --format text --preview bind-bt AA:BB:CC:DD:EE:FF laptop
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes --format text --preview mode manual
+
+# Existing machine-readable private JSON preview is unchanged:
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes --preview set-lan music
-PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes --preview bind-bt AA:BB:CC:DD:EE:FF laptop
-PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes --preview mode manual
 
 # Safe LAN/Bluetooth slot EXCHANGE: only manual mode with a BT-occupied slot.
 # Example: LAN currently laptop, assigned BT currently music. Does not
@@ -531,11 +536,23 @@ or unverified; it never implies a disconnected device. The view
 uses **only fixed English labels and validated boolean values**, never
 private addresses, names, node IDs or raw command output. Default
 `status` continues to emit the exact existing machine-readable JSON
-format for scripts. The `--format text` option is rejected on all
-other commands and cannot be combined with policy modification,
-`--preview` or mutation approval. The BlueZ probe remains explicit
-and opt-in. Neither rendering format proves audible sound or repairs
-a device.
+format for scripts. The `--format text` option now additionally
+supports read-only `slots` and explicit read-only `--preview ACTION`
+commands. Unlike JSON's private MAC-addressed route policy, the
+text views display only three fixed mixer slot names and stable
+`Bluetooth source 1/2` placeholders (assigned by sorted source
+address internally); they **never display raw MACs or device names**.
+The preview shows current and proposed mode/slot mappings, an
+automatic-discovery warning when appropriate, and the full
+`r1-...` private policy revision needed for a separate guarded
+confirmation. Keep that preview and revision private. Bluetooth
+source numbering is local to a snapshot, **not** an authenticated
+device identity. There is no automatic write, retry, pairing or
+connection. Text output is still rejected for `show`, direct writes,
+and any `--confirm-local-route-change` request. Default JSON
+`slots` and preview outputs remain unchanged for existing scripts.
+The BlueZ probe remains explicit and status-only. Neither output
+format proves PCM, audible audio or physically tested routing.
 
 For a more practical, truthful source **runtime status** on the authorized
 local console, run `python3 -m audiohub.source_routes status`. The
