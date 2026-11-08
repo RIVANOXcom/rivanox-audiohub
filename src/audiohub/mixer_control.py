@@ -49,6 +49,65 @@ def isolate_input_patch(slot):
     return {other: {"mute": True} for other in CHANNELS if other != slot}
 
 
+def _isolation_restore_patch(slot, baseline):
+    """Restore exactly two other mutes from a strict operator-owned snapshot."""
+    source = _decode_baseline(baseline)
+    return {other: {"mute": source[other]["mute"]}
+            for other in CHANNELS if other != slot}
+
+
+def preview_restore_isolation(slot, baseline, *, path=SETTINGS):
+    """Refuse to restore mutes unless the whole mixer still matches isolation.
+
+    An operator-provided baseline is not proof that isolation occurred. It
+    is only a bounded original settings snapshot. Validate ALL controls,
+    including the selected channel's mute, master and EQ, before proposing
+    two precise other-channel mute restorations. A second snapshot's revision
+    must match: otherwise a concurrent or ABA edit invalidates the preview.
+    """
+    patch = isolate_input_patch(slot)
+    original = _decode_baseline(baseline)
+    expected = patch_settings(original, patch)
+    current, revision = _preview_snapshot(path=path)
+    if current != expected:
+        raise MixerControlUnavailable(
+            "Mixer settings differ from the expected isolated baseline")
+    to_restore = _isolation_restore_patch(slot, baseline)
+    plan = preview_change(to_restore, path=path)
+    if plan["revision"] != revision:
+        raise MixerControlUnavailable(
+            "Mixer settings changed during isolation restore preview")
+    return {
+        **plan,
+        "operation": "isolation-restore-preview",
+        "source": slot,
+        "scope": "two-other-input-mutes-only",
+        "baseline_trust": "operator_supplied_not_authenticated",
+        "other_controls_preserved": True,
+        "selected_input_mute_preserved": True,
+        "requires_separate_revision_guarded_confirmation": True,
+    }
+
+
+def restore_isolation(slot, baseline, *, path=SETTINGS,
+                      confirmed=False, if_revision=None):
+    """Atomically restore two mutes only, after an independently reviewed plan.
+
+    Revalidate the untrusted baseline and the current isolated snapshot before
+    entering the existing exclusive-lock, revision-checked mixer writer.
+    If any actor writes in the interval, the writer refuses the old revision.
+    Never restore volume/EQ/master, route sources or unmute the selected input.
+    """
+    if confirmed is not True or type(if_revision) is not str:
+        raise MixerControlUnavailable(
+            "Explicit guarded local isolation restore confirmation required")
+    plan = preview_restore_isolation(slot, baseline, path=path)
+    if if_revision != plan["revision"]:
+        raise StaleMixerPreview("Private mixer isolation restore preview is stale")
+    return change(_isolation_restore_patch(slot, baseline),
+                  path=path, confirmed=True, if_revision=if_revision)
+
+
 def preset_patch(name):
     """Generate one explicit, schema-validated volume-only profile patch."""
     if type(name) is not str or name not in PRESET_VOLUMES:
@@ -900,6 +959,13 @@ def main(argv=None):
              "Requires reviewed preview revision and separate local confirmation",
     )
     isolate.add_argument("slot", choices=CHANNELS)
+    undo_isolation = commands.add_parser(
+        "restore-isolation",
+        help="Safely restore the other two pre-isolation mutes from a private "
+             "baseline, requiring separate preview and exact revision confirmation",
+    )
+    undo_isolation.add_argument("slot", choices=CHANNELS)
+    undo_isolation.add_argument("baseline", help="b1-... snapshot from the original isolation preview")
     preset = commands.add_parser(
         "preset",
         help="Request one conservative named volume preset, without unmuting or changing EQ",
@@ -951,9 +1017,11 @@ def main(argv=None):
         # Isolation can change two channels. A basic boolean confirmation is
         # intentionally insufficient: require the EXACT reviewed mixer
         # generation to prevent applying an old choice to a newer mix.
-        if args.action == "isolate-input" and (
+        if args.action in ("isolate-input", "restore-isolation") and (
                 args.confirm_local_profile_save
                 or args.if_profile_revision is not None
+                or (args.action == "restore-isolation"
+                    and args.compare_baseline is not None)
                 or (args.preview and (
                     args.confirm_local_mixer_change
                     or args.if_preview_revision is not None
@@ -962,7 +1030,7 @@ def main(argv=None):
                     not args.confirm_local_mixer_change
                     or args.if_preview_revision is None))):
             raise MixerControlUnavailable(
-                "Input isolation needs preview and a separate revision-guarded confirmation")
+                "Input isolation/restore needs preview and a separate revision-guarded confirmation")
         if args.action in ("compare-profiles", "compare-profile-current",
                            "profile-choices") and (
                 args.preview or args.confirm_local_mixer_change
@@ -1031,6 +1099,14 @@ def main(argv=None):
             state = show()
         elif args.action == "status":
             state = application_status()
+        elif args.action == "restore-isolation":
+            if args.preview:
+                state = preview_restore_isolation(args.slot, args.baseline)
+            else:
+                state = restore_isolation(
+                    args.slot, args.baseline,
+                    confirmed=args.confirm_local_mixer_change,
+                    if_revision=args.if_preview_revision)
         elif args.action == "list-profiles":
             state = list_volume_profiles()
         elif args.action == "profile-choices":
@@ -1122,6 +1198,9 @@ def main(argv=None):
         parser.exit(4, "Profile not copied: review the fresh copy preview "
                        "and separately confirm its new profile revision.\n")
     except StaleMixerPreview:
+        if args.action == "restore-isolation":
+            parser.exit(4, "Isolation mutes not restored: mixer changed. "
+                           "Inspect a new read-only preview; no automatic restore.\n")
         if args.action == "save-current-profile":
             # Never auto-capture a later state after a stale revision. The
             # operator must inspect the new read-only snapshot and consent.

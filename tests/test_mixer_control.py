@@ -355,6 +355,179 @@ class LocalMixerControlsTests(unittest.TestCase):
                             for slot in ("music", "laptop", "tablet")))
         self.assertEqual(mixer_control.show(path=self.settings), original)
 
+    def test_restore_isolation_recovers_only_two_original_mutes_atomically(self):
+        original = mixer_control.change({
+            "master": 23,
+            "music": {"volume": 20, "bass": 4, "mute": True},
+            "laptop": {"volume": 15, "mid": -3, "mute": False},
+            "tablet": {"volume": 35, "treble": 2, "mute": False},
+        }, path=self.settings, confirmed=True)
+        isolate = mixer_control.preview_change(
+            mixer_control.isolate_input_patch("music"), path=self.settings)
+        saved_baseline = isolate["comparison_baseline"]
+        mixer_control.change(
+            mixer_control.isolate_input_patch("music"),
+            path=self.settings, confirmed=True,
+            if_revision=isolate["revision"])
+        isolated_bytes = self.settings.read_bytes()
+        restored_plan = mixer_control.preview_restore_isolation(
+            "music", saved_baseline, path=self.settings)
+        self.assertEqual(self.settings.read_bytes(), isolated_bytes)
+        self.assertEqual(restored_plan["mode"], "preview-only")
+        self.assertEqual(restored_plan["operation"], "isolation-restore-preview")
+        self.assertEqual(restored_plan["source"], "music")
+        self.assertEqual(restored_plan["scope"], "two-other-input-mutes-only")
+        self.assertEqual(restored_plan["baseline_trust"],
+                         "operator_supplied_not_authenticated")
+        self.assertTrue(restored_plan["selected_input_mute_preserved"])
+        self.assertEqual(restored_plan["would_change"], [
+            "laptop.mute", "tablet.mute"])
+        self.assertTrue(restored_plan["before"]["music"]["mute"])
+        self.assertTrue(restored_plan["after"]["music"]["mute"])
+        self.assertFalse(restored_plan["settings_written"])
+        with mock.patch("audiohub.mixer_control.atomic_json",
+                        wraps=mixer_control.atomic_json) as atomic:
+            result = mixer_control.restore_isolation(
+                "music", saved_baseline, path=self.settings, confirmed=True,
+                if_revision=restored_plan["revision"])
+            atomic.assert_called_once()
+        self.assertEqual(result, original)
+        self.assertTrue(result["music"]["mute"],
+                        "A previously muted selected input stays muted")
+        self.assertEqual(stat.S_IMODE(self.settings.stat().st_mode), 0o600)
+        self.assertEqual(mixer_control.show(path=self.settings), original)
+
+    def test_restore_isolation_cli_requires_exact_reviewed_generation(self):
+        mixer_control.change({
+            "master": 31, "music": {"mute": False},
+            "laptop": {"mute": True}, "tablet": {"mute": False},
+        }, path=self.settings, confirmed=True)
+        iso = mixer_control.preview_change(
+            mixer_control.isolate_input_patch("music"), path=self.settings)
+        mixer_control.change(
+            mixer_control.isolate_input_patch("music"),
+            path=self.settings, confirmed=True,
+            if_revision=iso["revision"])
+        original_bytes = self.settings.read_bytes()
+        baseline = iso["comparison_baseline"]
+        real_preview = mixer_control.preview_restore_isolation
+        real_restore = mixer_control.restore_isolation
+        with (mock.patch(
+                "audiohub.mixer_control.preview_restore_isolation",
+                side_effect=lambda slot, token, **kw:
+                real_preview(slot, token, path=kw.get("path", self.settings))) as preview,
+              mock.patch("audiohub.mixer_control.restore_isolation",
+                         side_effect=lambda slot, token, **kw:
+                         real_restore(slot, token, path=self.settings, **kw)) as restore):
+            with redirect_stdout(StringIO()) as stdout:
+                mixer_control.main(["--preview", "restore-isolation",
+                                    "music", baseline])
+            planned = json.loads(stdout.getvalue().splitlines()[0])
+            self.assertEqual(planned["would_change"], ["tablet.mute"])
+            self.assertEqual(self.settings.read_bytes(), original_bytes)
+            preview.assert_called_once_with("music", baseline)
+            restore.assert_not_called()
+            with redirect_stdout(StringIO()) as stdout:
+                mixer_control.main([
+                    "--confirm-local-mixer-change",
+                    "--if-preview-revision", planned["revision"],
+                    "restore-isolation", "music", baseline,
+                ])
+            result = json.loads(stdout.getvalue().splitlines()[0])
+            self.assertFalse(result["music"]["mute"])
+            self.assertTrue(result["laptop"]["mute"])
+            self.assertFalse(result["tablet"]["mute"])
+            restore.assert_called_once_with(
+                "music", baseline, confirmed=True,
+                if_revision=planned["revision"])
+
+    def test_restore_isolation_fails_closed_on_intervening_master_eq_or_mute(self):
+        original = mixer_control.change({
+            "master": 30,
+            "music": {"mute": False, "bass": 1},
+            "laptop": {"volume": 15, "mute": False},
+            "tablet": {"mute": False, "treble": 2},
+        }, path=self.settings, confirmed=True)
+        start = mixer_control.preview_change(
+            mixer_control.isolate_input_patch("music"), path=self.settings)
+        baseline = start["comparison_baseline"]
+        mixer_control.change(
+            mixer_control.isolate_input_patch("music"),
+            path=self.settings, confirmed=True,
+            if_revision=start["revision"])
+        preview = mixer_control.preview_restore_isolation(
+            "music", baseline, path=self.settings)
+        # Even a no-op-looking ABA replacement is another settings generation.
+        mixer_control.change({"master": 55}, path=self.settings, confirmed=True)
+        mixer_control.change({"master": 30}, path=self.settings, confirmed=True)
+        raw = self.settings.read_bytes()
+        with self.assertRaises(mixer_control.StaleMixerPreview):
+            mixer_control.restore_isolation(
+                "music", baseline, path=self.settings, confirmed=True,
+                if_revision=preview["revision"])
+        self.assertEqual(self.settings.read_bytes(), raw)
+        for foreign in (
+                {"master": 21},
+                {"music": {"bass": 8}},
+                {"music": {"mute": True}},
+                {"laptop": {"volume": 88}},
+                {"laptop": {"mute": False}},
+        ):
+            with self.subTest(foreign=foreign):
+                mixer_control.change(foreign, path=self.settings, confirmed=True)
+                before = self.settings.read_bytes()
+                with self.assertRaises(mixer_control.MixerControlUnavailable):
+                    mixer_control.preview_restore_isolation(
+                        "music", baseline, path=self.settings)
+                self.assertEqual(self.settings.read_bytes(), before)
+                # Restore the original isolated settings by an independent
+                # test-only writer; never done automatically by the product.
+                mixer_control.change(original, path=self.settings, confirmed=True)
+                mixer_control.change(
+                    mixer_control.isolate_input_patch("music"),
+                    path=self.settings, confirmed=True)
+
+    def test_restore_isolation_invalid_token_or_flags_never_touch_settings(self):
+        initial = mixer_control.preview_change(
+            mixer_control.isolate_input_patch("music"), path=self.settings)
+        baseline = initial["comparison_baseline"]
+        for args in (
+            ["restore-isolation", "music", baseline],
+            ["--confirm-local-mixer-change", "restore-isolation", "music", baseline],
+            ["--if-preview-revision", "v1-" + "a"*64,
+             "restore-isolation", "music", baseline],
+            ["--preview", "--confirm-local-mixer-change",
+             "restore-isolation", "music", baseline],
+            ["--preview", "--if-preview-revision", "v1-" + "a"*64,
+             "restore-isolation", "music", baseline],
+            ["--preview", "--wait-for-supervisor",
+             "restore-isolation", "music", baseline],
+            ["--preview", "--confirm-local-profile-save",
+             "restore-isolation", "music", baseline],
+            ["--preview", "--compare-baseline", baseline,
+             "restore-isolation", "music", baseline],
+            ["--preview", "restore-isolation", "unknown", baseline],
+            ["--preview", "restore-isolation", "music", "b1-$PRIVATE_MAC"],
+            ["--preview", "restore-isolation", "music", baseline, "tablet"],
+        ):
+            with (self.subTest(args=args),
+                  mock.patch("audiohub.mixer_control.change") as writer,
+                  redirect_stdout(StringIO()) as stdout,
+                  redirect_stderr(StringIO()) as stderr):
+                with self.assertRaises(SystemExit) as invalid:
+                    mixer_control.main(args)
+                self.assertEqual(invalid.exception.code, 2)
+                self.assertEqual(stdout.getvalue(), "")
+                self.assertNotIn("PRIVATE_MAC", stderr.getvalue())
+                writer.assert_not_called()
+            self.assertFalse(self.settings.parent.exists())
+        for token in (True, 5, "", "b1-X", "b1-../SECRET"):
+            with self.subTest(token=repr(token)), self.assertRaises(
+                    mixer_control.MixerControlUnavailable):
+                mixer_control.preview_restore_isolation(
+                    "music", token, path=self.settings)
+            self.assertFalse(self.settings.parent.exists())
+
     def test_mute_all_is_single_atomic_write_and_preserves_levels_and_eq(self):
         prior = mixer_control.change({
             "master": 27, "music": {"volume": 33, "bass": 4},
