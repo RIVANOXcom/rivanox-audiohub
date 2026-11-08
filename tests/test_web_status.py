@@ -822,6 +822,9 @@ class BrowserEqOwnerGuideTests(unittest.TestCase):
             "eq-guide-transfer-source", "eq-guide-transfer-target",
             "eq-guide-transfer-note", "eq-guide-transfer-feedback",
             "eq-guide-transfer-command", "eq-guide-copy-transfer",
+            "eq-guide-neutral-note", "eq-guide-neutral-slot",
+            "eq-guide-neutral-feedback", "eq-guide-neutral-command",
+            "eq-guide-copy-neutral",
         ):
             self.assertIn('id="' + ident + '"', html)
         self.assertEqual(html.count('id="eq-guide-slot"'), 1)
@@ -833,13 +836,16 @@ class BrowserEqOwnerGuideTests(unittest.TestCase):
         self.assertIn('value="copy-eq"', html)
         self.assertIn('value="swap-eq"', html)
         self.assertIn('id="eq-guide-transfer-command" readonly', html)
+        self.assertIn('id="eq-guide-neutral-command" readonly', html)
+        self.assertIn('aria-describedby="eq-guide-neutral-note eq-guide-neutral-feedback"', html)
+        self.assertIn('byId("eq-guide-copy-neutral").addEventListener("click", () => copyEqGuideCommand("neutral"));', js)
         self.assertIn('aria-describedby="eq-guide-transfer-note eq-guide-transfer-feedback"', html)
         self.assertIn('byId("eq-guide-copy-transfer").addEventListener("click", () => copyEqGuideCommand("transfer"));', js)
         self.assertNotIn('--confirm-local-mixer-change', html)
         self.assertNotIn('--stage-saved', html)
         self.assertIn('byId("eq-guide-slot").addEventListener("change", renderEqGuide);', js)
         self.assertIn('if (BANDS.includes(key)) renderEqGuide();', js)
-        self.assertIn('    renderEqGuide();\n    renderEqTransferGuide();\n    renderRoutingPlan();', js)
+        self.assertIn('    renderEqGuide();\n    renderEqTransferGuide();\n    renderEqNeutralGuide();\n    renderRoutingPlan();', js)
         self.assertIn('navigator.clipboard.writeText(command)', js)
         self.assertNotIn("fetch(", preview_eq_guide_source())
         keys = {
@@ -852,6 +858,10 @@ class BrowserEqOwnerGuideTests(unittest.TestCase):
             "eqGuideTransferSource", "eqGuideTransferTarget",
             "eqGuideTransferReady", "eqGuideTransferInvalid",
             "eqGuideTransferCommandLabel", "eqGuideTransferCopyCommand",
+            "eqGuideNeutralTitle", "eqGuideNeutralNotice",
+            "eqGuideNeutralSlot", "eqGuideNeutralReady",
+            "eqGuideNeutralInvalid", "eqGuideNeutralCommandLabel",
+            "eqGuideNeutralCopyCommand",
         }
         for code in ("en", "de", "es", "fr", "it"):
             with self.subTest(locale=code):
@@ -1057,6 +1067,80 @@ async function check() {
   assert.equal(copied.length, 2);
 }
 check().catch(error => { console.error(error); process.exitCode = 1; });
+'''
+        result = subprocess.run(
+            ["node", "-e", setup + "\n" + preview_eq_guide_source() + "\n" + verify],
+            capture_output=True, text=True, timeout=15, check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+
+    @unittest.skipUnless(shutil.which("node"), "Node.js runtime unavailable")
+    def test_shipped_eq_neutral_preview_is_one_slot_readonly_and_fail_closed(self):
+        """Run real production JavaScript, including the clipboard boundary."""
+        setup = r'''
+const assert = require("node:assert/strict");
+const CHANNELS = ["music", "laptop", "tablet"];
+const BANDS = ["bass", "mid", "treble"];
+const elements = {
+  "eq-guide-neutral-slot": {value: "music"},
+  "eq-guide-neutral-command": {value: ""},
+  "eq-guide-copy-neutral": {disabled: false},
+  "eq-guide-neutral-feedback": {textContent: "", dataset: {}},
+  "eq-guide-copy-status": {textContent: ""}
+};
+const byId = id => elements[id];
+const tr = key => key;
+const copied = [];
+let navigator = {clipboard: {writeText: async value => copied.push(value)}};
+const fetch = () => {throw new Error("Unexpected device or network request");};
+'''
+        verify = r'''
+async function check() {
+  const prefix = "PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control " +
+    "--preview reset-eq ";
+  for (const slot of CHANNELS) {
+    assert.equal(buildLocalEqNeutralPreview(slot), prefix + slot);
+  }
+  for (const injected of [null, undefined, "", 0, 1, {}, [],
+                           "music;id", "../tablet", "laptop --confirm-local-mixer-change",
+                           "tablet\nrm -rf"]) {
+    assert.equal(buildLocalEqNeutralPreview(injected), null);
+  }
+  renderEqNeutralGuide();
+  assert.equal(elements["eq-guide-neutral-command"].value, prefix + "music");
+  assert.equal(elements["eq-guide-copy-neutral"].disabled, false);
+  assert.equal(elements["eq-guide-neutral-feedback"].dataset.invalid, "false");
+  await copyEqGuideCommand("neutral");
+  assert.deepEqual(copied, [prefix + "music"]);
+  assert.equal(elements["eq-guide-copy-status"].textContent, "eqGuideCopied");
+  assert.ok(copied.every(x => x.includes("--preview reset-eq ") &&
+    !x.includes("--confirm-") && !x.includes("--stage-saved")));
+
+  elements["eq-guide-neutral-slot"].value = "tablet";
+  renderEqNeutralGuide();
+  assert.equal(elements["eq-guide-neutral-command"].value, prefix + "tablet");
+  await copyEqGuideCommand("neutral");
+  assert.deepEqual(copied, [prefix + "music", prefix + "tablet"]);
+
+  // Invalid selection clears prior valid command rather than copying stale text.
+  elements["eq-guide-neutral-slot"].value = "music;bad";
+  renderEqNeutralGuide();
+  assert.equal(elements["eq-guide-neutral-command"].value, "");
+  assert.equal(elements["eq-guide-copy-neutral"].disabled, true);
+  assert.equal(elements["eq-guide-neutral-feedback"].dataset.invalid, "true");
+  await copyEqGuideCommand("neutral");
+  assert.equal(copied.length, 2);
+
+  elements["eq-guide-neutral-slot"].value = "laptop";
+  renderEqNeutralGuide();
+  navigator.clipboard = null;
+  await copyEqGuideCommand("neutral");
+  assert.equal(elements["eq-guide-copy-status"].textContent,
+    "eqGuideCopyUnavailable");
+  assert.equal(copied.length, 2);
+}
+check().catch(error => {console.error(error); process.exitCode = 1;});
 '''
         result = subprocess.run(
             ["node", "-e", setup + "\n" + preview_eq_guide_source() + "\n" + verify],

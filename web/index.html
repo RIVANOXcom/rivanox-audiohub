@@ -85,6 +85,25 @@
             <button type="button" id="eq-guide-copy-transfer" data-t="eqGuideTransferCopyCommand">Copy transfer preview</button>
           </div>
         </fieldset>
+        <fieldset class="eq-guide-neutral" aria-describedby="eq-guide-neutral-note">
+          <legend data-t="eqGuideNeutralTitle">Preview a neutral (0 dB) EQ curve for one input</legend>
+          <p id="eq-guide-neutral-note" data-t="eqGuideNeutralNotice">Only a local Pi read-only preview is generated. Neutralizing EQ affects the saved three-band curve only after a separate owner approval; this browser never changes it.</p>
+          <div class="eq-guide-fields">
+            <label for="eq-guide-neutral-slot"><span data-t="eqGuideNeutralSlot">Input to preview</span>
+              <select id="eq-guide-neutral-slot" aria-describedby="eq-guide-neutral-note">
+                <option value="music" data-t="input1">Input 1</option>
+                <option value="laptop" data-t="input2">Input 2</option>
+                <option value="tablet" data-t="input3">Input 3</option>
+              </select>
+            </label>
+          </div>
+          <p id="eq-guide-neutral-feedback" role="status" aria-live="polite" data-t="eqGuideNeutralReady">A non-mutating preview can show the difference from the saved EQ to 0 dB.</p>
+          <label for="eq-guide-neutral-command" data-t="eqGuideNeutralCommandLabel">4. Preview neutral saved EQ at the Pi (no save or audio change)</label>
+          <textarea id="eq-guide-neutral-command" readonly rows="2" spellcheck="false" aria-describedby="eq-guide-neutral-note eq-guide-neutral-feedback"></textarea>
+          <div class="eq-guide-actions">
+            <button type="button" id="eq-guide-copy-neutral" data-t="eqGuideNeutralCopyCommand">Copy neutral-EQ preview</button>
+          </div>
+        </fieldset>
       </details>
       <section class="routing-summary" aria-labelledby="routing-title">
         <h2 id="routing-title" data-t="routingTitle">Audio routing status</h2>

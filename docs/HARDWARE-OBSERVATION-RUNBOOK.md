@@ -299,6 +299,36 @@ approve the separately documented owner-only transaction. This
 browser guide never authorizes that action, audible output, physical
 hardware acceptance or a public release.
 
+### Browser-assisted neutral EQ preview (no settings changes)
+
+The five-language, keyboard-openable browser-only EQ guide now also
+offers a **single-input neutral curve preview**. Choose exactly one
+fixed technical Pi slot (`music`, `laptop` or `tablet`) and copy
+the read-only command:
+
+```sh
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --preview reset-eq music
+```
+
+When run by an **authorized owner at the local Pi terminal**, this
+previews setting just that slot's saved `bass`, `mid` and `treble`
+gains to **0 dB** in the private mixer without changing them. The
+command does not change master or channel volumes, mute state, the
+other inputs, audio routing, Bluetooth ownership, the staged PipeWire
+filter or live sound. Unknown or injected source slots create no
+command in the browser and disable copying. Changing from a valid to
+an invalid selection removes the stale preview.
+
+The browser does **not** read the Pi's private EQ or perform the reset.
+Its demonstration sliders are not the current saved settings. There
+is deliberately **no save/confirm button**, no `--if-preview-revision`
+or local stage command in the browser. Any later save requires an
+operator to review the actual Pi-local preview and explicitly confirm
+a fresh private mixer generation through the separately documented
+owner-only transaction. A neutral saved EQ is not proof of a reloaded
+PipeWire filter or audible hardware. This feature is no hardware,
+release, privacy or security approval.
+
 ### Read the EQ stage status without interpreting JSON
 
 For an owner at the Pi console, the same **read-only** comparison is
