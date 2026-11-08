@@ -589,6 +589,116 @@ class EqSetupFileSafetyTests(unittest.TestCase):
                 self.assertNotIn(str(settings), err.getvalue())
                 self.assertFalse(self.config(home).parent.exists())
 
+    def test_eq_text_explains_matching_and_differing_stages_not_live_sound(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = self.home(tmp)
+            settings = home / "private" / "settings.json"
+            mixer_control.change({
+                "music": {"bass": -3, "mid": 2, "treble": 1},
+                "laptop": {"bass": 4, "mute": True},
+            }, path=settings, confirmed=True)
+            with (mock.patch.object(Path, "home", return_value=home),
+                  mock.patch.object(eq_setup, "SETTINGS", settings)):
+                plan = eq_setup.preview_saved_eq()
+                eq_setup.stage_saved_eq(plan["revision"], confirmed=True)
+                stage = self.config(home).read_bytes()
+                saved = settings.read_bytes()
+                with redirect_stdout(StringIO()) as out:
+                    eq_setup.main(["--compare-staged", "--format", "text"])
+                report = out.getvalue()
+                self.assertIn("Stage: matches saved", report)
+                self.assertIn("music: bass -3 dB, mid +2 dB, treble +1 dB",
+                              report)
+                self.assertIn("not prove PipeWire loaded", report)
+                self.assertIn("no audible output verified", report)
+                self.assertNotIn(str(home), report)
+                self.assertEqual(self.config(home).read_bytes(), stage)
+                self.assertEqual(settings.read_bytes(), saved)
+
+                mixer_control.change(
+                    {"music": {"treble": -2}}, path=settings, confirmed=True)
+                saved_new = settings.read_bytes()
+                with redirect_stdout(StringIO()) as out:
+                    eq_setup.main(["--format", "text", "--compare-staged"])
+                report = out.getvalue()
+                self.assertIn("Stage: differs from saved", report)
+                self.assertIn("music: bass -3 dB, mid +2 dB, treble -2 dB",
+                              report)
+                self.assertIn("--preview-saved", report)
+                self.assertIn("separate local consent", report)
+                self.assertEqual(self.config(home).read_bytes(), stage)
+                self.assertEqual(settings.read_bytes(), saved_new)
+
+    def test_eq_text_missing_and_unsafe_stage_guide_without_touching_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = self.home(tmp)
+            settings = home / "private" / "settings.json"
+            mixer_control.change({"music": {"bass": 5}},
+                                 path=settings, confirmed=True)
+            before = settings.read_bytes()
+            with (mock.patch.object(Path, "home", return_value=home),
+                  mock.patch.object(eq_setup, "SETTINGS", settings)):
+                with redirect_stdout(StringIO()) as out:
+                    eq_setup.main(["--compare-staged", "--format", "text"])
+                text = out.getvalue()
+                self.assertIn("Stage: missing", text)
+                self.assertIn("--preview-saved", text)
+                self.assertIn("no PipeWire restart", text)
+                self.assertFalse(self.config(home).parent.exists())
+                target = self.config(home)
+                target.parent.mkdir(parents=True, mode=0o700)
+                private_note = home / "private-note"
+                private_note.write_text("secret device address")
+                target.symlink_to(private_note)
+                with redirect_stdout(StringIO()) as out:
+                    eq_setup.main(["--compare-staged", "--format", "text"])
+                text = out.getvalue()
+                self.assertIn("Stage: unavailable", text)
+                self.assertIn("No automatic repair", text)
+                self.assertNotIn("secret device address", text)
+                self.assertEqual(private_note.read_text(),
+                                 "secret device address")
+                self.assertEqual(settings.read_bytes(), before)
+
+    def test_eq_text_format_is_comparison_only_and_default_json_unchanged(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = self.home(tmp)
+            settings = home / "private" / "settings.json"
+            mixer_control.change({"tablet": {"treble": 2}},
+                                 path=settings, confirmed=True)
+            before = settings.read_bytes()
+            with (mock.patch.object(Path, "home", return_value=home),
+                  mock.patch.object(eq_setup, "SETTINGS", settings)):
+                for args in (
+                    ["--format", "text"],
+                    ["--preview-saved", "--format", "text"],
+                    ["--stage-saved", "--format", "text"],
+                    ["--compare-staged", "--format", "text",
+                     "--confirm-local-eq-stage"],
+                    ["--compare-staged", "--format", "text",
+                     "--if-preview-revision", "v1-" + "a" * 64],
+                    ["--compare-staged", "--format", "html"],
+                ):
+                    with (self.subTest(args=args),
+                          redirect_stdout(StringIO()) as out,
+                          redirect_stderr(StringIO())):
+                        with self.assertRaises(SystemExit) as failed:
+                            eq_setup.main(args)
+                        self.assertEqual(failed.exception.code, 2)
+                        self.assertEqual(out.getvalue(), "")
+                with redirect_stdout(StringIO()) as out:
+                    eq_setup.main(["--compare-staged"])
+                default_json = json.loads(out.getvalue())
+                self.assertEqual(default_json["staging_status"], "missing")
+                self.assertFalse(default_json["settings_written"])
+                self.assertFalse(default_json["live_eq_applied"])
+                with redirect_stdout(StringIO()) as out:
+                    eq_setup.main(["--compare-staged", "--format", "json"])
+                explicit_json = json.loads(out.getvalue())
+                self.assertEqual(explicit_json, default_json)
+                self.assertFalse(self.config(home).parent.exists())
+                self.assertEqual(settings.read_bytes(), before)
+
     def test_saved_eq_preview_and_operator_guarded_staging_no_live_restart(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = self.home(tmp)
