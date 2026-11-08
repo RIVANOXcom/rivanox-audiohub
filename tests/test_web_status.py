@@ -839,7 +839,7 @@ class BrowserEqOwnerGuideTests(unittest.TestCase):
         self.assertNotIn('--stage-saved', html)
         self.assertIn('byId("eq-guide-slot").addEventListener("change", renderEqGuide);', js)
         self.assertIn('if (BANDS.includes(key)) renderEqGuide();', js)
-        self.assertIn('    renderEqGuide();\n    renderRoutingPlan();', js)
+        self.assertIn('    renderEqGuide();\n    renderEqTransferGuide();\n    renderRoutingPlan();', js)
         self.assertIn('navigator.clipboard.writeText(command)', js)
         self.assertNotIn("fetch(", preview_eq_guide_source())
         keys = {
