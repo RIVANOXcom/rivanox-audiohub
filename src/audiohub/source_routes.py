@@ -645,6 +645,115 @@ def format_source_status_text(report):
     return "\n".join(lines)
 
 
+_ROUTE_ACTION_LABELS = {
+    "set-lan": "Select LAN input",
+    "swap-lan": "Exchange LAN and Bluetooth inputs",
+    "swap-bt": "Exchange two Bluetooth inputs",
+    "bind-bt": "Assign a Bluetooth input",
+    "unbind-bt": "Unassign a Bluetooth input",
+    "mode": "Change source discovery mode",
+}
+
+
+def _private_route_lines(plan, labels):
+    """Only fixed slot and source-index labels, never real MAC addresses."""
+    lines = ["  Mode: " + plan["mode"]]
+    by_slot = {slot: "Unreserved" for slot in CHANNELS}
+    by_slot[plan["lan_slot"]] = "LAN reserved"
+    for address, slot in plan["bluetooth"].items():
+        by_slot[slot] = labels[address]
+    for slot in CHANNELS:
+        lines.append("  " + slot + ": " + by_slot[slot])
+    return lines
+
+
+def format_route_slots_text(report):
+    """Readable current private reservation map; redact Bluetooth addresses."""
+    if (type(report) is not dict or report.get("mode") != "source-slots-read-only"
+            or type(report.get("slots")) is not dict
+            or set(report["slots"]) != set(CHANNELS)
+            or type(report.get("free_slots")) is not list
+            or report.get("policy_written") is not False
+            or report.get("connected_devices_verified") is not False
+            or report.get("audible_playback_verified") is not False):
+        raise ValueError("Invalid private slot report")
+    _check_revision(report.get("revision"))
+    assigned = {}
+    for slot in CHANNELS:
+        entry = report["slots"][slot]
+        if (type(entry) is not dict
+                or set(entry) != {"lan_reserved", "manual_bluetooth_addresses",
+                                 "free_for_manual_assignment"}
+                or type(entry["lan_reserved"]) is not bool
+                or type(entry["free_for_manual_assignment"]) is not bool
+                or type(entry["manual_bluetooth_addresses"]) is not list
+                or len(entry["manual_bluetooth_addresses"]) > 1):
+            raise ValueError("Invalid private slot reservation")
+        for addr in entry["manual_bluetooth_addresses"]:
+            mac = canonical_mac(addr)
+            if mac != addr or mac in assigned:
+                raise ValueError("Invalid private source binding")
+            assigned[mac] = slot
+    plan = validate({
+        "schema": SCHEMA, "mode": report.get("route_policy"),
+        "lan_slot": report.get("lan_slot"), "bluetooth": assigned,
+    })
+    if (_slots(plan) != report["slots"] or
+            report["free_slots"] != [
+                slot for slot in CHANNELS
+                if _slots(plan)[slot]["free_for_manual_assignment"]
+            ]):
+        raise ValueError("Inconsistent private reservation map")
+    labels = {addr: "Bluetooth source " + str(i + 1)
+              for i, addr in enumerate(sorted(assigned))}
+    return "\n".join([
+        "AudioHub current source reservations (read-only)",
+        *_private_route_lines(plan, labels),
+        "Unreserved slots are not proof of inactive Bluetooth audio.",
+        "No connection, PCM or audible speaker has been verified.",
+    ])
+
+
+def format_route_preview_text(report):
+    """One-screen privacy-safe plan comparison for a separate local approval."""
+    if (type(report) is not dict or report.get("mode") != "source-route-preview-only"
+            or report.get("action") not in _ROUTE_ACTION_LABELS
+            or type(report.get("would_change")) is not bool
+            or report.get("separate_confirmation_recommended") is not True
+            or report.get("policy_written") is not False
+            or report.get("connected_devices_verified") is not False
+            or report.get("audible_playback_verified") is not False):
+        raise ValueError("Invalid private route preview")
+    revision = _check_revision(report.get("revision"))
+    current = validate(report.get("current"))
+    proposed = validate(report.get("proposed"))
+    if report["would_change"] != (current != proposed):
+        raise ValueError("Inconsistent source routing preview")
+    labels = {addr: "Bluetooth source " + str(i + 1)
+              for i, addr in enumerate(sorted(
+                  set(current["bluetooth"]) | set(proposed["bluetooth"])))}
+    lines = [
+        "AudioHub source routing preview (read-only)",
+        "Action: " + _ROUTE_ACTION_LABELS[report["action"]],
+        "Current:",
+        *_private_route_lines(current, labels),
+        "Proposed:",
+        *_private_route_lines(proposed, labels),
+        "Change requested: " + ("yes" if report["would_change"] else "no"),
+    ]
+    if current["mode"] == "auto" and proposed["mode"] == "manual":
+        lines.append("Warning: automatic Bluetooth discovery would be disabled.")
+    if current["bluetooth"] != proposed["bluetooth"]:
+        lines.append("Warning: affected running sources may restart on the next poll.")
+    lines.extend([
+        "Review the PRIVATE route policy revision before any separate confirmation:",
+        "Revision: " + revision,
+        "No routing policy or devices were changed by this preview.",
+        "This view does not prove pairing, connection, PCM or audible sound.",
+    ])
+    return "\n".join(lines)
+
+
 def read_source_report(*, path=None, now=None):
     """Read one local owner-private runtime status JSON without writing."""
     from .runtime import STATE, read_json
@@ -744,7 +853,7 @@ def main(argv=None):
     parser.add_argument("--preview", action="store_true",
                         help="Preview a routing change without writing policy or devices")
     parser.add_argument("--format", choices=("json", "text"), default="json",
-                        help="Status only: JSON (default) or safe human-readable text")
+                        help="JSON (default); text for read-only status, slots and route previews")
     parser.add_argument("--probe-bluetooth", action="store_true",
                         help="Status only: read manual BlueZ connection property, never connect or pair")
     parser.add_argument("--confirm-local-route-change", action="store_true",
@@ -778,7 +887,7 @@ def main(argv=None):
             if (args.preview or args.confirm_local_route_change
                     or args.if_preview_revision is not None
                     or (args.probe_bluetooth and args.action != "status")
-                    or (args.format != "json" and args.action != "status")):
+                    or (args.format != "json" and args.action not in ("status", "slots"))):
                 raise ValueError("Status-only actions do not accept route changes")
             if args.action == "status":
                 value = (probe_bluez_connections() if args.probe_bluetooth
@@ -786,8 +895,8 @@ def main(argv=None):
             else:
                 value = load() if args.action == "show" else route_slots()
         else:
-            if args.probe_bluetooth or args.format != "json":
-                raise ValueError("Formatting and BlueZ inspection are status-only")
+            if args.probe_bluetooth or (args.format != "json" and not args.preview):
+                raise ValueError("Text route formatting requires a read-only preview")
             target = (args.slot if args.action in ("set-lan", "swap-lan") else
                       args.first_slot if args.action == "swap-bt" else
                       args.value if args.action == "mode" else args.address)
@@ -835,8 +944,13 @@ def main(argv=None):
     except (OSError, ValueError, UnicodeError, TypeError):
         # Do not echo private device addresses, policy JSON or filesystem paths.
         parser.exit(2, "AudioHub route not changed or unavailable.\\n")
-    if args.action == "status" and args.format == "text":
-        print(format_source_status_text(value))
+    if args.format == "text":
+        if args.action == "status":
+            print(format_source_status_text(value))
+        elif args.action == "slots":
+            print(format_route_slots_text(value))
+        else:
+            print(format_route_preview_text(value))
     else:
         print(json.dumps(value, sort_keys=True))
 
