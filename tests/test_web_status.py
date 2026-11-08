@@ -838,7 +838,7 @@ class BrowserEqOwnerGuideTests(unittest.TestCase):
         self.assertIn('not proof of selected presets', html)
         self.assertIn('requested values only', html)
         self.assertIn('calculated mix headroom factor', html)
-        self.assertIn('reduce the protective master gain', html)
+        self.assertIn('lower the protective master gain', html)
         self.assertIn('value="copy-eq"', html)
         self.assertIn('value="swap-eq"', html)
         self.assertIn('id="eq-guide-transfer-command" readonly', html)
