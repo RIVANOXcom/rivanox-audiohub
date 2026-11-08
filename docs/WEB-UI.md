@@ -14,6 +14,50 @@ Security requirements for the future controller:
 4. A reset/recovery path usable without a monitor or keyboard.
 5. Device state/metadata protected from unauthenticated clients.
 
+## Controls-first mobile and desktop dashboard (unmerged draft)
+
+The user-facing preview previously placed a long routing diagnostics,
+listening-observation, diagnostic-export, historical comparison and
+three-source routing lab **ahead of the basic mixer controls**. On a
+phone, this required extensive scrolling even to reach Input 1–3.
+That was an avoidable UX barrier, especially for users exploring the
+mock source volume/mute and EQ controls.
+
+The layout now presents **USB speaker status, the three input cards,
+and master output first**, immediately after the existing conspicuous
+warning that the controls are **NOT connected to live sound**.
+The compact routing status header, its three counters, freshness,
+manual recheck and concise diagnostic explanation remain visible
+below the primary controls.
+
+All existing expert routing diagnostic functions remain usable but
+are grouped into a single **native, initially collapsed
+`<details>` section**. Opening *Advanced diagnostics and test notes*
+reveals the existing local history, five manual listening observations,
+JSON export and historical comparison. Nested native history/compare
+disclosures retain their existing controls. No history or observations
+are cleared or changed merely because the group is collapsed; the
+existing explicit reset actions retain their meaning. Device-status
+polling and existing report/export event handlers continue to refer
+to the original, unchanged element IDs.
+
+The offline what-if three-source routing planner is likewise
+available under a separate **optional native details disclosure**.
+Its current-slot assumptions, three target selectors, side-by-side
+hypothetical movements and generated **read-only local terminal
+preview** remain unchanged. The panel being collapsed does not mean
+sources are disconnected or applied; no browser route writes, owner
+authentication, sound measurement or device manipulation is added.
+Every disclosure uses keyboard-operable browser-native summary
+elements, clearly visible focus styling, responsive content and
+complete translations in en/de/es/fr/it. There are **no new buttons**.
+
+This improves access to a demonstration, **not** deployment readiness.
+Actual mixer settings/route policy can only be changed separately
+via the existing explicitly confirmed private console workflows;
+phone setup and authorized device controls remain blocked pending
+secure ownership and physical hardware tests.
+
 ## Read-only on-device status preview (experimental)
 
 The image-builder installs five-language web assets under `/opt/audiohub/web` and starts an unprivileged Python HTTP service on port `8765`. **Until authenticated ownership and a protected API are available, the status preview binds to `127.0.0.1:8765` by default.** This is intentionally **not** a usable phone-based setup portal; `http://audiohub.local:8765/` is *not* available from another device in the default image. A remote browser cannot access the current local-only preview.

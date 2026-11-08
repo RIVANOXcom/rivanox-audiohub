@@ -148,3 +148,15 @@
 .routing-guide-comparison ul{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;list-style:none;padding:0;margin:0}
 .routing-guide-comparison li{min-width:0;border:1px solid #365272;border-radius:8px;background:#172c48;padding:10px;overflow-wrap:anywhere;font-size:.82rem;line-height:1.5;color:#eef7ff}
 @media(max-width:740px){.routing-guide-comparison ul{grid-template-columns:minmax(0,1fr)}}
+
+
+/* Controls-first layout: keep essential channel controls in view while
+   preserving every advanced on-page diagnostic in keyboard-openable details. */
+.routing-tools-panel,.routing-plan-disclosure{border:1px solid #405775;border-radius:12px;background:#102039;padding:12px 14px;margin-top:16px}
+.routing-tools-panel>summary,.routing-plan-disclosure>summary{color:#eef6ff;font-weight:700;cursor:pointer;min-height:40px;line-height:1.5;display:list-item;padding:7px 4px}
+.routing-tools-panel>summary:focus-visible,.routing-plan-disclosure>summary:focus-visible{outline:3px solid #d8a1ff;outline-offset:3px;border-radius:6px}
+.routing-tools-note,.routing-plan-disclosure-note{font-size:.86rem;color:#c1d5ef;line-height:1.55;margin:10px 0 14px}
+.routing-plan-disclosure{margin:0 0 26px;padding:15px 18px;background:#17233a;border-color:#385478}
+.routing-plan-disclosure .routing-plan{margin:0;padding:4px 0 0;border:0;background:transparent}
+.routing-plan-disclosure .routing-plan h2{margin-top:6px}
+@media(max-width:560px){.routing-tools-panel,.routing-plan-disclosure{padding:10px 12px}}

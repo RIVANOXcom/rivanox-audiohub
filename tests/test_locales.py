@@ -1,5 +1,7 @@
 """Five-language app contract: parity, content, and absence of unsafe HTML."""
 import json
+import re
+from html.parser import HTMLParser
 import shutil
 import subprocess
 import unittest
@@ -839,3 +841,114 @@ assert.deepEqual([lan.value, bt1.value, bt2.value],
         self.assertIn('byId("routing-guide-from-bt2")', source)
         self.assertIn('byId("routing-guide-from-" + role).addEventListener("change", renderRoutingGuide);', script)
         self.assertIn('value="unknown"', (ROOT / "web" / "index.html").read_text(encoding="utf-8"))
+
+
+class ControlsFirstDashboardTests(unittest.TestCase):
+    """The live dashboard must remain useful without scrolling past a lab UI."""
+
+    def test_mixer_controls_precede_long_diagnostics_and_are_unique(self):
+        markup = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
+        self.assertLess(markup.index('id="channels"'),
+                        markup.index('class="routing-summary"'))
+        self.assertLess(markup.index('id="master"'),
+                        markup.index('class="routing-summary"'))
+        self.assertLess(markup.index('id="channels"'),
+                        markup.index('class="routing-plan-disclosure"'))
+        self.assertIn('data-t="previewNotice"', markup)
+        self.assertIn('id="routing-routes"', markup)
+        self.assertIn('id="routing-freshness"', markup)
+        self.assertIn('id="routing-diagnostic"', markup)
+        ids = re.findall(r'\bid="([^"]+)"', markup)
+        self.assertEqual(len(ids), len(set(ids)), "Duplicate HTML id breaks JS events")
+        for identity in (
+                "channels", "master", "master-value", "routing-recheck",
+                "routing-recheck-status", "routing-history-list",
+                "routing-history-clear", "routing-observation-usb",
+                "routing-observations-reset", "routing-export",
+                "routing-compare-file", "routing-compare-table",
+                "routing-compare-observations-table", "routing-plan-lan",
+                "routing-plan-bt1", "routing-plan-bt2", "routing-plan-list",
+                "routing-plan-reset", "routing-guide-from-bt1",
+                "routing-guide-from-bt2", "routing-guide-command",
+                "routing-guide-comparison-list", "routing-tools-panel"):
+            with self.subTest(identity=identity):
+                self.assertEqual(ids.count(identity), 1)
+
+    def test_optional_disclosures_preserve_nested_tools_and_status_visibility(self):
+        class DetailsTree(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.stack = []
+                self.panel_attrs = {}
+                self.belongs_to = {}
+                self.sequence = []
+
+            def handle_starttag(self, tag, attrs):
+                attr = dict(attrs)
+                if tag == "details":
+                    name = attr.get("class", "")
+                    self.stack.append(name)
+                    self.panel_attrs[name] = attr
+                    self.sequence.append(name)
+                if "id" in attr:
+                    self.belongs_to[attr["id"]] = tuple(self.stack)
+
+            def handle_endtag(self, tag):
+                if tag == "details":
+                    if not self.stack:
+                        raise AssertionError("Unexpected closing details element")
+                    self.stack.pop()
+
+        markup = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
+        dom = DetailsTree()
+        dom.feed(markup)
+        dom.close()
+        self.assertEqual(dom.stack, [], "Advanced panels are not properly closed")
+        self.assertEqual(dom.sequence, [
+            "routing-tools-panel", "routing-history-panel",
+            "routing-compare-panel", "routing-plan-disclosure"
+        ])
+        for name in ("routing-tools-panel", "routing-plan-disclosure"):
+            self.assertNotIn("open", dom.panel_attrs[name])
+        for identity in (
+                "routing-history-list", "routing-history-clear",
+                "routing-observation-usb", "routing-observation-three",
+                "routing-observations-reset", "routing-export",
+                "routing-compare-file", "routing-compare-table",
+                "routing-compare-observations-table"):
+            with self.subTest(identity=identity):
+                self.assertIn("routing-tools-panel", dom.belongs_to[identity])
+        for identity in (
+                "routing-plan-lan", "routing-plan-bt1", "routing-plan-bt2",
+                "routing-plan-status", "routing-guide-from-bt1",
+                "routing-guide-command", "routing-guide-comparison-list"):
+            with self.subTest(identity=identity):
+                self.assertIn("routing-plan-disclosure", dom.belongs_to[identity])
+        for identity in ("channels", "master", "routing-routes",
+                         "routing-freshness", "routing-diagnostic",
+                         "routing-recheck"):
+            self.assertNotIn("routing-tools-panel", dom.belongs_to[identity])
+            self.assertNotIn("routing-plan-disclosure", dom.belongs_to[identity])
+        self.assertIn('<summary data-t="routingToolsTitle">', markup)
+        self.assertIn('<summary data-t="routingPlanDisclosureTitle">', markup)
+
+    def test_disclosures_are_localized_keyboard_accessible_and_no_buttons_added(self):
+        markup = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
+        styles = (ROOT / "web" / "styles.css").read_text(encoding="utf-8")
+        for language in ("en", "de", "es", "fr", "it"):
+            data = json.loads((LOCALES / (language + ".json")).read_text(
+                encoding="utf-8"))
+            for key in ("routingToolsTitle", "routingToolsNote",
+                        "routingPlanDisclosureTitle",
+                        "routingPlanDisclosureNote"):
+                with self.subTest(language=language, key=key):
+                    self.assertTrue(data[key].strip())
+                    self.assertIn('data-t="' + key + '"', markup)
+        self.assertIn(".routing-tools-panel>summary:focus-visible", styles)
+        self.assertIn(".routing-plan-disclosure>summary:focus-visible", styles)
+        self.assertIn("@media(max-width:560px)", styles)
+        # Only native details/summary disclosures; retain existing buttons.
+        self.assertNotIn('id="routing-tools-toggle"', markup)
+        self.assertNotIn('id="routing-plan-toggle"', markup)
+        self.assertEqual(markup.count('id="routing-export"'), 1)
+        self.assertEqual(markup.count('id="routing-recheck"'), 1)
