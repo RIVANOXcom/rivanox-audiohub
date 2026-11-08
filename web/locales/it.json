@@ -168,6 +168,7 @@
   "eqGuidePresetVoice": "Voce · medi in evidenza",
   "eqGuidePresetDetail": "Dettaglio · alti leggermente enfatizzati",
   "eqGuidePresetExampleOnly": "punto di partenza non calibrato, non audio dal vivo",
+  "eqGuideRestoreHint": "Prima di provare un nuovo profilo conserva localmente il comparison_baseline dell'anteprima sul Pi. Per recuperare il precedente EQ salvato, controlla restore-eq sul Pi con quel valore, verifica le modifiche e conferma separatamente una nuova revisione. Non inserire mai il valore nel browser. Il ripristino non carica PipeWire né dimostra un audio udibile.",
   "sustainabilityEyebrow": "Sviluppo open source indipendente",
   "sustainabilityTitle": "Aiuta AudioHub a migliorare",
   "sustainabilityDescription": "Il tuo sostegno volontario contribuisce ai test hardware Raspberry Pi, alla sicurezza, all'accessibilità e alla manutenzione.",
