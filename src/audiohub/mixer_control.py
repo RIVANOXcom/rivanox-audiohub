@@ -1432,6 +1432,29 @@ def main(argv=None):
                         [args.left, args.right] if args.action == "swap-eq" else None
                     )
                     state["eq_staging_separate"] = True
+                if args.action in ("set-eq", "set-eq-curve",
+                                   "eq-preset", "reset-eq"):
+                    # Make undo discoverable at the time the operator still
+                    # has the genuine pre-change snapshot. The b1 token is
+                    # portable but NOT cryptographically authenticated; it
+                    # must only ever suggest another separately reviewed
+                    # revision-guarded Pi-local preview, never apply one.
+                    saved_before = _decode_baseline(
+                        state["comparison_baseline"])[args.slot]
+                    state["eq_restore_guide"] = {
+                        "target_input": args.slot,
+                        "previous_saved_eq_db": {
+                            band: saved_before[band] for band in EQ_BANDS
+                        },
+                        "operator_retained_baseline": state["comparison_baseline"],
+                        "preview_command":
+                            "PYTHONPATH=/opt/audiohub/src python3 -m "
+                            "audiohub.mixer_control --preview restore-eq " +
+                            args.slot + " " + state["comparison_baseline"],
+                        "baseline_authenticated": False,
+                        "separate_owner_confirmation_required": True,
+                        "live_eq_applied": False,
+                    }
                 if args.action == "profile":
                     state["profile_impact"] = _profile_selection_impact(
                         state, args.name)
