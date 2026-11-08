@@ -824,7 +824,8 @@ class BrowserEqOwnerGuideTests(unittest.TestCase):
             "eq-guide-transfer-command", "eq-guide-copy-transfer",
             "eq-guide-neutral-note", "eq-guide-neutral-slot",
             "eq-guide-neutral-feedback", "eq-guide-neutral-command",
-            "eq-guide-copy-neutral",
+            "eq-guide-copy-neutral", "eq-guide-preset-choice",
+            "eq-guide-preset-curve",
         ):
             self.assertIn('id="' + ident + '"', html)
         self.assertEqual(html.count('id="eq-guide-slot"'), 1)
@@ -837,6 +838,10 @@ class BrowserEqOwnerGuideTests(unittest.TestCase):
         self.assertIn('value="swap-eq"', html)
         self.assertIn('id="eq-guide-transfer-command" readonly', html)
         self.assertIn('id="eq-guide-neutral-command" readonly', html)
+        self.assertIn('id="eq-guide-preset-choice"', html)
+        self.assertIn('id="eq-guide-preset-curve" role="status"', html)
+        for preset in ("flat", "warm", "voice", "detail"):
+            self.assertIn('value="' + preset + '"', html)
         self.assertIn('aria-describedby="eq-guide-neutral-note eq-guide-neutral-feedback"', html)
         self.assertIn('byId("eq-guide-copy-neutral").addEventListener("click", () => copyEqGuideCommand("neutral"));', js)
         self.assertIn('aria-describedby="eq-guide-transfer-note eq-guide-transfer-feedback"', html)
@@ -861,7 +866,10 @@ class BrowserEqOwnerGuideTests(unittest.TestCase):
             "eqGuideNeutralTitle", "eqGuideNeutralNotice",
             "eqGuideNeutralSlot", "eqGuideNeutralReady",
             "eqGuideNeutralInvalid", "eqGuideNeutralCommandLabel",
-            "eqGuideNeutralCopyCommand",
+            "eqGuideNeutralCopyCommand", "eqGuidePresetChoice",
+            "eqGuidePresetFlat", "eqGuidePresetWarm",
+            "eqGuidePresetVoice", "eqGuidePresetDetail",
+            "eqGuidePresetExampleOnly",
         }
         for code in ("en", "de", "es", "fr", "it"):
             with self.subTest(locale=code):
@@ -1084,6 +1092,8 @@ const CHANNELS = ["music", "laptop", "tablet"];
 const BANDS = ["bass", "mid", "treble"];
 const elements = {
   "eq-guide-neutral-slot": {value: "music"},
+  "eq-guide-preset-choice": {value: "flat"},
+  "eq-guide-preset-curve": {textContent: ""},
   "eq-guide-neutral-command": {value: ""},
   "eq-guide-copy-neutral": {disabled: false},
   "eq-guide-neutral-feedback": {textContent: "", dataset: {}},
@@ -1147,6 +1157,114 @@ check().catch(error => {console.error(error); process.exitCode = 1;});
             capture_output=True, text=True, timeout=15, check=False,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
+
+
+    @unittest.skipUnless(shutil.which("node"), "Node.js runtime unavailable")
+    def test_shipped_eq_sound_profiles_match_backend_and_never_execute(self):
+        """Production browser and private CLI agree on actual profile numbers."""
+        from audiohub import mixer_control
+        setup = r'''
+const assert = require("node:assert/strict");
+const CHANNELS = ["music", "laptop", "tablet"];
+const BANDS = ["bass", "mid", "treble"];
+const elements = {
+  "eq-guide-neutral-slot": {value: "music"},
+  "eq-guide-preset-choice": {value: "warm"},
+  "eq-guide-preset-curve": {textContent: ""},
+  "eq-guide-neutral-command": {value: ""},
+  "eq-guide-copy-neutral": {disabled: false},
+  "eq-guide-neutral-feedback": {textContent: "", dataset: {}},
+  "eq-guide-copy-status": {textContent: ""}
+};
+const byId = id => elements[id];
+const tr = key => key;
+const copied = [];
+let navigator = {clipboard: {writeText: async cmd => copied.push(cmd)}};
+const fetch = () => {throw new Error("No web/device commands permitted");};
+'''
+        check = r'''
+async function test() {
+  const prefix = "PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --preview ";
+  const expected = {
+    flat: [0, 0, 0], warm: [3, 0, -1],
+    voice: [-2, 3, 1], detail: [0, 1, 3]
+  };
+  assert.deepEqual(EQ_SOUND_PRESETS.flat, expected.flat);
+  assert.deepEqual(EQ_SOUND_PRESETS.warm, expected.warm);
+  assert.deepEqual(EQ_SOUND_PRESETS.voice, expected.voice);
+  assert.deepEqual(EQ_SOUND_PRESETS.detail, expected.detail);
+  for (const slot of CHANNELS) {
+    assert.equal(buildLocalEqSoundPresetPreview(slot, "flat"),
+      prefix + "reset-eq " + slot);
+    for (const profile of ["warm", "voice", "detail"]) {
+      const result = buildLocalEqSoundPresetPreview(slot, profile);
+      assert.equal(result, prefix + "eq-preset " + slot + " " + profile);
+      assert.ok(!result.includes("--confirm-local-mixer-change"));
+      assert.ok(!result.includes("--stage-saved"));
+    }
+  }
+  for (const slot of [null, "", "music;id", "../tablet", "music --confirm",
+                      true, 0, {}, []]) {
+    assert.equal(buildLocalEqSoundPresetPreview(slot, "warm"), null);
+  }
+  for (const profile of [null, "", "WARM", "warm;id",
+                          "voice --confirm", 1, {}, []]) {
+    assert.equal(buildLocalEqSoundPresetPreview("music", profile), null);
+  }
+  renderEqNeutralGuide();
+  assert.equal(elements["eq-guide-neutral-command"].value,
+    prefix + "eq-preset music warm");
+  assert.equal(elements["eq-guide-copy-neutral"].disabled, false);
+  assert.ok(elements["eq-guide-preset-curve"].textContent.includes("bass +3 dB"));
+  assert.ok(elements["eq-guide-preset-curve"].textContent.includes("treble -1 dB"));
+  assert.ok(elements["eq-guide-preset-curve"].textContent.includes("eqGuidePresetExampleOnly"));
+  await copyEqGuideCommand("neutral");
+  assert.deepEqual(copied, [prefix + "eq-preset music warm"]);
+  elements["eq-guide-preset-choice"].value = "voice";
+  renderEqNeutralGuide();
+  assert.ok(elements["eq-guide-preset-curve"].textContent.includes("mid +3 dB"));
+  await copyEqGuideCommand("neutral");
+  assert.equal(copied[1], prefix + "eq-preset music voice");
+
+  elements["eq-guide-preset-choice"].value = "voice;id";
+  renderEqNeutralGuide();
+  assert.equal(elements["eq-guide-neutral-command"].value, "");
+  assert.equal(elements["eq-guide-copy-neutral"].disabled, true);
+  assert.equal(elements["eq-guide-neutral-feedback"].dataset.invalid, "true");
+  assert.equal(elements["eq-guide-preset-curve"].textContent, "eqGuideNeutralInvalid");
+  await copyEqGuideCommand("neutral");
+  assert.equal(copied.length, 2);
+
+  elements["eq-guide-preset-choice"].value = "detail";
+  elements["eq-guide-neutral-slot"].value = "../music";
+  renderEqNeutralGuide();
+  assert.equal(elements["eq-guide-neutral-command"].value, "");
+  assert.equal(elements["eq-guide-copy-neutral"].disabled, true);
+
+  elements["eq-guide-neutral-slot"].value = "tablet";
+  renderEqNeutralGuide();
+  assert.ok(elements["eq-guide-neutral-command"].value.endsWith("eq-preset tablet detail"));
+  navigator.clipboard = null;
+  await copyEqGuideCommand("neutral");
+  assert.equal(elements["eq-guide-copy-status"].textContent,
+    "eqGuideCopyUnavailable");
+  assert.equal(copied.length, 2);
+  console.log(JSON.stringify({
+    warm: EQ_SOUND_PRESETS.warm, voice: EQ_SOUND_PRESETS.voice,
+    detail: EQ_SOUND_PRESETS.detail
+  }));
+}
+test().catch(err => {console.error(err); process.exitCode = 1;});
+'''
+        result = subprocess.run(
+            ["node", "-e", setup + "\n" + preview_eq_guide_source() + "\n" + check],
+            capture_output=True, text=True, timeout=15, check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        browser = json.loads(result.stdout.strip())
+        self.assertEqual(browser, {
+            k: list(v) for k, v in mixer_control.EQ_PRESET_CURVES.items()
+        })
 
 
 class BrowserRoutingSummaryTests(unittest.TestCase):

@@ -299,35 +299,56 @@ approve the separately documented owner-only transaction. This
 browser guide never authorizes that action, audible output, physical
 hardware acceptance or a public release.
 
-### Browser-assisted neutral EQ preview (no settings changes)
+### Choose one of four safe EQ starting points (private Pi preview)
 
-The five-language, keyboard-openable browser-only EQ guide now also
-offers a **single-input neutral curve preview**. Choose exactly one
-fixed technical Pi slot (`music`, `laptop` or `tablet`) and copy
-the read-only command:
+The existing five-language, keyboard-accessible browser EQ guide now
+offers one **sound-profile selector** instead of another row of
+separate controls. It displays the exact three-band values for an
+operator's chosen technical input, and generates one local Pi
+**read-only preview** command. These fixed curves are **not calibrated
+to the Edifier speakers, not hearing-safety recommendations, and not
+live audio**:
+
+| Choice | Bass | Mid | Treble | Owner-local preview |
+|---|---:|---:|---:|---|
+| Flat / neutral | 0 dB | 0 dB | 0 dB | `--preview reset-eq SLOT` |
+| Warm | +3 dB | 0 dB | -1 dB | `--preview eq-preset SLOT warm` |
+| Voice | -2 dB | +3 dB | +1 dB | `--preview eq-preset SLOT voice` |
+| Detail | 0 dB | +1 dB | +3 dB | `--preview eq-preset SLOT detail` |
+
+The actual private settings are read and compared ONLY at an authorized
+local Pi terminal. Examples:
 
 ```sh
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --preview eq-preset music voice
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --preview reset-eq music
 ```
 
-When run by an **authorized owner at the local Pi terminal**, this
-previews setting just that slot's saved `bass`, `mid` and `treble`
-gains to **0 dB** in the private mixer without changing them. The
-command does not change master or channel volumes, mute state, the
-other inputs, audio routing, Bluetooth ownership, the staged PipeWire
-filter or live sound. Unknown or injected source slots create no
-command in the browser and disable copying. Changing from a valid to
-an invalid selection removes the stale preview.
+These are alternatives, not instructions to run both. Each returns a
+reviewable private mixer **revision**, a three-band `before`/`after`
+difference and `eq_staging_separate=true`. Unknown/injected inputs
+or profile choices never generate a browser command. The UI clears
+any previously generated command when selection becomes invalid;
+the clipboard button only copies the read-only preview.
 
-The browser does **not** read the Pi's private EQ or perform the reset.
-Its demonstration sliders are not the current saved settings. There
-is deliberately **no save/confirm button**, no `--if-preview-revision`
-or local stage command in the browser. Any later save requires an
-operator to review the actual Pi-local preview and explicitly confirm
-a fresh private mixer generation through the separately documented
-owner-only transaction. A neutral saved EQ is not proof of a reloaded
-PipeWire filter or audible hardware. This feature is no hardware,
-release, privacy or security approval.
+**Separate approval is essential.** Only after an operator has actually
+reviewed a fresh private Pi preview may that operator separately use,
+for example, the exact revision returned by the *voice* preview:
+
+```sh
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-mixer-change --if-preview-revision v1-REPLACE-WITH-REVIEWED-REVISION eq-preset music voice
+```
+
+This confirmed CLI action is an existing-style private atomic 0600
+settings transaction with an exclusive lock and exact mixer generation
+check; a mismatched or ABA-stale generation refuses to write. Only the
+selected input's three saved bands are changed together. Volumes,
+mutes, all other inputs, and routing are preserved. The web page
+**never** generates any confirmation command, never invokes the Pi,
+never loads stored EQ or claims an audible change. Any PipeWire EQ
+staging and reload must be separately reviewed, authorized and
+verified on physical equipment. A saved preset alone is **not a
+live/applied EQ** and cannot justify a release or hardware GO.
 
 ### Read the EQ stage status without interpreting JSON
 

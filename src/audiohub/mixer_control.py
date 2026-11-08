@@ -37,6 +37,24 @@ PRESET_VOLUMES = {
     "music-priority": (30, 55, 20, 20),
 }
 
+# Fixed, conservative starting points; NOT a hearing test or calibrated EQ.
+# Tuple order matches EQ_BANDS (bass, mid, treble). All other mixer controls
+# are kept intact. The saved EQ is NOT automatically staged or applied live.
+EQ_PRESET_CURVES = {
+    "warm": (3, 0, -1),
+    "voice": (-2, 3, 1),
+    "detail": (0, 1, 3),
+}
+
+
+def eq_preset_patch(slot, name):
+    """One-slot, fixed 3-band curve for a reviewed private EQ transaction."""
+    if type(slot) is not str or slot not in CHANNELS:
+        raise MixerControlUnavailable("Unknown local EQ input")
+    if type(name) is not str or name not in EQ_PRESET_CURVES:
+        raise MixerControlUnavailable("Unknown local EQ sound profile")
+    return {slot: dict(zip(EQ_BANDS, EQ_PRESET_CURVES[name]))}
+
 
 def reset_input_eq_patch(slot):
     """Neutralize one input's three EQ bands in a single guarded change."""
@@ -1032,6 +1050,13 @@ def main(argv=None):
              "not a live PipeWire EQ change",
     )
     reset_eq.add_argument("slot", choices=CHANNELS)
+    sound_eq = commands.add_parser(
+        "eq-preset",
+        help="Preview or separately confirm a fixed three-band EQ sound profile. "
+             "Only private saved settings change; NOT live PipeWire or sound.",
+    )
+    sound_eq.add_argument("slot", choices=CHANNELS)
+    sound_eq.add_argument("name", choices=tuple(EQ_PRESET_CURVES))
     commands.add_parser(
         "mute-all", help="Atomically request mute on all three inputs"
     )
@@ -1106,12 +1131,13 @@ def main(argv=None):
         # generation to prevent applying an old choice to a newer mix.
         if args.action in (
                 "isolate-input", "restore-isolation", "set-eq",
-                "copy-eq", "reset-eq", "swap-eq", "set-eq-curve") and (
+                "copy-eq", "reset-eq", "swap-eq", "set-eq-curve",
+                "eq-preset") and (
                 args.confirm_local_profile_save
                 or args.if_profile_revision is not None
                 or (args.action == "restore-isolation"
                     and args.compare_baseline is not None)
-                or (args.action == "swap-eq" and (
+                or (args.action in ("swap-eq", "eq-preset") and (
                     args.compare_baseline is not None
                     or args.wait_for_supervisor))
                 or (args.preview and (
@@ -1266,6 +1292,11 @@ def main(argv=None):
                     raise StaleMixerPreview("EQ swap sources have changed")
             elif args.action == "reset-eq":
                 patch = reset_input_eq_patch(args.slot)
+            elif args.action == "eq-preset":
+                # A fixed named sound profile always changes all three saved
+                # bands together under the same guarded private transaction.
+                # No filter stage, PipeWire process or audible gain is touched.
+                patch = eq_preset_patch(args.slot, args.name)
             elif args.action == "isolate-input":
                 # The selected source's mute, volume, EQ and routing stay
                 # untouched. Never implicitly unmute a source in a lab.
@@ -1300,10 +1331,16 @@ def main(argv=None):
                     raise MixerControlUnavailable(
                         "EQ source changed during read-only preview"
                     )
-                if args.action == "set-eq-curve":
-                    state["eq_operation"] = "set-eq-curve"
+                if args.action in ("set-eq-curve", "eq-preset"):
+                    state["eq_operation"] = args.action
                     state["target_input"] = args.slot
                     state["eq_staging_separate"] = True
+                    if args.action == "eq-preset":
+                        state["eq_preset"] = args.name
+                        state["preset_curve_db"] = {
+                            band: patch[args.slot][band] for band in EQ_BANDS
+                        }
+                        state["preset_not_calibrated"] = True
                 if args.action in ("copy-eq", "reset-eq", "swap-eq"):
                     state["eq_operation"] = args.action
                     state["copy_source"] = (
@@ -1325,7 +1362,8 @@ def main(argv=None):
                           if args.if_preview_revision is not None else {})
                 state = change(patch, confirmed=args.confirm_local_mixer_change,
                                **kwargs)
-                if args.action in ("set-eq", "set-eq-curve", "copy-eq", "reset-eq", "swap-eq"):
+                if args.action in ("set-eq", "set-eq-curve", "copy-eq",
+                                    "reset-eq", "swap-eq", "eq-preset"):
                     state = {
                         "requested_eq_settings_saved": True,
                         "pipewire_eq_staged": False,
