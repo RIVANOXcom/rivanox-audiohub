@@ -24,6 +24,10 @@
         <div class="device-icon" aria-hidden="true">◉</div>
         <div><strong data-t="speaker">USB speakers</strong><p data-t="speakerState">Hardware detection pending</p></div>
       </section>
+      
+      <h2 data-t="channel">Channel</h2>
+      <div id="channels" class="grid"></div>
+      <section class="device master"><div><h2 data-t="master">Master output</h2><input id="master" type="range" min="0" max="100" value="70" aria-label="Master output"></div><output id="master-value" for="master">70%</output></section>
       <section class="routing-summary" aria-labelledby="routing-title">
         <h2 id="routing-title" data-t="routingTitle">Audio routing status</h2>
         <p class="routing-explainer" data-t="routingNotice">Read-only device counts; they do not confirm audible playback.</p>
@@ -35,6 +39,9 @@
         <p class="routing-freshness" id="routing-freshness" role="status" aria-live="polite" data-t="routingPending">Waiting for first status check</p>
         <div class="routing-recheck-actions"><button type="button" id="routing-recheck" data-t="routingRecheck">Recheck device status now</button><span id="routing-recheck-status" role="status" aria-live="polite"></span></div>
         <p class="routing-diagnostic" id="routing-diagnostic" aria-live="polite" data-t="routingDiagPending">Diagnostic guidance will appear after the first status check.</p>
+        <details class="routing-tools-panel" id="routing-tools-panel">
+          <summary data-t="routingToolsTitle">Advanced diagnostics and test notes</summary>
+          <p class="routing-tools-note" data-t="routingToolsNote">Optional local test notes, sanitized history, JSON export and comparison. These do not prove audible sound or authorize a release.</p>
         <details class="routing-history-panel">
           <summary data-t="routingHistoryTitle">Recent local routing changes</summary>
           <p class="routing-history-note" data-t="routingHistoryNote">Up to eight sanitized changes seen on this page are also included in the diagnostic JSON download. Times come from your browser clock. This does not prove audio or hardware fitness; reloading the page clears the history.</p>
@@ -101,7 +108,11 @@
             </table>
           </div>
         </details>
+        </details>
       </section>
+      <details class="routing-plan-disclosure">
+        <summary data-t="routingPlanDisclosureTitle">Explore a three-source routing layout (optional)</summary>
+        <p class="routing-plan-disclosure-note" data-t="routingPlanDisclosureNote">Offline what-if planner; does not read or change the actual device.</p>
       <section class="routing-plan" aria-labelledby="routing-plan-title">
         <h2 id="routing-plan-title" data-t="routingPlanTitle">Try a three-input routing layout</h2>
         <p id="routing-plan-note" class="routing-plan-note" data-t="routingPlanNotice">Browser-only example. Choose the mixer input for LAN and up to two unnamed Bluetooth sources. This cannot read or change real device assignments, pairing or sound.</p>
@@ -170,9 +181,7 @@
         </div>
         <p class="routing-plan-scope" data-t="routingPlanScope">The real Pi route policy is private and unavailable to this page. Source assignments still require an authorized local terminal, a read-only revision preview and separate confirmation. Bluetooth labels here are placeholders, not device identities.</p>
       </section>
-      <h2 data-t="channel">Channel</h2>
-      <div id="channels" class="grid"></div>
-      <section class="device master"><div><h2 data-t="master">Master output</h2><input id="master" type="range" min="0" max="100" value="70" aria-label="Master output"></div><output id="master-value" for="master">70%</output></section>
+      </details>
       <section class="extra"><h2 data-t="connection">Connections</h2><div class="grid small"><div class="tile"><strong data-t="bluetooth">Bluetooth pairing</strong><p data-t="security">Secure onboarding is being developed</p></div><div class="tile"><strong data-t="wifi">Wi-Fi</strong><p data-t="notAvailable">Not available in this build</p></div><div class="tile"><strong data-t="radio">Internet radio</strong><p data-t="notAvailable">Not available in this build</p></div></div></section>
       <section class="support-feature" aria-labelledby="support-feature-title">
         <div class="support-feature-copy">
