@@ -495,6 +495,13 @@ PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes --preview set-lan
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes --preview bind-bt AA:BB:CC:DD:EE:FF laptop
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes --preview mode manual
 
+# Safe LAN/Bluetooth slot EXCHANGE: only manual mode with a BT-occupied slot.
+# Example: LAN currently laptop, assigned BT currently music. Does not
+# connect/pair a device, and does not change either source's trust status.
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes --preview swap-lan music
+# Inspect private old/new plan and revision, then separately run:
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes --confirm-local-route-change --if-preview-revision r1-REPLACE-WITH-64-HEX-CHARS swap-lan music
+
 # Inspect the output revision r1-... and its impact: old/new occupied slots,
 # Bluetooth sources removed/added and potential auto-discovery disablement.
 # After REVIEW, independently approve EXACTLY that preview generation:
@@ -663,8 +670,29 @@ corrupt plan, the live supervisor **denies all Bluetooth routes** and
 stops existing managed loopbacks instead of silently returning to
 automatic pairing. A repaired plan is reloaded on the next poll.
 
-To move an existing route, first unbind the conflicting source or
-move the LAN slot into a free slot. The switch is an atomic, local
+When the target LAN slot is **already occupied by a manually
+assigned Bluetooth source**, use `--preview swap-lan SLOT` instead of
+temporarily unbinding the Bluetooth source. The preview describes a
+single valid new route plan: LAN moves to that occupied slot and the
+exact manual Bluetooth assignment moves to the old LAN slot. A
+separate `--confirm-local-route-change --if-preview-revision REV
+swap-lan SLOT` commits that single private policy generation under
+the existing writer lock. This operation is rejected in automatic
+mode, for an empty target, for the same LAN slot, with no explicit
+confirmation, or after any concurrent replacement of the policy
+(including identical-content ABA updates). No implicit retry occurs,
+and a stale attempt only presents a fresh read-only proposal. All
+other Bluetooth bindings and the manual allowlist are preserved.
+The routing supervisor may briefly restart affected audio streams
+on its next polling pass; do not assume seamless or audible playback.
+This local operation is **not** device authentication or a consumer
+phone UI, and cannot pair, trust, connect, open Scream UDP, or
+independently validate delivered PCM. Keep the local preview with
+Bluetooth addresses out of public logs.
+
+To move an existing route into an **empty** slot, use the existing
+guarded `--preview set-lan SLOT` process; to choose an occupied
+Bluetooth slot use `swap-lan`. The switch is an atomic, local
 **0600 file in a 0700 directory**, with a per-directory
 exclusive lock. No write API exists on the anonymous status page.
 No private addresses or route tables are sent to an unauthenticated
