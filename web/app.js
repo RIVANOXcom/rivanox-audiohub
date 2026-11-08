@@ -79,6 +79,7 @@
     range.addEventListener("input", () => {
       state[channel][key] = Number(range.value);
       readout.textContent = range.value + unit;
+      if (BANDS.includes(key)) renderEqGuide();
     });
     container.append(label, range);
     return container;
@@ -223,6 +224,44 @@
       target.append(card);
     }
     restoreChannelEditState(editState);
+  }
+  // The web page intentionally cannot read private mixer settings or change
+  // the device. Only produce non-mutating owner-terminal commands from
+  // fixed technical slots and bounded browser-demo EQ numbers.
+  function buildLocalEqPreview(slot, example) {
+    if (!CHANNELS.includes(slot) || !example || !BANDS.every(band =>
+      Number.isInteger(example[band]) &&
+      example[band] >= -12 && example[band] <= 12)) return null;
+    return "PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control " +
+      "--preview set-eq-curve " + slot + " " +
+      BANDS.map(band => String(example[band])).join(" ");
+  }
+  function renderEqGuide() {
+    const slot = byId("eq-guide-slot").value;
+    const preview = buildLocalEqPreview(slot, state[slot]);
+    const command = byId("eq-guide-preview-command");
+    const status = byId("eq-guide-feedback");
+    command.value = preview || "";
+    byId("eq-guide-copy-preview").disabled = preview === null;
+    status.dataset.invalid = String(preview === null);
+    status.textContent = tr(preview === null ? "eqGuideInvalid" : "eqGuideReady");
+    byId("eq-guide-copy-status").textContent = "";
+  }
+  async function copyEqGuideCommand(kind) {
+    const id = kind === "preview" ? "eq-guide-preview-command" :
+      kind === "compare" ? "eq-guide-compare-command" : null;
+    const command = id && byId(id).value;
+    if (!command) return;
+    try {
+      if (!navigator.clipboard || typeof navigator.clipboard.writeText !== "function")
+        throw new Error("Clipboard unavailable");
+      // Browser clipboard only. No HTTP command, saved settings, or PipeWire
+      // operation is ever triggered by this action.
+      await navigator.clipboard.writeText(command);
+      byId("eq-guide-copy-status").textContent = tr("eqGuideCopied");
+    } catch (_) {
+      byId("eq-guide-copy-status").textContent = tr("eqGuideCopyUnavailable");
+    }
   }
   // A browser-only WHAT-IF layout. A source label never identifies a real
   // BlueZ device or reveals the private Pi source policy.
@@ -726,6 +765,7 @@
     document.querySelectorAll("[data-t]").forEach(node => { node.textContent = tr(node.dataset.t); });
     byId("master").setAttribute("aria-label", tr("master"));
     drawChannels();
+    renderEqGuide();
     renderRoutingPlan();
     renderHardwareStatus();
     renderRoutingSummary();
@@ -759,6 +799,9 @@
     translate();
   }
   byId("language").addEventListener("change", event => setLanguage(event.target.value));
+  byId("eq-guide-slot").addEventListener("change", renderEqGuide);
+  byId("eq-guide-copy-preview").addEventListener("click", () => copyEqGuideCommand("preview"));
+  byId("eq-guide-copy-compare").addEventListener("click", () => copyEqGuideCommand("compare"));
   byId("routing-export").addEventListener("click", downloadRoutingDiagnostics);
   byId("routing-recheck").addEventListener("click", requestRoutingRecheck);
   byId("routing-history-clear").addEventListener("click", clearRoutingHistory);

@@ -799,6 +799,159 @@ def preview_routing_summary_source():
     return source[start:end]
 
 
+def preview_eq_guide_source():
+    """Exercise the shipped browser EQ command builder, not a test copy."""
+    source = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
+    begin = source.index("  function buildLocalEqPreview(")
+    end = source.index("  // A browser-only WHAT-IF layout.", begin)
+    return source[begin:end]
+
+
+class BrowserEqOwnerGuideTests(unittest.TestCase):
+    """The EQ browser helper must be informative, localized and read-only."""
+
+    def test_readonly_eq_browser_guide_is_accessible_and_translated(self):
+        html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
+        js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
+        for ident in (
+            "eq-operator-guide", "eq-guide-note", "eq-guide-slot",
+            "eq-guide-feedback", "eq-guide-preview-command",
+            "eq-guide-compare-command", "eq-guide-compare-note",
+            "eq-guide-copy-preview", "eq-guide-copy-compare",
+            "eq-guide-copy-status",
+        ):
+            self.assertIn('id="' + ident + '"', html)
+        self.assertEqual(html.count('id="eq-guide-slot"'), 1)
+        self.assertIn('<details class="eq-operator-guide"', html)
+        self.assertIn('aria-live="polite"', html)
+        self.assertIn('id="eq-guide-preview-command" readonly', html)
+        self.assertIn('id="eq-guide-compare-command" readonly', html)
+        self.assertIn('--compare-staged --format text', html)
+        self.assertNotIn('--confirm-local-mixer-change', html)
+        self.assertNotIn('--stage-saved', html)
+        self.assertIn('byId("eq-guide-slot").addEventListener("change", renderEqGuide);', js)
+        self.assertIn('if (BANDS.includes(key)) renderEqGuide();', js)
+        self.assertIn('    renderEqGuide();\n    renderRoutingPlan();', js)
+        self.assertIn('navigator.clipboard.writeText(command)', js)
+        self.assertNotIn("fetch(", preview_eq_guide_source())
+        keys = {
+            "eqGuideTitle", "eqGuideNotice", "eqGuideSlot", "eqGuideReady",
+            "eqGuideInvalid", "eqGuidePreviewLabel", "eqGuideCopyPreview",
+            "eqGuideCompareLabel", "eqGuideCompareNotice",
+            "eqGuideCopyCompare", "eqGuideCopied", "eqGuideCopyUnavailable"
+        }
+        for code in ("en", "de", "es", "fr", "it"):
+            with self.subTest(locale=code):
+                loc = json.loads(
+                    (ROOT / "web" / "locales" / (code + ".json")).read_text(
+                        encoding="utf-8"))
+                self.assertTrue(keys.issubset(loc))
+                self.assertTrue(all(type(loc[key]) is str and loc[key].strip()
+                                    for key in keys))
+                self.assertTrue(any(term in loc["eqGuideNotice"].lower()
+                                    for term in ("not", "keine", "no", "pas", "non")))
+                self.assertTrue(any(term in loc["eqGuideCompareNotice"].lower()
+                                    for term in ("not", "nicht", "no", "pas", "non")))
+
+    @unittest.skipUnless(shutil.which("node"), "Node.js runtime unavailable")
+    def test_real_eq_browser_commands_fail_closed_and_copy_only_readonly(self):
+        setup = r'''
+const assert = require("node:assert/strict");
+const CHANNELS = ["music", "laptop", "tablet"];
+const BANDS = ["bass", "mid", "treble"];
+const state = {
+  music: {bass: -3, mid: 2, treble: 1},
+  laptop: {bass: 0, mid: 0, treble: 0},
+  tablet: {bass: 12, mid: -12, treble: 6}
+};
+const elements = {
+  "eq-guide-slot": {value: "music"},
+  "eq-guide-preview-command": {value: ""},
+  "eq-guide-compare-command": {
+    value: "PYTHONPATH=/opt/audiohub/src python3 -m audiohub.eq_setup --compare-staged --format text"
+  },
+  "eq-guide-copy-preview": {disabled: false},
+  "eq-guide-feedback": {textContent: "", dataset: {}},
+  "eq-guide-copy-status": {textContent: ""}
+};
+const byId = id => elements[id];
+const tr = key => key;
+let copied = [];
+const navigator = {
+  clipboard: {writeText: async value => {copied.push(value);}}
+};
+const fetch = () => {throw new Error("No network or device call permitted");};
+'''
+        verify = r'''
+async function check() {
+  const expected = "PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control " +
+    "--preview set-eq-curve music -3 2 1";
+  assert.equal(buildLocalEqPreview("music", state.music), expected);
+  assert.equal(buildLocalEqPreview("tablet", state.tablet),
+    "PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control " +
+    "--preview set-eq-curve tablet 12 -12 6");
+  for (const input of ["unknown", "music;id", "../music", "", null]) {
+    assert.equal(buildLocalEqPreview(input, state.music), null);
+  }
+  for (const invalid of [NaN, Infinity, 13, -13, 1.5, "3", {}, null]) {
+    assert.equal(buildLocalEqPreview("music", {bass: invalid, mid: 2, treble: 1}), null);
+  }
+  assert.equal(buildLocalEqPreview("music", {bass: 1, mid: 2}), null);
+  renderEqGuide();
+  assert.equal(elements["eq-guide-preview-command"].value, expected);
+  assert.equal(elements["eq-guide-copy-preview"].disabled, false);
+  await copyEqGuideCommand("preview");
+  assert.deepEqual(copied, [expected]);
+  assert.equal(elements["eq-guide-copy-status"].textContent, "eqGuideCopied");
+  await copyEqGuideCommand("compare");
+  assert.equal(copied.length, 2);
+  assert.equal(copied[1], elements["eq-guide-compare-command"].value);
+  assert.ok(!copied.some(cmd => cmd.includes("--confirm-") ||
+    cmd.includes("--stage-saved") || cmd.includes("curl")));
+
+  state.music.treble = 5;
+  renderEqGuide();
+  assert.ok(elements["eq-guide-preview-command"].value.endsWith("music -3 2 5"));
+  elements["eq-guide-slot"].value = "laptop";
+  renderEqGuide();
+  assert.ok(elements["eq-guide-preview-command"].value.endsWith("laptop 0 0 0"));
+  elements["eq-guide-slot"].value = "tablet";
+  renderEqGuide();
+  assert.ok(elements["eq-guide-preview-command"].value.endsWith("tablet 12 -12 6"));
+
+  elements["eq-guide-slot"].value = "music;bad";
+  renderEqGuide();
+  assert.equal(elements["eq-guide-preview-command"].value, "");
+  assert.equal(elements["eq-guide-copy-preview"].disabled, true);
+  assert.equal(elements["eq-guide-feedback"].dataset.invalid, "true");
+  await copyEqGuideCommand("preview");
+  assert.equal(copied.length, 2);
+
+  elements["eq-guide-slot"].value = "music";
+  state.music.bass = 900;
+  renderEqGuide();
+  assert.equal(elements["eq-guide-preview-command"].value, "");
+  assert.equal(elements["eq-guide-copy-preview"].disabled, true);
+  await copyEqGuideCommand("unknown");
+  assert.equal(copied.length, 2);
+
+  state.music.bass = -3;
+  renderEqGuide();
+  navigator.clipboard = null;
+  await copyEqGuideCommand("preview");
+  assert.equal(elements["eq-guide-copy-status"].textContent,
+    "eqGuideCopyUnavailable");
+  assert.equal(copied.length, 2);
+}
+check().catch(error => {console.error(error); process.exitCode = 1;});
+'''
+        result = subprocess.run(
+            ["node", "-e", setup + "\n" + preview_eq_guide_source() + "\n" + verify],
+            capture_output=True, text=True, timeout=15, check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+
 class BrowserRoutingSummaryTests(unittest.TestCase):
     """Read-only routing diagnostics do not turn missing health into zero."""
 

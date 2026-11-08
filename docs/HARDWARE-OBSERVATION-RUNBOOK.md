@@ -227,6 +227,42 @@ Stage only with the separate deliberate revision-guarded
 Any actual PipeWire reload remains a separate operator-authorized lab
 step and cannot be inferred from this read-only comparison.
 
+### Browser-assisted EQ preview on the isolated Pi (never a remote control)
+
+The five-language **browser-only** preview dashboard now has an optional
+keyboard-openable "Prepare a safe local EQ preview" panel under the
+demonstration mixer controls. The panel uses the existing example EQ
+sliders and a fixed choice of technical source slots (`music`,
+`laptop`, `tablet`) to prepare only:
+
+```sh
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --preview set-eq-curve music -3 2 1
+```
+
+The numbers come **only** from the browser's demonstration sliders,
+**not** from the saved Pi mixer or the live audio graph. A Pi operator
+must independently check the actual source-slot assignment and
+settings. Values are restricted to integers from -12 to +12 dB and
+unknown slots fail closed. The browser offers a direct clipboard
+button, but when clipboard permission is unavailable it leaves a
+read-only textarea for manual copying. Copying never executes a
+command or approves a change.
+
+The second button copies the fixed, read-only status command:
+
+```sh
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.eq_setup --compare-staged --format text
+```
+
+Both can **only** be run by a separately authorized operator in the
+Pi's local terminal. The browser has no mixer, EQ stage, PipeWire,
+Bluetooth trust or first-owner mutation endpoint. It generates
+**no** confirmation or staging command, never reads private EQ
+settings, never exposes device identifiers, and must never be
+interpreted as a real saved-vs-live EQ dashboard. Live filter
+application, audio playback, hardware acceptance, ownership and
+release decisions all remain independent.
+
 ### Read the EQ stage status without interpreting JSON
 
 For an owner at the Pi console, the same **read-only** comparison is
