@@ -10,6 +10,7 @@ import argparse
 import fcntl
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import secrets
@@ -330,15 +331,23 @@ def format_staged_eq_overview(report):
     status, guidance = explanations[report["staging_status"]]
     gain = report.get("gain_headroom")
     if gain is not None:
-        if (type(gain) is not dict
-                or type(gain.get("requested_master_percent")) is not int
-                or type(gain.get("conservative_mix_factor_percent")) not in
-                    (int, float)
-                or type(gain.get("projected_master_percent")) not in
-                    (int, float)
-                or type(gain.get("unmuted_sources")) is not list
+        if type(gain) is not dict:
+            raise ValueError("Invalid headroom projection")
+        master = gain.get("requested_master_percent")
+        factor = gain.get("conservative_mix_factor_percent")
+        projected = gain.get("projected_master_percent")
+        unmuted = gain.get("unmuted_sources")
+        if (type(master) is not int or not 0 <= master <= 100
+                or type(factor) not in (int, float)
+                or not math.isfinite(factor) or not 0 <= factor <= 100
+                or type(projected) not in (int, float)
+                or not math.isfinite(projected) or not 0 <= projected <= 100
+                or type(unmuted) is not list
+                or len(unmuted) > len(CHANNELS)
+                or len(set(slot for slot in unmuted
+                           if type(slot) is str)) != len(unmuted)
                 or not all(type(slot) is str and slot in CHANNELS
-                           for slot in gain["unmuted_sources"])):
+                           for slot in unmuted)):
             raise ValueError("Invalid headroom projection")
         gain_lines = [
             "REQUESTED MIX HEADROOM (calculated, NOT verified live output):",
