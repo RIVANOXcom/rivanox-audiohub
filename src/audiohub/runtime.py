@@ -299,6 +299,11 @@ class Supervisor:
         self.settings = patch_settings(defaults(), read_json(SETTINGS, {}))
         self.assignments = read_json(ASSIGNMENTS, {})
         self.loopbacks = {}
+        # In-memory PipeWire source/sink node generation per managed process.
+        # Node names may survive Bluetooth reconnect or EQ graph recreation
+        # while the underlying IDs change; a live process is then stale.
+        # Never persist these private identifiers into status or logs.
+        self.route_node_generations = {}
         self.retry_state = {}
         self.route_failures_total = 0
         self.output_switch_failures = 0
@@ -391,6 +396,9 @@ class Supervisor:
         retries = getattr(self, "retry_state", None)
         if isinstance(retries, dict):
             retries.clear()
+        generations = getattr(self, "route_node_generations", None)
+        if isinstance(generations, dict):
+            generations.clear()
         if errors:
             raise RuntimeError("Managed AudioHub routing cleanup failed")
 
@@ -406,37 +414,72 @@ class Supervisor:
     def _route(self, sources, sinks, *, now=None):
         """Route up to two Bluetooth inputs; pause all routes without USB.
 
-        A dead pw-loopback is retried with capped exponential backoff, rather
-        than spawning a new process on each 5-second poll indefinitely.
+        Dead pw-loopback processes are retried with capped exponential
+        backoff. A still-alive route is also replaced if the discovered
+        Bluetooth source node or virtual EQ sink node ID changes, even
+        when its readable node name is unchanged after reconnect.
+        Never mistake a running process for proof of an intact link.
         """
         now = time.monotonic() if now is None else now
         self._assign(sources)
+        generations = getattr(self, "route_node_generations", None)
+        if not isinstance(generations, dict):
+            generations = {}
+            self.route_node_generations = generations
         desired = {}
         for source in sources:
             address = source.get("address")
             name = source.get("name")
             channel = self.assignments.get(address)
             target = "audiohub." + channel if channel else None
+            source_id = source.get("id")
+            target_id = sinks.get(target)
+            # Real PipeWire discovery supplies bounded nonnegative node IDs.
+            # Historical unit fixtures without an ID retain their older
+            # behavior, but a malformed explicit ID must not start a route.
+            valid_source_id = (
+                source_id is None and "id" not in source
+                or type(source_id) is int and source_id >= 0
+            )
             if (_usable_bluetooth_mac(address)
                     and type(name) is str and _SOURCE_NAME.fullmatch(name)
-                    and channel in CHANNELS and channel != getattr(self, "route_plan", default_routes())["lan_slot"] and target in sinks
+                    and channel in CHANNELS
+                    and channel != getattr(self, "route_plan", default_routes())["lan_slot"]
+                    and target in sinks and type(target_id) is int
+                    and target_id >= 0 and valid_source_id
                     and address not in desired and len(desired) < MAX_BT_INPUTS):
-                desired[address] = (name, target)
+                # The full tuple also scopes the bounded retry backoff so
+                # a newly recreated real node is not penalized by failures
+                # of its previous generation.
+                desired[address] = (name, target, source_id, target_id)
 
-        retries = getattr(self, "retry_state", {})
+        retries = getattr(self, "retry_state", None)
+        if not isinstance(retries, dict):
+            retries = {}
+            self.retry_state = retries
         for address, (old_source, old_target, process) in list(self.loopbacks.items()):
             expected = desired.get(address)
+            same_names = (expected is not None and
+                          expected[:2] == (old_source, old_target))
+            new_generation = expected[2:] if expected else None
+            # Existing untagged processes (e.g. after an older test setup)
+            # are adopted once, then checked on every subsequent poll.
+            old_generation = generations.get(address, new_generation)
+            same_graph = same_names and old_generation == new_generation
             running = process.poll() is None
-            if expected == (old_source, old_target) and running:
+            if same_graph and running:
+                generations[address] = new_generation
                 retries.pop(address, None)
                 continue
             if running:
+                # A stale-alive loopback will not automatically reconnect
+                # to newly created Pi PipeWire nodes. Recreate it safely.
                 self._stop_process(process)
-            else:
-                if expected == (old_source, old_target):
-                    self._retry_after_failure(address, expected, now)
+            elif same_graph:
+                self._retry_after_failure(address, expected, now)
             del self.loopbacks[address]
-            if expected != (old_source, old_target):
+            generations.pop(address, None)
+            if not same_graph:
                 retries.pop(address, None)
         for address in list(retries):
             if address not in desired:
@@ -450,7 +493,7 @@ class Supervisor:
                 continue
             if previous and previous[0] != identity:
                 retries.pop(address, None)
-            name, target = identity
+            name, target, source_id, target_id = identity
             channel = target.removeprefix("audiohub.")
             try:
                 process = subprocess.Popen(
@@ -460,7 +503,9 @@ class Supervisor:
                     stderr=subprocess.DEVNULL,
                 )
                 self.loopbacks[address] = (name, target, process)
+                generations[address] = (source_id, target_id)
             except (OSError, ValueError):
+                generations.pop(address, None)
                 self._retry_after_failure(address, identity, now)
 
     def poll(self):
