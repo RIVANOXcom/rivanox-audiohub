@@ -15,6 +15,50 @@ start a network service. Names (e.g. TV, Console, Office PC) are
 independent of source transport and are managed by a separate
 browser-only preview and local private console prototype.
 
+### Read-only combined local input board (new operator feature)
+
+The actual Pi-local source reservation map and requested mixer levels have
+so far required two separate commands. To identify a muted source during
+troubleshooting without manually correlating technical slot IDs, an
+authorized operator may now use this **single local text view**:
+
+```sh
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes --format text board
+```
+
+The view combines **current private source reservations** (LAN, manually
+assigned Bluetooth, unreserved or auto-discovery) with **requested
+input volume / mute** for each of the three fixed internal EQ input
+slots, the requested master volume and a global **software-only**
+supervisor acceptance state (`accepted`, `pending`, `unavailable`).
+It explicitly distinguishes manual Bluetooth **assignment** from a
+real connection, and LAN **reservation** from a running network
+receiver. No raw MAC address, Bluetooth name, device path, IP, SSID,
+secrets or arbitrary runtime diagnostic fields are displayed.
+The owner-private input labels may optionally be included with
+`--format text --with-input-names board`; as in other diagnostics
+they remain opt-in because a name may reveal a person or room.
+
+This display is a **read-only local terminal feature** and requires
+`--format text`: it has no JSON export, public HTTP API, pair/trust,
+device connection, source edit, mixer write, new permissions or root
+access. It rejects `--preview`, `--probe-bluetooth`,
+`--confirm-local-route-change`, and `--if-preview-revision`
+together with `board`. The existing strict slot-map validator and
+private mixer requested-control validation are applied, and malformed
+data are refused with a sanitized message. The source policy and
+mixer status are read from two **independent** file generations;
+they are NOT a synchronized transaction and may change during
+inspection. Re-check before a separately confirmed operation.
+
+**Trust limits:** `requested` volume and `mute` are settings,
+not measured PipeWire gain. The supervisor's `accepted` state only
+means a recent software acknowledgement, not speaker output.
+No dual A2DP streaming, USB PCM continuity, clipping, audible sound
+or Pi4/Edifier hardware verification can be inferred. This code is
+for an operator-controlled isolated alpha bench, not an unprotected
+browser/live phone control API.
+
 ### Atomic full three-input layout (experimental local operator feature)
 
 A manual three-source configuration previously required two or more separate
