@@ -53,6 +53,38 @@
           <button type="button" id="eq-guide-copy-compare" data-t="eqGuideCopyCompare">Copy status command</button>
           <span id="eq-guide-copy-status" role="status" aria-live="polite"></span>
         </div>
+        <fieldset class="eq-guide-transfer" aria-describedby="eq-guide-transfer-note">
+          <legend data-t="eqGuideTransferTitle">Preview copying or swapping two saved input EQ curves</legend>
+          <p id="eq-guide-transfer-note" data-t="eqGuideTransferNotice">This generates only a local Pi preview. The browser cannot read actual saved curves; choosing an input does not change its EQ.</p>
+          <div class="eq-guide-fields">
+            <label for="eq-guide-transfer-mode"><span data-t="eqGuideTransferMode">Operation</span>
+              <select id="eq-guide-transfer-mode">
+                <option value="copy-eq" data-t="eqGuideTransferCopy">Copy source EQ to target</option>
+                <option value="swap-eq" data-t="eqGuideTransferSwap">Swap both EQ curves</option>
+              </select>
+            </label>
+            <label for="eq-guide-transfer-source"><span data-t="eqGuideTransferSource">Source or first input</span>
+              <select id="eq-guide-transfer-source">
+                <option value="music" data-t="input1">Input 1</option>
+                <option value="laptop" data-t="input2">Input 2</option>
+                <option value="tablet" data-t="input3">Input 3</option>
+              </select>
+            </label>
+            <label for="eq-guide-transfer-target"><span data-t="eqGuideTransferTarget">Target or second input</span>
+              <select id="eq-guide-transfer-target">
+                <option value="music" data-t="input1">Input 1</option>
+                <option value="laptop" data-t="input2">Input 2</option>
+                <option value="tablet" data-t="input3" selected>Input 3</option>
+              </select>
+            </label>
+          </div>
+          <p id="eq-guide-transfer-feedback" role="status" aria-live="polite" data-t="eqGuideTransferReady">Read-only Pi command prepared. The actual saved EQ is checked only in the local preview.</p>
+          <label for="eq-guide-transfer-command" data-t="eqGuideTransferCommandLabel">3. Review both inputs in a local read-only preview</label>
+          <textarea id="eq-guide-transfer-command" readonly rows="2" spellcheck="false" aria-describedby="eq-guide-transfer-note eq-guide-transfer-feedback"></textarea>
+          <div class="eq-guide-actions">
+            <button type="button" id="eq-guide-copy-transfer" data-t="eqGuideTransferCopyCommand">Copy transfer preview</button>
+          </div>
+        </fieldset>
       </details>
       <section class="routing-summary" aria-labelledby="routing-title">
         <h2 id="routing-title" data-t="routingTitle">Audio routing status</h2>

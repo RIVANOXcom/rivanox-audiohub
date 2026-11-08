@@ -263,6 +263,42 @@ interpreted as a real saved-vs-live EQ dashboard. Live filter
 application, audio playback, hardware acceptance, ownership and
 release decisions all remain independent.
 
+### Browser-assisted read-only copying or swapping saved EQ curves
+
+The optional five-language EQ guide also offers a two-input operation
+selector, fixed technical **source** and **target** slots, and a
+read-only, copyable local Pi **preview** command. For example:
+
+```sh
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --preview copy-eq music tablet
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --preview swap-eq music tablet
+```
+
+These are **alternative examples**, not instructions to perform both
+operations. `copy-eq` previews copying the actual saved source curve
+to the target, without changing the source. `swap-eq` previews
+exchanging both actual saved curves. These values are read **only**
+from the Pi's private mixer state when an authorized operator runs a
+command at the local Pi terminal; the browser never reads that state
+and its example EQ slider values are **not** used for copy/swap.
+
+Only the three fixed local slots (`music`, `laptop`, `tablet`) are
+permitted, and source and target must be different. Unknown, injected,
+incomplete or identical selections clear the command and disable
+copying. Choosing a different operation or slot immediately invalidates
+the previous browser-generated preview. The copy button uses the
+browser clipboard only; its fallback is a read-only textarea for
+manual selection. This UI does not copy **settings** to another input,
+stage EQ, reload PipeWire, change Bluetooth routing or generate
+`--confirm-local-mixer-change` / `--if-preview-revision` commands.
+
+If an operator later wants to make an actual private local change,
+the operator must independently verify the source/target,
+review a **fresh revision** from the local preview and explicitly
+approve the separately documented owner-only transaction. This
+browser guide never authorizes that action, audible output, physical
+hardware acceptance or a public release.
+
 ### Read the EQ stage status without interpreting JSON
 
 For an owner at the Pi console, the same **read-only** comparison is

@@ -247,9 +247,32 @@
     status.textContent = tr(preview === null ? "eqGuideInvalid" : "eqGuideReady");
     byId("eq-guide-copy-status").textContent = "";
   }
+  // Read-only Pi previews use actual PRIVATE saved EQ only when the command
+  // is run locally. Browser demonstration sliders cannot supply source curves.
+  function buildLocalEqTransferPreview(operation, source, target) {
+    if (!["copy-eq", "swap-eq"].includes(operation) ||
+        !CHANNELS.includes(source) || !CHANNELS.includes(target) ||
+        source === target) return null;
+    return "PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control " +
+      "--preview " + operation + " " + source + " " + target;
+  }
+  function renderEqTransferGuide() {
+    const operation = byId("eq-guide-transfer-mode").value;
+    const source = byId("eq-guide-transfer-source").value;
+    const target = byId("eq-guide-transfer-target").value;
+    const preview = buildLocalEqTransferPreview(operation, source, target);
+    byId("eq-guide-transfer-command").value = preview || "";
+    byId("eq-guide-copy-transfer").disabled = preview === null;
+    const feedback = byId("eq-guide-transfer-feedback");
+    feedback.dataset.invalid = String(preview === null);
+    feedback.textContent = tr(preview === null ?
+      "eqGuideTransferInvalid" : "eqGuideTransferReady");
+    byId("eq-guide-copy-status").textContent = "";
+  }
   async function copyEqGuideCommand(kind) {
     const id = kind === "preview" ? "eq-guide-preview-command" :
-      kind === "compare" ? "eq-guide-compare-command" : null;
+      kind === "compare" ? "eq-guide-compare-command" :
+      kind === "transfer" ? "eq-guide-transfer-command" : null;
     const command = id && byId(id).value;
     if (!command) return;
     try {
@@ -766,6 +789,7 @@
     byId("master").setAttribute("aria-label", tr("master"));
     drawChannels();
     renderEqGuide();
+    renderEqTransferGuide();
     renderRoutingPlan();
     renderHardwareStatus();
     renderRoutingSummary();
@@ -800,6 +824,11 @@
   }
   byId("language").addEventListener("change", event => setLanguage(event.target.value));
   byId("eq-guide-slot").addEventListener("change", renderEqGuide);
+  for (const id of ["eq-guide-transfer-mode", "eq-guide-transfer-source",
+                    "eq-guide-transfer-target"]) {
+    byId(id).addEventListener("change", renderEqTransferGuide);
+  }
+  byId("eq-guide-copy-transfer").addEventListener("click", () => copyEqGuideCommand("transfer"));
   byId("eq-guide-copy-preview").addEventListener("click", () => copyEqGuideCommand("preview"));
   byId("eq-guide-copy-compare").addEventListener("click", () => copyEqGuideCommand("compare"));
   byId("routing-export").addEventListener("click", downloadRoutingDiagnostics);

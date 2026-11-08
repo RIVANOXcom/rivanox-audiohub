@@ -818,7 +818,10 @@ class BrowserEqOwnerGuideTests(unittest.TestCase):
             "eq-guide-feedback", "eq-guide-preview-command",
             "eq-guide-compare-command", "eq-guide-compare-note",
             "eq-guide-copy-preview", "eq-guide-copy-compare",
-            "eq-guide-copy-status",
+            "eq-guide-copy-status", "eq-guide-transfer-mode",
+            "eq-guide-transfer-source", "eq-guide-transfer-target",
+            "eq-guide-transfer-note", "eq-guide-transfer-feedback",
+            "eq-guide-transfer-command", "eq-guide-copy-transfer",
         ):
             self.assertIn('id="' + ident + '"', html)
         self.assertEqual(html.count('id="eq-guide-slot"'), 1)
@@ -827,18 +830,28 @@ class BrowserEqOwnerGuideTests(unittest.TestCase):
         self.assertIn('id="eq-guide-preview-command" readonly', html)
         self.assertIn('id="eq-guide-compare-command" readonly', html)
         self.assertIn('--compare-staged --format text', html)
+        self.assertIn('value="copy-eq"', html)
+        self.assertIn('value="swap-eq"', html)
+        self.assertIn('id="eq-guide-transfer-command" readonly', html)
+        self.assertIn('aria-describedby="eq-guide-transfer-note eq-guide-transfer-feedback"', html)
+        self.assertIn('byId("eq-guide-copy-transfer").addEventListener("click", () => copyEqGuideCommand("transfer"));', js)
         self.assertNotIn('--confirm-local-mixer-change', html)
         self.assertNotIn('--stage-saved', html)
         self.assertIn('byId("eq-guide-slot").addEventListener("change", renderEqGuide);', js)
         self.assertIn('if (BANDS.includes(key)) renderEqGuide();', js)
-        self.assertIn('    renderEqGuide();\n    renderRoutingPlan();', js)
+        self.assertIn('    renderEqGuide();\n    renderEqTransferGuide();\n    renderRoutingPlan();', js)
         self.assertIn('navigator.clipboard.writeText(command)', js)
         self.assertNotIn("fetch(", preview_eq_guide_source())
         keys = {
             "eqGuideTitle", "eqGuideNotice", "eqGuideSlot", "eqGuideReady",
             "eqGuideInvalid", "eqGuidePreviewLabel", "eqGuideCopyPreview",
             "eqGuideCompareLabel", "eqGuideCompareNotice",
-            "eqGuideCopyCompare", "eqGuideCopied", "eqGuideCopyUnavailable"
+            "eqGuideCopyCompare", "eqGuideCopied", "eqGuideCopyUnavailable",
+            "eqGuideTransferTitle", "eqGuideTransferNotice",
+            "eqGuideTransferMode", "eqGuideTransferCopy", "eqGuideTransferSwap",
+            "eqGuideTransferSource", "eqGuideTransferTarget",
+            "eqGuideTransferReady", "eqGuideTransferInvalid",
+            "eqGuideTransferCommandLabel", "eqGuideTransferCopyCommand",
         }
         for code in ("en", "de", "es", "fr", "it"):
             with self.subTest(locale=code):
@@ -944,6 +957,106 @@ async function check() {
   assert.equal(copied.length, 2);
 }
 check().catch(error => {console.error(error); process.exitCode = 1;});
+'''
+        result = subprocess.run(
+            ["node", "-e", setup + "\n" + preview_eq_guide_source() + "\n" + verify],
+            capture_output=True, text=True, timeout=15, check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+
+    @unittest.skipUnless(shutil.which("node"), "Node.js runtime unavailable")
+    def test_shipped_eq_copy_swap_preview_uses_fixed_slots_and_never_mutates(self):
+        """Use the actual shipped JS builder and clipboard handler, not a copy."""
+        setup = r'''
+const assert = require("node:assert/strict");
+const CHANNELS = ["music", "laptop", "tablet"];
+const BANDS = ["bass", "mid", "treble"];
+const elements = {
+  "eq-guide-transfer-mode": {value: "copy-eq"},
+  "eq-guide-transfer-source": {value: "music"},
+  "eq-guide-transfer-target": {value: "tablet"},
+  "eq-guide-transfer-command": {value: ""},
+  "eq-guide-copy-transfer": {disabled: false},
+  "eq-guide-transfer-feedback": {textContent: "", dataset: {}},
+  "eq-guide-copy-status": {textContent: ""}
+};
+const byId = id => elements[id];
+const tr = key => key;
+const copied = [];
+let navigator = {clipboard: {
+  writeText: async value => { copied.push(value); }
+}};
+const fetch = () => { throw new Error("No network or device operation"); };
+'''
+        verify = r'''
+async function check() {
+  const prefix = "PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control ";
+  const copy = prefix + "--preview copy-eq music tablet";
+  const swap = prefix + "--preview swap-eq music tablet";
+  assert.equal(buildLocalEqTransferPreview("copy-eq", "music", "tablet"), copy);
+  assert.equal(buildLocalEqTransferPreview("swap-eq", "music", "tablet"), swap);
+  assert.equal(buildLocalEqTransferPreview("swap-eq", "tablet", "music"),
+    prefix + "--preview swap-eq tablet music");
+  for (const mode of ["stage-eq", "set-eq", "confirm", ";id", "", null, 3]) {
+    assert.equal(buildLocalEqTransferPreview(mode, "music", "tablet"), null);
+  }
+  for (const source of ["", null, "music;id", "../music", "unknown", {}, 1]) {
+    assert.equal(buildLocalEqTransferPreview("copy-eq", source, "tablet"), null);
+  }
+  for (const target of ["", null, "tablet;echo", "../tablet", "unknown", {}, 1]) {
+    assert.equal(buildLocalEqTransferPreview("copy-eq", "music", target), null);
+  }
+  for (const mode of ["copy-eq", "swap-eq"]) {
+    for (const same of CHANNELS) {
+      assert.equal(buildLocalEqTransferPreview(mode, same, same), null);
+    }
+  }
+  renderEqTransferGuide();
+  assert.equal(elements["eq-guide-transfer-command"].value, copy);
+  assert.equal(elements["eq-guide-copy-transfer"].disabled, false);
+  assert.equal(elements["eq-guide-transfer-feedback"].dataset.invalid, "false");
+  await copyEqGuideCommand("transfer");
+  assert.deepEqual(copied, [copy]);
+  assert.equal(elements["eq-guide-copy-status"].textContent, "eqGuideCopied");
+
+  elements["eq-guide-transfer-mode"].value = "swap-eq";
+  renderEqTransferGuide();
+  assert.equal(elements["eq-guide-transfer-command"].value, swap);
+  await copyEqGuideCommand("transfer");
+  assert.deepEqual(copied, [copy, swap]);
+  assert.ok(copied.every(cmd => cmd.includes("--preview ") &&
+    !cmd.includes("--confirm-") && !cmd.includes("--stage-saved")));
+
+  // Changing to invalid/self-assignments MUST clear stale commands.
+  elements["eq-guide-transfer-target"].value = "music";
+  renderEqTransferGuide();
+  assert.equal(elements["eq-guide-transfer-command"].value, "");
+  assert.equal(elements["eq-guide-copy-transfer"].disabled, true);
+  assert.equal(elements["eq-guide-transfer-feedback"].dataset.invalid, "true");
+  await copyEqGuideCommand("transfer");
+  assert.equal(copied.length, 2);
+
+  elements["eq-guide-transfer-mode"].value = "invalid;whoami";
+  elements["eq-guide-transfer-target"].value = "tablet";
+  renderEqTransferGuide();
+  assert.equal(elements["eq-guide-transfer-command"].value, "");
+  assert.equal(elements["eq-guide-copy-transfer"].disabled, true);
+  await copyEqGuideCommand("transfer");
+  assert.equal(copied.length, 2);
+
+  elements["eq-guide-transfer-mode"].value = "copy-eq";
+  elements["eq-guide-transfer-source"].value = "laptop";
+  renderEqTransferGuide();
+  assert.equal(elements["eq-guide-transfer-command"].value,
+    prefix + "--preview copy-eq laptop tablet");
+  navigator.clipboard = null;
+  await copyEqGuideCommand("transfer");
+  assert.equal(elements["eq-guide-copy-status"].textContent,
+    "eqGuideCopyUnavailable");
+  assert.equal(copied.length, 2);
+}
+check().catch(error => { console.error(error); process.exitCode = 1; });
 '''
         result = subprocess.run(
             ["node", "-e", setup + "\n" + preview_eq_guide_source() + "\n" + verify],
