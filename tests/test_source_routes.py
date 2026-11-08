@@ -12,7 +12,7 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
-from audiohub import source_routes as routes, runtime
+from audiohub import source_routes as routes, runtime, input_profiles
 from audiohub.mixer import CHANNELS, defaults
 
 
@@ -571,6 +571,141 @@ class SourcePolicyTests(unittest.TestCase):
             self.assertEqual((self.dir / routes.FILENAME).read_bytes(), after)
             self.assertEqual(writer.call_count, 2)
             self.assertEqual(previews.call_count, 2)
+
+    def test_opt_in_private_input_names_in_slot_text_are_not_bluetooth_identity(self):
+        first = "AA:BB:CC:DD:EE:FF"
+        routes.bind_bluetooth(first, "music", self.dir)
+        input_profiles.set_label("music", "Living Room", self.dir)
+        input_profiles.set_label("laptop", "Games Console", self.dir)
+        input_profiles.set_label("tablet", "Kitchen", self.dir)
+        names = input_profiles.load_labels(self.dir)
+        current = routes.route_slots(self.dir)
+        original = (self.dir / routes.FILENAME).read_bytes()
+        plain = routes.format_route_slots_text(current)
+        custom = routes.format_route_slots_text(current, input_names=names)
+        self.assertIn("  music: Bluetooth source 1", plain)
+        self.assertNotIn("Living Room", plain)
+        self.assertIn("  music [Living Room]: Bluetooth source 1", custom)
+        self.assertIn("  laptop [Games Console]: LAN reserved", custom)
+        self.assertIn("  tablet [Kitchen]: Unreserved", custom)
+        self.assertIn("not source identities", custom)
+        self.assertNotIn(first, custom)
+        self.assertNotIn("Kitchen", json.dumps(current))
+        self.assertEqual((self.dir / routes.FILENAME).read_bytes(), original)
+
+        old_slots = routes.route_slots
+        with (mock.patch.object(
+                routes, "route_slots",
+                side_effect=lambda: old_slots(self.dir)) as read_slots,
+              mock.patch.object(input_profiles, "load_labels",
+                                side_effect=lambda: names) as read_names,
+              mock.patch.object(routes, "update") as writer):
+            with redirect_stdout(StringIO()) as stdout:
+                routes.main(["--format", "text", "--with-input-names", "slots"])
+            read_slots.assert_called_once_with()
+            read_names.assert_called_once_with()
+            writer.assert_not_called()
+        self.assertEqual(stdout.getvalue().strip(), custom.strip())
+        self.assertEqual((self.dir / routes.FILENAME).read_bytes(), original)
+
+    def test_opt_in_private_names_in_route_preview_and_source_status_are_labels_only(self):
+        first = "AA:BB:CC:DD:EE:FF"
+        routes.bind_bluetooth(first, "music", self.dir)
+        names = {"music": "Audio Lounge", "laptop": "Office PC",
+                 "tablet": "Workshop"}
+        before = (self.dir / routes.FILENAME).read_bytes()
+        report = routes.preview_route("move-bt", "music", "tablet",
+                                      directory=self.dir)
+        rendered = routes.format_route_preview_text(report, input_names=names)
+        self.assertIn("music [Audio Lounge]: Bluetooth source 1", rendered)
+        self.assertIn("tablet [Workshop]: Bluetooth source 1", rendered)
+        self.assertIn(report["revision"], rendered)
+        self.assertIn("not source identities", rendered)
+        self.assertNotIn(first, rendered)
+        self.assertNotIn("Audio Lounge", routes.format_route_preview_text(report))
+        self.assertEqual((self.dir / routes.FILENAME).read_bytes(), before)
+        status = routes.read_source_report(path=self.root / "missing-status.json")
+        text_status = routes.format_source_status_text(status, input_names=names)
+        self.assertIn("music [Audio Lounge]", text_status)
+        self.assertIn("not source identities", text_status)
+        self.assertNotIn("Office PC", routes.format_source_status_text(status))
+        self.assertFalse((self.root / "missing-status.json").exists())
+
+        old_preview = routes.preview_route
+        with (mock.patch.object(
+                routes, "preview_route",
+                side_effect=lambda action, target, slot=None:
+                old_preview(action, target, slot, directory=self.dir)),
+              mock.patch.object(input_profiles, "load_labels",
+                                return_value=names),
+              mock.patch.object(routes, "update") as writer):
+            with redirect_stdout(StringIO()) as output:
+                routes.main(["--format", "text", "--with-input-names",
+                             "--preview", "move-bt", "music", "tablet"])
+            self.assertIn("music [Audio Lounge]", output.getvalue())
+            self.assertIn("tablet [Workshop]", output.getvalue())
+            self.assertNotIn(first, output.getvalue())
+            writer.assert_not_called()
+        self.assertEqual((self.dir / routes.FILENAME).read_bytes(), before)
+
+    def test_private_input_name_validation_rejects_bad_or_ambiguous_snapshots(self):
+        routes.set_mode("manual", self.dir)
+        original = (self.dir / routes.FILENAME).read_bytes()
+        report = routes.route_slots(self.dir)
+        for name in ("x\nspoof", "<script>", "X" * 33, ""):
+            names = {"music": name, "laptop": "Console", "tablet": "Studio"}
+            with self.subTest(name=repr(name)), self.assertRaises(ValueError):
+                routes.format_route_slots_text(report, input_names=names)
+        for bad in ({}, {"music": "Room", "laptop": "room", "tablet": "Studio"},
+                    {"music": "Room", "laptop": "Office", "tablet": 17}):
+            with self.subTest(bad=repr(bad)), self.assertRaises(ValueError):
+                routes.format_route_slots_text(report, input_names=bad)
+        input_profiles.set_label("music", "Original", self.dir)
+        namefile = self.dir / input_profiles.FILENAME
+        namefile.write_text('{"schema":"broken","labels":{}}')
+        prev = namefile.read_bytes()
+        old_slots = routes.route_slots
+        old_read = input_profiles.load_labels
+        with (mock.patch.object(routes, "route_slots",
+                                side_effect=lambda: old_slots(self.dir)),
+              mock.patch.object(input_profiles, "load_labels",
+                                side_effect=lambda: old_read(self.dir)),
+              redirect_stdout(StringIO()) as stdout,
+              redirect_stderr(StringIO()) as stderr):
+            with self.assertRaises(SystemExit) as exit_:
+                routes.main(["--format", "text", "--with-input-names", "slots"])
+        self.assertEqual(exit_.exception.code, 2)
+        self.assertEqual(stdout.getvalue(), "")
+        self.assertIn("private input names unavailable", stderr.getvalue())
+        self.assertNotIn("broken", stderr.getvalue())
+        self.assertEqual((self.dir / routes.FILENAME).read_bytes(), original)
+        self.assertEqual(namefile.read_bytes(), prev)
+
+    def test_private_names_flag_refuses_json_direct_changes_and_confirmation(self):
+        routes.bind_bluetooth("AA:BB:CC:DD:EE:FF", "music", self.dir)
+        version = routes.preview_route("unbind-slot", "music",
+                                       directory=self.dir)["revision"]
+        before = (self.dir / routes.FILENAME).read_bytes()
+        invalid_calls = [
+            ["--with-input-names", "slots"],
+            ["--with-input-names", "show"],
+            ["--with-input-names", "--format", "text", "show"],
+            ["--with-input-names", "--format", "text", "set-lan", "tablet"],
+            ["--with-input-names", "--format", "text",
+             "--confirm-local-route-change", "--if-preview-revision", version,
+             "unbind-slot", "music"],
+        ]
+        with (mock.patch.object(input_profiles, "load_labels") as reader,
+              mock.patch.object(routes, "update") as writer):
+            for command in invalid_calls:
+                with self.subTest(command=command), redirect_stdout(StringIO()) as out,                      redirect_stderr(StringIO()):
+                    with self.assertRaises(SystemExit) as exit_:
+                        routes.main(command)
+                    self.assertEqual(exit_.exception.code, 2)
+                    self.assertEqual(out.getvalue(), "")
+            reader.assert_not_called()
+            writer.assert_not_called()
+        self.assertEqual((self.dir / routes.FILENAME).read_bytes(), before)
 
     def test_third_bluetooth_source_is_rejected(self):
         routes.bind_bluetooth("AA:BB:CC:DD:EE:FF", "music", self.dir)
