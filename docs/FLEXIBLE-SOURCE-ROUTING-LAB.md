@@ -502,6 +502,12 @@ PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes --preview swap-la
 # Inspect private old/new plan and revision, then separately run:
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes --confirm-local-route-change --if-preview-revision r1-REPLACE-WITH-64-HEX-CHARS swap-lan music
 
+# Exchange TWO MANUALLY assigned Bluetooth input slots in one policy update:
+# Example: music and tablet are both occupied by different BT peers.
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes --preview swap-bt music tablet
+# After privately reviewing the exact route revision and both mappings:
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes --confirm-local-route-change --if-preview-revision r1-REPLACE-WITH-64-HEX-CHARS swap-bt music tablet
+
 # Inspect the output revision r1-... and its impact: old/new occupied slots,
 # Bluetooth sources removed/added and potential auto-discovery disablement.
 # After REVIEW, independently approve EXACTLY that preview generation:
@@ -689,6 +695,23 @@ This local operation is **not** device authentication or a consumer
 phone UI, and cannot pair, trust, connect, open Scream UDP, or
 independently validate delivered PCM. Keep the local preview with
 Bluetooth addresses out of public logs.
+
+If two Bluetooth input slots are both manually occupied,
+`--preview swap-bt FIRST SECOND` safely proposes exchanging the two
+existing **source-to-EQ-slot bindings** in a single policy generation.
+The LAN reservation is never moved. A later
+`--confirm-local-route-change --if-preview-revision REV swap-bt FIRST
+SECOND` applies exactly that reviewed preview. Unlike multiple
+unbind/rebind commands, no intermediate missing or duplicated source
+assignment is persisted. This requires manual routing mode, distinct
+non-LAN input slots with exactly one manually assigned Bluetooth source
+each, and a valid unchanged policy revision under the exclusive
+writer lock; unconfirmed, empty/invalid and stale/ABA proposals are
+rejected without automatically retrying. Bluetooth source addresses
+are displayed ONLY in the authorized private preview, not the
+anonymous HTTP API. Active streams may restart when the supervisor
+polls the changed policy; this is not a zero-dropout switch or proof
+of owner trust, Bluetooth connection, PCM or audible playback.
 
 To move an existing route into an **empty** slot, use the existing
 guarded `--preview set-lan SLOT` process; to choose an occupied
