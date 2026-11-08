@@ -193,6 +193,19 @@ def _proposed(plan, action, value, slot=None):
         if type(value) is not str or value not in CHANNELS:
             raise ValueError("Unknown input slot")
         new["lan_slot"] = value
+    elif action == "swap-lan":
+        # A single all-or-nothing policy generation avoids the intermediate
+        # unbind/restore steps required by a manually occupied target slot.
+        if (type(value) is not str or value not in CHANNELS
+                or value == new["lan_slot"] or new["mode"] != "manual"):
+            raise ValueError("LAN swap requires another manual Bluetooth slot")
+        owners = [address for address, dest in new["bluetooth"].items()
+                  if dest == value]
+        if len(owners) != 1:
+            raise ValueError("Target slot needs one manually assigned Bluetooth source")
+        old_lan_slot = new["lan_slot"]
+        new["lan_slot"] = value
+        new["bluetooth"][owners[0]] = old_lan_slot
     elif action == "bind-bt":
         mac = canonical_mac(value)
         if type(slot) is not str or slot not in CHANNELS:
@@ -374,6 +387,14 @@ def update(mutate, directory=None, *, if_revision=None):
 def set_lan(slot, directory=None, *, if_revision=None):
     return update(lambda plan: _proposed(plan, "set-lan", slot),
                   directory, if_revision=if_revision)
+
+
+def swap_lan_with_bluetooth(slot, directory=None, *, if_revision=None):
+    """Only an explicitly revision-confirmed local operator may swap sources."""
+    if if_revision is None:
+        raise ValueError("LAN/Bluetooth swap requires a reviewed preview revision")
+    return update(lambda plan: _proposed(plan, "swap-lan", slot),
+                  directory, if_revision=_check_revision(if_revision))
 
 
 def bind_bluetooth(address, slot, directory=None, *, if_revision=None):
@@ -712,6 +733,9 @@ def main(argv=None):
     sub.add_parser("status", help="Read-only anonymized observed runtime source states")
     lan = sub.add_parser("set-lan")
     lan.add_argument("slot", choices=CHANNELS)
+    swap = sub.add_parser(
+        "swap-lan", help="Swap LAN with one manual Bluetooth slot; preview and confirmation required")
+    swap.add_argument("slot", choices=CHANNELS)
     bt = sub.add_parser("bind-bt")
     bt.add_argument("address")
     bt.add_argument("slot", choices=CHANNELS)
@@ -736,7 +760,7 @@ def main(argv=None):
         else:
             if args.probe_bluetooth or args.format != "json":
                 raise ValueError("Formatting and BlueZ inspection are status-only")
-            target = (args.slot if args.action == "set-lan" else
+            target = (args.slot if args.action in ("set-lan", "swap-lan") else
                       args.value if args.action == "mode" else args.address)
             slot = args.slot if args.action == "bind-bt" else None
             if args.preview:
@@ -750,8 +774,12 @@ def main(argv=None):
                 revision = args.if_preview_revision
                 if revision is not None:
                     _check_revision(revision)
+                if args.action == "swap-lan" and revision is None:
+                    raise ValueError("LAN/Bluetooth swap requires prior preview confirmation")
                 if args.action == "set-lan":
                     value = set_lan(args.slot, if_revision=revision)
+                elif args.action == "swap-lan":
+                    value = swap_lan_with_bluetooth(args.slot, if_revision=revision)
                 elif args.action == "bind-bt":
                     value = bind_bluetooth(args.address, args.slot,
                                            if_revision=revision)
