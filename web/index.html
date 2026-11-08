@@ -86,8 +86,8 @@
           </div>
         </fieldset>
         <fieldset class="eq-guide-neutral" aria-describedby="eq-guide-neutral-note">
-          <legend data-t="eqGuideNeutralTitle">Preview a neutral (0 dB) EQ curve for one input</legend>
-          <p id="eq-guide-neutral-note" data-t="eqGuideNeutralNotice">Only a local Pi read-only preview is generated. Neutralizing EQ affects the saved three-band curve only after a separate owner approval; this browser never changes it.</p>
+          <legend data-t="eqGuideNeutralTitle">Choose a sound profile and review it at the Pi</legend>
+          <p id="eq-guide-neutral-note" data-t="eqGuideNeutralNotice">Choose Flat (0 dB), Warm, Voice or Detail. These are fixed examples, not calibrated acoustic profiles or live sound controls. The Pi saves nothing without a separate reviewed owner confirmation.</p>
           <div class="eq-guide-fields">
             <label for="eq-guide-neutral-slot"><span data-t="eqGuideNeutralSlot">Input to preview</span>
               <select id="eq-guide-neutral-slot" aria-describedby="eq-guide-neutral-note">
@@ -96,12 +96,21 @@
                 <option value="tablet" data-t="input3">Input 3</option>
               </select>
             </label>
+            <label for="eq-guide-preset-choice"><span data-t="eqGuidePresetChoice">Sound profile</span>
+              <select id="eq-guide-preset-choice" aria-describedby="eq-guide-neutral-note">
+                <option value="flat" data-t="eqGuidePresetFlat">Flat · 0 dB</option>
+                <option value="warm" data-t="eqGuidePresetWarm">Warm · bass emphasis</option>
+                <option value="voice" data-t="eqGuidePresetVoice">Voice · clearer mids</option>
+                <option value="detail" data-t="eqGuidePresetDetail">Detail · treble emphasis</option>
+              </select>
+            </label>
           </div>
+          <p id="eq-guide-preset-curve" role="status" aria-live="polite" data-t="eqGuidePresetCurve">Bass 0 dB · Mid 0 dB · Treble 0 dB (example only)</p>
           <p id="eq-guide-neutral-feedback" role="status" aria-live="polite" data-t="eqGuideNeutralReady">A non-mutating preview can show the difference from the saved EQ to 0 dB.</p>
-          <label for="eq-guide-neutral-command" data-t="eqGuideNeutralCommandLabel">4. Preview neutral saved EQ at the Pi (no save or audio change)</label>
+          <label for="eq-guide-neutral-command" data-t="eqGuideNeutralCommandLabel">4. Preview selected sound profile at the Pi (no save or audio change)</label>
           <textarea id="eq-guide-neutral-command" readonly rows="2" spellcheck="false" aria-describedby="eq-guide-neutral-note eq-guide-neutral-feedback"></textarea>
           <div class="eq-guide-actions">
-            <button type="button" id="eq-guide-copy-neutral" data-t="eqGuideNeutralCopyCommand">Copy neutral-EQ preview</button>
+            <button type="button" id="eq-guide-copy-neutral" data-t="eqGuideNeutralCopyCommand">Copy sound-profile preview</button>
           </div>
         </fieldset>
       </details>
