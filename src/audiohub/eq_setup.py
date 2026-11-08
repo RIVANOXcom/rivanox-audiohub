@@ -130,6 +130,90 @@ def preview_saved_eq():
     return _saved_eq_report(state, revision, payload, staged=False)
 
 
+def _staged_eq_digest():
+    """Read ONLY a private bounded stage file; never create paths or links.
+
+    Return a conservative state and digest, not any device path or file body.
+    An unsafe or changing destination cannot be presented as a valid stage.
+    """
+    target = Path.home() / ".config" / "pipewire" / "pipewire.conf.d" / EQ_FILE
+    dirfd = filefd = None
+    try:
+        dirfd = _private_parent_fd(target, create=False)
+        filefd = os.open(
+            target.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK
+            | os.O_CLOEXEC, dir_fd=dirfd,
+        )
+        before = os.fstat(filefd)
+        if (not stat.S_ISREG(before.st_mode) or before.st_nlink != 1
+                or before.st_uid != os.geteuid()
+                or stat.S_IMODE(before.st_mode) & 0o077
+                or not 0 < before.st_size <= MAX_EQ_CONFIG_BYTES):
+            return "unavailable", None
+        content = os.read(filefd, MAX_EQ_CONFIG_BYTES + 1)
+        after = os.fstat(filefd)
+        entry = os.stat(target.name, dir_fd=dirfd, follow_symlinks=False)
+        def identity(st):
+            return (st.st_dev, st.st_ino, st.st_size,
+                    st.st_mtime_ns, st.st_ctime_ns)
+        if (len(content) != before.st_size
+                or identity(before) != identity(after)
+                or identity(after) != identity(entry)):
+            return "unavailable", None
+        return "available", hashlib.sha256(content).hexdigest()
+    except FileNotFoundError:
+        return "missing", None
+    except (OSError, ValueError, TypeError):
+        return "unavailable", None
+    finally:
+        if filefd is not None:
+            os.close(filefd)
+        if dirfd is not None:
+            os.close(dirfd)
+
+
+def compare_staged_eq():
+    """Read-only requested-versus-staged EQ config check, never live audio.
+
+    Read two stable mixer generations around the stage-file inspection;
+    refuse a mismatched generation rather than comparing unrelated states.
+    A matching file digest is NOT evidence that PipeWire loaded that file.
+    """
+    state, revision = mixer_control._preview_snapshot(path=SETTINGS)
+    payload = pipewire_filter_config(state).encode("utf-8")
+    if not 0 < len(payload) <= MAX_EQ_CONFIG_BYTES:
+        raise ValueError("PipeWire EQ configuration exceeds storage bound")
+    expected_digest = hashlib.sha256(payload).hexdigest()
+    file_state, actual_digest = _staged_eq_digest()
+    _, second_revision = mixer_control._preview_snapshot(path=SETTINGS)
+    if revision != second_revision:
+        raise mixer_control.MixerControlUnavailable(
+            "Mixer changed during staged EQ comparison")
+    status = (
+        "missing" if file_state == "missing" else
+        "unavailable" if file_state != "available" else
+        "matches_saved" if actual_digest == expected_digest else
+        "differs_from_saved"
+    )
+    return {
+        "mode": "read-only-saved-vs-staged-eq",
+        "revision": revision,
+        "equalizer": {
+            slot: {band: state[slot][band] for band in EQ_BANDS}
+            for slot in CHANNELS
+        },
+        "saved_configuration_sha256": expected_digest,
+        "staged_configuration_sha256": actual_digest,
+        "staging_status": status,
+        "configuration_staged_for_saved_eq": status == "matches_saved",
+        "settings_written": False,
+        "configuration_written": False,
+        "pipewire_restarted": False,
+        "live_eq_applied": False,
+        "hardware_audio_verified": False,
+    }
+
+
 def stage_saved_eq(revision, *, confirmed=False):
     """Only stage a checked mixer generation; never restart PipeWire.
 
@@ -180,6 +264,8 @@ def main(argv=()):
                         help="Preview stored three-band EQ and config digest without writing")
     choice.add_argument("--stage-saved", action="store_true",
                         help="Stage saved EQ config only after reviewed revision and consent")
+    choice.add_argument("--compare-staged", action="store_true",
+                        help="Read-only compare saved EQ to actual staged config; NOT live audio")
     parser.add_argument("--confirm-local-eq-stage", action="store_true")
     parser.add_argument("--if-preview-revision", metavar="REV")
     args = parser.parse_args(argv)
@@ -200,6 +286,14 @@ def main(argv=()):
             output = preview_saved_eq()
         except (OSError, PermissionError, ValueError, mixer_control.MixerControlUnavailable):
             parser.exit(2, "AudioHub local EQ preview unavailable.\n")
+        print(json.dumps(output, sort_keys=True))
+    elif args.compare_staged:
+        if args.confirm_local_eq_stage or args.if_preview_revision is not None:
+            parser.error("EQ comparison is read-only; staging flags not allowed")
+        try:
+            output = compare_staged_eq()
+        except (OSError, PermissionError, ValueError, mixer_control.MixerControlUnavailable):
+            parser.exit(2, "AudioHub local staged EQ comparison unavailable.\\n")
         print(json.dumps(output, sort_keys=True))
     else:
         if args.confirm_local_eq_stage or args.if_preview_revision is not None:
