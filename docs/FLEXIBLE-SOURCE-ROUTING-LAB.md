@@ -538,6 +538,24 @@ speaker playback is proved; all remain explicitly unverified.
 No scan, subprocess, audio change, private identifier, file write,
 new network API or elevated privilege is introduced by this display.
 
+To avoid interpreting raw booleans by hand, each local `status` input
+also receives a fixed, privacy-safe `next_local_check` hint. The
+diagnostic decision order starts with stale/private-status recovery,
+then USB default-output selection, absent EQ virtual sink, unassigned
+input, opt-in LAN receiver, Bluetooth source-node visibility, managed
+loopback process, and direct/intermediary PipeWire links. A fully
+observed path recommends `verify_actual_speaker_audio`, which is a
+**manual test instruction**, never a claim that sound was heard.
+Example values include `inspect_usb_default_output`,
+`inspect_bluetooth_pipewire_source`, `inspect_managed_loopback`,
+`inspect_pipewire_graph`, and `inspect_possible_intermediary_links`.
+These are inert guidance strings: there is no automatic repair,
+scan, pairing, reconnect, route activation, file write or new service.
+When explicitly using `--probe-bluetooth status`, a known
+`Connected: no` value can prioritize
+`inspect_bluetooth_device_connection` after basic USB/EQ prerequisites.
+Unknown and stale evidence never become a false disconnected claim.
+
 Source evidence comes from one **unmodified** owner-private
 `runtime-status.json` snapshot, never a fresh Bluetooth scan.
 `fresh` requires a trusted supervisor timestamp within 30 seconds;
