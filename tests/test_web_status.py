@@ -833,7 +833,10 @@ class BrowserEqOwnerGuideTests(unittest.TestCase):
         self.assertIn('aria-live="polite"', html)
         self.assertIn('id="eq-guide-preview-command" readonly', html)
         self.assertIn('id="eq-guide-compare-command" readonly', html)
-        self.assertIn('--compare-staged --format text', html)
+        self.assertIn('--compare-staged --format overview', html)
+        self.assertIn('one Pi overview', html)
+        self.assertIn('not selected or active presets', html)
+        self.assertIn('one on-disk file for all three inputs', html)
         self.assertIn('value="copy-eq"', html)
         self.assertIn('value="swap-eq"', html)
         self.assertIn('id="eq-guide-transfer-command" readonly', html)
@@ -905,7 +908,7 @@ const elements = {
   "eq-guide-slot": {value: "music"},
   "eq-guide-preview-command": {value: ""},
   "eq-guide-compare-command": {
-    value: "PYTHONPATH=/opt/audiohub/src python3 -m audiohub.eq_setup --compare-staged --format text"
+    value: "PYTHONPATH=/opt/audiohub/src python3 -m audiohub.eq_setup --compare-staged --format overview"
   },
   "eq-guide-copy-preview": {disabled: false},
   "eq-guide-feedback": {textContent: "", dataset: {}},
