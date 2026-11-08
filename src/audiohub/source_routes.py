@@ -222,6 +222,26 @@ def _proposed(plan, action, value, slot=None):
             raise ValueError("Both Bluetooth input slots must be manually assigned")
         new["bluetooth"][from_device[0]] = slot
         new["bluetooth"][to_device[0]] = value
+    elif action == "layout":
+        # Reassign ALL three existing source roles in one locked policy
+        # generation. Identify Bluetooth sources by their CURRENT input slot,
+        # never by MAC ordering or by an untrusted friendly display label.
+        if (new["mode"] != "manual" or len(new["bluetooth"]) != 2
+                or type(value) is not tuple or len(value) != 5
+                or any(type(name) is not str or name not in CHANNELS
+                       for name in value)):
+            raise ValueError("Full layout needs two existing manual Bluetooth inputs")
+        new_lan, old_bt1, new_bt1, old_bt2, new_bt2 = value
+        if (len({old_bt1, old_bt2}) != 2
+                or {old_bt1, old_bt2} != set(new["bluetooth"].values())
+                or len({new_lan, new_bt1, new_bt2}) != 3):
+            raise ValueError("Layout needs both existing BT slots and three unique targets")
+        destinations = {old_bt1: new_bt1, old_bt2: new_bt2}
+        new["lan_slot"] = new_lan
+        new["bluetooth"] = {
+            mac: destinations[old_slot]
+            for mac, old_slot in new["bluetooth"].items()
+        }
     elif action == "move-bt":
         # Move the one already assigned Bluetooth source by its CURRENT slot,
         # not a typed MAC. No unbind step or temporary missing assignment.
@@ -444,6 +464,16 @@ def swap_bluetooth_inputs(first, second, directory=None, *, if_revision=None):
     if if_revision is None:
         raise ValueError("Bluetooth input swap requires preview confirmation")
     return update(lambda plan: _proposed(plan, "swap-bt", first, second),
+                  directory, if_revision=_check_revision(if_revision))
+
+
+def set_three_source_layout(lan_slot, first_old, first_new, second_old,
+                            second_new, directory=None, *, if_revision=None):
+    """Apply a reviewed complete 2BT+LAN arrangement in one policy write."""
+    if if_revision is None:
+        raise ValueError("Full input layout requires a reviewed preview revision")
+    arrangement = (lan_slot, first_old, first_new, second_old, second_new)
+    return update(lambda plan: _proposed(plan, "layout", arrangement),
                   directory, if_revision=_check_revision(if_revision))
 
 
@@ -713,6 +743,7 @@ _ROUTE_ACTION_LABELS = {
     "set-lan": "Select LAN input",
     "swap-lan": "Exchange LAN and Bluetooth inputs",
     "swap-bt": "Exchange two Bluetooth inputs",
+    "layout": "Rearrange LAN and two existing Bluetooth sources atomically",
     "move-bt": "Move Bluetooth to free input",
     "bind-bt": "Assign a Bluetooth input",
     "unbind-bt": "Unassign a Bluetooth input",
@@ -946,6 +977,13 @@ def main(argv=None):
         "swap-bt", help="Exchange two occupied manual Bluetooth slots; confirmation required")
     bt_swap.add_argument("first_slot", choices=CHANNELS)
     bt_swap.add_argument("second_slot", choices=CHANNELS)
+    layout = sub.add_parser(
+        "layout", help="Atomically reassign LAN and two existing manual BT slots; confirmation required")
+    layout.add_argument("lan_slot", choices=CHANNELS)
+    layout.add_argument("first_current_bt_slot", choices=CHANNELS)
+    layout.add_argument("first_new_bt_slot", choices=CHANNELS)
+    layout.add_argument("second_current_bt_slot", choices=CHANNELS)
+    layout.add_argument("second_new_bt_slot", choices=CHANNELS)
     bt_move = sub.add_parser(
         "move-bt", help="Move one manual Bluetooth source into a free input; confirmation required")
     bt_move.add_argument("first_slot", choices=CHANNELS)
@@ -981,7 +1019,10 @@ def main(argv=None):
         else:
             if args.probe_bluetooth or (args.format != "json" and not args.preview):
                 raise ValueError("Text route formatting requires a read-only preview")
-            target = (args.slot if args.action in ("set-lan", "swap-lan", "unbind-slot") else
+            target = ((args.lan_slot, args.first_current_bt_slot,
+                       args.first_new_bt_slot, args.second_current_bt_slot,
+                       args.second_new_bt_slot) if args.action == "layout" else
+                      args.slot if args.action in ("set-lan", "swap-lan", "unbind-slot") else
                       args.first_slot if args.action in ("swap-bt", "move-bt") else
                       args.value if args.action == "mode" else args.address)
             slot = (args.slot if args.action == "bind-bt" else
@@ -997,7 +1038,7 @@ def main(argv=None):
                 revision = args.if_preview_revision
                 if revision is not None:
                     _check_revision(revision)
-                if args.action in ("swap-lan", "swap-bt", "move-bt", "unbind-slot") and revision is None:
+                if args.action in ("swap-lan", "swap-bt", "layout", "move-bt", "unbind-slot") and revision is None:
                     raise ValueError("Input relocation requires prior preview confirmation")
                 if args.action == "set-lan":
                     value = set_lan(args.slot, if_revision=revision)
@@ -1006,6 +1047,9 @@ def main(argv=None):
                 elif args.action == "swap-bt":
                     value = swap_bluetooth_inputs(
                         args.first_slot, args.second_slot, if_revision=revision)
+                elif args.action == "layout":
+                    value = set_three_source_layout(
+                        *target, if_revision=revision)
                 elif args.action == "move-bt":
                     value = move_bluetooth_input(
                         args.first_slot, args.second_slot, if_revision=revision)
