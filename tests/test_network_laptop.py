@@ -339,13 +339,6 @@ class NetworkLaptopTests(unittest.TestCase):
     @mock.patch("audiohub.network_laptop.os.write", return_value=4)
     @mock.patch("audiohub.network_laptop.os.set_blocking")
     @mock.patch("audiohub.network_laptop.subprocess.Popen")
-    @mock.patch("audiohub.network_laptop.time.monotonic")
-    @mock.patch("audiohub.network_laptop.socket.socket")
-    @mock.patch("audiohub.network_laptop.check_audio_target")
-    @mock.patch("audiohub.network_laptop.close_player")
-    @mock.patch("audiohub.network_laptop.os.write", return_value=4)
-    @mock.patch("audiohub.network_laptop.os.set_blocking")
-    @mock.patch("audiohub.network_laptop.subprocess.Popen")
     @mock.patch("audiohub.network_laptop.time.monotonic", side_effect=[100.0, 100.0, 100.0, 106.0])
     @mock.patch("audiohub.network_laptop.socket.socket")
     def test_idle_sender_releases_player(
