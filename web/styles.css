@@ -160,3 +160,23 @@
 .routing-plan-disclosure .routing-plan{margin:0;padding:4px 0 0;border:0;background:transparent}
 .routing-plan-disclosure .routing-plan h2{margin-top:6px}
 @media(max-width:560px){.routing-tools-panel,.routing-plan-disclosure{padding:10px 12px}}
+
+/* Browser-only EQ assistant: commands are local, non-mutating previews only. */
+.eq-operator-guide{margin:18px 0 26px;padding:14px 18px;background:#17233a;border:1px solid #456486;border-radius:14px}
+.eq-operator-guide>summary{cursor:pointer;color:#edf6ff;font-weight:700;min-height:44px;line-height:1.5;padding:10px 4px}
+.eq-operator-guide>summary:focus-visible{outline:3px solid #d8a1ff;outline-offset:3px;border-radius:6px}
+.eq-operator-guide>p{font-size:.88rem;color:#c9d9ef;line-height:1.55}
+.eq-guide-fields{display:flex;gap:14px;flex-wrap:wrap}
+.eq-guide-fields label{display:flex;flex-direction:column;gap:8px;color:#ecf3ff;font-size:.86rem}
+.eq-guide-fields select{background:#101e33;color:#eef5ff;border:1px solid #89aacc;border-radius:8px;padding:10px;font:inherit;min-height:44px;max-width:100%}
+.eq-operator-guide>label{display:block;margin:18px 0 8px;color:#f2f7ff;font-size:.87rem;font-weight:600}
+#eq-guide-feedback{font-size:.84rem;color:#c8e6f6;line-height:1.45}
+#eq-guide-feedback[data-invalid="true"]{color:#ffcece}
+#eq-guide-preview-command,#eq-guide-compare-command{box-sizing:border-box;display:block;width:100%;max-width:100%;min-height:80px;padding:12px;border-radius:8px;border:1px solid #729cc3;background:#102039;color:#f3f8ff;font:.79rem/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;resize:vertical;overflow-wrap:anywhere}
+.eq-guide-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:10px 0 14px}
+.eq-guide-actions button{min-height:44px;padding:10px 14px;font:inherit;color:#f2f8ff;background:#244263;border:1px solid #91b6de;border-radius:9px;cursor:pointer}
+.eq-guide-actions button:disabled{cursor:not-allowed;opacity:.6}
+.eq-guide-actions button:not(:disabled):hover{background:#315577}
+#eq-guide-copy-status{color:#c5e3fc;font-size:.84rem;line-height:1.4}
+.eq-guide-fields select:focus-visible,#eq-guide-preview-command:focus-visible,#eq-guide-compare-command:focus-visible,.eq-guide-actions button:focus-visible{outline:3px solid #d8a1ff;outline-offset:2px}
+@media(max-width:560px){.eq-operator-guide{padding:12px}.eq-guide-fields label,.eq-guide-fields select{width:100%}}
