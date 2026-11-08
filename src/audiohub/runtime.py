@@ -528,6 +528,10 @@ class Supervisor:
             # Positive graph evidence only. Missing direct links may reflect
             # PipeWire intermediary adapter nodes, never prove audio absence.
             "pipewire_links_inspected": graph_links["links_inspected"],
+            # This is a graph parse, not PCM delivery or audibility evidence.
+            "pipewire_graph_inspection_available": (
+                graph_links.get("inspection_available") is True
+            ),
             "eq_output_usb_direct_links": [
                 slot for slot in CHANNELS
                 if graph_links["eq_output_to_usb_direct_link"][slot]
