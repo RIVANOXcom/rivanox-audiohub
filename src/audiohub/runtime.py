@@ -453,7 +453,10 @@ class Supervisor:
                 # of its previous generation.
                 desired[address] = (name, target, source_id, target_id)
 
-        retries = getattr(self, "retry_state", {})
+        retries = getattr(self, "retry_state", None)
+        if not isinstance(retries, dict):
+            retries = {}
+            self.retry_state = retries
         for address, (old_source, old_target, process) in list(self.loopbacks.items()):
             expected = desired.get(address)
             same_names = (expected is not None and
