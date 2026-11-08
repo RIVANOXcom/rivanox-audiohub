@@ -640,6 +640,85 @@ class LocalSourceStatusTests(unittest.TestCase):
         self.assertEqual(self.file.read_bytes(), before)
         self.assertNotIn(mac, json.dumps(report))
 
+    def test_human_source_status_one_screen_never_claims_audio_or_identity(self):
+        report = routes.interpret_source_status({
+            "updated_at": 100, "route_policy_valid": True,
+            "source_slot_observations_version": 1,
+            "source_slot_observations": self.sample(),
+            "pipewire_graph_inspection_available": True,
+            "eq_output_usb_direct_links": ["music"],
+            "mac": "AA:BB:CC:DD:EE:FF", "password": "SECRET",
+        }, now=102)
+        out = routes.format_source_status_text(report)
+        self.assertIn("Runtime evidence: available", out)
+        for slot in CHANNELS:
+            self.assertIn(slot + " (", out)
+        self.assertIn("EQ-to-USB direct: yes", out)
+        self.assertIn("Test actual speaker audio manually", out)
+        self.assertIn("BlueZ property: ?", out)
+        self.assertIn("not proof of PCM samples or audible sound", out)
+        self.assertNotIn("AA:BB:CC", out)
+        self.assertNotIn("SECRET", out)
+        self.assertNotIn("unverified\":", out)
+
+    def test_human_status_cli_is_opt_in_and_other_commands_refuse_format(self):
+        report = routes.interpret_source_status({}, now=101)
+        with (mock.patch.object(routes, "read_source_report", return_value=report) as read,
+              mock.patch.object(routes, "probe_bluez_connections") as probe,
+              mock.patch.object(routes, "update") as write):
+            with redirect_stdout(StringIO()) as out:
+                routes.main(["--format", "text", "status"])
+            text = out.getvalue()
+            self.assertIn("Runtime evidence: unknown", text)
+            self.assertIn("Refresh private supervisor status", text)
+            self.assertEqual(text.count("  Next: "), len(CHANNELS))
+            self.assertNotIn("{", text)
+            read.assert_called_once_with()
+            probe.assert_not_called()
+            write.assert_not_called()
+        with mock.patch.object(routes, "read_source_report", return_value=report):
+            with redirect_stdout(StringIO()) as out:
+                routes.main(["status"])
+            self.assertEqual(json.loads(out.getvalue()), report)
+        for invalid in (
+            ["--format", "text", "show"],
+            ["--format", "text", "slots"],
+            ["--format", "text", "set-lan", "music"],
+            ["--format", "text", "--preview", "mode", "auto"],
+            ["--format", "text", "--confirm-local-route-change",
+             "--if-preview-revision", "r1-" + "a"*64, "set-lan", "music"],
+            ["--format", "text", "--preview", "status"],
+        ):
+            with self.subTest(invalid=invalid):
+                with (mock.patch.object(routes, "load") as read_policy,
+                      mock.patch.object(routes, "update") as write,
+                      mock.patch.object(routes, "probe_bluez_connections") as probe):
+                    with redirect_stdout(StringIO()), redirect_stderr(StringIO()):
+                        with self.assertRaises(SystemExit) as refused:
+                            routes.main(invalid)
+                    self.assertEqual(refused.exception.code, 2)
+                    read_policy.assert_not_called()
+                    write.assert_not_called()
+                    probe.assert_not_called()
+
+    def test_human_status_bluez_opt_in_and_malicious_report_fail_closed(self):
+        report = routes.interpret_source_status({}, now=100)
+        report["inputs"]["music"]["bluez_connected_property"] = False
+        with mock.patch.object(routes, "probe_bluez_connections",
+                               return_value=report) as probe:
+            with redirect_stdout(StringIO()) as out:
+                routes.main(["--format", "text", "--probe-bluetooth", "status"])
+            self.assertIn("BlueZ property: no", out.getvalue())
+            probe.assert_called_once_with()
+        bad = json.loads(json.dumps(report))
+        bad["inputs"]["music"]["next_local_check"] = "SECRET\\nCode"
+        with self.assertRaises(ValueError):
+            routes.format_source_status_text(bad)
+        bad = json.loads(json.dumps(report))
+        bad["inputs"]["music"]["eq_to_usb_direct_link_observed"] = "yes SECRET"
+        with self.assertRaises(ValueError):
+            routes.format_source_status_text(bad)
+
     def test_source_status_stale_missing_future_and_wrong_type_fail_closed(self):
         for age in (None, 31, -1, 100):
             with self.subTest(age=age):
