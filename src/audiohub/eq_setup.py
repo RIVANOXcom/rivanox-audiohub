@@ -172,7 +172,7 @@ def _staged_eq_digest():
             os.close(dirfd)
 
 
-def compare_staged_eq():
+def compare_staged_eq(*, include_gain_headroom=False):
     """Read-only requested-versus-staged EQ config check, never live audio.
 
     Read two stable mixer generations around the stage-file inspection;
@@ -195,7 +195,7 @@ def compare_staged_eq():
         "matches_saved" if actual_digest == expected_digest else
         "differs_from_saved"
     )
-    return {
+    report = {
         "mode": "read-only-saved-vs-staged-eq",
         "revision": revision,
         "equalizer": {
@@ -212,6 +212,12 @@ def compare_staged_eq():
         "live_eq_applied": False,
         "hardware_audio_verified": False,
     }
+    # Existing stable JSON report stays strictly backward compatible.
+    # Only the explicitly human-readable overview requests this extra
+    # calculation, derived from the SAME revision-checked mixer state.
+    if include_gain_headroom is True:
+        report["gain_headroom"] = mixer_control.gain_headroom_projection(state)
+    return report
 
 
 def format_staged_eq_text(report):
@@ -322,11 +328,40 @@ def format_staged_eq_overview(report):
         gains = "  ".join(f"{band} {curve[band]:+d} dB" for band in EQ_BANDS)
         rows.append(f"  {slot:<7} {shape:<7} (shape match) | {gains}")
     status, guidance = explanations[report["staging_status"]]
+    gain = report.get("gain_headroom")
+    if gain is not None:
+        if (type(gain) is not dict
+                or type(gain.get("requested_master_percent")) is not int
+                or type(gain.get("conservative_mix_factor_percent")) not in
+                    (int, float)
+                or type(gain.get("projected_master_percent")) not in
+                    (int, float)
+                or type(gain.get("unmuted_sources")) is not list
+                or not all(type(slot) is str and slot in CHANNELS
+                           for slot in gain["unmuted_sources"])):
+            raise ValueError("Invalid headroom projection")
+        gain_lines = [
+            "REQUESTED MIX HEADROOM (calculated, NOT verified live output):",
+            "  Requested master: " +
+                str(gain["requested_master_percent"]) + "%",
+            "  Unmuted inputs: " +
+                (", ".join(gain["unmuted_sources"]) or "none"),
+            "  Conservative mix factor: " +
+                f'{gain["conservative_mix_factor_percent"]:.2f}%',
+            "  Projected capped master: " +
+                f'{gain["projected_master_percent"]:.2f}%',
+            "  A lower projected master can result from EQ boosts or "
+            "simultaneous sources; this does not prove actual volume.",
+            "  This estimate is NOT a look-ahead limiter or peak test.",
+        ]
+    else:
+        gain_lines = []
     return "\n".join([
         "AudioHub EQ overview — Pi-local, read-only",
         "SAVED EQ (not necessarily staged or audible):",
         *rows,
         "A named shape match is not proof of preset selection or calibration.",
+        *gain_lines,
         "ON-DISK STAGE: " + status,
         guidance,
         "Stage comparison covers ALL three inputs as one file, "
@@ -418,7 +453,8 @@ def main(argv=()):
         if args.confirm_local_eq_stage or args.if_preview_revision is not None:
             parser.error("EQ comparison is read-only; staging flags not allowed")
         try:
-            output = compare_staged_eq()
+            output = (compare_staged_eq(include_gain_headroom=True)
+                      if args.format == "overview" else compare_staged_eq())
         except (OSError, PermissionError, ValueError, mixer_control.MixerControlUnavailable):
             parser.exit(2, "AudioHub local staged EQ comparison unavailable.\\n")
         if args.format == "text":
