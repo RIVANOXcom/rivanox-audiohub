@@ -108,3 +108,23 @@
 #routing-compare-observations-table th,#routing-compare-observations-table td{padding:10px 8px;border-bottom:1px solid #355778;overflow-wrap:anywhere}
 #routing-compare-observations-table th{font-weight:600;color:#e1edff}
 #routing-compare-observations-table td{color:#c4d9ed}
+
+
+/* Interactive browser-only source layout sketch. Never present it as device telemetry. */
+.routing-plan{margin:0 0 26px;padding:20px 22px;background:#17233a;border:1px solid #385478;border-radius:18px}
+.routing-plan h2{margin:0 0 8px}
+.routing-plan-note,.routing-plan-scope{color:#bfcfe6;font-size:.85rem;line-height:1.55}
+.routing-plan-note{margin:0 0 16px}
+.routing-plan-scope{margin:14px 0 0}
+.routing-plan-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.routing-plan-options label{display:flex;flex-direction:column;gap:8px;color:#e4eefc;font-size:.86rem;min-width:0}
+.routing-plan-options select{width:100%;min-width:0;min-height:44px;border:1px solid #759abd;border-radius:9px;background:#102039;color:#f3f8ff;font:inherit;padding:9px}
+.routing-plan-status{font-size:.85rem;line-height:1.5;margin:15px 0 9px;color:#c5e1fa}
+.routing-plan-status[data-invalid="true"]{color:#ffcece}
+.routing-plan-list{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;list-style:none;padding:0;margin:0}
+.routing-plan-list li{min-width:0;border:1px solid #3a5578;background:#102039;border-radius:9px;padding:12px;color:#eef5ff;font-size:.85rem;overflow-wrap:anywhere}
+.routing-plan-actions{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-top:14px}
+#routing-plan-reset{font:inherit;min-height:44px;background:#213a58;color:#f3f8ff;border:1px solid #8bb5da;border-radius:9px;padding:9px 14px;cursor:pointer}
+#routing-plan-reset:hover{background:#2b4a6d}
+#routing-plan-reset-status{font-size:.82rem;color:#c1dcf0}
+@media(max-width:740px){.routing-plan-options,.routing-plan-list{grid-template-columns:minmax(0,1fr)}.routing-plan{padding:18px}}

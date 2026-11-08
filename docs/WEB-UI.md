@@ -24,6 +24,43 @@ Only GET requests for strict allowlisted UI assets and `/api/status` work. The s
 
 Never forward port 8765 to the public Internet. Device ownership, authenticated controls and secure Wi-Fi provisioning remain release blockers. This experimental integration requires Pi image rebuilding and hardware validation before being considered operational.
 
+## Browser-only three-source routing layout planner (unmerged draft)
+
+The existing five-language web preview now includes a responsive **three-input
+routing example planner**, separate from real device status. A user may select
+one LAN mixer slot and optionally assign two **anonymous example** Bluetooth
+sources to `Input 1`, `Input 2` and `Input 3`. If two sources claim the
+same slot, the preview immediately rejects the layout and does not display it
+as valid. Unassigned Bluetooth placeholders are allowed; LAN must always
+reserve exactly one of the three slots. A reset button restores the
+initial sample mapping (LAN = Input 2, example Bluetooth sources = 1 and 3).
+The rendered slot list and validation messages update in all five languages.
+Keyboard-accessible native selects, explicit labels, non-color-only error
+text, a live validation status and responsive vertical mobile layout are
+used. Rendering only fixed translated labels via `textContent` avoids
+injecting browser or device identifiers into the display.
+
+**Deliberate safety and product boundaries:** This is a **what-if example,
+not a snapshot of the Pi routing policy**. It does not read actual source
+assignments, search or pair Bluetooth devices, authenticate senders, change
+volume/EQ, open a socket, write local storage, download private names, submit
+an HTTP request or change real routes. Neither a valid sample layout nor the
+public read-only route counts proves that any device is paired, connected or
+audible. The selector's source 1/2 names are placeholders, **not real BT
+identities or MAC addresses**. Browser input-name preferences and sample
+mixer volume settings remain independent and untouched when the example
+layout is reset. A real route operation continues to require an authorized
+local audiohub-user terminal, a private `source_routes --preview` at the
+current policy revision and a separate, revision-guarded confirmation. The
+web preview cannot issue that confirmation. Remote-phone access still
+requires owner-authenticated onboarding; it is not provided by this PR.
+
+The channel-card capability hints no longer imply that the `music`,
+`laptop`, and `tablet` technical slot IDs permanently bind particular
+transport types. The new wording distinguishes possible flexible assignment
+from verified live audio and remains neutral about which input a real device
+uses.
+
 ## Generic audio input display names (AH-004, draft PR #26)
 
 The UI now presents **Input 1, Input 2, Input 3**, not mandatory

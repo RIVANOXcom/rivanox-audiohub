@@ -224,6 +224,55 @@
     }
     restoreChannelEditState(editState);
   }
+  // A browser-only WHAT-IF layout. A source label never identifies a real
+  // BlueZ device or reveals the private Pi source policy.
+  function planRoutingLayout(lan, bt1, bt2) {
+    if (!CHANNELS.includes(lan) ||
+        ![bt1, bt2].every(slot => slot === "unused" || CHANNELS.includes(slot)))
+      return null;
+    const selected = [lan, bt1, bt2].filter(slot => slot !== "unused");
+    if (new Set(selected).size !== selected.length) return null;
+    return CHANNELS.map(slot => ({
+      slot,
+      role: slot === lan ? "lan" : slot === bt1 ? "bt1" :
+        slot === bt2 ? "bt2" : "unused"
+    }));
+  }
+  function renderRoutingPlan() {
+    const lan = byId("routing-plan-lan").value;
+    const bt1 = byId("routing-plan-bt1").value;
+    const bt2 = byId("routing-plan-bt2").value;
+    const layout = planRoutingLayout(lan, bt1, bt2);
+    const list = byId("routing-plan-list");
+    const status = byId("routing-plan-status");
+    list.setAttribute("aria-label", tr("routingPlanTitle"));
+    list.replaceChildren();
+    status.dataset.invalid = String(layout === null);
+    status.textContent = tr(layout ? "routingPlanValid" : "routingPlanConflict");
+    if (!layout) return; // Never present a conflicting plan as valid.
+    const roles = {
+      lan: "routingPlanLan",
+      bt1: "routingPlanBt1",
+      bt2: "routingPlanBt2",
+      unused: "routingPlanUnused"
+    };
+    for (const item of layout) {
+      const row = document.createElement("li");
+      row.textContent = tr("input" + SLOT_INDEX[item.slot]) +
+        ": " + tr(roles[item.role]);
+      list.append(row);
+    }
+  }
+  function resetRoutingPlan() {
+    // Revert only the three WHAT-IF selects. Never touch device routes,
+    // localStorage input names, mocked volume/EQ or private observations.
+    byId("routing-plan-lan").value = "laptop";
+    byId("routing-plan-bt1").value = "music";
+    byId("routing-plan-bt2").value = "tablet";
+    renderRoutingPlan();
+    byId("routing-plan-reset-status").textContent = tr("routingPlanResetDone");
+  }
+
   function statusIsRecent() {
     // The API's own fresh flag is necessary but not sufficient: a hanging
     // poll must not leave the previous snapshot visibly "recent" forever.
@@ -613,6 +662,7 @@
     document.querySelectorAll("[data-t]").forEach(node => { node.textContent = tr(node.dataset.t); });
     byId("master").setAttribute("aria-label", tr("master"));
     drawChannels();
+    renderRoutingPlan();
     renderHardwareStatus();
     renderRoutingSummary();
     byId("routing-export-status").textContent = "";
@@ -651,6 +701,13 @@
   byId("routing-compare-file").addEventListener("change", loadRoutingComparison);
   byId("routing-compare-clear").addEventListener("click", clearRoutingComparison);
   byId("routing-observations-reset").addEventListener("click", resetManualSoundObservations);
+  for (const role of ["lan", "bt1", "bt2"]) {
+    byId("routing-plan-" + role).addEventListener("change", () => {
+      byId("routing-plan-reset-status").textContent = "";
+      renderRoutingPlan();
+    });
+  }
+  byId("routing-plan-reset").addEventListener("click", resetRoutingPlan);
   for (const id of ["usb", "bluetooth", "three", "dual-bt", "usb-reconnect"]) {
     byId("routing-observation-" + id).addEventListener("change", renderManualComparison);
   }

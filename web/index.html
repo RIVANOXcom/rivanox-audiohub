@@ -102,6 +102,42 @@
           </div>
         </details>
       </section>
+      <section class="routing-plan" aria-labelledby="routing-plan-title">
+        <h2 id="routing-plan-title" data-t="routingPlanTitle">Try a three-input routing layout</h2>
+        <p id="routing-plan-note" class="routing-plan-note" data-t="routingPlanNotice">Browser-only example. Choose the mixer input for LAN and up to two unnamed Bluetooth sources. This cannot read or change real device assignments, pairing or sound.</p>
+        <div class="routing-plan-options" role="group" aria-describedby="routing-plan-note">
+          <label for="routing-plan-lan"><span data-t="routingPlanLan">LAN source</span>
+            <select id="routing-plan-lan">
+              <option value="music" data-t="input1">Input 1</option>
+              <option value="laptop" data-t="input2" selected>Input 2</option>
+              <option value="tablet" data-t="input3">Input 3</option>
+            </select>
+          </label>
+          <label for="routing-plan-bt1"><span data-t="routingPlanBt1">Bluetooth source 1 (example)</span>
+            <select id="routing-plan-bt1">
+              <option value="unused" data-t="routingPlanUnused">Unassigned</option>
+              <option value="music" data-t="input1" selected>Input 1</option>
+              <option value="laptop" data-t="input2">Input 2</option>
+              <option value="tablet" data-t="input3">Input 3</option>
+            </select>
+          </label>
+          <label for="routing-plan-bt2"><span data-t="routingPlanBt2">Bluetooth source 2 (example)</span>
+            <select id="routing-plan-bt2">
+              <option value="unused" data-t="routingPlanUnused">Unassigned</option>
+              <option value="music" data-t="input1">Input 1</option>
+              <option value="laptop" data-t="input2">Input 2</option>
+              <option value="tablet" data-t="input3" selected>Input 3</option>
+            </select>
+          </label>
+        </div>
+        <p id="routing-plan-status" class="routing-plan-status" role="status" aria-live="polite">Example layout only; nothing applied.</p>
+        <ul id="routing-plan-list" class="routing-plan-list" aria-label="Example routing assignments"></ul>
+        <div class="routing-plan-actions">
+          <button type="button" id="routing-plan-reset" data-t="routingPlanReset">Reset example layout</button>
+          <span id="routing-plan-reset-status" role="status" aria-live="polite"></span>
+        </div>
+        <p class="routing-plan-scope" data-t="routingPlanScope">The real Pi route policy is private and unavailable to this page. Source assignments still require an authorized local terminal, a read-only revision preview and separate confirmation. Bluetooth labels here are placeholders, not device identities.</p>
+      </section>
       <h2 data-t="channel">Channel</h2>
       <div id="channels" class="grid"></div>
       <section class="device master"><div><h2 data-t="master">Master output</h2><input id="master" type="range" min="0" max="100" value="70" aria-label="Master output"></div><output id="master-value" for="master">70%</output></section>
