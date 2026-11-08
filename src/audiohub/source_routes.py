@@ -244,6 +244,18 @@ def _proposed(plan, action, value, slot=None):
             new["mode"] = "manual"
             new["bluetooth"] = {}
         new["bluetooth"][mac] = slot
+    elif action == "unbind-slot":
+        # Permit the local operator to release one manual BT assignment by
+        # stable EQ slot, without copying its private device address.
+        if (new["mode"] != "manual"
+                or type(value) is not str or value not in CHANNELS
+                or value == new["lan_slot"]):
+            raise ValueError("Unassignment requires an occupied manual BT input")
+        owners = [address for address, assigned in new["bluetooth"].items()
+                  if assigned == value]
+        if len(owners) != 1:
+            raise ValueError("Input has no unique manually assigned Bluetooth source")
+        del new["bluetooth"][owners[0]]
     elif action == "unbind-bt":
         mac = canonical_mac(value)
         if new["mode"] != "manual" or mac not in new["bluetooth"]:
@@ -446,6 +458,14 @@ def move_bluetooth_input(first, second, directory=None, *, if_revision=None):
 def bind_bluetooth(address, slot, directory=None, *, if_revision=None):
     return update(lambda plan: _proposed(plan, "bind-bt", address, slot),
                   directory, if_revision=if_revision)
+
+
+def unbind_bluetooth_slot(slot, directory=None, *, if_revision=None):
+    """Unassign one manual Bluetooth slot only after exact local review."""
+    if if_revision is None:
+        raise ValueError("Bluetooth unassignment requires a reviewed preview revision")
+    return update(lambda plan: _proposed(plan, "unbind-slot", slot),
+                  directory, if_revision=_check_revision(if_revision))
 
 
 def unbind_bluetooth(address, directory=None, *, if_revision=None):
@@ -674,6 +694,7 @@ _ROUTE_ACTION_LABELS = {
     "move-bt": "Move Bluetooth to free input",
     "bind-bt": "Assign a Bluetooth input",
     "unbind-bt": "Unassign a Bluetooth input",
+    "unbind-slot": "Release Bluetooth input without entering a device address",
     "mode": "Change source discovery mode",
 }
 
@@ -905,6 +926,9 @@ def main(argv=None):
     bt.add_argument("slot", choices=CHANNELS)
     unbind = sub.add_parser("unbind-bt")
     unbind.add_argument("address")
+    unbind_slot = sub.add_parser(
+        "unbind-slot", help="Release one manual Bluetooth input; preview and confirmation required")
+    unbind_slot.add_argument("slot", choices=CHANNELS)
     mode = sub.add_parser("mode")
     mode.add_argument("value", choices=MODES)
     args = parser.parse_args(argv)
@@ -924,7 +948,7 @@ def main(argv=None):
         else:
             if args.probe_bluetooth or (args.format != "json" and not args.preview):
                 raise ValueError("Text route formatting requires a read-only preview")
-            target = (args.slot if args.action in ("set-lan", "swap-lan") else
+            target = (args.slot if args.action in ("set-lan", "swap-lan", "unbind-slot") else
                       args.first_slot if args.action in ("swap-bt", "move-bt") else
                       args.value if args.action == "mode" else args.address)
             slot = (args.slot if args.action == "bind-bt" else
@@ -940,7 +964,7 @@ def main(argv=None):
                 revision = args.if_preview_revision
                 if revision is not None:
                     _check_revision(revision)
-                if args.action in ("swap-lan", "swap-bt", "move-bt") and revision is None:
+                if args.action in ("swap-lan", "swap-bt", "move-bt", "unbind-slot") and revision is None:
                     raise ValueError("Input relocation requires prior preview confirmation")
                 if args.action == "set-lan":
                     value = set_lan(args.slot, if_revision=revision)
@@ -957,6 +981,8 @@ def main(argv=None):
                                            if_revision=revision)
                 elif args.action == "unbind-bt":
                     value = unbind_bluetooth(args.address, if_revision=revision)
+                elif args.action == "unbind-slot":
+                    value = unbind_bluetooth_slot(args.slot, if_revision=revision)
                 else:
                     value = set_mode(args.value, if_revision=revision)
     except StaleRoutePreview:
