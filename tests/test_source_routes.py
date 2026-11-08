@@ -569,6 +569,77 @@ class LocalSourceStatusTests(unittest.TestCase):
                 self.assertFalse(report["hardware_verified"])
                 self.assertFalse(report["release_ready"])
 
+    def test_local_next_check_triages_real_status_without_audio_claim(self):
+        base = {
+            "updated_at": 100, "route_policy_valid": True,
+            "source_slot_observations_version": 1,
+            "source_slot_observations": self.sample(),
+            "pipewire_graph_inspection_available": True,
+            "eq_output_usb_direct_links": ["music"],
+        }
+        report = routes.interpret_source_status(base, now=102)
+        self.assertEqual(report["inputs"]["music"]["next_local_check"],
+                         "verify_actual_speaker_audio")
+        self.assertEqual(report["inputs"]["laptop"]["next_local_check"],
+                         "verify_opt_in_lan_receiver")
+        self.assertEqual(report["inputs"]["tablet"]["next_local_check"],
+                         "inspect_eq_virtual_sink")
+        self.assertEqual(report["inputs"]["music"]["audible_playback"], "unverified")
+        self.assertEqual(report["inputs"]["music"]["audio_stream_available"], "unverified")
+        self.assertFalse(report["hardware_verified"])
+        self.assertFalse(report["release_ready"])
+        self.assertEqual(routes.interpret_source_status({}, now=102)[
+            "inputs"]["music"]["next_local_check"], "refresh_private_supervisor_status")
+
+        for changes, expected in (
+            ({"usb_route_ready": False}, "inspect_usb_default_output"),
+            ({"virtual_sink_observed": False}, "inspect_eq_virtual_sink"),
+            ({"bluetooth_node_observed": False}, "inspect_bluetooth_pipewire_source"),
+            ({"managed_loopback_running": False}, "inspect_managed_loopback"),
+        ):
+            with self.subTest(changes=changes):
+                current = json.loads(json.dumps(base))
+                current["source_slot_observations"]["music"].update(changes)
+                observed = routes.interpret_source_status(current, now=102)
+                self.assertEqual(observed["inputs"]["music"]["next_local_check"],
+                                 expected)
+        no_edge = routes.interpret_source_status({
+            **base, "eq_output_usb_direct_links": [],
+        }, now=102)
+        self.assertEqual(no_edge["inputs"]["music"]["next_local_check"],
+                         "inspect_possible_intermediary_links")
+        no_graph = routes.interpret_source_status({
+            **base, "pipewire_graph_inspection_available": False,
+            "eq_output_usb_direct_links": [],
+        }, now=102)
+        self.assertEqual(no_graph["inputs"]["music"]["next_local_check"],
+                         "inspect_pipewire_graph")
+        unassigned = json.loads(json.dumps(base))
+        unassigned["source_slot_observations"]["tablet"]["virtual_sink_observed"] = True
+        self.assertEqual(routes.interpret_source_status(unassigned, now=102)[
+            "inputs"]["tablet"]["next_local_check"], "assign_source_or_leave_unused")
+
+    def test_local_next_check_bluez_false_only_when_explicitly_probed(self):
+        from subprocess import CompletedProcess
+        mac = self._manual_blue_probe_state()
+        before = self.file.read_bytes()
+        self.assertEqual(routes.read_source_report(path=self.file, now=102)[
+            "inputs"]["music"]["next_local_check"], "inspect_pipewire_graph")
+        def disconnected(argv, *, timeout, max_bytes):
+            return CompletedProcess(argv, 0,
+                                    "Device " + mac + "\n Connected: no\n", "")
+        with mock.patch.object(routes, "bounded_command_output",
+                               side_effect=disconnected) as query:
+            report = routes.probe_bluez_connections(
+                directory=self.directory, status_path=self.file, now=102)
+            query.assert_called_once()
+        self.assertEqual(report["inputs"]["music"]["next_local_check"],
+                         "inspect_bluetooth_device_connection")
+        self.assertFalse(report["inputs"]["music"]["bluez_connected_property"])
+        self.assertEqual(report["inputs"]["music"]["audible_playback"], "unverified")
+        self.assertEqual(self.file.read_bytes(), before)
+        self.assertNotIn(mac, json.dumps(report))
+
     def test_source_status_stale_missing_future_and_wrong_type_fail_closed(self):
         for age in (None, 31, -1, 100):
             with self.subTest(age=age):
