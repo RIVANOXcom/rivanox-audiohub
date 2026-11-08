@@ -652,7 +652,7 @@ class SourcePolicyTests(unittest.TestCase):
         routes.set_mode("manual", self.dir)
         original = (self.dir / routes.FILENAME).read_bytes()
         report = routes.route_slots(self.dir)
-        for name in ("x\\nspoof", "<script>", "X" * 33, ""):
+        for name in ("x\nspoof", "<script>", "X" * 33, ""):
             names = {"music": name, "laptop": "Console", "tablet": "Studio"}
             with self.subTest(name=repr(name)), self.assertRaises(ValueError):
                 routes.format_route_slots_text(report, input_names=names)
@@ -665,14 +665,6 @@ class SourcePolicyTests(unittest.TestCase):
         namefile.write_text('{"schema":"broken","labels":{}}')
         prev = namefile.read_bytes()
         old_slots = routes.route_slots
-        with (mock.patch.object(
-                routes, "route_slots",
-                side_effect=lambda: old_slots(self.dir)),
-              mock.patch.object(input_profiles, "load_labels",
-                                side_effect=lambda: input_profiles.load_labels(self.dir))):
-            # Directly test the file reader separately; the CLI has a
-            # single sanitized error on unavailable private profiles.
-            pass
         old_read = input_profiles.load_labels
         with (mock.patch.object(routes, "route_slots",
                                 side_effect=lambda: old_slots(self.dir)),
