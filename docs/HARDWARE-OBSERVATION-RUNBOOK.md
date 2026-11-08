@@ -186,6 +186,53 @@ Physical playback, clipping, multi-source isolation and USB recovery
 must still be independently observed. Even attenuating an EQ band
 is not a guarantee of safe output gain or no clipping.
 
+### Copy and neutralize a tuned three-band EQ without three manual edits
+
+Once the owner has saved one input's bass/mid/treble on the private Pi
+console, the previous per-band editor required three separately reviewed
+changes to give another input the **same requested EQ curve**. This
+experimental operator shortcut copies all three values in **one**
+revision-guarded mixer settings replacement:
+
+```sh
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --preview copy-eq music tablet
+```
+
+The read-only `eq_changes` array identifies the exact target bands,
+before/after values, unchanged requested gains/mutes, and a private
+`v1-...` mixer revision. The source and destination must be
+**different** existing fixed input slots; no device or Bluetooth
+address is accepted. Only after independent local review may the
+operator enter the **fresh** revision and consent:
+
+```sh
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-mixer-change --if-preview-revision v1-REPLACE-WITH-REVIEWED-REVISION copy-eq music tablet
+```
+
+The selected source's three EQ bands are copied to the destination in
+one existing exclusive-locked private 0600 settings update. The source
+EQ stays intact; the target's volume/mute, other inputs, master level,
+physical routing and Bluetooth trust are unchanged. Concurrent or
+even ABA mixer changes invalidate the earlier revision, and all three
+copied values must come from the same source generation.
+
+To return just one input's saved EQ to a neutral 0 dB baseline without
+raising/lowering volume or changing mute, use the same explicit
+two-step review:
+
+```sh
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --preview reset-eq music
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-mixer-change --if-preview-revision v1-REPLACE-WITH-REVIEWED-REVISION reset-eq music
+```
+
+These operations change only the **requested, saved EQ**. Neither
+command applies the EQ dynamically to the running PipeWire filter.
+The operator must separately inspect `audiohub.eq_setup --preview-saved`
+and, only with separate approval, stage the exact saved configuration
+as documented above. No PipeWire restart, audible sound, device
+connection, test evidence or release approval is implied by copying
+or neutralizing a curve.
+
 ## What the operator actually checks
 
 1. Real Edifier speaker playback is **audible** at safe volume.
