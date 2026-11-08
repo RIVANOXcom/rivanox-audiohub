@@ -249,7 +249,10 @@
     list.replaceChildren();
     status.dataset.invalid = String(layout === null);
     status.textContent = tr(layout ? "routingPlanValid" : "routingPlanConflict");
-    if (!layout) return; // Never present a conflicting plan as valid.
+    if (!layout) {
+      renderRoutingGuide();
+      return; // Never present a conflicting plan as valid.
+    }
     const roles = {
       lan: "routingPlanLan",
       bt1: "routingPlanBt1",
@@ -262,6 +265,37 @@
         ": " + tr(roles[item.role]);
       list.append(row);
     }
+    renderRoutingGuide();
+  }
+  // Generate only a NON-MUTATING local terminal preview for the backend's
+  // revision-guarded three-way layout operation. No device connection or
+  // source identity is obtained by this example browser.
+  function buildLocalRoutingPreview(lan, bt1, bt2, from1, from2) {
+    if (planRoutingLayout(lan, bt1, bt2) === null ||
+        bt1 === "unused" || bt2 === "unused" ||
+        !CHANNELS.includes(from1) || !CHANNELS.includes(from2) ||
+        from1 === from2) return null;
+    // All values belong to the constant, shell-safe technical slot allowlist.
+    // No MAC, friendly names, credentials, confirmation or revision is used.
+    return "PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes " +
+      "--format text --preview layout " +
+      [lan, from1, bt1, from2, bt2].join(" ");
+  }
+  function renderRoutingGuide() {
+    const command = buildLocalRoutingPreview(
+      byId("routing-plan-lan").value,
+      byId("routing-plan-bt1").value,
+      byId("routing-plan-bt2").value,
+      byId("routing-guide-from-bt1").value,
+      byId("routing-guide-from-bt2").value
+    );
+    const field = byId("routing-guide-command");
+    const message = byId("routing-guide-status");
+    // Reset stale commands immediately when targets or current slots change.
+    field.value = command === null ? "" : command;
+    message.dataset.invalid = String(command === null);
+    message.textContent = tr(command === null ?
+      "routingGuideNeedSlots" : "routingGuideReady");
   }
   function resetRoutingPlan() {
     // Revert only the three WHAT-IF selects. Never touch device routes,
@@ -269,6 +303,9 @@
     byId("routing-plan-lan").value = "laptop";
     byId("routing-plan-bt1").value = "music";
     byId("routing-plan-bt2").value = "tablet";
+    // Do not preserve a previously assumed source mapping after reset.
+    byId("routing-guide-from-bt1").value = "unknown";
+    byId("routing-guide-from-bt2").value = "unknown";
     renderRoutingPlan();
     byId("routing-plan-reset-status").textContent = tr("routingPlanResetDone");
   }
@@ -708,6 +745,9 @@
     });
   }
   byId("routing-plan-reset").addEventListener("click", resetRoutingPlan);
+  for (const role of ["bt1", "bt2"]) {
+    byId("routing-guide-from-" + role).addEventListener("change", renderRoutingGuide);
+  }
   for (const id of ["usb", "bluetooth", "three", "dual-bt", "usb-reconnect"]) {
     byId("routing-observation-" + id).addEventListener("change", renderManualComparison);
   }

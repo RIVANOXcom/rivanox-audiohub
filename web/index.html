@@ -136,6 +136,33 @@
           <button type="button" id="routing-plan-reset" data-t="routingPlanReset">Reset example layout</button>
           <span id="routing-plan-reset-status" role="status" aria-live="polite"></span>
         </div>
+        <div class="routing-plan-command" aria-labelledby="routing-plan-command-title">
+          <h3 id="routing-plan-command-title" data-t="routingGuideTitle">Prepare a local read-only route preview</h3>
+          <p id="routing-guide-intro" data-t="routingGuideIntro">Only for an existing manual LAN plus two-Bluetooth assignment. Check the current private source slots on the Pi first. The browser cannot detect actual Bluetooth identities or routing.</p>
+          <p class="routing-guide-inspect" data-t="routingGuideInspect">On the authorized local Pi terminal, first inspect: python3 -m audiohub.source_routes --format text slots</p>
+          <div class="routing-plan-options" role="group" aria-describedby="routing-guide-intro">
+            <label for="routing-guide-from-bt1"><span data-t="routingGuideFromBt1">Current input of Bluetooth source A (verified locally)</span>
+              <select id="routing-guide-from-bt1">
+                <option value="unknown" data-t="routingGuideUnknown" selected>Choose verified current input</option>
+                <option value="music" data-t="input1">Input 1</option>
+                <option value="laptop" data-t="input2">Input 2</option>
+                <option value="tablet" data-t="input3">Input 3</option>
+              </select>
+            </label>
+            <label for="routing-guide-from-bt2"><span data-t="routingGuideFromBt2">Current input of Bluetooth source B (verified locally)</span>
+              <select id="routing-guide-from-bt2">
+                <option value="unknown" data-t="routingGuideUnknown" selected>Choose verified current input</option>
+                <option value="music" data-t="input1">Input 1</option>
+                <option value="laptop" data-t="input2">Input 2</option>
+                <option value="tablet" data-t="input3">Input 3</option>
+              </select>
+            </label>
+          </div>
+          <p id="routing-guide-status" class="routing-plan-status" role="status" aria-live="polite" data-t="routingGuideNeedSlots">No command yet: select both verified current Bluetooth inputs and all three distinct target inputs.</p>
+          <label for="routing-guide-command"><span data-t="routingGuideCommandLabel">Read-only local preview command (copy manually; never executed here)</span></label>
+          <textarea id="routing-guide-command" readonly rows="3" spellcheck="false" aria-describedby="routing-guide-status routing-guide-warning" placeholder="" autocomplete="off"></textarea>
+          <p id="routing-guide-warning" class="routing-plan-scope" data-t="routingGuideWarning">This only prepares a read-only local CLI preview. It does not verify device identity, pair devices, connect, apply routes or authorize confirmation. Match the current private policy and independently inspect its revision before any local change.</p>
+        </div>
         <p class="routing-plan-scope" data-t="routingPlanScope">The real Pi route policy is private and unavailable to this page. Source assignments still require an authorized local terminal, a read-only revision preview and separate confirmation. Bluetooth labels here are placeholders, not device identities.</p>
       </section>
       <h2 data-t="channel">Channel</h2>

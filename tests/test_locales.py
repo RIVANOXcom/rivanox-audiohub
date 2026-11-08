@@ -536,7 +536,11 @@ class BrowserRoutingPlannerTests(unittest.TestCase):
             "routingPlanTitle", "routingPlanNotice", "routingPlanLan",
             "routingPlanBt1", "routingPlanBt2", "routingPlanUnused",
             "routingPlanValid", "routingPlanConflict", "routingPlanReset",
-            "routingPlanResetDone", "routingPlanScope"
+            "routingPlanResetDone", "routingPlanScope",
+            "routingGuideTitle", "routingGuideIntro", "routingGuideInspect",
+            "routingGuideFromBt1", "routingGuideFromBt2", "routingGuideUnknown",
+            "routingGuideNeedSlots", "routingGuideReady",
+            "routingGuideCommandLabel", "routingGuideWarning"
         }
         for lang in ("en", "de", "es", "fr", "it"):
             with self.subTest(lang=lang):
@@ -547,11 +551,16 @@ class BrowserRoutingPlannerTests(unittest.TestCase):
                     self.assertIn("sourceHint" + key[-1], data)
         markup = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
         for id_ in ("routing-plan-lan", "routing-plan-bt1", "routing-plan-bt2",
-                    "routing-plan-status", "routing-plan-list", "routing-plan-reset"):
+                    "routing-plan-status", "routing-plan-list", "routing-plan-reset",
+                    "routing-guide-from-bt1", "routing-guide-from-bt2",
+                    "routing-guide-status", "routing-guide-command"):
             self.assertIn('id="' + id_ + '"', markup)
         self.assertIn('aria-live="polite"', markup)
         self.assertIn('data-t="routingPlanScope"', markup)
         self.assertIn('value="unused"', markup)
+        self.assertIn('value="unknown"', markup)
+        self.assertIn('readonly rows="3"', markup)
+        self.assertIn('aria-live="polite"', markup)
         self.assertNotIn('method: "POST"', PREVIEW.read_text(encoding="utf-8"))
 
     def test_routing_layout_is_browser_only_and_does_not_expose_device_ids(self):
@@ -561,8 +570,12 @@ class BrowserRoutingPlannerTests(unittest.TestCase):
         self.assertIn('list.replaceChildren();', source)
         self.assertIn('row.textContent =', source)
         for absent in ("fetch(", "localStorage.", "innerHTML", "bluetoothctl",
-                       "writeFile", "POST", "MAC", "source_routes"):
+                       "writeFile", "POST", "--confirm-local-route-change",
+                       "navigator.clipboard", "eval("):
             self.assertNotIn(absent, source)
+        self.assertIn("python3 -m audiohub.source_routes", source)
+        self.assertIn("--format text --preview layout ", source)
+        self.assertIn('field.value = command === null ? "" : command;', source)
 
     @unittest.skipUnless(shutil.which("node"), "Node.js runtime unavailable")
     def test_shipped_planner_conflicts_accessible_labels_reset_and_locale(self):
@@ -574,6 +587,11 @@ const elements = Object.create(null);
 for (const role of ["lan", "bt1", "bt2"]) {
   elements["routing-plan-" + role] = {value: ""};
 }
+for (const role of ["bt1", "bt2"]) {
+  elements["routing-guide-from-" + role] = {value: "unknown"};
+}
+elements["routing-guide-command"] = {value: ""};
+elements["routing-guide-status"] = {dataset: {}, textContent: ""};
 elements["routing-plan-status"] = {dataset: {}, textContent: ""};
 elements["routing-plan-reset-status"] = {textContent: ""};
 elements["routing-plan-list"] = {
@@ -600,6 +618,8 @@ let words = {
   routingPlanValid: "Example only",
   routingPlanConflict: "Conflict",
   routingPlanResetDone: "Restored",
+  routingGuideReady: "Preview prepared",
+  routingGuideNeedSlots: "Missing verified current inputs",
   input1: "Input 1", input2: "Input 2", input3: "Input 3"
 };
 const tr = key => words[key] || key;
@@ -652,9 +672,122 @@ assert.deepEqual([lan.value, bt1.value, bt2.value],
 assert.equal(elements["routing-plan-reset-status"].textContent, "Restored");
 assert.equal(slots.children.length, 3);
 assert.equal(status.dataset.invalid, "false");
+assert.equal(elements["routing-guide-command"].value, "");
+assert.deepEqual(
+  [elements["routing-guide-from-bt1"].value,
+   elements["routing-guide-from-bt2"].value], ["unknown", "unknown"]);
 """
         script = setup + "\n" + preview_routing_planner_source() + "\n" + checks
         result = subprocess.run(
             ["node", "-e", script], capture_output=True, text=True, timeout=15,
             check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
+
+
+    @unittest.skipUnless(shutil.which("node"), "Node.js runtime unavailable")
+    def test_browser_guide_generates_only_guarded_readonly_local_preview(self):
+        setup = r"""
+const assert = require("node:assert/strict");
+const CHANNELS = ["music", "laptop", "tablet"];
+const SLOT_INDEX = {music: 1, laptop: 2, tablet: 3};
+const elements = Object.create(null);
+for (const id of ["routing-plan-lan", "routing-plan-bt1", "routing-plan-bt2",
+                  "routing-guide-from-bt1", "routing-guide-from-bt2"]) {
+  elements[id] = {value: "unknown"};
+}
+elements["routing-plan-status"] = {dataset: {}, textContent: ""};
+elements["routing-guide-status"] = {dataset: {}, textContent: ""};
+elements["routing-guide-command"] = {value: ""};
+elements["routing-plan-reset-status"] = {textContent: ""};
+elements["routing-plan-list"] = {
+  children: [], setAttribute() {},
+  replaceChildren() {this.children = [];},
+  append(value) {this.children.push(value);}
+};
+const document = {createElement(tag) {
+  assert.equal(tag, "li");
+  return {textContent: ""};
+}};
+const byId = id => {
+  assert.ok(elements[id], "unrecognized node: " + id);
+  return elements[id];
+};
+const tr = key => ({
+  routingGuideReady: "Preview prepared",
+  routingGuideNeedSlots: "Unverified current inputs"
+})[key] || key;
+"""
+        tests = r"""
+const command = "PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes " +
+  "--format text --preview layout music music tablet tablet laptop";
+assert.equal(buildLocalRoutingPreview(
+  "music", "tablet", "laptop", "music", "tablet"), command);
+for (const invalid of [
+  ["music", "tablet", "unused", "music", "tablet"],
+  ["music", "tablet", "laptop", "unknown", "tablet"],
+  ["music", "tablet", "laptop", "music", "unknown"],
+  ["music", "tablet", "laptop", "music", "music"],
+  ["music", "tablet", "music", "laptop", "tablet"],
+  ["music", "tablet", "laptop", "music;rm", "tablet"],
+  ["music", "tablet", "laptop", "music", "laptop;touch"],
+  ["music", "tablet", "laptop", "unused", "tablet"],
+  ["music", "tablet", "laptop", "music", null],
+  ["unknown", "tablet", "laptop", "music", "tablet"]
+]) assert.equal(buildLocalRoutingPreview(...invalid), null);
+const lan = byId("routing-plan-lan");
+const bt1 = byId("routing-plan-bt1");
+const bt2 = byId("routing-plan-bt2");
+const from1 = byId("routing-guide-from-bt1");
+const from2 = byId("routing-guide-from-bt2");
+const field = byId("routing-guide-command");
+const status = byId("routing-guide-status");
+lan.value = "music"; bt1.value = "tablet"; bt2.value = "laptop";
+from1.value = "music"; from2.value = "tablet";
+renderRoutingPlan();
+assert.equal(field.value, command);
+assert.equal(status.dataset.invalid, "false");
+assert.equal(status.textContent, "Preview prepared");
+assert.ok(!field.value.includes("--confirm-local-route-change"));
+assert.ok(!field.value.includes("--if-preview-revision"));
+from2.value = "music";
+renderRoutingGuide();
+assert.equal(field.value, "");
+assert.equal(status.dataset.invalid, "true");
+assert.equal(status.textContent, "Unverified current inputs");
+from2.value = "tablet";
+renderRoutingGuide();
+assert.equal(field.value, command);
+bt2.value = "unused";
+renderRoutingPlan();
+assert.equal(field.value, "");
+bt2.value = "laptop";
+renderRoutingPlan();
+assert.equal(field.value, command);
+resetRoutingPlan();
+assert.equal(field.value, "");
+assert.equal(from1.value, "unknown");
+assert.equal(from2.value, "unknown");
+assert.equal(status.dataset.invalid, "true");
+assert.deepEqual([lan.value, bt1.value, bt2.value],
+  ["laptop", "music", "tablet"]);
+"""
+        script = setup + "\n" + preview_routing_planner_source() + "\n" + tests
+        result = subprocess.run(["node", "-e", script],
+                                capture_output=True, text=True, timeout=15,
+                                check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_browser_source_preview_never_confirms_or_transmits(self):
+        script = PREVIEW.read_text(encoding="utf-8")
+        source = preview_routing_planner_source()
+        assert "function buildLocalRoutingPreview" in source
+        self.assertNotIn("--confirm-local-route-change", source)
+        self.assertNotIn("--if-preview-revision", source)
+        self.assertNotIn("window.open(", source)
+        self.assertNotIn("fetch(", source)
+        self.assertNotIn("navigator.clipboard", source)
+        self.assertIn('byId("routing-guide-command")', source)
+        self.assertIn('byId("routing-guide-from-bt1")', source)
+        self.assertIn('byId("routing-guide-from-bt2")', source)
+        self.assertIn('byId("routing-guide-from-" + role).addEventListener("change", renderRoutingGuide);', script)
+        self.assertIn('value="unknown"', (ROOT / "web" / "index.html").read_text(encoding="utf-8"))
