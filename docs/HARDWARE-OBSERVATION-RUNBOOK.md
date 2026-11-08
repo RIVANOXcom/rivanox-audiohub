@@ -24,6 +24,61 @@ sudo -u audiohub env XDG_RUNTIME_DIR="/run/user/$(id -u audiohub)" PYTHONPATH=/o
 
 This tool **never starts playback**, changes volume, pairs a Bluetooth device, opens a network socket or writes a report. The person at the bench must independently operate each applicable audio source and confirm what they physically heard. Answers: `yes`, `no`, or `skip`. Invalid strings are discarded, not stored. The tool prints fixed, privacy-bounded JSON to the local console. If topology is incomplete, it asks no audio questions and exits with code 2.
 
+## Isolate one input safely during an already authorized bench session
+
+A newly added **owner-local, unprivileged** mixer feature reduces the
+multiple-command risk of checking individual channel isolation. On a
+separately authorized *isolated* Pi4 bench, first inspect the private
+anonymized source/mixer overview and confirm the current source slot:
+
+```sh
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes --format text board
+```
+
+To test **Input 1** (technical slot `music`) without disturbing its
+volume, EQ or existing mute state, request a **read-only** plan:
+
+```sh
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --preview isolate-input music
+```
+
+The JSON `before` / `after` and `would_change` fields show exactly
+which of the **other two input mutes** would be turned on. Nothing is
+changed by the preview; inspect it and copy the private `v1-...`
+revision only after reviewing it. If an owner/operator separately
+chooses to perform the planned change at that same local console,
+they must explicitly enter **both** the approval flag and exact
+preview revision:
+
+```sh
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-mixer-change --if-preview-revision v1-REPLACE-WITH-64-LOWERCASE-HEX isolate-input music
+```
+
+Without prior preview revision or explicit local confirmation the
+operation refuses to write. A concurrent mixer edit, even a change
+that restores the same values (ABA), makes the previous revision
+invalid. One existing exclusive 0600 settings-file writer applies
+the two **other** mutes in a single atomic replacement, avoiding
+an intermediate mixed configuration. Master level, volume, EQ and
+all source-routing settings remain unchanged.
+
+**Crucially, isolation is NOT auto-unmute or solo.** If the selected
+input was already muted, it **stays muted**. No sound is played,
+gained, paired, connected, tested or claimed by the command.
+An already-unmuted selected input may remain audible, so always
+check physical speaker volume, source state and the proposed
+`before/after` settings before confirming. No automatic
+restoration occurs afterward: manually inspect any later unmute
+or volume adjustments as separate actions. The running PipeWire
+supervisor applies the requested mutes on a later poll, and a
+successful file update cannot prove the effect or audible audio.
+
+The command does not attach to the web UI, enable the unsafe
+Windows UDP receiver, modify BlueZ trust, open a port, or grant
+release approval. Repeat tests individually only with separate
+owner authorization, and retain the existing offline hardware
+observation gates and independent 24-hour test.
+
 ## What the operator actually checks
 
 1. Real Edifier speaker playback is **audible** at safe volume.
