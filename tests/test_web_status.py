@@ -1295,6 +1295,8 @@ class BrowserRoutingSummaryTests(unittest.TestCase):
         source = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
         for key in ("routing-routes", "routing-bluetooth", "routing-channels",
                     "routing-freshness", "routing-diagnostic",
+                    "routing-recovery", "routing-recovery-title",
+                    "routing-recovery-note", "routing-recovery-steps",
                     "routing-export", "routing-export-status"):
             self.assertIn('id="' + key + '"', html)
         for key in ("active_routes", "bluetooth_sources", "virtual_channel_count"):
@@ -1362,7 +1364,17 @@ class BrowserRoutingSummaryTests(unittest.TestCase):
             "routingCompareColumnChange", "routingCompareUsb", "routingCompareChanged",
             "routingCompareUnchanged", "routingCompareUnknown", "routingCompareCleared",
             "routingCompareObservationsTitle", "routingCompareObservationsNote",
-            "routingCompareObservationsCurrent"
+            "routingCompareObservationsCurrent",
+            "routingRecoveryTitle", "routingRecoveryNotice",
+            "routingRecoverWait", "routingRecoverNoAuto",
+            "routingRecoverService", "routingRecoverRecheck",
+            "routingRecoverUsbPower", "routingRecoverUsbCable",
+            "routingRecoverVirtualService", "routingRecoverVirtualStage",
+            "routingRecoverKnownPlayback", "routingRecoverRoutePolicy",
+            "routingRecoverBluetoothSender", "routingRecoverBluetoothTrust",
+            "routingRecoverListen", "routingRecoverReplug",
+            "routingRecoverNoAudioProof", "routingRecoverUsbReturned",
+            "routingRecoverBtReturned",
         }
         for code in ("en", "de", "es", "fr", "it"):
             with self.subTest(code=code):
@@ -1373,6 +1385,109 @@ class BrowserRoutingSummaryTests(unittest.TestCase):
                 self.assertTrue(all(messages[key].strip() for key in keys))
                 self.assertNotEqual(messages["routingPending"], messages["routingRecent"])
                 self.assertNotEqual(messages["routingUnavailable"], messages["routingRecent"])
+
+    @unittest.skipUnless(shutil.which("node"), "Node.js runtime unavailable")
+    def test_shipped_usb_bluetooth_reconnection_guide_is_actionable_and_safe(self):
+        """Actual production renderer, without pairing/API mutations."""
+        setup = r'''
+const assert = require("node:assert/strict");
+const history = [];
+const recoveryList = {
+  children: [],
+  replaceChildren() { this.children = []; },
+  append(item) { this.children.push(item); }
+};
+const panel = {dataset: {}};
+const byId = id => id === "routing-recovery-steps" ? recoveryList :
+  id === "routing-recovery" ? panel : null;
+const document = {createElement(tag) {
+  assert.equal(tag, "li");
+  return {textContent: ""};
+}};
+const tr = key => key;
+const fetch = () => {throw new Error("Unexpected device or network access");};
+let deviceHealth = null;
+let statusChecked = false;
+let nowMs = 1000;
+let statusReceivedAt = 1000;
+const performance = {now: () => nowMs};
+const routingHistory = history;
+let lastRoutingHistorySignature = null;
+function renderRoutingComparison() {}
+function stepKeys() {return recoveryList.children.map(x => x.textContent);}
+function check(expected, report, count=3) {
+  deviceHealth = report;
+  renderRoutingSummary();
+  assert.equal(panel.dataset.recoveryState, expected);
+  assert.equal(stepKeys().length, count);
+  assert.ok(stepKeys().every(x => x.startsWith("routingRecover")));
+  assert.ok(!JSON.stringify(recoveryList).includes("SECRET"));
+}
+'''
+        checks = r'''
+renderRoutingSummary();
+assert.equal(panel.dataset.recoveryState, "pending");
+assert.deepEqual(stepKeys(), ["routingRecoverWait", "routingRecoverNoAuto"]);
+statusChecked = true;
+check("unavailable", null);
+check("usb", {fresh: true, usb_connected: false, active_routes: 0,
+              bluetooth_sources: 0, virtual_channel_count: 0,
+              mac: "SECRET-MAC", owner: "SECRET-OWNER"});
+assert.deepEqual(stepKeys(), ["routingRecoverUsbPower",
+  "routingRecoverUsbCable", "routingRecoverRecheck"]);
+check("channels", {fresh: true, usb_connected: true, active_routes: 0,
+                   bluetooth_sources: 0, virtual_channel_count: 0});
+check("routes", {fresh: true, usb_connected: true, active_routes: 0,
+                 bluetooth_sources: 1, virtual_channel_count: 3});
+check("bluetooth", {fresh: true, usb_connected: true, active_routes: 1,
+                    bluetooth_sources: 0, virtual_channel_count: 3});
+assert.ok(stepKeys().includes("routingRecoverBluetoothTrust"));
+check("observed", {fresh: true, usb_connected: true, active_routes: 1,
+                   bluetooth_sources: 1, virtual_channel_count: 3});
+assert.ok(stepKeys().includes("routingRecoverNoAudioProof"));
+// Counts must be bounded, complete, and freshly received. A stale value
+// must never be presented as unplugged hardware, pairing or healthy.
+check("unavailable", {fresh: false, usb_connected: false,
+  active_routes: 0, bluetooth_sources: 0, virtual_channel_count: 0});
+check("unavailable", {fresh: true, usb_connected: "false",
+  active_routes: 0, bluetooth_sources: 0, virtual_channel_count: 0});
+check("unavailable", {fresh: true, usb_connected: false,
+  active_routes: "0", bluetooth_sources: 0, virtual_channel_count: 0});
+deviceHealth = {fresh: true, usb_connected: false, active_routes: 0,
+  bluetooth_sources: 0, virtual_channel_count: 0};
+nowMs = 17001;
+renderRoutingSummary();
+assert.equal(panel.dataset.recoveryState, "unavailable");
+nowMs = 1000;
+history.length = 0;
+lastRoutingHistorySignature = null;
+check("usb", {fresh: true, usb_connected: false, active_routes: 0,
+              bluetooth_sources: 0, virtual_channel_count: 0});
+check("observed", {fresh: true, usb_connected: true, active_routes: 1,
+                   bluetooth_sources: 1, virtual_channel_count: 3}, 4);
+assert.equal(stepKeys()[0], "routingRecoverUsbReturned");
+assert.ok(stepKeys().includes("routingRecoverNoAudioProof"));
+// A subsequent loss is not a restoration, and an unavailable poll
+// cannot create a positive reconnection claim.
+check("unavailable", null);
+assert.ok(!stepKeys().includes("routingRecoverUsbReturned"));
+history.length = 0;
+lastRoutingHistorySignature = null;
+check("bluetooth", {fresh: true, usb_connected: true, active_routes: 1,
+                    bluetooth_sources: 0, virtual_channel_count: 3});
+check("observed", {fresh: true, usb_connected: true, active_routes: 2,
+                   bluetooth_sources: 1, virtual_channel_count: 3}, 4);
+assert.equal(stepKeys()[0], "routingRecoverBtReturned");
+assert.equal(history.length, 2);
+// Translator uses keys; repeat selection does not add a history entry.
+renderRoutingSummary();
+assert.equal(history.length, 2);
+'''
+        result = subprocess.run(
+            ["node", "-e", setup + "\n" +
+             preview_routing_summary_source() + "\n" + checks],
+            capture_output=True, text=True, timeout=15, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     @unittest.skipUnless(shutil.which("node"), "Node.js runtime unavailable")
     def test_shipped_routing_renderer_fails_closed_and_retranslates(self):
