@@ -24,6 +24,55 @@ sudo -u audiohub env XDG_RUNTIME_DIR="/run/user/$(id -u audiohub)" PYTHONPATH=/o
 
 This tool **never starts playback**, changes volume, pairs a Bluetooth device, opens a network socket or writes a report. The person at the bench must independently operate each applicable audio source and confirm what they physically heard. Answers: `yes`, `no`, or `skip`. Invalid strings are discarded, not stored. The tool prints fixed, privacy-bounded JSON to the local console. If topology is incomplete, it asks no audio questions and exits with code 2.
 
+## PipeWire node recreation: supervisor reconnection handling (source code alpha)
+
+When a known, authorized Bluetooth sender disconnects and reconnects
+or PipeWire recreates an EQ virtual sink after a graph restart, its
+**readable node name may be identical** while the PipeWire **node ID
+changes**. In older source revisions, the supervisor kept a still-alive
+`pw-loopback` process whenever the two names matched. That process
+could be attached to the old, disappearing nodes and might never
+recover audio until some unrelated service restart.
+
+The supervisor now keeps **only in volatile process memory** the
+bounded PipeWire node-generation pair for each managed Bluetooth
+source: the current source node ID and its virtual AudioHub target
+sink node ID. It compares both on every existing five-second
+supervisor poll. A changed source/sink generation causes the **old
+managed process to be stopped before one replacement is started**,
+using the same existing authorized manual/auto route policy. A
+completely unchanged node generation keeps the running process to
+avoid interruptions and repeated process creation. A dead process
+with an unchanged generation still uses the existing bounded
+exponential retry delay; a genuinely new node generation can recover
+without inheriting that older process's retry delay. Unexpected
+exceptions still use the fail-closed supervised cleanup path.
+
+A missing/ambiguous virtual sink, unavailable USB route, rejected
+volume command or invalid explicit source/sink node ID removes
+managed routes instead of attaching a candidate to an unknown
+output. Replugging an authorized USB speaker allows the supervisor
+to consider only newly detected PipeWire nodes after a successful
+safe default output selection and existing mixer-control guards.
+The route's per-source MAC assignment is not altered by graph
+recreation; the browser does not change routing or pairing and does
+not receive node IDs or private addresses. An operator must still
+control Bluetooth trust and all permissions outside this feature.
+
+This is **source-level recovery**, not a verified physical restart or
+a claim that the Pi reconnected the actual speaker. On an isolated,
+separately authorized physical bench, test **one known source** at a
+time: connect it, verify audible Edifier output at low volume,
+simulate a controlled Bluetooth disconnect/reconnect or EQ graph
+restart, verify output returns without escalating to unauthorized
+pairing, and check that a second authorized source is not interrupted
+when only the first node changes. Repeat with controlled USB removal
+and reconnection. Capture the existing privacy-redacted web report
+and manual auditory observations separately before/after. Actual
+two-Bluetooth-plus-LAN simultaneous stereo PCM, USB hotplug/24h
+and secure phone-first-owner enrollment remain independent release
+gates, and a running `pw-loopback` is not proof of PCM delivery.
+
 ## USB / Bluetooth reconnect checklist in the existing browser status panel
 
 The five-language **Audio routing status** panel now shows an ordered
