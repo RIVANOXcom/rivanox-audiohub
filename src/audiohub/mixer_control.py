@@ -38,6 +38,30 @@ PRESET_VOLUMES = {
 }
 
 
+def reset_input_eq_patch(slot):
+    """Neutralize one input's three EQ bands in a single guarded change."""
+    if type(slot) is not str or slot not in CHANNELS:
+        raise MixerControlUnavailable("Unknown local EQ input")
+    return {slot: {band: 0 for band in EQ_BANDS}}
+
+
+def copy_input_eq_patch(source, destination, *, path=SETTINGS):
+    """Read one exact private mixer generation to copy three source EQ bands.
+
+    Do not copy volume, mute, source roles or private device identities. The
+    returned revision MUST match the reviewed preview and be guarded again
+    under the exclusive writer lock before any save.
+    """
+    if (type(source) is not str or source not in CHANNELS
+            or type(destination) is not str or destination not in CHANNELS
+            or source == destination):
+        raise MixerControlUnavailable("Select two different local EQ inputs")
+    current, revision = _preview_snapshot(path=path)
+    return ({destination: {
+        band: current[source][band] for band in EQ_BANDS
+    }}, revision)
+
+
 def isolate_input_patch(slot):
     """Atomically mute ONLY the other inputs; never unmute or raise gain.
 
@@ -962,6 +986,19 @@ def main(argv=None):
     eq.add_argument("slot", choices=CHANNELS)
     eq.add_argument("band", choices=EQ_BANDS)
     eq.add_argument("db", type=int, help="Integer gain -12..12 dB")
+    copy_eq = commands.add_parser(
+        "copy-eq",
+        help="Copy all three saved EQ bands to another fixed input in ONE "
+             "guarded local change; does not update running PipeWire filters",
+    )
+    copy_eq.add_argument("source", choices=CHANNELS)
+    copy_eq.add_argument("destination", choices=CHANNELS)
+    reset_eq = commands.add_parser(
+        "reset-eq",
+        help="Set one source's three saved EQ bands to 0 dB atomically; "
+             "not a live PipeWire EQ change",
+    )
+    reset_eq.add_argument("slot", choices=CHANNELS)
     commands.add_parser(
         "mute-all", help="Atomically request mute on all three inputs"
     )
@@ -1034,7 +1071,9 @@ def main(argv=None):
         # Isolation can change two channels. A basic boolean confirmation is
         # intentionally insufficient: require the EXACT reviewed mixer
         # generation to prevent applying an old choice to a newer mix.
-        if args.action in ("isolate-input", "restore-isolation", "set-eq") and (
+        if args.action in (
+                "isolate-input", "restore-isolation", "set-eq",
+                "copy-eq", "reset-eq") and (
                 args.confirm_local_profile_save
                 or args.if_profile_revision is not None
                 or (args.action == "restore-isolation"
@@ -1167,6 +1206,15 @@ def main(argv=None):
                 if not -12 <= args.db <= 12:
                     raise MixerControlUnavailable("Local EQ must be -12..12 dB")
                 patch = {args.slot: {args.band: args.db}}
+            elif args.action == "copy-eq":
+                patch, source_revision = copy_input_eq_patch(
+                    args.source, args.destination
+                )
+                if (not args.preview
+                        and source_revision != args.if_preview_revision):
+                    raise StaleMixerPreview("EQ copy source has changed")
+            elif args.action == "reset-eq":
+                patch = reset_input_eq_patch(args.slot)
             elif args.action == "isolate-input":
                 # The selected source's mute, volume, EQ and routing stay
                 # untouched. Never implicitly unmute a source in a lab.
@@ -1196,6 +1244,20 @@ def main(argv=None):
                 extras = ({"baseline": args.compare_baseline}
                           if args.compare_baseline is not None else {})
                 state = preview_change(patch, **extras)
+                if (args.action == "copy-eq"
+                        and state["revision"] != source_revision):
+                    raise MixerControlUnavailable(
+                        "EQ source changed during read-only preview"
+                    )
+                if args.action in ("copy-eq", "reset-eq"):
+                    state["eq_operation"] = args.action
+                    state["copy_source"] = (
+                        args.source if args.action == "copy-eq" else None
+                    )
+                    state["target_input"] = (
+                        args.destination if args.action == "copy-eq" else args.slot
+                    )
+                    state["eq_staging_separate"] = True
                 if args.action == "profile":
                     state["profile_impact"] = _profile_selection_impact(
                         state, args.name)
@@ -1204,7 +1266,7 @@ def main(argv=None):
                           if args.if_preview_revision is not None else {})
                 state = change(patch, confirmed=args.confirm_local_mixer_change,
                                **kwargs)
-                if args.action == "set-eq":
+                if args.action in ("set-eq", "copy-eq", "reset-eq"):
                     state = {
                         "requested_eq_settings_saved": True,
                         "pipewire_eq_staged": False,
