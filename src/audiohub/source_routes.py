@@ -414,6 +414,31 @@ def _valid_source_observations(raw):
     return True
 
 
+def _next_source_check(item):
+    """One actionable local diagnostic hint, not an automatic repair."""
+    if item["configured_role"] == "unknown":
+        return "refresh_private_supervisor_status"
+    if item["usb_route_ready"] is False:
+        return "inspect_usb_default_output"
+    if item["virtual_sink_observed"] is False:
+        return "inspect_eq_virtual_sink"
+    if item["configured_role"] == "unassigned":
+        return "assign_source_or_leave_unused"
+    if item["configured_role"] == "lan_reserved":
+        return "verify_opt_in_lan_receiver"
+    if item.get("bluez_connected_property") is False:
+        return "inspect_bluetooth_device_connection"
+    if item["bluetooth_source_node_seen"] is False:
+        return "inspect_bluetooth_pipewire_source"
+    if item["managed_loopback_process_running"] is False:
+        return "inspect_managed_loopback"
+    if item["eq_to_usb_direct_link_observed"] is None:
+        return "inspect_pipewire_graph"
+    if item["eq_to_usb_direct_link_observed"] is False:
+        return "inspect_possible_intermediary_links"
+    return "verify_actual_speaker_audio"
+
+
 def interpret_source_status(status, *, now=None):
     """Use only allowlisted fixed-slot booleans; stale evidence is UNKNOWN."""
     now = int(time.time() if now is None else now)
@@ -478,6 +503,7 @@ def interpret_source_status(status, *, now=None):
             "audio_stream_available": "unverified",
             "audible_playback": "unverified",
         }
+        inputs[slot]["next_local_check"] = _next_source_check(inputs[slot])
     return {
         "mode": "local-source-observations-read-only",
         "fresh": bool(fresh),
@@ -579,6 +605,9 @@ def probe_bluez_connections(*, directory=None, status_path=None, now=None):
             return report
         for slot, value in pending.items():
             report["inputs"][slot]["bluez_connected_property"] = value
+            report["inputs"][slot]["next_local_check"] = _next_source_check(
+                report["inputs"][slot]
+            )
         report["bluez_probe"] = "manual_assignments_queried"
     except (OSError, ValueError, TypeError, UnicodeError):
         report["bluez_probe"] = "policy_unavailable"
