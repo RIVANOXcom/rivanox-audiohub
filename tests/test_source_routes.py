@@ -502,6 +502,73 @@ class LocalSourceStatusTests(unittest.TestCase):
         self.assertNotIn("SECRET", json.dumps(report))
         self.assertEqual(self.file.read_bytes(), before)
 
+    def test_pipewire_eq_to_usb_direct_link_is_per_input_topology_only(self):
+        self.report_file({
+            "updated_at": 100, "route_policy_valid": True,
+            "source_slot_observations_version": 1,
+            "source_slot_observations": self.sample(),
+            "pipewire_graph_inspection_available": True,
+            "eq_output_usb_direct_links": ["music", "laptop"],
+            "raw_node_id": "SECRET-PIPEWIRE-ID",
+        })
+        before = self.file.read_bytes()
+        report = routes.read_source_report(path=self.file, now=102)
+        self.assertTrue(report["observations_available"])
+        self.assertTrue(report["pipewire_graph_inspection_available"])
+        self.assertTrue(report["inputs"]["music"]["eq_to_usb_direct_link_observed"])
+        self.assertTrue(report["inputs"]["laptop"]["eq_to_usb_direct_link_observed"])
+        self.assertFalse(report["inputs"]["tablet"]["eq_to_usb_direct_link_observed"])
+        self.assertEqual(report["inputs"]["music"]["audio_stream_available"], "unverified")
+        self.assertEqual(report["inputs"]["music"]["audible_playback"], "unverified")
+        self.assertNotIn("SECRET", json.dumps(report))
+        self.assertEqual(self.file.read_bytes(), before)
+
+    def test_pipewire_missing_direct_link_does_not_claim_disconnection(self):
+        base = {
+            "updated_at": 100, "route_policy_valid": True,
+            "source_slot_observations_version": 1,
+            "source_slot_observations": self.sample(),
+            "pipewire_graph_inspection_available": True,
+            "eq_output_usb_direct_links": [],
+        }
+        inspected = routes.interpret_source_status(base, now=101)
+        self.assertTrue(inspected["pipewire_graph_inspection_available"])
+        self.assertFalse(inspected["inputs"]["music"]["eq_to_usb_direct_link_observed"])
+        self.assertEqual(inspected["inputs"]["music"]["bluetooth_connected"], "unverified")
+        self.assertEqual(inspected["inputs"]["music"]["audio_stream_available"], "unverified")
+        unavailable = routes.interpret_source_status({
+            **base, "pipewire_graph_inspection_available": False,
+        }, now=101)
+        self.assertFalse(unavailable["pipewire_graph_inspection_available"])
+        self.assertIsNone(unavailable["inputs"]["music"]["eq_to_usb_direct_link_observed"])
+
+    def test_pipewire_graph_link_evidence_rejects_forged_and_stale_data(self):
+        base = {
+            "updated_at": 100, "route_policy_valid": True,
+            "source_slot_observations_version": 1,
+            "source_slot_observations": self.sample(),
+            "pipewire_graph_inspection_available": True,
+            "eq_output_usb_direct_links": ["music"],
+        }
+        for override in (
+            {"pipewire_graph_inspection_available": 1},
+            {"eq_output_usb_direct_links": ["music", "music"]},
+            {"eq_output_usb_direct_links": ["music", "secret-id"]},
+            {"eq_output_usb_direct_links": ["music", 1]},
+            {"eq_output_usb_direct_links": "music"},
+            {"pipewire_graph_inspection_available": False},
+            {"updated_at": 50},
+            {"route_policy_valid": False},
+        ):
+            with self.subTest(override=override):
+                report = routes.interpret_source_status({**base, **override}, now=103)
+                self.assertIsNone(report["pipewire_graph_inspection_available"])
+                for slot in CHANNELS:
+                    self.assertIsNone(report["inputs"][slot][
+                        "eq_to_usb_direct_link_observed"])
+                self.assertFalse(report["hardware_verified"])
+                self.assertFalse(report["release_ready"])
+
     def test_source_status_stale_missing_future_and_wrong_type_fail_closed(self):
         for age in (None, 31, -1, 100):
             with self.subTest(age=age):
@@ -662,9 +729,9 @@ class LocalSourceStatusTests(unittest.TestCase):
         sources = [{"address": mac, "name": "bluez_input.demo"}]
         sinks = {"audiohub.music": 11, "audiohub.laptop": 12,
                  "audiohub.tablet": 13}
-        links = {"links_inspected": 0,
+        links = {"inspection_available": True, "links_inspected": 1,
                  "eq_output_to_usb_direct_link": {
-                     slot: False for slot in CHANNELS}}
+                     slot: slot == "music" for slot in CHANNELS}}
         responses = Mock(returncode=0, stdout="[]")
         with (mock.patch.object(live, "run", return_value=responses),
               mock.patch.object(live, "pipewire_nodes", return_value=[]),
@@ -681,6 +748,8 @@ class LocalSourceStatusTests(unittest.TestCase):
         save.assert_called_once()
         data = save.call_args.args[1]
         self.assertEqual(data["source_slot_observations_version"], 1)
+        self.assertTrue(data["pipewire_graph_inspection_available"])
+        self.assertEqual(data["eq_output_usb_direct_links"], ["music"])
         self.assertTrue(data["source_slot_observations"]["music"][
             "bluetooth_node_observed"])
         self.assertTrue(data["source_slot_observations"]["music"][
