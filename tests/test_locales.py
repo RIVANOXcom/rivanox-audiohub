@@ -919,7 +919,8 @@ class ControlsFirstDashboardTests(unittest.TestCase):
                 "eq-guide-transfer-mode", "eq-guide-transfer-source",
                 "eq-guide-transfer-target", "eq-guide-transfer-command",
                 "eq-guide-copy-transfer", "eq-guide-transfer-feedback",
-                "eq-guide-neutral-slot", "eq-guide-neutral-command",
+                "eq-guide-neutral-slot", "eq-guide-preset-choice",
+                "eq-guide-preset-curve", "eq-guide-neutral-command",
                 "eq-guide-neutral-feedback", "eq-guide-copy-neutral"):
             with self.subTest(identity=identity):
                 self.assertIn("eq-operator-guide", dom.belongs_to[identity])
