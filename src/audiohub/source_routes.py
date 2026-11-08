@@ -1041,7 +1041,7 @@ def main(argv=None):
                 from .input_profiles import load_labels
                 input_names = load_labels()
             except (OSError, ValueError, UnicodeError, TypeError):
-                parser.exit(2, "AudioHub private input names unavailable.\\n")
+                parser.exit(2, "AudioHub private input names unavailable.\n")
         if args.action == "status":
             print(format_source_status_text(value, input_names=input_names))
         elif args.action == "slots":
