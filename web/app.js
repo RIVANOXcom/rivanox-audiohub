@@ -530,6 +530,60 @@
     const feedback = byId("routing-history-status");
     if (feedback) feedback.textContent = tr("routingHistoryCleared");
   }
+  // A single, safe triage plan from the SAME bounded public counters that
+  // feed the visible metrics. This is never a pairing/device command and
+  // cannot infer speaker sound, identity or trust from route counts.
+  function routingRecoveryPlan(summary) {
+    const plans = {
+      pending: ["routingRecoverWait", "routingRecoverNoAuto"],
+      unavailable: ["routingRecoverService", "routingRecoverRecheck",
+                    "routingRecoverNoAuto"],
+      usb: ["routingRecoverUsbPower", "routingRecoverUsbCable",
+            "routingRecoverRecheck"],
+      channels: ["routingRecoverVirtualService", "routingRecoverVirtualStage",
+                 "routingRecoverRecheck"],
+      routes: ["routingRecoverKnownPlayback", "routingRecoverRoutePolicy",
+               "routingRecoverRecheck"],
+      bluetooth: ["routingRecoverBluetoothSender", "routingRecoverBluetoothTrust",
+                  "routingRecoverRecheck"],
+      observed: ["routingRecoverListen", "routingRecoverReplug",
+                 "routingRecoverNoAudioProof"]
+    };
+    let state = statusChecked ? "unavailable" : "pending";
+    if (summary) {
+      if (!summary.usb_connected) state = "usb";
+      else if (summary.virtual_channel_count === 0) state = "channels";
+      else if (summary.active_routes === 0) state = "routes";
+      else if (summary.bluetooth_sources === 0) state = "bluetooth";
+      else state = "observed";
+    }
+    return {state, keys: plans[state]};
+  }
+  function renderRoutingRecovery(plan, summary) {
+    const list = byId("routing-recovery-steps");
+    if (!list) return;
+    list.replaceChildren();
+    let recovered = null;
+    if (summary && routingHistory.length >= 2) {
+      // Only two valid, privacy-bounded observed counts may suggest a
+      // return. A missing/stale report must NEVER claim reconnection.
+      const old = routingHistory[routingHistory.length - 2].health;
+      const now = routingHistory[routingHistory.length - 1].health;
+      if (old && now) {
+        if (old.usb_connected === false && now.usb_connected === true)
+          recovered = "routingRecoverUsbReturned";
+        else if (old.bluetooth_sources === 0 && now.bluetooth_sources > 0)
+          recovered = "routingRecoverBtReturned";
+      }
+    }
+    for (const key of (recovered ? [recovered, ...plan.keys] : plan.keys)) {
+      const item = document.createElement("li");
+      item.textContent = tr(key);
+      list.append(item);
+    }
+    const panel = byId("routing-recovery");
+    if (panel) panel.dataset.recoveryState = plan.state;
+  }
   function renderRoutingSummary() {
     const summary = safeRoutingHealth();
     captureRoutingHistory(summary);
@@ -553,21 +607,24 @@
         (statusChecked ? "routingUnavailable" : "routingPending"));
       if (freshness.textContent !== text) freshness.textContent = text;
     }
-    // Suggestions are based only on bounded, sanitized counters. They
-    // never claim proof of sound, ownership, pairing or hardware fitness.
-    let guidance = statusChecked ? "routingDiagUnavailable" : "routingDiagPending";
-    if (usable) {
-      if (!summary.usb_connected) guidance = "routingDiagUsbMissing";
-      else if (summary.virtual_channel_count === 0) guidance = "routingDiagNoChannels";
-      else if (summary.active_routes === 0) guidance = "routingDiagNoRoutes";
-      else if (summary.bluetooth_sources === 0) guidance = "routingDiagNoBluetooth";
-      else guidance = "routingDiagCountsAvailable";
-    }
+    // Keep the current single-line diagnosis and the step-by-step recovery
+    // actions consistent even if the device disconnects during a poll.
+    const recovery = routingRecoveryPlan(summary);
+    const guidance = ({
+      pending: "routingDiagPending",
+      unavailable: "routingDiagUnavailable",
+      usb: "routingDiagUsbMissing",
+      channels: "routingDiagNoChannels",
+      routes: "routingDiagNoRoutes",
+      bluetooth: "routingDiagNoBluetooth",
+      observed: "routingDiagCountsAvailable"
+    })[recovery.state];
     const diagnostic = byId("routing-diagnostic");
     if (diagnostic) {
       const text = tr(guidance);
       if (diagnostic.textContent !== text) diagnostic.textContent = text;
     }
+    renderRoutingRecovery(recovery, summary);
     renderRoutingComparison();
   }
   function safeImportedRoutingReport(report) {

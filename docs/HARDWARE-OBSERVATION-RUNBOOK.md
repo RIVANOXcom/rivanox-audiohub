@@ -24,6 +24,56 @@ sudo -u audiohub env XDG_RUNTIME_DIR="/run/user/$(id -u audiohub)" PYTHONPATH=/o
 
 This tool **never starts playback**, changes volume, pairs a Bluetooth device, opens a network socket or writes a report. The person at the bench must independently operate each applicable audio source and confirm what they physically heard. Answers: `yes`, `no`, or `skip`. Invalid strings are discarded, not stored. The tool prints fixed, privacy-bounded JSON to the local console. If topology is incomplete, it asks no audio questions and exits with code 2.
 
+## USB / Bluetooth reconnect checklist in the existing browser status panel
+
+The five-language **Audio routing status** panel now shows an ordered
+**What to check next** list based exclusively on a recent, fixed-schema,
+anonymized `/api/status` result. It reuses the existing **Recheck device
+status now** action: no extra pairing controls, network endpoints,
+privileged commands, Wi-Fi first-owner claims, restart or device writes
+are added. All metrics and recovery steps are read-only; the browser
+never receives an address, Bluetooth device identity or raw routing
+plan. The manual listening observations remain separate from telemetry.
+
+- **No recent status:** check the local AudioHub status service on the
+  isolated Pi; retry only the read-only status check. An unavailable
+  measurement must not become a claim that the USB cable is unplugged.
+- **USB missing:** check Edifier power, cable and Pi USB port. If a
+  replug is approved for the bench, restart at low speaker volume and
+  select **Recheck device status now**. Device recognition alone is
+  not a speaker sound test.
+- **USB available, no virtual channels:** have the Pi operator check
+  PipeWire/AudioHub service readiness locally, without using the
+  browser to restart services or elevate access.
+- **Virtual channels present, zero audio routes:** check actual playback
+  on a previously authorized source and inspect the existing private
+  source route plan locally before considering any separately approved
+  changes.
+- **Routes present, no Bluetooth sources:** inspect the previously
+  authorized sender's own Bluetooth connection and playback. A LAN
+  route can exist without Bluetooth, and this panel never adds
+  trust/pairing or verifies a Bluetooth identity.
+- **Counters available:** manually test USB output and each intended
+  source at safe low gain; determine actual audible operation from
+  human/bench measurements, never route counts. Existing manual
+  observation fields still require an operator.
+
+When two consecutive valid, bounded status observations transition
+from **USB missing → USB detected** or **zero Bluetooth sources →
+one or more**, a short **detected again** line appears. It describes
+only a count transition during this browser session, **not** restored
+playback, trust or automatic reconnect. A missing, malformed or stale
+status disables positive claims; reloading the browser clears the
+short history. All 5 languages have the same safety boundaries.
+
+Before and after a permitted reconnect, capture the existing redacted
+diagnostic JSON and human listening notes if desired; its v4 schema
+and privacy constraints are unchanged. No test result or web counter
+can authorize an official release. The genuine physical Pi4 + USB
+Edifier, concurrent 2 Bluetooth + LAN PCM, USB hotplug and 24-hour
+reliability, and phone-first owner security gates still need
+independent evidence and approval.
+
 ## Isolate one input safely during an already authorized bench session
 
 A newly added **owner-local, unprivileged** mixer feature reduces the
