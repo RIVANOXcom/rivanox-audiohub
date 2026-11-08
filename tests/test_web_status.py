@@ -1443,7 +1443,8 @@ check("bluetooth", {fresh: true, usb_connected: true, active_routes: 1,
                     bluetooth_sources: 0, virtual_channel_count: 3});
 assert.ok(stepKeys().includes("routingRecoverBluetoothTrust"));
 check("observed", {fresh: true, usb_connected: true, active_routes: 1,
-                   bluetooth_sources: 1, virtual_channel_count: 3});
+                   bluetooth_sources: 1, virtual_channel_count: 3}, 4);
+assert.equal(stepKeys()[0], "routingRecoverBtReturned");
 assert.ok(stepKeys().includes("routingRecoverNoAudioProof"));
 // Counts must be bounded, complete, and freshly received. A stale value
 // must never be presented as unplugged hardware, pairing or healthy.
