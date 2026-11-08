@@ -269,22 +269,45 @@
       "eqGuideTransferInvalid" : "eqGuideTransferReady");
     byId("eq-guide-copy-status").textContent = "";
   }
-  // Reset is deliberately a private Pi PREVIEW only. The browser neither
-  // reads the old curve nor constructs owner confirmation or write commands.
-  function buildLocalEqNeutralPreview(slot) {
-    if (!CHANNELS.includes(slot)) return null;
+  // Conservative published EQ starting points. The Pi CLI independently
+  // validates the identical fixed set, then checks a private mixer revision.
+  // The browser NEVER reads or applies private EQ or live PipeWire filters.
+  const EQ_SOUND_PRESETS = Object.freeze({
+    flat: Object.freeze([0, 0, 0]),
+    warm: Object.freeze([3, 0, -1]),
+    voice: Object.freeze([-2, 3, 1]),
+    detail: Object.freeze([0, 1, 3])
+  });
+  function buildLocalEqSoundPresetPreview(slot, preset) {
+    if (!CHANNELS.includes(slot) ||
+        typeof preset !== "string" ||
+        !Object.prototype.hasOwnProperty.call(EQ_SOUND_PRESETS, preset))
+      return null;
+    const operation = preset === "flat" ? "reset-eq " + slot :
+      "eq-preset " + slot + " " + preset;
     return "PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control " +
-      "--preview reset-eq " + slot;
+      "--preview " + operation;
+  }
+  // Keep the previously documented neutral preview command stable.
+  function buildLocalEqNeutralPreview(slot) {
+    return buildLocalEqSoundPresetPreview(slot, "flat");
   }
   function renderEqNeutralGuide() {
     const slot = byId("eq-guide-neutral-slot").value;
-    const preview = buildLocalEqNeutralPreview(slot);
+    const preset = byId("eq-guide-preset-choice").value;
+    const preview = buildLocalEqSoundPresetPreview(slot, preset);
     byId("eq-guide-neutral-command").value = preview || "";
     byId("eq-guide-copy-neutral").disabled = preview === null;
     const feedback = byId("eq-guide-neutral-feedback");
     feedback.dataset.invalid = String(preview === null);
     feedback.textContent = tr(preview === null ?
       "eqGuideNeutralInvalid" : "eqGuideNeutralReady");
+    const curve = preview && EQ_SOUND_PRESETS[preset];
+    byId("eq-guide-preset-curve").textContent = curve ?
+      BANDS.map((band, index) => tr(band) + " " +
+        (curve[index] > 0 ? "+" : "") + curve[index] + " dB").join(" · ") +
+        " — " + tr("eqGuidePresetExampleOnly") :
+      tr("eqGuideNeutralInvalid");
     byId("eq-guide-copy-status").textContent = "";
   }
   async function copyEqGuideCommand(kind) {
@@ -850,6 +873,7 @@
   }
   byId("eq-guide-copy-transfer").addEventListener("click", () => copyEqGuideCommand("transfer"));
   byId("eq-guide-neutral-slot").addEventListener("change", renderEqNeutralGuide);
+  byId("eq-guide-preset-choice").addEventListener("change", renderEqNeutralGuide);
   byId("eq-guide-copy-neutral").addEventListener("click", () => copyEqGuideCommand("neutral"));
   byId("eq-guide-copy-preview").addEventListener("click", () => copyEqGuideCommand("preview"));
   byId("eq-guide-copy-compare").addEventListener("click", () => copyEqGuideCommand("compare"));
