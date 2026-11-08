@@ -446,6 +446,149 @@ class EqSetupFileSafetyTests(unittest.TestCase):
     def config(self, home):
         return home / ".config" / "pipewire" / "pipewire.conf.d" / eq_setup.EQ_FILE
 
+    def test_staged_eq_comparison_reports_missing_without_creating_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = self.home(tmp)
+            settings = home / "private" / "settings.json"
+            mixer_control.change({"music": {"bass": 4}},
+                                 path=settings, confirmed=True)
+            saved = settings.read_bytes()
+            with (mock.patch.object(Path, "home", return_value=home),
+                  mock.patch.object(eq_setup, "SETTINGS", settings)):
+                with redirect_stdout(StringIO()) as output:
+                    eq_setup.main(["--compare-staged"])
+                result = json.loads(output.getvalue())
+                self.assertEqual(result["mode"], "read-only-saved-vs-staged-eq")
+                self.assertEqual(result["staging_status"], "missing")
+                self.assertIsNone(result["staged_configuration_sha256"])
+                self.assertFalse(result["configuration_staged_for_saved_eq"])
+                self.assertFalse(result["settings_written"])
+                self.assertFalse(result["configuration_written"])
+                self.assertFalse(result["pipewire_restarted"])
+                self.assertFalse(result["live_eq_applied"])
+                self.assertFalse(result["hardware_audio_verified"])
+                self.assertFalse(self.config(home).parent.exists())
+                self.assertEqual(settings.read_bytes(), saved)
+
+    def test_staged_eq_comparison_matches_then_shows_saved_curve_difference(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = self.home(tmp)
+            settings = home / "private" / "settings.json"
+            mixer_control.change({
+                "music": {"bass": -5, "mid": 2, "treble": 1},
+                "tablet": {"bass": 4},
+            }, path=settings, confirmed=True)
+            with (mock.patch.object(Path, "home", return_value=home),
+                  mock.patch.object(eq_setup, "SETTINGS", settings)):
+                plan = eq_setup.preview_saved_eq()
+                staged = eq_setup.stage_saved_eq(plan["revision"], confirmed=True)
+                target = self.config(home)
+                prior_stage = target.read_bytes()
+                prior_settings = settings.read_bytes()
+                self.assertEqual(staged["configuration_sha256"],
+                                 plan["configuration_sha256"])
+                with redirect_stdout(StringIO()) as output:
+                    eq_setup.main(["--compare-staged"])
+                result = json.loads(output.getvalue())
+                self.assertEqual(result["staging_status"], "matches_saved")
+                self.assertTrue(result["configuration_staged_for_saved_eq"])
+                self.assertEqual(result["saved_configuration_sha256"],
+                                 result["staged_configuration_sha256"])
+                self.assertEqual(result["equalizer"]["music"],
+                                 {"bass": -5, "mid": 2, "treble": 1})
+                self.assertFalse(result["live_eq_applied"])
+                self.assertFalse(result["pipewire_restarted"])
+                self.assertEqual(target.read_bytes(), prior_stage)
+                self.assertEqual(settings.read_bytes(), prior_settings)
+
+                mixer_control.change({"music": {"treble": 3}},
+                                     path=settings, confirmed=True)
+                new_settings = settings.read_bytes()
+                with redirect_stdout(StringIO()) as output:
+                    eq_setup.main(["--compare-staged"])
+                result = json.loads(output.getvalue())
+                self.assertEqual(result["staging_status"], "differs_from_saved")
+                self.assertFalse(result["configuration_staged_for_saved_eq"])
+                self.assertNotEqual(result["saved_configuration_sha256"],
+                                    result["staged_configuration_sha256"])
+                self.assertEqual(target.read_bytes(), prior_stage)
+                self.assertEqual(settings.read_bytes(), new_settings)
+
+    def test_staged_eq_comparison_never_trusts_symlink_public_or_hardlink(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = self.home(tmp)
+            settings = home / "private" / "settings.json"
+            mixer_control.change({"music": {"bass": 3}},
+                                 path=settings, confirmed=True)
+            target = self.config(home)
+            target.parent.mkdir(parents=True, mode=0o700)
+            victim = home / "private-note"
+            victim.write_text("private device identity")
+            with (mock.patch.object(Path, "home", return_value=home),
+                  mock.patch.object(eq_setup, "SETTINGS", settings)):
+                target.symlink_to(victim)
+                for candidate in ("symlink", "public", "hardlink"):
+                    with self.subTest(candidate=candidate):
+                        if candidate == "public":
+                            target.unlink()
+                            target.write_text("untrusted staged content")
+                            target.chmod(0o644)
+                        elif candidate == "hardlink":
+                            target.unlink()
+                            os.link(victim, target)
+                        with redirect_stdout(StringIO()) as output:
+                            eq_setup.main(["--compare-staged"])
+                        result = json.loads(output.getvalue())
+                        self.assertEqual(result["staging_status"], "unavailable")
+                        self.assertIsNone(result["staged_configuration_sha256"])
+                        self.assertFalse(result["configuration_staged_for_saved_eq"])
+                        self.assertNotIn("private device identity", output.getvalue())
+                self.assertEqual(victim.read_text(), "private device identity")
+                target.unlink()
+                target.parent.chmod(0o755)
+                with redirect_stdout(StringIO()) as output:
+                    eq_setup.main(["--compare-staged"])
+                result = json.loads(output.getvalue())
+                self.assertEqual(result["staging_status"], "unavailable")
+                self.assertFalse(result["configuration_staged_for_saved_eq"])
+
+    def test_staged_eq_comparison_refuses_mixer_race_and_write_flags(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = self.home(tmp)
+            settings = home / "private" / "settings.json"
+            mixer_control.change({"music": {"bass": 4}},
+                                 path=settings, confirmed=True)
+            with (mock.patch.object(Path, "home", return_value=home),
+                  mock.patch.object(eq_setup, "SETTINGS", settings)):
+                for args in (
+                    ["--compare-staged", "--confirm-local-eq-stage"],
+                    ["--compare-staged", "--if-preview-revision", "v1-" + "a"*64],
+                    ["--compare-staged", "--stage-saved"],
+                    ["--compare-staged", "--preview-saved"],
+                ):
+                    with (self.subTest(args=args),
+                          redirect_stdout(StringIO()) as out,
+                          redirect_stderr(StringIO())):
+                        with self.assertRaises(SystemExit) as exc:
+                            eq_setup.main(args)
+                        self.assertEqual(exc.exception.code, 2)
+                        self.assertEqual(out.getvalue(), "")
+                original_digest = eq_setup._staged_eq_digest
+                def interleaving_mixer_change():
+                    mixer_control.change({"music": {"bass": 5}},
+                                         path=settings, confirmed=True)
+                    return original_digest()
+                with (mock.patch.object(eq_setup, "_staged_eq_digest",
+                                        side_effect=interleaving_mixer_change),
+                      redirect_stdout(StringIO()) as out,
+                      redirect_stderr(StringIO()) as err):
+                    with self.assertRaises(SystemExit) as failed:
+                        eq_setup.main(["--compare-staged"])
+                self.assertEqual(failed.exception.code, 2)
+                self.assertEqual(out.getvalue(), "")
+                self.assertNotIn(str(settings), err.getvalue())
+                self.assertFalse(self.config(home).parent.exists())
+
     def test_saved_eq_preview_and_operator_guarded_staging_no_live_restart(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = self.home(tmp)
