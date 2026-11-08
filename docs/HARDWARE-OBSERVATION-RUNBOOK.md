@@ -233,6 +233,44 @@ as documented above. No PipeWire restart, audible sound, device
 connection, test evidence or release approval is implied by copying
 or neutralizing a curve.
 
+### Exchange two saved EQ curves without six separate edits
+
+On an isolated owner-controlled Pi console, two already-tuned inputs can
+exchange their saved bass/mid/treble requests **in one atomic settings
+generation**. This is safer than first copying one curve over the other,
+which would otherwise lose the original values, or manually editing
+six individual bands. For instance, after moving physical sources into
+different fixed technical mixer slots, swap just the two saved curves:
+
+```sh
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --preview swap-eq music tablet
+```
+
+Review the local JSON `swap_inputs`, every bounded `eq_changes` before/after
+band, unchanged master/input levels and mute states, and the fresh private
+`revision`. A read-only preview never creates or alters a settings file.
+Only if the owner explicitly approves the **same** proposed change:
+
+```sh
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-mixer-change --if-preview-revision v1-REPLACE-WITH-REVIEWED-REVISION swap-eq music tablet
+```
+
+Both sources' EQ values come from the **same** protected snapshot, and the
+exclusive locked private 0600 writer refuses any stale generation, including
+an ABA change back to identical values. An invalid or identical slot, missing
+consent or inconsistent preview does not write settings; a stale attempt
+returns only a newly captured **read-only** proposed swap for review.
+The other input, all master and per-source volumes/mutes, Bluetooth/LAN
+route assignments and device trust remain untouched. If both curves are
+equal, the preview may report no EQ changes.
+
+**Important:** A successful save is not staged or live audio EQ. As with
+`copy-eq` and `reset-eq`, separately review
+`audiohub.eq_setup --preview-saved` and explicitly authorize
+`--stage-saved` before any operator-controlled PipeWire reload on an
+isolated bench. This command does not restart audio, pair a device,
+authenticate a phone or certify audible output.
+
 ## What the operator actually checks
 
 1. Real Edifier speaker playback is **audible** at safe volume.

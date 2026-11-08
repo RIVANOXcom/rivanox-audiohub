@@ -62,6 +62,24 @@ def copy_input_eq_patch(source, destination, *, path=SETTINGS):
     }}, revision)
 
 
+def swap_input_eq_patch(left, right, *, path=SETTINGS):
+    """Exchange both inputs' three saved EQ bands in ONE private generation.
+
+    Neither input's volume/mute nor the master, third input or device routing
+    may change. Pin both source curves to the SAME read-only mixer revision;
+    the confirmed writer must compare that revision under its exclusive lock.
+    """
+    if (type(left) is not str or left not in CHANNELS
+            or type(right) is not str or right not in CHANNELS
+            or left == right):
+        raise MixerControlUnavailable("Select two different local EQ inputs")
+    current, revision = _preview_snapshot(path=path)
+    return ({
+        left: {band: current[right][band] for band in EQ_BANDS},
+        right: {band: current[left][band] for band in EQ_BANDS},
+    }, revision)
+
+
 def isolate_input_patch(slot):
     """Atomically mute ONLY the other inputs; never unmute or raise gain.
 
@@ -993,6 +1011,13 @@ def main(argv=None):
     )
     copy_eq.add_argument("source", choices=CHANNELS)
     copy_eq.add_argument("destination", choices=CHANNELS)
+    swap_eq = commands.add_parser(
+        "swap-eq",
+        help="Exchange two fixed inputs' three saved EQ bands in ONE "
+             "revision-guarded local change; NOT a live PipeWire EQ change",
+    )
+    swap_eq.add_argument("left", choices=CHANNELS)
+    swap_eq.add_argument("right", choices=CHANNELS)
     reset_eq = commands.add_parser(
         "reset-eq",
         help="Set one source's three saved EQ bands to 0 dB atomically; "
@@ -1073,11 +1098,14 @@ def main(argv=None):
         # generation to prevent applying an old choice to a newer mix.
         if args.action in (
                 "isolate-input", "restore-isolation", "set-eq",
-                "copy-eq", "reset-eq") and (
+                "copy-eq", "reset-eq", "swap-eq") and (
                 args.confirm_local_profile_save
                 or args.if_profile_revision is not None
                 or (args.action == "restore-isolation"
                     and args.compare_baseline is not None)
+                or (args.action == "swap-eq" and (
+                    args.compare_baseline is not None
+                    or args.wait_for_supervisor))
                 or (args.preview and (
                     args.confirm_local_mixer_change
                     or args.if_preview_revision is not None
@@ -1213,6 +1241,13 @@ def main(argv=None):
                 if (not args.preview
                         and source_revision != args.if_preview_revision):
                     raise StaleMixerPreview("EQ copy source has changed")
+            elif args.action == "swap-eq":
+                patch, source_revision = swap_input_eq_patch(
+                    args.left, args.right
+                )
+                if (not args.preview
+                        and source_revision != args.if_preview_revision):
+                    raise StaleMixerPreview("EQ swap sources have changed")
             elif args.action == "reset-eq":
                 patch = reset_input_eq_patch(args.slot)
             elif args.action == "isolate-input":
@@ -1244,18 +1279,22 @@ def main(argv=None):
                 extras = ({"baseline": args.compare_baseline}
                           if args.compare_baseline is not None else {})
                 state = preview_change(patch, **extras)
-                if (args.action == "copy-eq"
+                if (args.action in ("copy-eq", "swap-eq")
                         and state["revision"] != source_revision):
                     raise MixerControlUnavailable(
                         "EQ source changed during read-only preview"
                     )
-                if args.action in ("copy-eq", "reset-eq"):
+                if args.action in ("copy-eq", "reset-eq", "swap-eq"):
                     state["eq_operation"] = args.action
                     state["copy_source"] = (
                         args.source if args.action == "copy-eq" else None
                     )
                     state["target_input"] = (
-                        args.destination if args.action == "copy-eq" else args.slot
+                        args.destination if args.action == "copy-eq"
+                        else args.slot if args.action == "reset-eq" else None
+                    )
+                    state["swap_inputs"] = (
+                        [args.left, args.right] if args.action == "swap-eq" else None
                     )
                     state["eq_staging_separate"] = True
                 if args.action == "profile":
@@ -1266,7 +1305,7 @@ def main(argv=None):
                           if args.if_preview_revision is not None else {})
                 state = change(patch, confirmed=args.confirm_local_mixer_change,
                                **kwargs)
-                if args.action in ("set-eq", "copy-eq", "reset-eq"):
+                if args.action in ("set-eq", "copy-eq", "reset-eq", "swap-eq"):
                     state = {
                         "requested_eq_settings_saved": True,
                         "pipewire_eq_staged": False,
@@ -1291,6 +1330,30 @@ def main(argv=None):
         parser.exit(4, "Profile not copied: review the fresh copy preview "
                        "and separately confirm its new profile revision.\n")
     except StaleMixerPreview:
+        if args.action == "swap-eq":
+            # A stale EQ exchange must never offer a preview computed using
+            # old curve values. Re-snapshot BOTH sides, then verify that the
+            # preview is still pinned to the same new generation.
+            try:
+                fresh_patch, fresh_revision = swap_input_eq_patch(
+                    args.left, args.right)
+                refreshed = preview_change(fresh_patch)
+                if refreshed["revision"] != fresh_revision:
+                    raise MixerControlUnavailable("EQ swap changed during refresh")
+                refreshed["eq_operation"] = "swap-eq"
+                refreshed["swap_inputs"] = [args.left, args.right]
+                refreshed["eq_staging_separate"] = True
+            except (MixerControlUnavailable, OSError, ValueError, TypeError):
+                parser.exit(4, "EQ not swapped: mixer changed. "
+                               "Fresh preview unavailable.\n")
+            print(json.dumps({
+                "status": "eq-swap-stale",
+                "settings_written": False,
+                "fresh_preview": refreshed,
+                "audible_playback_verified": False,
+            }, sort_keys=True))
+            parser.exit(4, "EQ not swapped: review a fresh preview and "
+                           "separately confirm its new revision.\n")
         if args.action == "restore-isolation":
             parser.exit(4, "Isolation mutes not restored: mixer changed. "
                            "Inspect a new read-only preview; no automatic restore.\n")
