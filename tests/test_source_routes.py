@@ -707,6 +707,172 @@ class SourcePolicyTests(unittest.TestCase):
             writer.assert_not_called()
         self.assertEqual((self.dir / routes.FILENAME).read_bytes(), before)
 
+    def test_complete_three_source_layout_one_atomic_revision_preserves_bluetooth_identities(self):
+        older, newer = "AA:BB:CC:DD:EE:FF", "11:22:33:44:55:66"
+        routes.bind_bluetooth(older, "music", self.dir)
+        routes.bind_bluetooth(newer, "tablet", self.dir)
+        original = (self.dir / routes.FILENAME).read_bytes()
+        assignment = ("music", "music", "tablet", "tablet", "laptop")
+        preview = routes.preview_route("layout", assignment, directory=self.dir)
+        self.assertEqual(preview["current"]["lan_slot"], "laptop")
+        self.assertEqual(preview["current"]["bluetooth"], {
+            older: "music", newer: "tablet",
+        })
+        self.assertEqual(preview["proposed"]["lan_slot"], "music")
+        self.assertEqual(preview["proposed"]["bluetooth"], {
+            older: "tablet", newer: "laptop",
+        })
+        self.assertEqual(len(preview["bluetooth_bindings_removed"]), 2)
+        self.assertEqual(len(preview["bluetooth_bindings_added"]), 2)
+        self.assertTrue(preview["would_change"])
+        self.assertFalse(preview["policy_written"])
+        self.assertFalse(preview["connected_devices_verified"])
+        self.assertFalse(preview["audible_playback_verified"])
+        self.assertEqual((self.dir / routes.FILENAME).read_bytes(), original)
+        with self.assertRaises(ValueError):
+            routes.set_three_source_layout(*assignment, directory=self.dir)
+        self.assertEqual((self.dir / routes.FILENAME).read_bytes(), original)
+        result = routes.set_three_source_layout(
+            *assignment, directory=self.dir, if_revision=preview["revision"])
+        self.assertEqual(result, preview["proposed"])
+        self.assertEqual(routes.load(self.dir), preview["proposed"])
+        self.assertEqual(routes.lan_target(self.dir), "audiohub.music")
+        self.assertEqual(stat.S_IMODE(
+            (self.dir / routes.FILENAME).stat().st_mode), 0o600)
+        self.assertFalse(any(name.endswith(".tmp")
+                             for name in os.listdir(self.dir)))
+        # Reversed argument order identifies the same two sources by their
+        # original slots, NOT by sorted MAC address or Bluetooth numbering.
+        reversed_preview = routes.preview_route(
+            "layout", ("laptop", "laptop", "music", "tablet", "tablet"),
+            directory=self.dir)
+        self.assertEqual(reversed_preview["proposed"]["lan_slot"], "laptop")
+        self.assertEqual(reversed_preview["proposed"]["bluetooth"], {
+            older: "tablet", newer: "music",
+        })
+
+    def test_complete_layout_rejects_missing_sources_auto_and_collisions_without_write(self):
+        self.assertFalse(self.dir.exists())
+        assignment = ("music", "music", "tablet", "tablet", "laptop")
+        with self.assertRaises(ValueError):
+            routes.preview_route("layout", assignment, directory=self.dir)
+        self.assertFalse(self.dir.exists())
+        routes.bind_bluetooth("AA:BB:CC:DD:EE:FF", "music", self.dir)
+        single = (self.dir / routes.FILENAME).read_bytes()
+        with self.assertRaises(ValueError):
+            routes.preview_route("layout", assignment, directory=self.dir)
+        self.assertEqual((self.dir / routes.FILENAME).read_bytes(), single)
+        routes.bind_bluetooth("11:22:33:44:55:66", "tablet", self.dir)
+        original = (self.dir / routes.FILENAME).read_bytes()
+        invalid = [
+            ("music", "music", "music", "tablet", "laptop"),
+            ("music", "music", "tablet", "tablet", "tablet"),
+            ("music", "music", "tablet", "music", "laptop"),
+            ("music", "laptop", "tablet", "tablet", "music"),
+            ("music", "music", "tablet", "laptop", "laptop"),
+            ("music", "music", "tablet", "tablet", "bogus"),
+            ("music", "music", "tablet", "tablet"),
+            ["music", "music", "tablet", "tablet", "laptop"],
+            ("music", "music", "tablet", "tablet", None),
+            (True, "music", "tablet", "tablet", "laptop"),
+        ]
+        for arrangement in invalid:
+            with self.subTest(arrangement=repr(arrangement)):
+                with self.assertRaises(ValueError):
+                    routes.preview_route("layout", arrangement, directory=self.dir)
+                self.assertEqual((self.dir / routes.FILENAME).read_bytes(), original)
+        with self.assertRaises(ValueError):
+            routes._proposed(routes.defaults(), "layout", assignment)
+        self.assertEqual((self.dir / routes.FILENAME).read_bytes(), original)
+
+    def test_complete_layout_stale_aba_and_invalid_revision_never_write(self):
+        routes.bind_bluetooth("AA:BB:CC:DD:EE:FF", "music", self.dir)
+        routes.bind_bluetooth("11:22:33:44:55:66", "tablet", self.dir)
+        assignment = ("music", "music", "tablet", "tablet", "laptop")
+        prior = routes.preview_route("layout", assignment, directory=self.dir)
+        routes.update(lambda current: dict(current), self.dir)
+        unchanged = (self.dir / routes.FILENAME).read_bytes()
+        with self.assertRaises(routes.StaleRoutePreview):
+            routes.set_three_source_layout(
+                *assignment, directory=self.dir,
+                if_revision=prior["revision"])
+        self.assertEqual((self.dir / routes.FILENAME).read_bytes(), unchanged)
+        with self.assertRaises(ValueError):
+            routes.set_three_source_layout(
+                *assignment, directory=self.dir,
+                if_revision="r1-" + "Y"*64)
+        self.assertEqual((self.dir / routes.FILENAME).read_bytes(), unchanged)
+
+    def test_complete_layout_cli_preview_text_confirm_and_reject_stale(self):
+        first, second = "AA:BB:CC:DD:EE:FF", "11:22:33:44:55:66"
+        routes.bind_bluetooth(first, "music", self.dir)
+        routes.bind_bluetooth(second, "tablet", self.dir)
+        original = (self.dir / routes.FILENAME).read_bytes()
+        command = ["layout", "music", "music", "tablet", "tablet", "laptop"]
+        original_preview = routes.preview_route
+        original_commit = routes.set_three_source_layout
+        with (mock.patch.object(
+                routes, "preview_route",
+                side_effect=lambda action, target, slot=None:
+                original_preview(action, target, slot, directory=self.dir)) as previews,
+              mock.patch.object(
+                routes, "set_three_source_layout",
+                side_effect=lambda *args, if_revision:
+                original_commit(*args, directory=self.dir,
+                                if_revision=if_revision)) as writer):
+            with redirect_stdout(StringIO()), redirect_stderr(StringIO()):
+                with self.assertRaises(SystemExit) as rejected:
+                    routes.main(command)
+            self.assertEqual(rejected.exception.code, 2)
+            writer.assert_not_called()
+            with redirect_stdout(StringIO()) as out:
+                routes.main(["--format", "text", "--preview", *command])
+            display = out.getvalue()
+            self.assertIn("Rearrange LAN and two existing Bluetooth sources", display)
+            self.assertIn("Current:", display)
+            self.assertIn("Proposed:", display)
+            self.assertIn("music: LAN reserved", display)
+            self.assertNotIn(first, display)
+            self.assertNotIn(second, display)
+            self.assertEqual((self.dir / routes.FILENAME).read_bytes(), original)
+            desired = original_preview("layout", tuple(command[1:]),
+                                       directory=self.dir)
+            self.assertIn(desired["revision"], display)
+            with redirect_stdout(StringIO()), redirect_stderr(StringIO()):
+                with self.assertRaises(SystemExit) as refused:
+                    routes.main(["--format", "text",
+                                 "--confirm-local-route-change",
+                                 "--if-preview-revision", desired["revision"],
+                                 *command])
+            self.assertEqual(refused.exception.code, 2)
+            writer.assert_not_called()
+            with redirect_stdout(StringIO()) as applied:
+                routes.main(["--confirm-local-route-change",
+                             "--if-preview-revision", desired["revision"],
+                             *command])
+            self.assertEqual(json.loads(applied.getvalue()),
+                             desired["proposed"])
+            self.assertEqual(routes.load(self.dir), desired["proposed"])
+            writer.assert_called_once_with(
+                *tuple(command[1:]), if_revision=desired["revision"])
+            next_cmd = ["layout", "laptop", "laptop", "music",
+                        "tablet", "tablet"]
+            pending = original_preview("layout", tuple(next_cmd[1:]),
+                                       directory=self.dir)
+            routes.update(lambda current: dict(current), self.dir)
+            unchanged = (self.dir / routes.FILENAME).read_bytes()
+            with redirect_stdout(StringIO()) as stale_out, redirect_stderr(StringIO()):
+                with self.assertRaises(SystemExit) as stopped:
+                    routes.main(["--confirm-local-route-change",
+                                 "--if-preview-revision", pending["revision"],
+                                 *next_cmd])
+            self.assertEqual(stopped.exception.code, 4)
+            self.assertEqual(json.loads(stale_out.getvalue())["status"],
+                             "route-preview-stale")
+            self.assertEqual((self.dir / routes.FILENAME).read_bytes(), unchanged)
+            self.assertEqual(writer.call_count, 2)
+            self.assertEqual(previews.call_count, 2)
+
     def test_third_bluetooth_source_is_rejected(self):
         routes.bind_bluetooth("AA:BB:CC:DD:EE:FF", "music", self.dir)
         routes.bind_bluetooth("11:22:33:44:55:66", "tablet", self.dir)
