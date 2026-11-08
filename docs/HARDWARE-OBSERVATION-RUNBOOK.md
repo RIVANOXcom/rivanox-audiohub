@@ -186,6 +186,39 @@ Physical playback, clipping, multi-source isolation and USB recovery
 must still be independently observed. Even attenuating an EQ band
 is not a guarantee of safe output gain or no clipping.
 
+### Tune all three bands of one input in one reviewed change
+
+The older `set-eq SLOT BAND DB` command edits one band at a time. To
+set a complete bass/mid/treble curve for one input without three
+separately saved intermediate configurations, use the new owner-local
+`set-eq-curve` command. Example: technical input `music`, bass -3 dB,
+mid +2 dB and treble +1 dB:
+
+```sh
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --preview set-eq-curve music -3 2 1
+```
+
+This reads the current **private** settings without writing; `eq_changes`
+shows each actual band difference, `before`/`after` show unchanged
+requested volumes and mute bits, and `revision` is a private exact-generation
+token. Values must be integers between -12 and +12 dB. The slot is one
+of `music`, `laptop` or `tablet`, **not** a device identifier.
+After an independent review of the exact preview, separately approve:
+
+```sh
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-mixer-change --if-preview-revision v1-REPLACE-WITH-REVIEWED-REVISION set-eq-curve music -3 2 1
+```
+
+The existing exclusive-locked, private 0600 atomic mixer writer rejects
+stale or ABA revisions and saves all three settings in one generation.
+No master/input volume, mute, third-source EQ, source route or Bluetooth
+trust is changed. A source change between preview and confirmation is
+**never** silently accepted: review a new preview. Saved EQ remains
+**not staged and not live**; use the separate `audiohub.eq_setup`
+preview/approval process below before an independently authorized
+PipeWire reload in an isolated lab. A requested EQ boost can clip;
+keep levels conservative and do not interpret the save as measured sound.
+
 ### Copy and neutralize a tuned three-band EQ without three manual edits
 
 Once the owner has saved one input's bass/mid/treble on the private Pi
