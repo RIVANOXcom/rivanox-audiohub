@@ -478,6 +478,12 @@ PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes show
 # New: LOCAL runtime evidence per mixer input, no identity, no writes:
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes status
 
+# Human-readable one-screen offline troubleshooting: JSON remains default.
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes --format text status
+
+# Explicitly opt in to BlueZ property inspection, still no pairing/connect:
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes --format text --probe-bluetooth status
+
 # Optional read-only BlueZ connection-property check of manual Bluetooth slots:
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes --probe-bluetooth status
 
@@ -501,6 +507,22 @@ PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes set-lan music
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes bind-bt AA:BB:CC:DD:EE:FF laptop
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes bind-bt 11:22:33:44:55:66 tablet
 ```
+
+For console operators who do not want to interpret nested JSON,
+`--format text status` prints one short read-only overview of all
+three fixed inputs, with a safe role label, USB status, Bluetooth
+PipeWire source node, managed loopback, direct EQ-to-USB graph
+observation, optional BlueZ `Connected` property and a human-readable
+next-check suggestion. A question mark means unqueried, unavailable
+or unverified; it never implies a disconnected device. The view
+uses **only fixed English labels and validated boolean values**, never
+private addresses, names, node IDs or raw command output. Default
+`status` continues to emit the exact existing machine-readable JSON
+format for scripts. The `--format text` option is rejected on all
+other commands and cannot be combined with policy modification,
+`--preview` or mutation approval. The BlueZ probe remains explicit
+and opt-in. Neither rendering format proves audible sound or repairs
+a device.
 
 For a more practical, truthful source **runtime status** on the authorized
 local console, run `python3 -m audiohub.source_routes status`. The
