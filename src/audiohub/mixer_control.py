@@ -1004,6 +1004,14 @@ def main(argv=None):
     eq.add_argument("slot", choices=CHANNELS)
     eq.add_argument("band", choices=EQ_BANDS)
     eq.add_argument("db", type=int, help="Integer gain -12..12 dB")
+    curve = commands.add_parser(
+        "set-eq-curve",
+        help="Atomically store one input's three bounded EQ bands (-12..12 dB). "
+             "Requires a reviewed preview revision; NOT live PipeWire EQ",
+    )
+    curve.add_argument("slot", choices=CHANNELS)
+    for band in EQ_BANDS:
+        curve.add_argument(band, type=int, help="Integer gain -12..12 dB")
     copy_eq = commands.add_parser(
         "copy-eq",
         help="Copy all three saved EQ bands to another fixed input in ONE "
@@ -1098,7 +1106,7 @@ def main(argv=None):
         # generation to prevent applying an old choice to a newer mix.
         if args.action in (
                 "isolate-input", "restore-isolation", "set-eq",
-                "copy-eq", "reset-eq", "swap-eq") and (
+                "copy-eq", "reset-eq", "swap-eq", "set-eq-curve") and (
                 args.confirm_local_profile_save
                 or args.if_profile_revision is not None
                 or (args.action == "restore-isolation"
@@ -1234,6 +1242,14 @@ def main(argv=None):
                 if not -12 <= args.db <= 12:
                     raise MixerControlUnavailable("Local EQ must be -12..12 dB")
                 patch = {args.slot: {args.band: args.db}}
+            elif args.action == "set-eq-curve":
+                # A single guarded private generation avoids three separately
+                # confirmed edits (and intermediate incomplete EQ curves).
+                values = {band: getattr(args, band) for band in EQ_BANDS}
+                if any(type(value) is not int or not -12 <= value <= 12
+                       for value in values.values()):
+                    raise MixerControlUnavailable("Local EQ must be -12..12 dB")
+                patch = {args.slot: values}
             elif args.action == "copy-eq":
                 patch, source_revision = copy_input_eq_patch(
                     args.source, args.destination
@@ -1284,6 +1300,10 @@ def main(argv=None):
                     raise MixerControlUnavailable(
                         "EQ source changed during read-only preview"
                     )
+                if args.action == "set-eq-curve":
+                    state["eq_operation"] = "set-eq-curve"
+                    state["target_input"] = args.slot
+                    state["eq_staging_separate"] = True
                 if args.action in ("copy-eq", "reset-eq", "swap-eq"):
                     state["eq_operation"] = args.action
                     state["copy_source"] = (
@@ -1305,7 +1325,7 @@ def main(argv=None):
                           if args.if_preview_revision is not None else {})
                 state = change(patch, confirmed=args.confirm_local_mixer_change,
                                **kwargs)
-                if args.action in ("set-eq", "copy-eq", "reset-eq", "swap-eq"):
+                if args.action in ("set-eq", "set-eq-curve", "copy-eq", "reset-eq", "swap-eq"):
                     state = {
                         "requested_eq_settings_saved": True,
                         "pipewire_eq_staged": False,
