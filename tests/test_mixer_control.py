@@ -563,6 +563,216 @@ class LocalMixerControlsTests(unittest.TestCase):
                                  if_revision=old)
         self.assertEqual(self.settings.read_bytes(), raw)
 
+    def test_restore_saved_eq_recovers_previous_curve_and_preserves_everything_else(self):
+        original = mixer_control.change({
+            "master": 27,
+            "music": {"bass": -5, "mid": 4, "treble": -2,
+                      "volume": 19, "mute": True},
+            "laptop": {"bass": 8, "mid": -4, "treble": 1,
+                       "volume": 42, "mute": False},
+            "tablet": {"treble": 6, "volume": 12, "mute": True},
+        }, path=self.settings, confirmed=True)
+        first = mixer_control.preview_change(
+            mixer_control.eq_preset_patch("music", "warm"), path=self.settings)
+        baseline = first["comparison_baseline"]
+        mixer_control.change(
+            mixer_control.eq_preset_patch("music", "warm"),
+            path=self.settings, confirmed=True,
+            if_revision=first["revision"])
+        # A later unrelated change must be preserved, not rolled back.
+        mixer_control.change({
+            "master": 35, "laptop": {"bass": 6, "mute": True},
+        }, path=self.settings, confirmed=True)
+        before_restore = mixer_control.show(path=self.settings)
+        raw = self.settings.read_bytes()
+        preview = mixer_control.preview_restore_saved_eq(
+            "music", baseline, path=self.settings)
+        self.assertEqual(preview["operation"], "restore-eq")
+        self.assertEqual(preview["target_input"], "music")
+        self.assertEqual(preview["scope"],
+                         "selected_input_three_saved_eq_bands_only")
+        self.assertEqual(preview["baseline_trust"],
+                         "operator_supplied_not_authenticated")
+        self.assertEqual(preview["baseline_eq_db"],
+                         {"bass": -5, "mid": 4, "treble": -2})
+        self.assertEqual([v["band"] for v in preview["eq_changes"]],
+                         ["bass", "mid", "treble"])
+        self.assertEqual(preview["eq_changes"], preview["saved_eq_changes"])
+        self.assertEqual(preview["planned_changes"], [])
+        self.assertFalse(preview["eq_live_applied"])
+        self.assertTrue(preview["eq_staging_separate"])
+        self.assertFalse(preview["settings_written"])
+        self.assertEqual(self.settings.read_bytes(), raw)
+        with mock.patch("audiohub.mixer_control.atomic_json",
+                        wraps=mixer_control.atomic_json) as writer:
+            restored = mixer_control.restore_saved_eq(
+                "music", baseline, path=self.settings,
+                confirmed=True, if_revision=preview["revision"])
+            writer.assert_called_once()
+        self.assertEqual({band: restored["music"][band]
+                          for band in ("bass", "mid", "treble")},
+                         {"bass": -5, "mid": 4, "treble": -2})
+        self.assertEqual(restored["master"], 35)
+        self.assertEqual(restored["laptop"], before_restore["laptop"])
+        self.assertEqual(restored["tablet"], original["tablet"])
+        self.assertEqual(restored["music"]["volume"],
+                         original["music"]["volume"])
+        self.assertEqual(restored["music"]["mute"],
+                         original["music"]["mute"])
+        self.assertEqual(stat.S_IMODE(self.settings.stat().st_mode), 0o600)
+
+    def test_restore_eq_cli_preview_then_separate_revision_guarded_confirmation(self):
+        mixer_control.change({
+            "music": {"bass": -4, "mid": 2, "treble": 5, "mute": True},
+            "tablet": {"bass": 6, "mid": -3, "treble": 2},
+        }, path=self.settings, confirmed=True)
+        before_change = mixer_control.preview_change(
+            mixer_control.eq_preset_patch("music", "detail"), path=self.settings)
+        baseline = before_change["comparison_baseline"]
+        mixer_control.change(
+            mixer_control.eq_preset_patch("music", "detail"),
+            path=self.settings, confirmed=True,
+            if_revision=before_change["revision"])
+        snapshot = self.settings.read_bytes()
+        real_preview = mixer_control.preview_restore_saved_eq
+        real_restore = mixer_control.restore_saved_eq
+        with (mock.patch(
+                "audiohub.mixer_control.preview_restore_saved_eq",
+                side_effect=lambda slot, token, **kw: real_preview(
+                    slot, token, path=kw.get("path", self.settings))) as preview,
+              mock.patch(
+                "audiohub.mixer_control.restore_saved_eq",
+                side_effect=lambda slot, token, **kw: real_restore(
+                    slot, token, path=self.settings, **kw)) as restore):
+            with redirect_stdout(StringIO()) as out:
+                mixer_control.main(["--preview", "restore-eq",
+                                    "music", baseline])
+            plan = json.loads(out.getvalue().splitlines()[0])
+            self.assertEqual(plan["operation"], "restore-eq")
+            self.assertEqual(plan["baseline_eq_db"],
+                             {"bass": -4, "mid": 2, "treble": 5})
+            self.assertFalse(plan["settings_written"])
+            self.assertTrue(plan["requires_separate_revision_guarded_confirmation"])
+            self.assertEqual(self.settings.read_bytes(), snapshot)
+            preview.assert_called_once_with("music", baseline)
+            restore.assert_not_called()
+            with redirect_stdout(StringIO()) as out:
+                mixer_control.main([
+                    "--confirm-local-mixer-change", "--if-preview-revision",
+                    plan["revision"], "restore-eq", "music", baseline,
+                ])
+            saved = json.loads(out.getvalue().splitlines()[0])
+            self.assertTrue(saved["requested_eq_settings_saved"])
+            self.assertFalse(saved["pipewire_eq_staged"])
+            self.assertFalse(saved["pipewire_eq_live_applied"])
+            self.assertEqual(saved["settings"]["music"]["bass"], -4)
+            self.assertEqual(saved["settings"]["music"]["mid"], 2)
+            self.assertEqual(saved["settings"]["music"]["treble"], 5)
+            self.assertEqual(saved["settings"]["tablet"]["bass"], 6)
+            restore.assert_called_once_with(
+                "music", baseline, confirmed=True,
+                if_revision=plan["revision"])
+
+    def test_restore_eq_rejects_untrusted_tokens_without_writing_or_leaking(self):
+        token = mixer_control.preview_change(
+            mixer_control.eq_preset_patch("music", "warm"),
+            path=self.settings)["comparison_baseline"]
+        for bad in (None, 23, "", "b1-PRIVATE;id", token + "=", token + "a",
+                    "b1-$SECRET", "b1-" + "x" * 260):
+            with self.subTest(token=str(bad)[:35]):
+                with self.assertRaises(mixer_control.MixerControlUnavailable):
+                    mixer_control.preview_restore_saved_eq(
+                        "music", bad, path=self.settings)
+        for bad in ("UNKNOWN", "music;id", "", None, True, []):
+            with self.subTest(slot=repr(bad)):
+                with self.assertRaises(mixer_control.MixerControlUnavailable):
+                    mixer_control.preview_restore_saved_eq(
+                        bad, token, path=self.settings)
+        self.assertFalse(self.settings.parent.exists())
+
+    def test_restore_eq_rejects_stale_aba_and_reports_fresh_preview_only(self):
+        mixer_control.change({
+            "master": 20, "music": {"bass": -4, "mid": 5, "treble": -3},
+        }, path=self.settings, confirmed=True)
+        before = mixer_control.preview_change(
+            mixer_control.eq_preset_patch("music", "voice"),
+            path=self.settings)
+        baseline = before["comparison_baseline"]
+        mixer_control.change(
+            mixer_control.eq_preset_patch("music", "voice"),
+            path=self.settings, confirmed=True,
+            if_revision=before["revision"])
+        plan = mixer_control.preview_restore_saved_eq(
+            "music", baseline, path=self.settings)
+        mixer_control.change({"master": 29}, path=self.settings, confirmed=True)
+        mixer_control.change({"master": 20}, path=self.settings, confirmed=True)
+        raw = self.settings.read_bytes()
+        with self.assertRaises(mixer_control.StaleMixerPreview):
+            mixer_control.restore_saved_eq(
+                "music", baseline, path=self.settings, confirmed=True,
+                if_revision=plan["revision"])
+        self.assertEqual(self.settings.read_bytes(), raw)
+        real_preview = mixer_control.preview_restore_saved_eq
+        real_restore = mixer_control.restore_saved_eq
+        with (mock.patch(
+                "audiohub.mixer_control.preview_restore_saved_eq",
+                side_effect=lambda slot, token, **kw: real_preview(
+                    slot, token, path=kw.get("path", self.settings))),
+              mock.patch(
+                "audiohub.mixer_control.restore_saved_eq",
+                side_effect=lambda slot, token, **kw: real_restore(
+                    slot, token, path=self.settings, **kw)),
+              redirect_stdout(StringIO()) as out,
+              redirect_stderr(StringIO()) as err):
+            with self.assertRaises(SystemExit) as stopped:
+                mixer_control.main([
+                    "--confirm-local-mixer-change", "--if-preview-revision",
+                    plan["revision"], "restore-eq", "music", baseline,
+                ])
+            self.assertEqual(stopped.exception.code, 4)
+            report = json.loads(out.getvalue().splitlines()[0])
+            self.assertEqual(report["status"], "eq-restore-stale")
+            self.assertFalse(report["settings_written"])
+            self.assertEqual(report["fresh_preview"]["operation"], "restore-eq")
+            self.assertNotEqual(report["fresh_preview"]["revision"],
+                                plan["revision"])
+            self.assertIn("separately confirm", err.getvalue())
+        self.assertEqual(self.settings.read_bytes(), raw)
+
+    def test_restore_eq_flags_and_ambiguous_extra_arguments_fail_closed(self):
+        token = mixer_control.preview_change(
+            mixer_control.eq_preset_patch("music", "warm"),
+            path=self.settings)["comparison_baseline"]
+        for args in (
+            ["restore-eq", "music", token],
+            ["--confirm-local-mixer-change", "restore-eq", "music", token],
+            ["--if-preview-revision", "v1-" + "a"*64,
+             "restore-eq", "music", token],
+            ["--preview", "--if-preview-revision", "v1-" + "a"*64,
+             "restore-eq", "music", token],
+            ["--preview", "--confirm-local-mixer-change",
+             "restore-eq", "music", token],
+            ["--preview", "--wait-for-supervisor", "restore-eq", "music", token],
+            ["--preview", "--confirm-local-profile-save",
+             "restore-eq", "music", token],
+            ["--preview", "--compare-baseline", token,
+             "restore-eq", "music", token],
+            ["--preview", "restore-eq", "unknown", token],
+            ["--preview", "restore-eq", "music", "b1-$SECRET"],
+            ["--preview", "restore-eq", "music"],
+            ["--preview", "restore-eq", "music", token, "tablet"],
+        ):
+            with (self.subTest(args=args[:3]),
+                  mock.patch("audiohub.mixer_control.change") as writer,
+                  redirect_stdout(StringIO()) as out,
+                  redirect_stderr(StringIO())):
+                with self.assertRaises(SystemExit) as stopped:
+                    mixer_control.main(args)
+                self.assertEqual(stopped.exception.code, 2)
+                self.assertEqual(out.getvalue(), "")
+                writer.assert_not_called()
+        self.assertFalse(self.settings.parent.exists())
+
     def test_fixed_eq_sound_presets_have_reviewable_bounded_values(self):
         expected = {
             "warm": {"bass": 3, "mid": 0, "treble": -1},
