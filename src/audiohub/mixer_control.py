@@ -19,7 +19,10 @@ import re
 import stat
 import time
 
-from .mixer import CHANNELS, EQ_BANDS, defaults, patch_settings, requested_mix_controls
+from .mixer import (
+    CHANNELS, EQ_BANDS, defaults, patch_settings, requested_mix_controls,
+    mix_gain_budget, effective_master_gain,
+)
 from .runtime import SETTINGS, STATE, _private_parent_fd, read_json, atomic_json
 
 LOCK_NAME = ".mixer-settings.lock"
@@ -841,6 +844,31 @@ def _control_differences(before, after, *, fields=("volume", "mute")):
     return differences
 
 
+def gain_headroom_projection(settings):
+    """Explain the EXISTING conservative mix budget for a saved request.
+
+    Calculated only from validated private requested controls and EQ boosts.
+    This is NOT measured peak level, a brick-wall limiter, a PipeWire
+    acknowledgement or an assurance of audible/unclipped hardware output.
+    """
+    state = patch_settings(defaults(), settings)
+    budget = mix_gain_budget(state)
+    effective = effective_master_gain(state)
+    return {
+        "requested_master_percent": state["master"],
+        "unmuted_sources": [
+            slot for slot in CHANNELS if state[slot]["mute"] is False
+        ],
+        "conservative_mix_factor_percent": round(budget * 100, 2),
+        "projected_master_percent": round(effective * 100, 2),
+        "mix_attenuation_requested": budget < 1.0,
+        "calculated_not_measured": True,
+        "limiter_verified": False,
+        "supervisor_applied": False,
+        "audible_playback_verified": False,
+    }
+
+
 def preview_change(patch, *, path=SETTINGS, baseline=None):
     """Show a validated prospective request; no lock, write, or audio action.
 
@@ -885,6 +913,12 @@ def preview_change(patch, *, path=SETTINGS, baseline=None):
         "after": after,
         "would_change": changes,
         "eq_changes": eq_changes,
+        "gain_headroom_preview": {
+            "before": gain_headroom_projection(current),
+            "after": gain_headroom_projection(desired),
+            "estimated_from_requested_settings_only": True,
+            "actual_audio_and_supervisor_not_verified": True,
+        },
         "eq_live_applied": False,
         "settings_written": False,
         "supervisor_applied": False,

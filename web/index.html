@@ -48,7 +48,7 @@
         </div>
         <label for="eq-guide-compare-command" data-t="eqGuideCompareLabel">2. Check saved EQ shapes and on-disk stage in one Pi overview</label>
         <textarea id="eq-guide-compare-command" readonly rows="2" spellcheck="false" aria-describedby="eq-guide-note eq-guide-compare-note">PYTHONPATH=/opt/audiohub/src python3 -m audiohub.eq_setup --compare-staged --format overview</textarea>
-        <p id="eq-guide-compare-note" data-t="eqGuideCompareNotice">The overview shows stored dB values and preset-shape matches, not selected or active presets. The stage is checked as one on-disk file for all three inputs. Even an exact match does not prove live PipeWire or audible sound. No changes occur here.</p>
+        <p id="eq-guide-compare-note" data-t="eqGuideCompareNotice">The overview shows saved EQ shapes (not proof of selected presets), one on-disk stage status and a calculated mix headroom factor. EQ boosts or simultaneous sources can lower the projected master gain. These are requested values only: no confirmed live PipeWire, limiter, or audible sound. No changes occur here.</p>
         <div class="eq-guide-actions">
           <button type="button" id="eq-guide-copy-compare" data-t="eqGuideCopyCompare">Copy status command</button>
           <span id="eq-guide-copy-status" role="status" aria-live="polite"></span>
@@ -87,7 +87,7 @@
         </fieldset>
         <fieldset class="eq-guide-neutral" aria-describedby="eq-guide-neutral-note">
           <legend data-t="eqGuideNeutralTitle">Choose a sound profile and review it at the Pi</legend>
-          <p id="eq-guide-neutral-note" data-t="eqGuideNeutralNotice">Choose Flat (0 dB), Warm, Voice or Detail. These are fixed examples, not calibrated acoustic profiles or live sound controls. The Pi saves nothing without a separate reviewed owner confirmation.</p>
+          <p id="eq-guide-neutral-note" data-t="eqGuideNeutralNotice">Choose Flat, Warm, Voice or Detail. Pi-local previews also estimate if added EQ boost could lower the protective master gain. These are uncalibrated starting points, not live measurements; any saving needs separate owner confirmation.</p>
           <div class="eq-guide-fields">
             <label for="eq-guide-neutral-slot"><span data-t="eqGuideNeutralSlot">Input to preview</span>
               <select id="eq-guide-neutral-slot" aria-describedby="eq-guide-neutral-note">

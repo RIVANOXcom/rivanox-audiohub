@@ -397,6 +397,51 @@ curve is a **saved request**, not automatically staged, not loaded
 into PipeWire and not evidence of audible playback. The owner must
 separately preview/authorize EQ staging and any physical lab test.
 
+### Understand automatic conservative mix-gain attenuation before tuning EQ
+
+When several unmuted inputs are mixed, especially with positive EQ
+boosts, AudioHub already calculates a **conservative mix gain factor**
+to lower the requested master signal. This protects against some
+straightforward sums of full-scale inputs, but **is not a look-ahead
+limiter**, a measured audio peak, a hardware output guarantee or a
+reason to raise volume aggressively. It may explain why increasing
+bass/mid/treble does **not** make playback proportionally louder.
+
+To preview the effect of a proposed curve BEFORE requesting any save:
+
+```sh
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --preview eq-preset music warm
+```
+
+Read `gain_headroom_preview.before` and `.after`. Both contain
+`requested_master_percent`, `unmuted_sources`,
+`conservative_mix_factor_percent` and
+`projected_master_percent`. Values describe **requested settings
+only**, not what the running supervisor has acknowledged. The after
+projection may be lower even if the **saved requested master value**
+has not changed. The existing formula sums the amplitude-equivalent
+of each unmuted input's requested volume and positive bass/mid/treble
+gains and caps the factor at 100%. It does not predict actual
+speaker SPL, spectrum, limiter behavior or clipping under every
+physical signal.
+
+The consolidated read-only view includes the same requested-mix
+projection alongside the stored EQ curves and global on-disk
+staging status:
+
+```sh
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.eq_setup --compare-staged --format overview
+```
+
+This view reads one consistent private mixer generation with the
+existing safe staged-file comparison. It never writes settings,
+executes PipeWire, stages the EQ or looks up actual USB/BT peers.
+Previous JSON and text modes remain unchanged; only the overview
+includes the additional human-readable gain summary. Because the
+existing conservative mix factor is not an active peak detector, actual
+USB speaker signal quality still requires independent bench
+measurements and human authorization.
+
 ### One-stop Pi-local saved EQ, preset-shape and stage overview
 
 Before trying another sound profile or comparing a saved change with
