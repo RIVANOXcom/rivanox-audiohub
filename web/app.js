@@ -269,10 +269,29 @@
       "eqGuideTransferInvalid" : "eqGuideTransferReady");
     byId("eq-guide-copy-status").textContent = "";
   }
+  // Reset is deliberately a private Pi PREVIEW only. The browser neither
+  // reads the old curve nor constructs owner confirmation or write commands.
+  function buildLocalEqNeutralPreview(slot) {
+    if (!CHANNELS.includes(slot)) return null;
+    return "PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control " +
+      "--preview reset-eq " + slot;
+  }
+  function renderEqNeutralGuide() {
+    const slot = byId("eq-guide-neutral-slot").value;
+    const preview = buildLocalEqNeutralPreview(slot);
+    byId("eq-guide-neutral-command").value = preview || "";
+    byId("eq-guide-copy-neutral").disabled = preview === null;
+    const feedback = byId("eq-guide-neutral-feedback");
+    feedback.dataset.invalid = String(preview === null);
+    feedback.textContent = tr(preview === null ?
+      "eqGuideNeutralInvalid" : "eqGuideNeutralReady");
+    byId("eq-guide-copy-status").textContent = "";
+  }
   async function copyEqGuideCommand(kind) {
     const id = kind === "preview" ? "eq-guide-preview-command" :
       kind === "compare" ? "eq-guide-compare-command" :
-      kind === "transfer" ? "eq-guide-transfer-command" : null;
+      kind === "transfer" ? "eq-guide-transfer-command" :
+      kind === "neutral" ? "eq-guide-neutral-command" : null;
     const command = id && byId(id).value;
     if (!command) return;
     try {
@@ -790,6 +809,7 @@
     drawChannels();
     renderEqGuide();
     renderEqTransferGuide();
+    renderEqNeutralGuide();
     renderRoutingPlan();
     renderHardwareStatus();
     renderRoutingSummary();
@@ -829,6 +849,8 @@
     byId(id).addEventListener("change", renderEqTransferGuide);
   }
   byId("eq-guide-copy-transfer").addEventListener("click", () => copyEqGuideCommand("transfer"));
+  byId("eq-guide-neutral-slot").addEventListener("change", renderEqNeutralGuide);
+  byId("eq-guide-copy-neutral").addEventListener("click", () => copyEqGuideCommand("neutral"));
   byId("eq-guide-copy-preview").addEventListener("click", () => copyEqGuideCommand("preview"));
   byId("eq-guide-copy-compare").addEventListener("click", () => copyEqGuideCommand("compare"));
   byId("routing-export").addEventListener("click", downloadRoutingDiagnostics);
