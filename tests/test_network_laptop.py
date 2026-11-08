@@ -114,7 +114,7 @@ class NetworkLaptopTests(unittest.TestCase):
             node(10, "alsa_output.usb-Edifier_R600USB", "Audio/Sink"),
         ]
         run.return_value = subprocess.CompletedProcess(["pw-dump"], 0, json.dumps(found), "")
-        laptop.check_audio_target()
+        self.assertEqual(laptop.check_audio_target(), (5, 10))
         self.assertEqual(run.call_count, 2)
         self.assertEqual(run.call_args.args[0], ("wpctl", "set-default", "10"))
         self.assertEqual(run.call_args.kwargs, {"timeout": 5})
@@ -257,6 +257,90 @@ class NetworkLaptopTests(unittest.TestCase):
         close_player.assert_called_once_with(process)
 
 
+    @mock.patch("audiohub.network_laptop.check_audio_target")
+    @mock.patch("audiohub.network_laptop.close_player")
+    @mock.patch("audiohub.network_laptop.os.write", return_value=4)
+    @mock.patch("audiohub.network_laptop.os.set_blocking")
+    @mock.patch("audiohub.network_laptop.subprocess.Popen")
+    @mock.patch("audiohub.network_laptop.time.monotonic")
+    @mock.patch("audiohub.network_laptop.socket.socket")
+    def test_stable_sink_and_usb_generation_does_not_restart_lan_player(
+        self, sock, clock, popen, set_blocking, write, close_player, check_target
+    ):
+        receiver = sock.return_value.__enter__.return_value
+        receiver.recvfrom.side_effect = [
+            (packet(), ("192.168.1.10", 4010)),
+            socket.timeout(),
+            KeyboardInterrupt(),
+        ]
+        clock.side_effect = [100., 100., 100., 104., 105.]
+        check_target.return_value = (5, 10)
+        process = popen.return_value
+        process.poll.return_value = None
+        process.stdin.fileno.return_value = 42
+        with self.assertRaises(KeyboardInterrupt):
+            laptop.serve("192.168.1.10", "127.0.0.1", 4010,
+                         unsafe_lan_test=True)
+        self.assertEqual(popen.call_count, 1)
+        self.assertEqual(write.call_count, 1)
+        self.assertEqual(check_target.call_count, 3)
+        close_player.assert_called_once_with(process)
+
+    @mock.patch("audiohub.network_laptop.check_audio_target")
+    @mock.patch("audiohub.network_laptop.close_player")
+    @mock.patch("audiohub.network_laptop.os.write", return_value=4)
+    @mock.patch("audiohub.network_laptop.os.set_blocking")
+    @mock.patch("audiohub.network_laptop.subprocess.Popen")
+    @mock.patch("audiohub.network_laptop.time.monotonic")
+    @mock.patch("audiohub.network_laptop.socket.socket")
+    def test_recreated_eq_or_usb_node_restarts_opt_in_lan_player_without_stale_pcm(
+        self, sock, clock, popen, set_blocking, write, close_player, check_target
+    ):
+        for new_graph in ((6, 10), (5, 11)):
+            with self.subTest(new_graph=new_graph):
+                receiver = sock.return_value.__enter__.return_value
+                receiver.recvfrom.side_effect = [
+                    (packet(), ("192.168.1.10", 4010)),
+                    socket.timeout(),
+                    (packet(b"ABCD"), ("192.168.1.10", 4010)),
+                    KeyboardInterrupt(),
+                ]
+                check_target.side_effect = [
+                    (5, 10), (5, 10), new_graph, new_graph,
+                ]
+                clock.side_effect = [
+                    100., 100., 100., 104., 107., 107., 107., 108.,
+                ]
+                first, second = mock.Mock(), mock.Mock()
+                for process in (first, second):
+                    process.poll.return_value = None
+                    process.stdin.fileno.return_value = 42
+                popen.side_effect = [first, second]
+                with self.assertRaises(KeyboardInterrupt):
+                    laptop.serve("192.168.1.10", "127.0.0.1", 4010,
+                                 unsafe_lan_test=True)
+                self.assertEqual(popen.call_count, 2)
+                self.assertEqual(check_target.call_count, 4)
+                self.assertEqual(close_player.call_count, 2)
+                self.assertEqual(close_player.call_args_list[0].args, (first,))
+                self.assertEqual(close_player.call_args_list[1].args, (second,))
+                self.assertEqual(write.call_count, 2)
+                self.assertEqual(write.call_args_list[-1].args[1], b"ABCD")
+                self.assertTrue(all(
+                    "--target=audiohub.laptop" in call.args[0]
+                    for call in popen.call_args_list
+                ))
+                receiver.recvfrom.reset_mock(side_effect=True)
+                for obj in (popen, check_target, clock, close_player, write):
+                    obj.reset_mock(side_effect=True)
+
+    @mock.patch("audiohub.network_laptop.check_audio_target")
+    @mock.patch("audiohub.network_laptop.close_player")
+    @mock.patch("audiohub.network_laptop.os.write", return_value=4)
+    @mock.patch("audiohub.network_laptop.os.set_blocking")
+    @mock.patch("audiohub.network_laptop.subprocess.Popen")
+    @mock.patch("audiohub.network_laptop.time.monotonic")
+    @mock.patch("audiohub.network_laptop.socket.socket")
     @mock.patch("audiohub.network_laptop.check_audio_target")
     @mock.patch("audiohub.network_laptop.close_player")
     @mock.patch("audiohub.network_laptop.os.write", return_value=4)
