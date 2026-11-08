@@ -831,6 +831,68 @@ class LocalMixerControlsTests(unittest.TestCase):
                 confirmed=False, if_revision=plan["revision"])
         self.assertEqual(self.settings.read_bytes(), raw)
 
+    def test_gain_headroom_projection_matches_existing_conservative_mixer_math(self):
+        from audiohub.mixer import mix_gain_budget, effective_master_gain
+        state = defaults()
+        state["master"] = 75
+        for slot in ("laptop", "tablet"):
+            state[slot]["mute"] = True
+        state["music"].update({"volume":80, "mute":False,
+                               "bass":6, "mid":0, "treble":0})
+        plan = mixer_control.gain_headroom_projection(state)
+        self.assertEqual(plan["requested_master_percent"], 75)
+        self.assertEqual(plan["unmuted_sources"], ["music"])
+        self.assertTrue(plan["mix_attenuation_requested"])
+        self.assertAlmostEqual(
+            plan["conservative_mix_factor_percent"],
+            round(mix_gain_budget(state) * 100, 2))
+        self.assertAlmostEqual(
+            plan["projected_master_percent"],
+            round(effective_master_gain(state) * 100, 2))
+        self.assertLess(plan["projected_master_percent"], 75)
+        self.assertTrue(plan["calculated_not_measured"])
+        self.assertFalse(plan["limiter_verified"])
+        self.assertFalse(plan["supervisor_applied"])
+        self.assertFalse(plan["audible_playback_verified"])
+        for slot in ("music", "laptop", "tablet"):
+            state[slot]["mute"] = True
+        muted = mixer_control.gain_headroom_projection(state)
+        self.assertEqual(muted["unmuted_sources"], [])
+        self.assertEqual(muted["conservative_mix_factor_percent"], 100.0)
+        self.assertEqual(muted["projected_master_percent"], 75.0)
+        self.assertFalse(muted["mix_attenuation_requested"])
+        self.assertFalse(self.settings.parent.exists())
+
+    def test_eq_preset_preview_explains_headroom_delta_without_changes(self):
+        state = mixer_control.change({
+            "master": 70,
+            "music": {"volume": 100, "mute": False,
+                      "bass":0, "mid":0, "treble":0},
+            "laptop": {"mute": True},
+            "tablet": {"mute": True},
+        }, path=self.settings, confirmed=True)
+        initial = self.settings.read_bytes()
+        with mock.patch("audiohub.mixer_control.atomic_json",
+                        wraps=mixer_control.atomic_json) as writer:
+            preview = mixer_control.preview_change(
+                mixer_control.eq_preset_patch("music", "warm"),
+                path=self.settings)
+            writer.assert_not_called()
+        headroom = preview["gain_headroom_preview"]
+        self.assertEqual(headroom["before"]["projected_master_percent"], 70)
+        self.assertLess(headroom["after"]["projected_master_percent"], 70)
+        self.assertTrue(headroom["after"]["mix_attenuation_requested"])
+        self.assertTrue(headroom["estimated_from_requested_settings_only"])
+        self.assertTrue(headroom["actual_audio_and_supervisor_not_verified"])
+        self.assertEqual(preview["before"]["music"]["volume"],
+                         state["music"]["volume"])
+        self.assertEqual(preview["after"]["music"]["volume"],
+                         state["music"]["volume"])
+        self.assertFalse(preview["settings_written"])
+        self.assertFalse(preview["eq_live_applied"])
+        self.assertEqual(self.settings.read_bytes(), initial)
+        self.assertEqual(stat.S_IMODE(self.settings.stat().st_mode), 0o600)
+
     def test_fixed_eq_sound_presets_have_reviewable_bounded_values(self):
         expected = {
             "warm": {"bass": 3, "mid": 0, "treble": -1},
