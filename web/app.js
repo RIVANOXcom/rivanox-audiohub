@@ -563,20 +563,19 @@
     const list = byId("routing-recovery-steps");
     if (!list) return;
     list.replaceChildren();
-    const recovered = routingHistory.length >= 2 &&
-      routingHistory[routingHistory.length - 1].health === null ? null :
-      routingHistory.length >= 2 ? (() => {
-        const old = routingHistory[routingHistory.length - 2].health;
-        const now = routingHistory[routingHistory.length - 1].health;
-        // Only two actual valid, privacy-bounded samples can suggest a
-        // restoration. An unavailable sample proves NOTHING.
-        if (!summary || !old || !now) return null;
+    let recovered = null;
+    if (summary && routingHistory.length >= 2) {
+      // Only two valid, privacy-bounded observed counts may suggest a
+      // return. A missing/stale report must NEVER claim reconnection.
+      const old = routingHistory[routingHistory.length - 2].health;
+      const now = routingHistory[routingHistory.length - 1].health;
+      if (old && now) {
         if (old.usb_connected === false && now.usb_connected === true)
-          return "routingRecoverUsbReturned";
-        if (old.bluetooth_sources === 0 && now.bluetooth_sources > 0)
-          return "routingRecoverBtReturned";
-        return null;
-      })() : null;
+          recovered = "routingRecoverUsbReturned";
+        else if (old.bluetooth_sources === 0 && now.bluetooth_sources > 0)
+          recovered = "routingRecoverBtReturned";
+      }
+    }
     for (const key of (recovered ? [recovered, ...plan.keys] : plan.keys)) {
       const item = document.createElement("li");
       item.textContent = tr(key);
