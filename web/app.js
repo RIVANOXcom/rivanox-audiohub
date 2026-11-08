@@ -281,21 +281,48 @@
       "--format text --preview layout " +
       [lan, from1, bt1, from2, bt2].join(" ");
   }
+  function routeMovementPlan(lan, bt1, bt2, from1, from2) {
+    // Never show a plausible-looking CURRENT layout from incomplete or
+    // conflicting user selections. This is NOT real device telemetry.
+    if (buildLocalRoutingPreview(lan, bt1, bt2, from1, from2) === null)
+      return null;
+    const assumedLan = CHANNELS.find(slot => slot !== from1 && slot !== from2);
+    return [
+      {role: "routingPlanLan", from: assumedLan, to: lan},
+      {role: "routingPlanBt1", from: from1, to: bt1},
+      {role: "routingPlanBt2", from: from2, to: bt2}
+    ];
+  }
   function renderRoutingGuide() {
-    const command = buildLocalRoutingPreview(
-      byId("routing-plan-lan").value,
-      byId("routing-plan-bt1").value,
-      byId("routing-plan-bt2").value,
-      byId("routing-guide-from-bt1").value,
-      byId("routing-guide-from-bt2").value
-    );
+    const lan = byId("routing-plan-lan").value;
+    const bt1 = byId("routing-plan-bt1").value;
+    const bt2 = byId("routing-plan-bt2").value;
+    const from1 = byId("routing-guide-from-bt1").value;
+    const from2 = byId("routing-guide-from-bt2").value;
+    const command = buildLocalRoutingPreview(lan, bt1, bt2, from1, from2);
     const field = byId("routing-guide-command");
     const message = byId("routing-guide-status");
-    // Reset stale commands immediately when targets or current slots change.
+    const comparison = byId("routing-guide-comparison-list");
+    // Reset stale commands AND assumed source movements immediately on
+    // incomplete input, conflicting targets or a new operator selection.
     field.value = command === null ? "" : command;
     message.dataset.invalid = String(command === null);
     message.textContent = tr(command === null ?
       "routingGuideNeedSlots" : "routingGuideReady");
+    comparison.setAttribute("aria-label", tr("routingGuideComparisonTitle"));
+    comparison.replaceChildren();
+    const moves = routeMovementPlan(lan, bt1, bt2, from1, from2);
+    if (moves === null) return;
+    for (const move of moves) {
+      const row = document.createElement("li");
+      const source = tr(move.role);
+      const before = tr("input" + SLOT_INDEX[move.from]);
+      const after = tr("input" + SLOT_INDEX[move.to]);
+      row.textContent = source + ": " + before + " → " + after +
+        " · " + tr(move.from === move.to ?
+          "routingGuideUnchanged" : "routingGuideMoved");
+      comparison.append(row);
+    }
   }
   function resetRoutingPlan() {
     // Revert only the three WHAT-IF selects. Never touch device routes,

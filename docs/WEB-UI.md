@@ -24,6 +24,40 @@ Only GET requests for strict allowlisted UI assets and `/api/status` work. The s
 
 Never forward port 8765 to the public Internet. Device ownership, authenticated controls and secure Wi-Fi provisioning remain release blockers. This experimental integration requires Pi image rebuilding and hardware validation before being considered operational.
 
+## Before/after source movement comparison (unmerged draft)
+
+The existing five-language manual route guide now presents **three
+source-specific movements side-by-side with the read-only command** when
+the operator has selected both distinct *assumed* current Bluetooth slots
+and a valid complete LAN + two-Bluetooth destination layout. Example:
+LAN Input 2 → Input 1, Bluetooth A Input 1 → Input 3 and Bluetooth B
+Input 3 → Input 2. Each item is marked `would move` or `would stay`,
+with translated accessible text (not color alone).
+
+**Important:** the old LAN slot is inferred solely as the remaining
+third slot from two operator-entered old Bluetooth slots. The browser
+NEVER reads real Pi source policy, hardware status, trusted sender IDs
+or local audio measurements. Therefore the comparison explicitly says
+`assumed`, not `observed` or `current measured`; the operator MUST
+compare against the actual private terminal `source_routes slots` view
+and independently check the complete preview before any separately
+authorized revision-guarded confirmation. The fixed identities A/B
+are placeholders bound by the operator's declared current technical
+slot, not Bluetooth MAC addresses or device names. A successful source
+preview or identical before/after roles does not prove stream continuity
+or audible sound; supervisor changes can interrupt audio.
+
+On unknown/duplicated input slots, incomplete targets, conflicts, or
+reset, the display drops **both** the generated read-only terminal
+instruction **and** its three inferred movements immediately; reset
+also clears both assumptions of the old Bluetooth slots. All strings
+are translated in en/de/es/fr/it. The comparison uses static
+translation keys and safely assigned `textContent`, never inserts
+user labels as HTML, never stores or exports private source names,
+and does not add new buttons, API routes, device writes or remote
+confirmation. Existing mixer mock and source-status components
+remain untouched.
+
 ## Browser-guided, read-only three-source layout preview (unmerged draft)
 
 The offline five-language routing example planner now prepares an optional

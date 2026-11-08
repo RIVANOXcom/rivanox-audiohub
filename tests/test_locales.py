@@ -540,7 +540,9 @@ class BrowserRoutingPlannerTests(unittest.TestCase):
             "routingGuideTitle", "routingGuideIntro", "routingGuideInspect",
             "routingGuideFromBt1", "routingGuideFromBt2", "routingGuideUnknown",
             "routingGuideNeedSlots", "routingGuideReady",
-            "routingGuideCommandLabel", "routingGuideWarning"
+            "routingGuideCommandLabel", "routingGuideWarning",
+            "routingGuideComparisonTitle", "routingGuideComparisonNotice",
+            "routingGuideMoved", "routingGuideUnchanged"
         }
         for lang in ("en", "de", "es", "fr", "it"):
             with self.subTest(lang=lang):
@@ -553,7 +555,9 @@ class BrowserRoutingPlannerTests(unittest.TestCase):
         for id_ in ("routing-plan-lan", "routing-plan-bt1", "routing-plan-bt2",
                     "routing-plan-status", "routing-plan-list", "routing-plan-reset",
                     "routing-guide-from-bt1", "routing-guide-from-bt2",
-                    "routing-guide-status", "routing-guide-command"):
+                    "routing-guide-status", "routing-guide-command",
+                    "routing-guide-comparison-list",
+                    "routing-guide-comparison-note"):
             self.assertIn('id="' + id_ + '"', markup)
         self.assertIn('aria-live="polite"', markup)
         self.assertIn('data-t="routingPlanScope"', markup)
@@ -594,6 +598,12 @@ elements["routing-guide-command"] = {value: ""};
 elements["routing-guide-status"] = {dataset: {}, textContent: ""};
 elements["routing-plan-status"] = {dataset: {}, textContent: ""};
 elements["routing-plan-reset-status"] = {textContent: ""};
+elements["routing-guide-comparison-list"] = {
+  children: [], attributes: {},
+  setAttribute(name, value) {this.attributes[name] = value;},
+  replaceChildren() {this.children = [];},
+  append(value) {this.children.push(value);}
+};
 elements["routing-plan-list"] = {
   children: [],
   attributes: {},
@@ -620,6 +630,9 @@ let words = {
   routingPlanResetDone: "Restored",
   routingGuideReady: "Preview prepared",
   routingGuideNeedSlots: "Missing verified current inputs",
+  routingGuideComparisonTitle: "Assumed movements",
+  routingGuideMoved: "would move",
+  routingGuideUnchanged: "would stay",
   input1: "Input 1", input2: "Input 2", input3: "Input 3"
 };
 const tr = key => words[key] || key;
@@ -673,6 +686,7 @@ assert.equal(elements["routing-plan-reset-status"].textContent, "Restored");
 assert.equal(slots.children.length, 3);
 assert.equal(status.dataset.invalid, "false");
 assert.equal(elements["routing-guide-command"].value, "");
+assert.equal(elements["routing-guide-comparison-list"].children.length, 0);
 assert.deepEqual(
   [elements["routing-guide-from-bt1"].value,
    elements["routing-guide-from-bt2"].value], ["unknown", "unknown"]);
@@ -699,6 +713,12 @@ elements["routing-plan-status"] = {dataset: {}, textContent: ""};
 elements["routing-guide-status"] = {dataset: {}, textContent: ""};
 elements["routing-guide-command"] = {value: ""};
 elements["routing-plan-reset-status"] = {textContent: ""};
+elements["routing-guide-comparison-list"] = {
+  children: [], attributes: {},
+  setAttribute(name, value) {this.attributes[name] = value;},
+  replaceChildren() {this.children = [];},
+  append(value) {this.children.push(value);}
+};
 elements["routing-plan-list"] = {
   children: [], setAttribute() {},
   replaceChildren() {this.children = [];},
@@ -714,7 +734,14 @@ const byId = id => {
 };
 const tr = key => ({
   routingGuideReady: "Preview prepared",
-  routingGuideNeedSlots: "Unverified current inputs"
+  routingGuideNeedSlots: "Unverified current inputs",
+  routingGuideComparisonTitle: "Assumed movements",
+  routingGuideMoved: "would move",
+  routingGuideUnchanged: "would stay",
+  routingPlanLan: "LAN",
+  routingPlanBt1: "Bluetooth A",
+  routingPlanBt2: "Bluetooth B",
+  input1: "Input 1", input2: "Input 2", input3: "Input 3"
 })[key] || key;
 """
         tests = r"""
@@ -747,6 +774,19 @@ renderRoutingPlan();
 assert.equal(field.value, command);
 assert.equal(status.dataset.invalid, "false");
 assert.equal(status.textContent, "Preview prepared");
+const movements = byId("routing-guide-comparison-list");
+assert.deepEqual(movements.children.map(x => x.textContent), [
+  "LAN: Input 2 → Input 1 · would move",
+  "Bluetooth A: Input 1 → Input 3 · would move",
+  "Bluetooth B: Input 3 → Input 2 · would move"
+]);
+assert.equal(movements.attributes["aria-label"], "Assumed movements");
+assert.deepEqual(routeMovementPlan("music", "tablet", "laptop", "music", "tablet"), [
+  {role:"routingPlanLan",from:"laptop",to:"music"},
+  {role:"routingPlanBt1",from:"music",to:"tablet"},
+  {role:"routingPlanBt2",from:"tablet",to:"laptop"}
+]);
+assert.equal(routeMovementPlan("music", "tablet", "laptop", "music", "music"), null);
 assert.ok(!field.value.includes("--confirm-local-route-change"));
 assert.ok(!field.value.includes("--if-preview-revision"));
 from2.value = "music";
@@ -754,20 +794,28 @@ renderRoutingGuide();
 assert.equal(field.value, "");
 assert.equal(status.dataset.invalid, "true");
 assert.equal(status.textContent, "Unverified current inputs");
+assert.equal(movements.children.length, 0);
 from2.value = "tablet";
 renderRoutingGuide();
 assert.equal(field.value, command);
+assert.equal(movements.children.length, 3);
 bt2.value = "unused";
 renderRoutingPlan();
 assert.equal(field.value, "");
+assert.equal(movements.children.length, 0);
 bt2.value = "laptop";
 renderRoutingPlan();
 assert.equal(field.value, command);
+lan.value = "laptop"; bt1.value = "music"; bt2.value = "tablet";
+renderRoutingPlan();
+assert.equal(movements.children.length, 3);
+assert.ok(movements.children.every(x => x.textContent.includes("would stay")));
 resetRoutingPlan();
 assert.equal(field.value, "");
 assert.equal(from1.value, "unknown");
 assert.equal(from2.value, "unknown");
 assert.equal(status.dataset.invalid, "true");
+assert.equal(movements.children.length, 0);
 assert.deepEqual([lan.value, bt1.value, bt2.value],
   ["laptop", "music", "tablet"]);
 """
