@@ -350,6 +350,53 @@ staging and reload must be separately reviewed, authorized and
 verified on physical equipment. A saved preset alone is **not a
 live/applied EQ** and cannot justify a release or hardware GO.
 
+### Undo one previously saved EQ curve without undoing the entire mix
+
+**Before** changing a saved EQ profile, the normal Pi-local preview now
+returns an `eq_restore_guide` field. This includes the original three
+saved EQ gains for the chosen fixed technical source, the operator-retained
+`b1-...` `comparison_baseline` from the **before** snapshot and a
+ready-to-copy **read-only** `restore-eq` preview command. Keep this
+information *privately at the Pi* while testing the prospective profile.
+Do **not** put the private token into the browser, a public issue or
+a remote API. A token is **not authenticated history**; a human must
+inspect the exact gains it proposes to restore.
+
+Typical workflow with source `music` and the previously reviewed
+`voice` profile:
+
+```sh
+# Step 1, before saving a new sound profile: read and keep the original baseline
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --preview eq-preset music voice
+
+# Step 2, only with the separately reviewed exact revision from Step 1:
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-mixer-change --if-preview-revision v1-REVIEWED-REVISION eq-preset music voice
+
+# Step 3, later: inspect rollback against current saved EQ, with the
+# original b1-... token from the Step 1 eq_restore_guide
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --preview restore-eq music b1-ORIGINAL-BASELINE
+
+# Step 4, only after reviewing Step 3's NEW revision and intended EQ changes:
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-mixer-change --if-preview-revision v1-NEWLY-REVIEWED-REVISION restore-eq music b1-ORIGINAL-BASELINE
+```
+
+The placeholders above are intentionally **not executable real approval
+tokens**. Each confirmed operation requires its own *fresh* exact
+private mixer generation checked under the writer lock. If the state
+changes in between, including a value-revert/ABA, the restore fails
+closed and offers only a fresh **read-only** preview. No automatic
+retry, silent rollback or background save occurs.
+
+Only `music`'s three previously saved bass/mid/treble values are
+recovered in this example. All current other inputs, master,
+volume, mute and routing are deliberately preserved, even if they
+changed after the original snapshot. Untrusted/malformed/oversized
+`b1-` tokens are rejected; the token is a bounded value snapshot, not
+proof of a past successful operation or calibration. The restored
+curve is a **saved request**, not automatically staged, not loaded
+into PipeWire and not evidence of audible playback. The owner must
+separately preview/authorize EQ staging and any physical lab test.
+
 ### Read the EQ stage status without interpreting JSON
 
 For an owner at the Pi console, the same **read-only** comparison is
