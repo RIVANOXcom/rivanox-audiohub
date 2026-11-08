@@ -126,6 +126,11 @@
         <p class="routing-freshness" id="routing-freshness" role="status" aria-live="polite" data-t="routingPending">Waiting for first status check</p>
         <div class="routing-recheck-actions"><button type="button" id="routing-recheck" data-t="routingRecheck">Recheck device status now</button><span id="routing-recheck-status" role="status" aria-live="polite"></span></div>
         <p class="routing-diagnostic" id="routing-diagnostic" aria-live="polite" data-t="routingDiagPending">Diagnostic guidance will appear after the first status check.</p>
+        <section class="routing-recovery" id="routing-recovery" aria-labelledby="routing-recovery-title" aria-describedby="routing-recovery-note">
+          <h3 id="routing-recovery-title" data-t="routingRecoveryTitle">What to check next</h3>
+          <p id="routing-recovery-note" data-t="routingRecoveryNotice">Manual, read-only guidance based on recent anonymous counters. These steps do not pair devices, fix a connection automatically or verify audible playback. After each physical check, use Recheck device status above.</p>
+          <ol id="routing-recovery-steps" aria-live="polite"><li data-t="routingRecoverWait">Wait for the first status check.</li></ol>
+        </section>
         <details class="routing-tools-panel" id="routing-tools-panel">
           <summary data-t="routingToolsTitle">Advanced diagnostics and test notes</summary>
           <p class="routing-tools-note" data-t="routingToolsNote">Optional local test notes, sanitized history, JSON export and comparison. These do not prove audible sound or authorize a release.</p>
