@@ -100,6 +100,56 @@ class FlexibleRoutingIntegration(unittest.TestCase):
         self.assertEqual(spawn.call_args.args[0][-1], "audiohub.music")
 
     @mock.patch("audiohub.runtime.subprocess.Popen")
+    def test_two_authorized_bt_routes_recover_only_recreated_pipewire_nodes(self, spawn):
+        """One renewed BlueZ or EQ node must not interrupt the other source."""
+        old_first, stable_second, new_first, new_second = (
+            Process(), Process(), Process(), Process())
+        spawn.side_effect = [old_first, stable_second, new_first, new_second]
+        plan = source_routes.validate({
+            "schema": source_routes.SCHEMA, "mode": "manual",
+            "lan_slot": "music", "bluetooth": {
+                BT1: "laptop", BT2: "tablet",
+            },
+        })
+        s = self.supervisor(plan)
+        first, second = {**source(BT1), "id": 101}, {**source(BT2), "id": 201}
+        sinks = {"audiohub.music": 31, "audiohub.laptop": 32,
+                 "audiohub.tablet": 33}
+        s._route([first, second], sinks, now=0)
+        self.assertEqual(spawn.call_count, 2)
+        self.assertEqual(s.route_node_generations, {
+            BT1: (101, 32), BT2: (201, 33),
+        })
+        s._route([{**first, "id": 102}, second], sinks, now=1)
+        self.assertTrue(old_first.terminated)
+        self.assertFalse(stable_second.terminated)
+        self.assertFalse(new_first.terminated)
+        self.assertEqual(spawn.call_count, 3)
+        self.assertEqual(s.route_node_generations, {
+            BT1: (102, 32), BT2: (201, 33),
+        })
+        # A new tablet EQ filter sink ID affects only the second source.
+        s._route([{**first, "id": 102}, second],
+                 {**sinks, "audiohub.tablet": 34}, now=2)
+        self.assertTrue(stable_second.terminated)
+        self.assertFalse(new_first.terminated)
+        self.assertFalse(new_second.terminated)
+        self.assertEqual(spawn.call_count, 4)
+        self.assertEqual(s.route_node_generations, {
+            BT1: (102, 32), BT2: (201, 34),
+        })
+        # Neither a reconnect nor node re-creation changes the private
+        # manual owner route plan or promotes unknown paired devices.
+        self.assertEqual(s.assignments, {BT1: "laptop", BT2: "tablet"})
+        self.assertNotIn(OTHER, s.assignments)
+        s._route([first, second, source(OTHER)], {}, now=3)
+        self.assertTrue(new_first.terminated)
+        self.assertTrue(new_second.terminated)
+        self.assertFalse(s.loopbacks)
+        self.assertFalse(s.route_node_generations)
+        self.assertFalse(s.retry_state)
+
+    @mock.patch("audiohub.runtime.subprocess.Popen")
     def test_auto_mode_reserves_current_lan_slot(self, spawn):
         spawn.side_effect = [Process(), Process()]
         plan = source_routes.defaults()
