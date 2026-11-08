@@ -836,7 +836,9 @@ class BrowserEqOwnerGuideTests(unittest.TestCase):
         self.assertIn('--compare-staged --format overview', html)
         self.assertIn('one Pi overview', html)
         self.assertIn('not selected or active presets', html)
-        self.assertIn('one on-disk file for all three inputs', html)
+        self.assertIn('requested values only', html)
+        self.assertIn('calculated mix headroom factor', html)
+        self.assertIn('reduce the protective master gain', html)
         self.assertIn('value="copy-eq"', html)
         self.assertIn('value="swap-eq"', html)
         self.assertIn('id="eq-guide-transfer-command" readonly', html)
@@ -892,6 +894,15 @@ class BrowserEqOwnerGuideTests(unittest.TestCase):
                                     for term in ("not", "nicht", "no", "pas", "non")))
                 self.assertIn("comparison_baseline", loc["eqGuideRestoreHint"])
                 self.assertIn("restore-eq", loc["eqGuideRestoreHint"])
+                headroom_words = {
+                    "en": "headroom", "de": "pegel",
+                    "es": "ganancia", "fr": "gain", "it": "guadagno",
+                }
+                self.assertIn(headroom_words[code],
+                              loc["eqGuideCompareNotice"].lower())
+                self.assertTrue(any(word in loc["eqGuideNeutralNotice"].lower()
+                                    for word in ("gain", "pegel", "ganancia",
+                                                 "guadagno")))
 
     @unittest.skipUnless(shutil.which("node"), "Node.js runtime unavailable")
     def test_real_eq_browser_commands_fail_closed_and_copy_only_readonly(self):
