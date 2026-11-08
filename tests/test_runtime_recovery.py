@@ -64,6 +64,135 @@ class RecoveryTests(unittest.TestCase):
         self.assertFalse(two.terminated)
 
     @mock.patch("audiohub.runtime.subprocess.Popen")
+    def test_same_bt_node_and_eq_sink_generation_does_not_interrupt_audio(self, popen):
+        original = FakeProcess()
+        popen.return_value = original
+        supervisor = self.supervisor()
+        sources = [{**self.source("bluez_input.first")[0], "id": 101}]
+        supervisor._route(sources, {"audiohub.music": 501}, now=1)
+        self.assertEqual(supervisor.route_node_generations,
+                         {"AA:BB:CC:DD:EE:FF": (101, 501)})
+        supervisor._route(sources, {"audiohub.music": 501}, now=2)
+        self.assertEqual(popen.call_count, 1)
+        self.assertFalse(original.terminated)
+        self.assertEqual(supervisor.retry_state.get("AA:BB:CC:DD:EE:FF"), None)
+
+    @mock.patch("audiohub.runtime.subprocess.Popen")
+    def test_alive_bt_route_restarts_after_source_node_regeneration(self, popen):
+        before, after = FakeProcess(), FakeProcess()
+        popen.side_effect = [before, after]
+        s = self.supervisor()
+        first = [{**self.source("bluez_input.first")[0], "id": 101}]
+        renewed = [{**first[0], "id": 102}]
+        s._route(first, {"audiohub.music": 501}, now=1)
+        s._route(renewed, {"audiohub.music": 501}, now=2)
+        self.assertTrue(before.terminated)
+        self.assertFalse(after.terminated)
+        self.assertEqual(popen.call_count, 2)
+        self.assertEqual(s.route_node_generations,
+                         {"AA:BB:CC:DD:EE:FF": (102, 501)})
+        self.assertEqual(s.loopbacks["AA:BB:CC:DD:EE:FF"][2], after)
+        self.assertFalse(s.retry_state)
+
+    @mock.patch("audiohub.runtime.subprocess.Popen")
+    def test_alive_bt_route_restarts_after_virtual_eq_sink_regeneration(self, popen):
+        first, second = FakeProcess(), FakeProcess()
+        popen.side_effect = [first, second]
+        s = self.supervisor()
+        src = [{**self.source("bluez_input.first")[0], "id": 111}]
+        s._route(src, {"audiohub.music": 501}, now=10)
+        s._route(src, {"audiohub.music": 502}, now=11)
+        self.assertTrue(first.terminated)
+        self.assertEqual(popen.call_count, 2)
+        self.assertEqual(s.route_node_generations,
+                         {"AA:BB:CC:DD:EE:FF": (111, 502)})
+        self.assertFalse(second.terminated)
+        s._route(src, {"audiohub.music": 502}, now=12)
+        self.assertEqual(popen.call_count, 2,
+                         "Stable replacement must not loop-start every poll")
+
+    @mock.patch("audiohub.runtime.subprocess.Popen")
+    def test_usb_disconnect_stops_old_route_and_replug_starts_fresh_route(self, popen):
+        first, second = FakeProcess(), FakeProcess()
+        popen.side_effect = [first, second]
+        s = self.supervisor()
+        src = [{**self.source("bluez_input.first")[0], "id": 111}]
+        s._route(src, {"audiohub.music": 501}, now=1)
+        s._route(src, {}, now=2)
+        self.assertTrue(first.terminated)
+        self.assertEqual(s.loopbacks, {})
+        self.assertEqual(s.route_node_generations, {})
+        self.assertFalse(s.retry_state)
+        s._route([{**src[0], "id": 112}], {"audiohub.music": 502}, now=3)
+        self.assertEqual(popen.call_count, 2)
+        self.assertFalse(second.terminated)
+        self.assertEqual(s.route_node_generations,
+                         {"AA:BB:CC:DD:EE:FF": (112, 502)})
+
+    @mock.patch("audiohub.runtime.subprocess.Popen")
+    def test_invalid_explicit_node_ids_stop_routes_without_rebinding(self, popen):
+        s = self.supervisor()
+        original = FakeProcess()
+        popen.return_value = original
+        src = [{**self.source("bluez_input.first")[0], "id": 101}]
+        s._route(src, {"audiohub.music": 501}, now=1)
+        for bad in (-1, True, "102", [], None):
+            with self.subTest(source_id=repr(bad)):
+                if "AA:BB:CC:DD:EE:FF" not in s.loopbacks:
+                    s._route(src, {"audiohub.music": 501}, now=2)
+                proc = s.loopbacks["AA:BB:CC:DD:EE:FF"][2]
+                s._route([{**src[0], "id": bad}],
+                         {"audiohub.music": 501}, now=3)
+                self.assertTrue(proc.terminated)
+                self.assertEqual(s.loopbacks, {})
+                self.assertEqual(s.route_node_generations, {})
+        self.assertEqual(popen.call_count, 6)
+        for bad in (-1, True, "501", None):
+            with self.subTest(sink_id=repr(bad)):
+                s._route(src, {"audiohub.music": bad}, now=4)
+                self.assertEqual(s.loopbacks, {})
+                self.assertEqual(s.route_node_generations, {})
+        self.assertEqual(popen.call_count, 6)
+
+    @mock.patch("audiohub.runtime.subprocess.Popen")
+    def test_dead_route_backoff_restarts_immediately_only_on_new_node_generation(self, popen):
+        old = FakeProcess()
+        renewed = FakeProcess()
+        popen.side_effect = [old, renewed]
+        s = self.supervisor()
+        src = [{**self.source("bluez_input.first")[0], "id": 40}]
+        sinks = {"audiohub.music": 71}
+        s._route(src, sinks, now=0)
+        old.alive = False
+        s._route(src, sinks, now=1)
+        self.assertEqual(popen.call_count, 1)
+        self.assertEqual(s.loopbacks, {})
+        self.assertIn("AA:BB:CC:DD:EE:FF", s.retry_state)
+        s._route(src, sinks, now=2)
+        self.assertEqual(popen.call_count, 1)
+        # New BlueZ incarnation is not penalized by prior node's failures.
+        s._route([{**src[0], "id": 41}], sinks, now=2)
+        self.assertEqual(popen.call_count, 2)
+        self.assertFalse(renewed.terminated)
+        self.assertEqual(s.route_node_generations,
+                         {"AA:BB:CC:DD:EE:FF": (41, 71)})
+        self.assertFalse(s.retry_state)
+
+    @mock.patch("audiohub.runtime.subprocess.Popen")
+    def test_cleanup_clears_private_node_generation_without_logging_or_persisting(self, popen):
+        s = self.supervisor()
+        proc = FakeProcess()
+        popen.return_value = proc
+        s._route([{**self.source("bluez_input.first")[0], "id": 201}],
+                 {"audiohub.music": 502}, now=0)
+        self.assertTrue(s.route_node_generations)
+        s._stop_all_managed_routes()
+        self.assertTrue(proc.terminated)
+        self.assertEqual(s.route_node_generations, {})
+        self.assertEqual(s.loopbacks, {})
+        self.assertFalse(s.retry_state)
+
+    @mock.patch("audiohub.runtime.subprocess.Popen")
     def test_duplicate_virtual_sinks_stop_existing_managed_route(self, popen):
         from audiohub.discovery import virtual_sinks
         process = FakeProcess()
