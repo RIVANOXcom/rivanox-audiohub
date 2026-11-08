@@ -55,6 +55,148 @@ class SourcePolicyTests(unittest.TestCase):
             routes.set_lan("music", self.dir)
         self.assertEqual(routes.load(self.dir), old)
 
+    def test_swap_lan_with_occupied_bluetooth_slot_is_atomic_and_guarded(self):
+        first = "AA:BB:CC:DD:EE:FF"
+        second = "11:22:33:44:55:66"
+        routes.bind_bluetooth(first, "music", self.dir)
+        routes.bind_bluetooth(second, "tablet", self.dir)
+        old = routes.load(self.dir)
+        before = (self.dir / routes.FILENAME).read_bytes()
+        preview = routes.preview_route("swap-lan", "music", directory=self.dir)
+        self.assertEqual((self.dir / routes.FILENAME).read_bytes(), before)
+        self.assertFalse(preview["policy_written"])
+        self.assertFalse(preview["connected_devices_verified"])
+        self.assertEqual(preview["lan_slot_change"],
+                         {"from": "laptop", "to": "music"})
+        self.assertEqual(preview["proposed"]["lan_slot"], "music")
+        self.assertEqual(preview["proposed"]["bluetooth"], {
+            first: "laptop", second: "tablet",
+        })
+        self.assertEqual(preview["bluetooth_bindings_removed"],
+                         [{"address": first, "slot": "music"}])
+        self.assertEqual(preview["bluetooth_bindings_added"],
+                         [{"address": first, "slot": "laptop"}])
+        with self.assertRaises(ValueError):
+            routes.swap_lan_with_bluetooth("music", self.dir)
+        self.assertEqual((self.dir / routes.FILENAME).read_bytes(), before)
+        changed = routes.swap_lan_with_bluetooth(
+            "music", self.dir, if_revision=preview["revision"])
+        self.assertEqual(changed, preview["proposed"])
+        self.assertEqual(routes.load(self.dir), changed)
+        self.assertEqual(routes.lan_target(self.dir), "audiohub.music")
+        self.assertEqual(changed["mode"], old["mode"])
+        self.assertEqual(len(changed["bluetooth"]), len(old["bluetooth"]))
+        self.assertEqual(stat.S_IMODE(
+            (self.dir / routes.FILENAME).stat().st_mode), 0o600)
+
+    def test_swap_lan_requires_one_occupied_manual_bt_target(self):
+        for setup, slot in (
+            ("auto", "music"),
+            ("manual-empty", "music"),
+            ("manual-free", "tablet"),
+            ("manual-self", "laptop"),
+        ):
+            with self.subTest(setup=setup):
+                folder = self.root / setup
+                if setup != "auto":
+                    routes.set_mode("manual", folder)
+                if setup in ("manual-free", "manual-self"):
+                    routes.bind_bluetooth("AA:BB:CC:DD:EE:FF", "music", folder)
+                before = ((folder / routes.FILENAME).read_bytes()
+                          if folder.exists() else None)
+                with self.assertRaises(ValueError):
+                    routes.preview_route("swap-lan", slot, directory=folder)
+                with self.assertRaises(ValueError):
+                    routes.swap_lan_with_bluetooth(slot, folder,
+                                                  if_revision="r1-" + "a"*64)
+                if before is None:
+                    self.assertFalse(folder.exists())
+                else:
+                    self.assertEqual(
+                        (folder / routes.FILENAME).read_bytes(), before)
+
+    def test_swap_lan_rejects_stale_and_aba_confirmation_without_write(self):
+        mac = "AA:BB:CC:DD:EE:FF"
+        routes.bind_bluetooth(mac, "music", self.dir)
+        preview = routes.preview_route("swap-lan", "music", directory=self.dir)
+        routes.update(lambda plan: dict(plan), self.dir)
+        before = (self.dir / routes.FILENAME).read_bytes()
+        with self.assertRaises(routes.StaleRoutePreview):
+            routes.swap_lan_with_bluetooth(
+                "music", self.dir, if_revision=preview["revision"])
+        self.assertEqual((self.dir / routes.FILENAME).read_bytes(), before)
+        self.assertEqual(routes.load(self.dir)["lan_slot"], "laptop")
+        with self.assertRaises(ValueError):
+            routes.swap_lan_with_bluetooth(
+                "music", self.dir, if_revision="r1-" + "Z"*64)
+        self.assertEqual((self.dir / routes.FILENAME).read_bytes(), before)
+
+    def test_swap_lan_cli_preview_confirm_and_unapproved_change_refused(self):
+        mac = "AA:BB:CC:DD:EE:FF"
+        routes.bind_bluetooth(mac, "music", self.dir)
+        original_preview = routes.preview_route
+        original_swap = routes.swap_lan_with_bluetooth
+        route_file = self.dir / routes.FILENAME
+        before = route_file.read_bytes()
+        with (mock.patch.object(
+                routes, "preview_route",
+                side_effect=lambda action, target, slot=None:
+                original_preview(action, target, slot, directory=self.dir)),
+              mock.patch.object(
+                routes, "swap_lan_with_bluetooth",
+                side_effect=lambda slot, *, if_revision:
+                original_swap(slot, self.dir, if_revision=if_revision)) as writer):
+            with redirect_stdout(StringIO()), redirect_stderr(StringIO()):
+                with self.assertRaises(SystemExit) as refused:
+                    routes.main(["swap-lan", "music"])
+            self.assertEqual(refused.exception.code, 2)
+            writer.assert_not_called()
+            self.assertEqual(route_file.read_bytes(), before)
+            with redirect_stdout(StringIO()) as out:
+                routes.main(["--preview", "swap-lan", "music"])
+            planned = json.loads(out.getvalue())
+            self.assertEqual(planned["proposed"]["lan_slot"], "music")
+            self.assertEqual(route_file.read_bytes(), before)
+            writer.assert_not_called()
+            with redirect_stdout(StringIO()) as out:
+                routes.main(["--confirm-local-route-change",
+                             "--if-preview-revision", planned["revision"],
+                             "swap-lan", "music"])
+            self.assertEqual(json.loads(out.getvalue())["lan_slot"], "music")
+            writer.assert_called_once_with(
+                "music", if_revision=planned["revision"])
+        self.assertEqual(routes.load(self.dir)["bluetooth"][mac], "laptop")
+
+    def test_swap_lan_cli_stale_preview_never_retries_or_writes(self):
+        mac = "AA:BB:CC:DD:EE:FF"
+        routes.bind_bluetooth(mac, "music", self.dir)
+        planned = routes.preview_route("swap-lan", "music", directory=self.dir)
+        routes.update(lambda plan: dict(plan), self.dir)
+        before = (self.dir / routes.FILENAME).read_bytes()
+        original_preview = routes.preview_route
+        original_swap = routes.swap_lan_with_bluetooth
+        with (mock.patch.object(
+                routes, "preview_route",
+                side_effect=lambda action, target, slot=None:
+                original_preview(action, target, slot, directory=self.dir)) as preview,
+              mock.patch.object(
+                routes, "swap_lan_with_bluetooth",
+                side_effect=lambda slot, *, if_revision:
+                original_swap(slot, self.dir, if_revision=if_revision)) as apply):
+            with redirect_stdout(StringIO()) as out, redirect_stderr(StringIO()):
+                with self.assertRaises(SystemExit) as halted:
+                    routes.main(["--confirm-local-route-change",
+                                 "--if-preview-revision", planned["revision"],
+                                 "swap-lan", "music"])
+            self.assertEqual(halted.exception.code, 4)
+            stale = json.loads(out.getvalue())
+            self.assertEqual(stale["status"], "route-preview-stale")
+            self.assertFalse(stale["policy_written"])
+            self.assertEqual(stale["fresh_preview"]["proposed"]["lan_slot"], "music")
+            preview.assert_called_once_with("swap-lan", "music", None)
+            apply.assert_called_once()
+        self.assertEqual((self.dir / routes.FILENAME).read_bytes(), before)
+
     def test_third_bluetooth_source_is_rejected(self):
         routes.bind_bluetooth("AA:BB:CC:DD:EE:FF", "music", self.dir)
         routes.bind_bluetooth("11:22:33:44:55:66", "tablet", self.dir)
