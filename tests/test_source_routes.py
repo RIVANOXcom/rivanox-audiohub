@@ -722,8 +722,11 @@ class SourcePolicyTests(unittest.TestCase):
         self.assertIn("Bluetooth source 1", display)
         self.assertNotIn(mac, display)
         self.assertFalse(folder.exists())
-        with redirect_stdout(StringIO()) as out:
-            routes.main(["--format", "text", "slots"])
+        original_slots = routes.route_slots
+        with mock.patch.object(routes, "route_slots",
+                               side_effect=lambda: original_slots(folder)):
+            with redirect_stdout(StringIO()) as out:
+                routes.main(["--format", "text", "slots"])
         self.assertIn("AudioHub current source reservations", out.getvalue())
 
     def test_private_route_text_renderers_reject_malformed_or_forged_reports(self):
@@ -751,7 +754,7 @@ class SourcePolicyTests(unittest.TestCase):
             lambda x: x["current"].update({"lan_slot": "SECRET"}),
             lambda x: x.update({"action": "SECRET\\nINJECT"}),
             lambda x: x.update({"policy_written": True}),
-            lambda x: x["proposed"]["bluetooth"].update({mac: "laptop"}),
+            lambda x: x["proposed"]["bluetooth"].update({mac: "music"}),
         ):
             invalid = json.loads(json.dumps(preview))
             change(invalid)
