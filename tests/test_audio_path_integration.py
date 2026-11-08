@@ -1,5 +1,7 @@
 """AudioHub: audio path integration regression tests (no device assumed)."""
 import json
+from contextlib import redirect_stdout, redirect_stderr
+from io import StringIO
 import os
 import stat
 import tempfile
@@ -11,7 +13,7 @@ from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
-from audiohub import runtime, eq_setup
+from audiohub import runtime, eq_setup, mixer_control
 from audiohub.discovery import (
     pipewire_nodes, props, choose_usb_output, bluetooth_sources, virtual_sinks,
 )
@@ -443,6 +445,125 @@ class EqSetupFileSafetyTests(unittest.TestCase):
 
     def config(self, home):
         return home / ".config" / "pipewire" / "pipewire.conf.d" / eq_setup.EQ_FILE
+
+    def test_saved_eq_preview_and_operator_guarded_staging_no_live_restart(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = self.home(tmp)
+            settings = home / "private" / "settings.json"
+            mixer_control.change({
+                "master": 32, "music": {"bass": 8, "mid": -2},
+                "tablet": {"treble": -5}, "laptop": {"volume": 27}
+            }, path=settings, confirmed=True)
+            original = settings.read_bytes()
+            with (mock.patch.object(Path, "home", return_value=home),
+                  mock.patch.object(eq_setup, "SETTINGS", settings)):
+                eq_setup.main()
+                target = self.config(home)
+                default_eq = target.read_bytes()
+                self.assertNotIn(b"gain = 8", default_eq)
+                with redirect_stdout(StringIO()) as output:
+                    eq_setup.main(["--preview-saved"])
+                plan = json.loads(output.getvalue())
+                self.assertEqual(plan["mode"], "eq-preview-only")
+                self.assertEqual(plan["equalizer"]["music"],
+                                 {"bass": 8, "mid": -2, "treble": 0})
+                self.assertEqual(plan["equalizer"]["tablet"]["treble"], -5)
+                self.assertFalse(plan["configuration_staged"])
+                self.assertFalse(plan["pipewire_restarted"])
+                self.assertFalse(plan["live_eq_applied"])
+                self.assertFalse(plan["hardware_audio_verified"])
+                self.assertEqual(target.read_bytes(), default_eq)
+                self.assertEqual(settings.read_bytes(), original)
+                with redirect_stdout(StringIO()) as output:
+                    eq_setup.main(["--stage-saved", "--confirm-local-eq-stage",
+                                   "--if-preview-revision", plan["revision"]])
+                staged = json.loads(output.getvalue())
+                self.assertEqual(staged["mode"], "eq-staged-for-manual-pipewire-restart")
+                self.assertTrue(staged["configuration_staged"])
+                self.assertFalse(staged["pipewire_restarted"])
+                self.assertFalse(staged["live_eq_applied"])
+                self.assertEqual(staged["revision"], plan["revision"])
+                self.assertEqual(staged["configuration_sha256"],
+                                 plan["configuration_sha256"])
+                payload = target.read_bytes()
+                self.assertIn(b"gain = 8", payload)
+                self.assertIn(b"gain = -2", payload)
+                self.assertIn(b"gain = -5", payload)
+                self.assertEqual(stat.S_IMODE(target.stat().st_mode), 0o600)
+                self.assertEqual(settings.read_bytes(), original)
+                self.assertEqual(len(list(target.parent.iterdir())), 1)
+
+    def test_saved_eq_staging_refuses_stale_or_unconfirmed_without_replacing_config(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = self.home(tmp)
+            settings = home / "private" / "settings.json"
+            mixer_control.change({"music": {"bass": 3}},
+                                 path=settings, confirmed=True)
+            with (mock.patch.object(Path, "home", return_value=home),
+                  mock.patch.object(eq_setup, "SETTINGS", settings)):
+                eq_setup.main()
+                target = self.config(home)
+                prior = target.read_bytes()
+                preview = eq_setup.preview_saved_eq()
+                for args in (
+                    ["--stage-saved"],
+                    ["--stage-saved", "--if-preview-revision", preview["revision"]],
+                    ["--stage-saved", "--confirm-local-eq-stage"],
+                    ["--preview-saved", "--confirm-local-eq-stage"],
+                    ["--preview-saved", "--if-preview-revision", preview["revision"]],
+                    ["--if-preview-revision", preview["revision"]],
+                    ["--confirm-local-eq-stage"],
+                ):
+                    with (self.subTest(args=args),
+                          redirect_stdout(StringIO()) as out,
+                          redirect_stderr(StringIO())):
+                        with self.assertRaises(SystemExit) as exc:
+                            eq_setup.main(args)
+                        self.assertEqual(exc.exception.code, 2)
+                        self.assertEqual(out.getvalue(), "")
+                        self.assertEqual(target.read_bytes(), prior)
+                mixer_control.change({"master": 34}, path=settings,
+                                     confirmed=True)
+                mixer_control.change({"master": 70}, path=settings,
+                                     confirmed=True)
+                with (redirect_stdout(StringIO()) as out,
+                      redirect_stderr(StringIO()) as err):
+                    with self.assertRaises(SystemExit) as exc:
+                        eq_setup.main([
+                            "--stage-saved", "--confirm-local-eq-stage",
+                            "--if-preview-revision", preview["revision"],
+                        ])
+                self.assertEqual(exc.exception.code, 2)
+                self.assertEqual(out.getvalue(), "")
+                self.assertEqual(target.read_bytes(), prior)
+                self.assertNotIn("gain = 3", target.read_text())
+                self.assertNotIn(str(settings), err.getvalue())
+
+    def test_saved_eq_staging_refuses_symlinked_destination(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = self.home(tmp)
+            settings = home / "private" / "settings.json"
+            mixer_control.change({"music": {"mid": 6}},
+                                 path=settings, confirmed=True)
+            target = self.config(home)
+            target.parent.mkdir(parents=True, mode=0o700)
+            victim = home / "protected.txt"
+            victim.write_text("DO NOT OVERWRITE")
+            target.symlink_to(victim)
+            with (mock.patch.object(Path, "home", return_value=home),
+                  mock.patch.object(eq_setup, "SETTINGS", settings)):
+                preview = eq_setup.preview_saved_eq()
+                with (redirect_stdout(StringIO()) as out,
+                      redirect_stderr(StringIO())):
+                    with self.assertRaises(SystemExit) as exc:
+                        eq_setup.main([
+                            "--stage-saved", "--confirm-local-eq-stage",
+                            "--if-preview-revision", preview["revision"],
+                        ])
+                self.assertEqual(exc.exception.code, 2)
+                self.assertEqual(out.getvalue(), "")
+                self.assertEqual(victim.read_text(), "DO NOT OVERWRITE")
+                self.assertTrue(target.is_symlink())
 
     def test_eq_config_creation_and_atomic_repeat_private_no_temporary_files(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -122,6 +122,70 @@ release approval. Repeat tests individually only with separate
 owner authorization, and retain the existing offline hardware
 observation gates and independent 24-hour test.
 
+## Three-band per-source EQ tuning for a separately authorized Pi bench
+
+The 3-band PipeWire equalizer previously had a defined configuration
+model and a demonstration UI, but no ordinary guarded operator-local
+way to choose individual band gains and generate matching PipeWire
+filter configuration. This unmerged alpha implementation now
+supports explicit **offline staging** for the next independently
+authorized PipeWire configuration reload. No automatic restart,
+Bluetooth reconnection, source routing or sound action occurs.
+
+After checking the current mixer, an authorized unprivileged Pi
+operator may preview one **bounded integer** band adjustment
+(`bass`, `mid`, `treble` at `-12..12` dB) on one fixed internal
+input (`music`, `laptop`, `tablet`). For example:
+
+```sh
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --preview set-eq music bass -3
+```
+
+The preview lists `eq_changes`, keeps requested gain/mute and routing
+untouched, and explicitly says `eq_live_applied=false`. An operator
+can independently save only the reviewed band setting with the
+exact fresh mixer revision; missing consent or stale/ABA generations
+are refused:
+
+```sh
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.mixer_control --confirm-local-mixer-change --if-preview-revision v1-REPLACE-WITH-REVIEWED-REVISION set-eq music bass -3
+```
+
+**Saving EQ is not yet hearing it.** The running PipeWire filter
+chain is never reconfigured by this command. Next, separately
+preview the actual sanitized three-source filter setup derived from
+the newly stored private mixer state:
+
+```sh
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.eq_setup --preview-saved
+```
+
+This returns the exact mixer revision, fixed three-band settings and
+SHA256 of the prospective PipeWire config. It creates no file.
+Only after reviewing it can the operator **separately** stage the
+configuration under the existing private EQ pathname, using the
+same revision. Staging is under the existing exclusive mixer writer
+lock and rejects intervening settings updates:
+
+```sh
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.eq_setup --stage-saved --confirm-local-eq-stage --if-preview-revision v1-REPLACE-WITH-EQ-PREVIEW-REVISION
+```
+
+The stage uses the existing atomic `0600` EQ file replacement and
+symlink/hardlink/private-directory protections. The default image
+builder invocation of `audiohub.eq_setup` without flags still
+generates the original neutral EQ; new settings are never selected
+implicitly. The stage output explicitly marks
+`configuration_staged=true` but `pipewire_restarted=false`,
+`live_eq_applied=false`, and `hardware_audio_verified=false`.
+Only a **separately operator-controlled, explicitly approved**
+PipeWire restart/reload on an isolated lab could use the new filters,
+and this may interrupt audio. Do not perform such a restart on
+production equipment or interpret staging as measured equalization.
+Physical playback, clipping, multi-source isolation and USB recovery
+must still be independently observed. Even attenuating an EQ band
+is not a guarantee of safe output gain or no clipping.
+
 ## What the operator actually checks
 
 1. Real Edifier speaker playback is **audible** at safe volume.
