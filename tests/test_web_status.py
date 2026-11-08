@@ -835,7 +835,7 @@ class BrowserEqOwnerGuideTests(unittest.TestCase):
         self.assertIn('id="eq-guide-compare-command" readonly', html)
         self.assertIn('--compare-staged --format overview', html)
         self.assertIn('one Pi overview', html)
-        self.assertIn('not selected or active presets', html)
+        self.assertIn('not proof of selected presets', html)
         self.assertIn('requested values only', html)
         self.assertIn('calculated mix headroom factor', html)
         self.assertIn('reduce the protective master gain', html)
