@@ -38,6 +38,17 @@ PRESET_VOLUMES = {
 }
 
 
+def isolate_input_patch(slot):
+    """Atomically mute ONLY the other inputs; never unmute or raise gain.
+
+    This is a conservative local audio-isolation helper, not a solo control
+    that silently switches on a previously muted or zero-level input.
+    """
+    if type(slot) is not str or slot not in CHANNELS:
+        raise MixerControlUnavailable("Unknown local input slot")
+    return {other: {"mute": True} for other in CHANNELS if other != slot}
+
+
 def preset_patch(name):
     """Generate one explicit, schema-validated volume-only profile patch."""
     if type(name) is not str or name not in PRESET_VOLUMES:
@@ -883,6 +894,12 @@ def main(argv=None):
         help="Atomically restore one or two explicitly named inputs, never all three",
     )
     restore.add_argument("slots", nargs="+", choices=CHANNELS)
+    isolate = commands.add_parser(
+        "isolate-input",
+        help="Mute both other inputs atomically; selected mute remains unchanged. "
+             "Requires reviewed preview revision and separate local confirmation",
+    )
+    isolate.add_argument("slot", choices=CHANNELS)
     preset = commands.add_parser(
         "preset",
         help="Request one conservative named volume preset, without unmuting or changing EQ",
@@ -931,6 +948,21 @@ def main(argv=None):
         mix.add_argument(slot, type=int)
     args = parser.parse_args(argv)
     try:
+        # Isolation can change two channels. A basic boolean confirmation is
+        # intentionally insufficient: require the EXACT reviewed mixer
+        # generation to prevent applying an old choice to a newer mix.
+        if args.action == "isolate-input" and (
+                args.confirm_local_profile_save
+                or args.if_profile_revision is not None
+                or (args.preview and (
+                    args.confirm_local_mixer_change
+                    or args.if_preview_revision is not None
+                    or args.wait_for_supervisor))
+                or (not args.preview and (
+                    not args.confirm_local_mixer_change
+                    or args.if_preview_revision is None))):
+            raise MixerControlUnavailable(
+                "Input isolation needs preview and a separate revision-guarded confirmation")
         if args.action in ("compare-profiles", "compare-profile-current",
                            "profile-choices") and (
                 args.preview or args.confirm_local_mixer_change
@@ -1036,6 +1068,10 @@ def main(argv=None):
                 # levels during a supervised poll; preserve every mute/EQ.
                 patch = {"master": args.master}
                 patch.update({slot: {"volume": getattr(args, slot)} for slot in CHANNELS})
+            elif args.action == "isolate-input":
+                # The selected source's mute, volume, EQ and routing stay
+                # untouched. Never implicitly unmute a source in a lab.
+                patch = isolate_input_patch(args.slot)
             elif args.action == "mute-all":
                 # One private atomic snapshot, not three independent updates.
                 # Preserve master, volume and EQ. Do not auto-unmute later.
