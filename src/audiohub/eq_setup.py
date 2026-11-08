@@ -214,6 +214,52 @@ def compare_staged_eq():
     }
 
 
+def format_staged_eq_text(report):
+    """Plain operator guidance from fixed, locally validated EQ comparison.
+
+    Never print file contents, arbitrary paths, device IDs, or suggest that a
+    matching on-disk stage proves PipeWire loaded its configuration.
+    """
+    explanations = {
+        "matches_saved": (
+            "Saved EQ matches the existing staged configuration.",
+            "A match does not prove PipeWire loaded the stage. A separately "
+            "authorized lab reload and actual audible check remain necessary.",
+        ),
+        "differs_from_saved": (
+            "Saved EQ differs from the existing staged configuration.",
+            "Next: review python3 -m audiohub.eq_setup --preview-saved; "
+            "stage only after separate local consent and fresh revision.",
+        ),
+        "missing": (
+            "No staged EQ configuration was found.",
+            "Next: review python3 -m audiohub.eq_setup --preview-saved; "
+            "stage only after separate local consent and fresh revision.",
+        ),
+        "unavailable": (
+            "Staged EQ could not be safely inspected.",
+            "Next: inspect file ownership and privacy locally. No automatic "
+            "repair, staging, or PipeWire reload is performed.",
+        ),
+    }
+    status = report["staging_status"]
+    if status not in explanations:
+        raise ValueError("Unknown staged EQ status")
+    lines = ["AudioHub EQ – saved versus staged (read-only)",
+             "Stage: " + status.replace("_", " ")]
+    lines.extend(explanations[status][:1])
+    lines.append("Saved requests (not verified live audio):")
+    for slot in CHANNELS:
+        values = report["equalizer"][slot]
+        bands = ", ".join(
+            f"{band} {values[band]:+d} dB" for band in EQ_BANDS
+        )
+        lines.append(f"  {slot}: {bands}")
+    lines.append(explanations[status][1])
+    lines.append("No files written, no PipeWire restart, no audible output verified.")
+    return "\n".join(lines)
+
+
 def stage_saved_eq(revision, *, confirmed=False):
     """Only stage a checked mixer generation; never restart PipeWire.
 
@@ -268,7 +314,11 @@ def main(argv=()):
                         help="Read-only compare saved EQ to actual staged config; NOT live audio")
     parser.add_argument("--confirm-local-eq-stage", action="store_true")
     parser.add_argument("--if-preview-revision", metavar="REV")
+    parser.add_argument("--format", choices=("json", "text"), default=None,
+                        help="Only with --compare-staged; default is JSON")
     args = parser.parse_args(argv)
+    if args.format is not None and not args.compare_staged:
+        parser.error("--format requires --compare-staged")
     if args.stage_saved:
         if not args.confirm_local_eq_stage or args.if_preview_revision is None:
             parser.error("EQ staging requires explicit confirmation and exact preview revision")
@@ -294,7 +344,10 @@ def main(argv=()):
             output = compare_staged_eq()
         except (OSError, PermissionError, ValueError, mixer_control.MixerControlUnavailable):
             parser.exit(2, "AudioHub local staged EQ comparison unavailable.\\n")
-        print(json.dumps(output, sort_keys=True))
+        if args.format == "text":
+            print(format_staged_eq_text(output))
+        else:
+            print(json.dumps(output, sort_keys=True))
     else:
         if args.confirm_local_eq_stage or args.if_preview_revision is not None:
             parser.error("EQ stage options require --stage-saved")

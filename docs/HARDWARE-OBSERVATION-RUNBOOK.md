@@ -227,6 +227,32 @@ Stage only with the separate deliberate revision-guarded
 Any actual PipeWire reload remains a separate operator-authorized lab
 step and cannot be inferred from this read-only comparison.
 
+### Read the EQ stage status without interpreting JSON
+
+For an owner at the Pi console, the same **read-only** comparison is
+also available as concise plain English, including safe next-step hints:
+
+```sh
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.eq_setup --compare-staged --format text
+```
+
+The human-readable report labels the stage as `matches saved`,
+`differs from saved`, `missing`, or `unavailable`, prints only
+the three technical inputs' saved bass/mid/treble gains, and explains
+the next explicit operator action. For a mismatch/missing file it
+suggests reviewing `--preview-saved` before *separately* consenting to
+staging. An unsafe destination never yields an automatic repair.
+For a match it explains that a matching file **does not prove that
+PipeWire has loaded the filter or that audio is audible**.
+
+JSON remains the unchanged default for scripts; `--format json` is
+explicitly supported with `--compare-staged`. The format switch is
+not permitted with staging, preview-saved or bare installer mode.
+Neither presentation reads device identifiers, edits settings,
+stages/restarts PipeWire, connects Bluetooth, nor authorizes a release.
+The stage status is an on-disk comparison only; hardware verification
+and a separately authorized lab reload remain independent.
+
 ### Tune all three bands of one input in one reviewed change
 
 The older `set-eq SLOT BAND DB` command edits one band at a time. To
