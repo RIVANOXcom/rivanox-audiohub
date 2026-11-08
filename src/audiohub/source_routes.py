@@ -634,7 +634,25 @@ _SOURCE_NEXT_LABELS = {
 }
 
 
-def format_source_status_text(report):
+def _validated_input_display_names(input_names):
+    """Opt-in human labels only; never change route-slot identity or JSON."""
+    if input_names is None:
+        return None
+    from .input_profiles import validate_labels
+    return validate_labels(input_names)
+
+
+def _captioned_slot(slot, display_names):
+    return slot if display_names is None else slot + " [" + display_names[slot] + "]"
+
+
+_INPUT_NAMES_ONLY_NOTE = (
+    "Local input names are display labels, not source identities or "
+    "part of the route-policy revision; confirm only stable slot IDs."
+)
+
+
+def format_source_status_text(report, *, input_names=None):
     """Render safe fixed-field guidance for the authorized local terminal.
 
     Never print raw device identifiers or free-form upstream values. This
@@ -644,6 +662,7 @@ def format_source_status_text(report):
             or set(report["inputs"]) != set(CHANNELS)
             or type(report.get("observations_available")) is not bool):
         raise ValueError("Invalid private source report")
+    input_names = _validated_input_display_names(input_names)
     status = ("available" if report["observations_available"]
               else "unknown (missing, unsafe or stale)")
     lines = [
@@ -673,7 +692,8 @@ def format_source_status_text(report):
             if type(value) not in (bool, type(None)):
                 raise ValueError("Invalid private source field")
             values.append(label + ": " + marks[value])
-        lines.append(slot + " (" + _SOURCE_ROLE_LABELS[role] + ")")
+        lines.append(_captioned_slot(slot, input_names) + " (" +
+                     _SOURCE_ROLE_LABELS[role] + ")")
         lines.append("  " + " | ".join(values))
         lines.append("  Next: " + _SOURCE_NEXT_LABELS[check])
     lines.append(
@@ -684,6 +704,8 @@ def format_source_status_text(report):
         "BlueZ property is queried ONLY with --probe-bluetooth; "
         "? also means unqueried/unavailable."
     )
+    if input_names is not None:
+        lines.append(_INPUT_NAMES_ONLY_NOTE)
     return "\n".join(lines)
 
 
@@ -699,7 +721,7 @@ _ROUTE_ACTION_LABELS = {
 }
 
 
-def _private_route_lines(plan, labels):
+def _private_route_lines(plan, labels, input_names=None):
     """Only fixed slot and source-index labels, never real MAC addresses."""
     lines = ["  Mode: " + plan["mode"]]
     by_slot = {slot: "Unreserved" for slot in CHANNELS}
@@ -707,11 +729,11 @@ def _private_route_lines(plan, labels):
     for address, slot in plan["bluetooth"].items():
         by_slot[slot] = labels[address]
     for slot in CHANNELS:
-        lines.append("  " + slot + ": " + by_slot[slot])
+        lines.append("  " + _captioned_slot(slot, input_names) + ": " + by_slot[slot])
     return lines
 
 
-def format_route_slots_text(report):
+def format_route_slots_text(report, *, input_names=None):
     """Readable current private reservation map; redact Bluetooth addresses."""
     if (type(report) is not dict or report.get("mode") != "source-slots-read-only"
             or type(report.get("slots")) is not dict
@@ -721,6 +743,7 @@ def format_route_slots_text(report):
             or report.get("connected_devices_verified") is not False
             or report.get("audible_playback_verified") is not False):
         raise ValueError("Invalid private slot report")
+    input_names = _validated_input_display_names(input_names)
     _check_revision(report.get("revision"))
     assigned = {}
     for slot in CHANNELS:
@@ -752,13 +775,14 @@ def format_route_slots_text(report):
               for i, addr in enumerate(sorted(assigned))}
     return "\n".join([
         "AudioHub current source reservations (read-only)",
-        *_private_route_lines(plan, labels),
+        *_private_route_lines(plan, labels, input_names),
         "Unreserved slots are not proof of inactive Bluetooth audio.",
         "No connection, PCM or audible speaker has been verified.",
+        *([_INPUT_NAMES_ONLY_NOTE] if input_names is not None else []),
     ])
 
 
-def format_route_preview_text(report):
+def format_route_preview_text(report, *, input_names=None):
     """One-screen privacy-safe plan comparison for a separate local approval."""
     if (type(report) is not dict or report.get("mode") != "source-route-preview-only"
             or report.get("action") not in _ROUTE_ACTION_LABELS
@@ -768,6 +792,7 @@ def format_route_preview_text(report):
             or report.get("connected_devices_verified") is not False
             or report.get("audible_playback_verified") is not False):
         raise ValueError("Invalid private route preview")
+    input_names = _validated_input_display_names(input_names)
     revision = _check_revision(report.get("revision"))
     current = validate(report.get("current"))
     proposed = validate(report.get("proposed"))
@@ -780,9 +805,9 @@ def format_route_preview_text(report):
         "AudioHub source routing preview (read-only)",
         "Action: " + _ROUTE_ACTION_LABELS[report["action"]],
         "Current:",
-        *_private_route_lines(current, labels),
+        *_private_route_lines(current, labels, input_names),
         "Proposed:",
-        *_private_route_lines(proposed, labels),
+        *_private_route_lines(proposed, labels, input_names),
         "Change requested: " + ("yes" if report["would_change"] else "no"),
     ]
     if current["mode"] == "auto" and proposed["mode"] == "manual":
@@ -795,6 +820,8 @@ def format_route_preview_text(report):
         "No routing policy or devices were changed by this preview.",
         "This view does not prove pairing, connection, PCM or audible sound.",
     ])
+    if input_names is not None:
+        lines.append(_INPUT_NAMES_ONLY_NOTE)
     return "\n".join(lines)
 
 
@@ -898,6 +925,8 @@ def main(argv=None):
                         help="Preview a routing change without writing policy or devices")
     parser.add_argument("--format", choices=("json", "text"), default="json",
                         help="JSON (default); text for read-only status, slots and route previews")
+    parser.add_argument("--with-input-names", action="store_true",
+                        help="Opt-in private input display names in LOCAL read-only text only")
     parser.add_argument("--probe-bluetooth", action="store_true",
                         help="Status only: read manual BlueZ connection property, never connect or pair")
     parser.add_argument("--confirm-local-route-change", action="store_true",
@@ -934,6 +963,10 @@ def main(argv=None):
     args = parser.parse_args(argv)
 
     try:
+        if (args.with_input_names and
+                (args.format != "text" or
+                 (args.action not in ("slots", "status") and not args.preview))):
+            raise ValueError("Private input names require read-only local text output")
         if args.action in ("show", "slots", "status"):
             if (args.preview or args.confirm_local_route_change
                     or args.if_preview_revision is not None
@@ -1001,12 +1034,20 @@ def main(argv=None):
         # Do not echo private device addresses, policy JSON or filesystem paths.
         parser.exit(2, "AudioHub route not changed or unavailable.\\n")
     if args.format == "text":
+        input_names = None
+        if args.with_input_names:
+            # Strictly private, user-owned file. No remote status or JSON leak.
+            try:
+                from .input_profiles import load_labels
+                input_names = load_labels()
+            except (OSError, ValueError, UnicodeError, TypeError):
+                parser.exit(2, "AudioHub private input names unavailable.\\n")
         if args.action == "status":
-            print(format_source_status_text(value))
+            print(format_source_status_text(value, input_names=input_names))
         elif args.action == "slots":
-            print(format_route_slots_text(value))
+            print(format_route_slots_text(value, input_names=input_names))
         else:
-            print(format_route_preview_text(value))
+            print(format_route_preview_text(value, input_names=input_names))
     else:
         print(json.dumps(value, sort_keys=True))
 
