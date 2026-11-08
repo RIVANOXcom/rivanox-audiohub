@@ -507,6 +507,13 @@ PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes --preview swap-la
 # Inspect private old/new plan and revision, then separately run:
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes --confirm-local-route-change --if-preview-revision r1-REPLACE-WITH-64-HEX-CHARS swap-lan music
 
+# Move one already bound Bluetooth source to an unused EQ input,
+# without entering its MAC address or unbinding/rebinding the device:
+# Example: music contains one manual Bluetooth source; tablet is empty.
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes --format text --preview move-bt music tablet
+# Privately verify before/after slot assignment and exact r1-... revision.
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes --confirm-local-route-change --if-preview-revision r1-REPLACE-WITH-64-HEX-CHARS move-bt music tablet
+
 # Exchange TWO MANUALLY assigned Bluetooth input slots in one policy update:
 # Example: music and tablet are both occupied by different BT peers.
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes --preview swap-bt music tablet
@@ -712,6 +719,25 @@ This local operation is **not** device authentication or a consumer
 phone UI, and cannot pair, trust, connect, open Scream UDP, or
 independently validate delivered PCM. Keep the local preview with
 Bluetooth addresses out of public logs.
+
+When **one manually bound Bluetooth source needs a free EQ mixer
+input**, `--format text --preview move-bt FROM TO` shows a redacted
+one-step move without typing or copying the device's MAC address.
+`FROM` must be the currently occupied manual Bluetooth slot and
+`TO` a distinct unreserved mixer slot. The LAN slot cannot be the
+source or destination. The operator must separately use
+`--confirm-local-route-change --if-preview-revision REV move-bt FROM TO`.
+No unguarded move is allowed; the policy generation is rechecked
+inside the existing exclusive lock, including ABA replacements.
+An occupied destination, missing source, automatic discovery mode,
+stale revision or invalid slot fails without updating policy.
+The Bluetooth identity and other assigned sources are preserved
+within the owner-private 0600 policy file, without a transient
+unbind. Existing JSON preview and text before/after display remain
+available. Supervisor routing can briefly restart after the next
+poll. The move neither pairs, connects nor authenticates a device,
+and cannot prove audible audio. No privileged, network or HTTP
+interface is introduced.
 
 If two Bluetooth input slots are both manually occupied,
 `--preview swap-bt FIRST SECOND` safely proposes exchanging the two
