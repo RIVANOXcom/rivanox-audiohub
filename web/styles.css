@@ -128,3 +128,14 @@
 #routing-plan-reset:hover{background:#2b4a6d}
 #routing-plan-reset-status{font-size:.82rem;color:#c1dcf0}
 @media(max-width:740px){.routing-plan-options,.routing-plan-list{grid-template-columns:minmax(0,1fr)}.routing-plan{padding:18px}}
+
+
+/* Local CLI guidance belongs exclusively to the offline what-if panel. */
+.routing-plan-command{margin-top:20px;padding-top:16px;border-top:1px solid #405775}
+.routing-plan-command h3{margin:0 0 8px;font-size:1.02rem;color:#f4f8ff}
+.routing-plan-command label{display:block;margin:12px 0 8px;font-size:.85rem;color:#e4eefc}
+.routing-plan-command .routing-plan-options label{display:flex;margin:0}
+.routing-guide-inspect{font-size:.84rem;overflow-wrap:anywhere;color:#c8e4f8}
+#routing-guide-command{display:block;width:100%;box-sizing:border-box;min-height:100px;background:#102039;border:1px solid #729cc3;border-radius:9px;padding:13px;color:#f3f8ff;line-height:1.5;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.79rem;resize:vertical;overflow-wrap:anywhere}
+#routing-guide-command:focus-visible,.routing-plan-options select:focus-visible{outline:3px solid #b4e1ff;outline-offset:2px}
+.routing-plan-command .routing-plan-scope{margin-bottom:0}
