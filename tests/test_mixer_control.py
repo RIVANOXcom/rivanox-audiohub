@@ -414,8 +414,8 @@ class LocalMixerControlsTests(unittest.TestCase):
         real_restore = mixer_control.restore_isolation
         with (mock.patch(
                 "audiohub.mixer_control.preview_restore_isolation",
-                side_effect=lambda slot, token:
-                real_preview(slot, token, path=self.settings)) as preview,
+                side_effect=lambda slot, token, **kw:
+                real_preview(slot, token, path=kw.get("path", self.settings))) as preview,
               mock.patch("audiohub.mixer_control.restore_isolation",
                          side_effect=lambda slot, token, **kw:
                          real_restore(slot, token, path=self.settings, **kw)) as restore):
