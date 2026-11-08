@@ -443,6 +443,135 @@ class SourcePolicyTests(unittest.TestCase):
             self.assertEqual(move.call_count, 2)
             self.assertEqual(preview.call_count, 2)
 
+    def test_unbind_slot_preview_and_confirm_preserve_other_manual_source(self):
+        first, second = "AA:BB:CC:DD:EE:FF", "11:22:33:44:55:66"
+        routes.bind_bluetooth(first, "music", self.dir)
+        routes.bind_bluetooth(second, "tablet", self.dir)
+        before = (self.dir / routes.FILENAME).read_bytes()
+        plan = routes.preview_route("unbind-slot", "music", directory=self.dir)
+        self.assertEqual(plan["current"]["bluetooth"], {
+            first: "music", second: "tablet",
+        })
+        self.assertEqual(plan["proposed"]["bluetooth"], {second: "tablet"})
+        self.assertEqual(plan["proposed"]["lan_slot"], "laptop")
+        self.assertEqual(plan["proposed"]["mode"], "manual")
+        self.assertEqual(plan["bluetooth_bindings_removed"],
+                         [{"address": first, "slot": "music"}])
+        self.assertEqual(plan["bluetooth_bindings_added"], [])
+        self.assertTrue(plan["proposed_slots"]["music"]["free_for_manual_assignment"])
+        self.assertFalse(plan["policy_written"])
+        self.assertFalse(plan["connected_devices_verified"])
+        self.assertFalse(plan["audible_playback_verified"])
+        self.assertEqual((self.dir / routes.FILENAME).read_bytes(), before)
+        with self.assertRaises(ValueError):
+            routes.unbind_bluetooth_slot("music", self.dir)
+        self.assertEqual((self.dir / routes.FILENAME).read_bytes(), before)
+        changed = routes.unbind_bluetooth_slot(
+            "music", self.dir, if_revision=plan["revision"])
+        self.assertEqual(changed, plan["proposed"])
+        self.assertEqual(routes.load(self.dir)["bluetooth"], {second: "tablet"})
+        self.assertEqual(routes.lan_target(self.dir), "audiohub.laptop")
+        self.assertEqual(stat.S_IMODE(
+            (self.dir / routes.FILENAME).stat().st_mode), 0o600)
+
+    def test_unbind_slot_rejects_auto_empty_lan_or_invalid_without_writes(self):
+        auto = self.root / "auto-unbind"
+        with self.assertRaises(ValueError):
+            routes.preview_route("unbind-slot", "music", directory=auto)
+        self.assertFalse(auto.exists())
+        routes.set_mode("manual", self.dir)
+        original = (self.dir / routes.FILENAME).read_bytes()
+        for slot in ("music", "tablet", "laptop", True, "", "bad"):
+            with self.subTest(slot=repr(slot)):
+                with self.assertRaises(ValueError):
+                    routes.preview_route("unbind-slot", slot, directory=self.dir)
+                self.assertEqual((self.dir / routes.FILENAME).read_bytes(), original)
+        routes.bind_bluetooth("AA:BB:CC:DD:EE:FF", "music", self.dir)
+        occupied = (self.dir / routes.FILENAME).read_bytes()
+        for slot in ("laptop", "tablet", "bad", None):
+            with self.subTest(slot=repr(slot)):
+                with self.assertRaises(ValueError):
+                    routes.preview_route("unbind-slot", slot, directory=self.dir)
+                self.assertEqual((self.dir / routes.FILENAME).read_bytes(), occupied)
+
+    def test_unbind_slot_stale_aba_and_malformed_revision_never_change_policy(self):
+        mac = "AA:BB:CC:DD:EE:FF"
+        routes.bind_bluetooth(mac, "music", self.dir)
+        preview = routes.preview_route("unbind-slot", "music", directory=self.dir)
+        routes.update(lambda current: dict(current), self.dir)
+        before = (self.dir / routes.FILENAME).read_bytes()
+        with self.assertRaises(routes.StaleRoutePreview):
+            routes.unbind_bluetooth_slot(
+                "music", self.dir, if_revision=preview["revision"])
+        self.assertEqual((self.dir / routes.FILENAME).read_bytes(), before)
+        with self.assertRaises(ValueError):
+            routes.unbind_bluetooth_slot(
+                "music", self.dir, if_revision="r1-" + "Z"*64)
+        self.assertEqual((self.dir / routes.FILENAME).read_bytes(), before)
+        self.assertEqual(routes.load(self.dir)["bluetooth"], {mac: "music"})
+
+    def test_unbind_slot_cli_privacy_preview_confirm_and_stale_no_retry(self):
+        mac = "AA:BB:CC:DD:EE:FF"
+        routes.bind_bluetooth(mac, "music", self.dir)
+        original_preview = routes.preview_route
+        original_unbind = routes.unbind_bluetooth_slot
+        before = (self.dir / routes.FILENAME).read_bytes()
+        with (mock.patch.object(
+                routes, "preview_route",
+                side_effect=lambda action, target, slot=None:
+                original_preview(action, target, slot, directory=self.dir)) as previews,
+              mock.patch.object(
+                routes, "unbind_bluetooth_slot",
+                side_effect=lambda slot, *, if_revision:
+                original_unbind(slot, self.dir, if_revision=if_revision)) as writer):
+            with redirect_stdout(StringIO()), redirect_stderr(StringIO()):
+                with self.assertRaises(SystemExit) as refused:
+                    routes.main(["unbind-slot", "music"])
+            self.assertEqual(refused.exception.code, 2)
+            writer.assert_not_called()
+            with redirect_stdout(StringIO()) as out:
+                routes.main(["--format", "text", "--preview",
+                             "unbind-slot", "music"])
+            display = out.getvalue()
+            self.assertIn("Release Bluetooth input", display)
+            self.assertIn("music: Bluetooth source 1", display)
+            self.assertIn("music: Unreserved", display)
+            self.assertNotIn(mac, display)
+            self.assertNotIn("AA:BB", display)
+            self.assertEqual((self.dir / routes.FILENAME).read_bytes(), before)
+            expected = original_preview("unbind-slot", "music", directory=self.dir)
+            self.assertIn(expected["revision"], display)
+            with redirect_stdout(StringIO()), redirect_stderr(StringIO()):
+                with self.assertRaises(SystemExit) as refused:
+                    routes.main(["--format", "text",
+                                 "--confirm-local-route-change",
+                                 "--if-preview-revision", expected["revision"],
+                                 "unbind-slot", "music"])
+            self.assertEqual(refused.exception.code, 2)
+            writer.assert_not_called()
+            with redirect_stdout(StringIO()) as out:
+                routes.main(["--confirm-local-route-change",
+                             "--if-preview-revision", expected["revision"],
+                             "unbind-slot", "music"])
+            self.assertEqual(json.loads(out.getvalue())["bluetooth"], {})
+            self.assertEqual(routes.load(self.dir)["mode"], "manual")
+            writer.assert_called_once_with("music", if_revision=expected["revision"])
+            routes.bind_bluetooth(mac, "music", self.dir)
+            stale = original_preview("unbind-slot", "music", directory=self.dir)
+            routes.update(lambda current: dict(current), self.dir)
+            after = (self.dir / routes.FILENAME).read_bytes()
+            with redirect_stdout(StringIO()) as out, redirect_stderr(StringIO()):
+                with self.assertRaises(SystemExit) as rejected:
+                    routes.main(["--confirm-local-route-change",
+                                 "--if-preview-revision", stale["revision"],
+                                 "unbind-slot", "music"])
+            self.assertEqual(rejected.exception.code, 4)
+            self.assertEqual(json.loads(out.getvalue())["status"],
+                             "route-preview-stale")
+            self.assertEqual((self.dir / routes.FILENAME).read_bytes(), after)
+            self.assertEqual(writer.call_count, 2)
+            self.assertEqual(previews.call_count, 2)
+
     def test_third_bluetooth_source_is_rejected(self):
         routes.bind_bluetooth("AA:BB:CC:DD:EE:FF", "music", self.dir)
         routes.bind_bluetooth("11:22:33:44:55:66", "tablet", self.dir)

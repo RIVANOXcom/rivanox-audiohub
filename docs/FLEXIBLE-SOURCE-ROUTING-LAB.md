@@ -514,6 +514,13 @@ PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes --format text --p
 # Privately verify before/after slot assignment and exact r1-... revision.
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes --confirm-local-route-change --if-preview-revision r1-REPLACE-WITH-64-HEX-CHARS move-bt music tablet
 
+# Release ONE manually assigned Bluetooth source by fixed mixer slot,
+# without copying its private device MAC. The source is no longer eligible
+# for this managed local route, but Bluetooth pairing itself is unchanged.
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes --format text --preview unbind-slot music
+# Inspect the redacted before/after and privately review the exact revision:
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes --confirm-local-route-change --if-preview-revision r1-REPLACE-WITH-64-HEX-CHARS unbind-slot music
+
 # Exchange TWO MANUALLY assigned Bluetooth input slots in one policy update:
 # Example: music and tablet are both occupied by different BT peers.
 PYTHONPATH=/opt/audiohub/src python3 -m audiohub.source_routes --preview swap-bt music tablet
@@ -719,6 +726,27 @@ This local operation is **not** device authentication or a consumer
 phone UI, and cannot pair, trust, connect, open Scream UDP, or
 independently validate delivered PCM. Keep the local preview with
 Bluetooth addresses out of public logs.
+
+To release an existing manual Bluetooth source *without typing its
+private device address*, first request
+`--format text --preview unbind-slot SLOT`. This reports a fixed-slot
+before/after mapping (with Bluetooth source 1/2 placeholders) and
+the private policy revision. On separately confirmed
+`--confirm-local-route-change --if-preview-revision REV unbind-slot SLOT`,
+only that slot's one manually assigned Bluetooth mapping is deleted
+atomically. Manual mode remains manual; other Bluetooth assignments,
+LAN reservation, EQ settings and volume controls remain unchanged.
+Automatic discovery is **not** silently reenabled. Direct unguarded
+slot release, an empty slot, the LAN slot, automatic mode and a stale
+or ABA-replaced policy revision are rejected without change or retry.
+At the supervisor's next poll a previously managed loopback for the
+released source can stop, so the operator should expect audio
+interruption on that input. This does **not** remove the system's
+Bluetooth pairing/trust, erase a BlueZ device, disconnect Bluetooth
+radio devices, or verify PCM or audible output. It creates no new
+network, web API or elevated service; the source's address remains
+private in the original read-only JSON preview and is never printed
+by the text preview.
 
 When **one manually bound Bluetooth source needs a free EQ mixer
 input**, `--format text --preview move-bt FROM TO` shows a redacted
