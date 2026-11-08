@@ -212,6 +212,149 @@ class LocalMixerControlsTests(unittest.TestCase):
                 ])
             change.assert_not_called()
 
+    def test_isolate_input_mutes_other_two_atomically_but_never_unmutes_selected(self):
+        original = mixer_control.change({
+            "master": 17,
+            "music": {"volume": 22, "bass": 3, "mute": False},
+            "laptop": {"volume": 14, "treble": -2, "mute": False},
+            "tablet": {"volume": 36, "mid": 4, "mute": True},
+        }, path=self.settings, confirmed=True)
+        before = self.settings.read_bytes()
+        selected = "tablet"
+        patch = mixer_control.isolate_input_patch(selected)
+        self.assertEqual(patch, {
+            "music": {"mute": True}, "laptop": {"mute": True}
+        })
+        preview = mixer_control.preview_change(patch, path=self.settings)
+        self.assertEqual(preview["would_change"], [
+            "music.mute", "laptop.mute"
+        ])
+        self.assertTrue(preview["after"]["tablet"]["mute"])
+        self.assertEqual(self.settings.read_bytes(), before)
+        with mock.patch("audiohub.mixer_control.atomic_json",
+                        wraps=mixer_control.atomic_json) as atomic:
+            result = mixer_control.change(
+                patch, path=self.settings, confirmed=True,
+                if_revision=preview["revision"])
+            atomic.assert_called_once()
+        for slot in ("music", "laptop"):
+            self.assertTrue(result[slot]["mute"])
+        self.assertTrue(result["tablet"]["mute"], "Never unmute isolated slot")
+        self.assertEqual(result["master"], original["master"])
+        for slot in ("music", "laptop", "tablet"):
+            for field in ("volume", "bass", "mid", "treble"):
+                self.assertEqual(result[slot][field], original[slot][field])
+        self.assertEqual(mixer_control.show(path=self.settings), result)
+        self.assertEqual(stat.S_IMODE(self.settings.stat().st_mode), 0o600)
+        self.assertEqual(set(self.settings.parent.iterdir()),
+                         {self.settings,
+                          self.settings.parent / mixer_control.LOCK_NAME})
+
+    def test_isolate_input_readonly_cli_and_exact_revision_confirm_flow(self):
+        mixer_control.change({
+            "master": 25,
+            "music": {"volume": 20, "mute": False, "bass": 3},
+            "laptop": {"volume": 22, "mute": False},
+            "tablet": {"volume": 17, "mute": True},
+        }, path=self.settings, confirmed=True)
+        original = self.settings.read_bytes()
+        original_preview = mixer_control.preview_change
+        original_change = mixer_control.change
+        with (mock.patch("audiohub.mixer_control.preview_change",
+                         side_effect=lambda patch, **kw:
+                         original_preview(patch, path=self.settings, **kw)) as preview_call,
+              mock.patch("audiohub.mixer_control.change",
+                         side_effect=lambda patch, **kw:
+                         original_change(patch, path=self.settings, **kw)) as change_call):
+            with redirect_stdout(StringIO()) as stdout:
+                mixer_control.main(["--preview", "isolate-input", "music"])
+            preview = json.loads(stdout.getvalue().splitlines()[0])
+            self.assertEqual(preview["mode"], "preview-only")
+            self.assertEqual(preview["would_change"], ["laptop.mute"])
+            self.assertFalse(preview["settings_written"])
+            self.assertFalse(preview["supervisor_applied"])
+            self.assertFalse(preview["audible_playback_verified"])
+            self.assertEqual(self.settings.read_bytes(), original)
+            change_call.assert_not_called()
+            preview_call.assert_called_once_with({
+                "laptop": {"mute": True}, "tablet": {"mute": True}
+            })
+            revision = preview["revision"]
+            with redirect_stdout(StringIO()) as out:
+                mixer_control.main([
+                    "--confirm-local-mixer-change",
+                    "--if-preview-revision", revision,
+                    "isolate-input", "music",
+                ])
+            applied = json.loads(out.getvalue().splitlines()[0])
+            self.assertFalse(applied["music"]["mute"])
+            self.assertTrue(applied["laptop"]["mute"])
+            self.assertTrue(applied["tablet"]["mute"])
+            self.assertEqual(applied["music"]["bass"], 3)
+            change_call.assert_called_once_with({
+                "laptop": {"mute": True}, "tablet": {"mute": True}
+            }, confirmed=True, if_revision=revision)
+
+    def test_isolate_input_refuses_unreviewed_apply_and_stale_aba_without_writes(self):
+        self.assertFalse(self.settings.parent.exists())
+        for command in (
+            ["isolate-input", "music"],
+            ["--confirm-local-mixer-change", "isolate-input", "music"],
+            ["--if-preview-revision", "v1-" + "a"*64, "isolate-input", "music"],
+            ["--preview", "--confirm-local-mixer-change", "isolate-input", "music"],
+            ["--preview", "--if-preview-revision", "v1-" + "a"*64,
+             "isolate-input", "music"],
+            ["--preview", "--wait-for-supervisor", "isolate-input", "music"],
+            ["--confirm-local-profile-save", "--preview", "isolate-input", "music"],
+            ["--preview", "isolate-input", "unknown"],
+            ["--preview", "isolate-input", "music", "laptop"],
+        ):
+            with (self.subTest(command=command),
+                  mock.patch("audiohub.mixer_control.change") as writer,
+                  redirect_stdout(StringIO()) as stdout,
+                  redirect_stderr(StringIO())):
+                with self.assertRaises(SystemExit) as stopped:
+                    mixer_control.main(command)
+                self.assertEqual(stopped.exception.code, 2)
+                self.assertEqual(stdout.getvalue(), "")
+                writer.assert_not_called()
+            self.assertFalse(self.settings.parent.exists())
+
+        for invalid in ("UNKNOWN", "music;touch", 22, True, None, ""):
+            with self.subTest(invalid=repr(invalid)), self.assertRaises(
+                    mixer_control.MixerControlUnavailable):
+                mixer_control.isolate_input_patch(invalid)
+        before = mixer_control.change(
+            {"master": 30, "music": {"mute": False}},
+            path=self.settings, confirmed=True)
+        preview = mixer_control.preview_change(
+            mixer_control.isolate_input_patch("music"), path=self.settings)
+        # ABA value reversion must not permit the old approval token.
+        mixer_control.change(
+            {"master": 40}, path=self.settings, confirmed=True)
+        mixer_control.change(
+            {"master": 30}, path=self.settings, confirmed=True)
+        self.assertEqual(mixer_control.show(path=self.settings), before)
+        snapshot = self.settings.read_bytes()
+        with self.assertRaises(mixer_control.StaleMixerPreview):
+            mixer_control.change(mixer_control.isolate_input_patch("music"),
+                                 path=self.settings, confirmed=True,
+                                 if_revision=preview["revision"])
+        self.assertEqual(self.settings.read_bytes(), snapshot)
+
+    def test_isolation_is_noop_when_other_two_already_muted_and_no_auto_unmute(self):
+        original = mixer_control.change({
+            "music": {"mute": True, "volume": 13},
+            "laptop": {"mute": True, "volume": 15},
+            "tablet": {"mute": True, "volume": 17},
+        }, path=self.settings, confirmed=True)
+        planned = mixer_control.preview_change(
+            mixer_control.isolate_input_patch("laptop"), path=self.settings)
+        self.assertEqual(planned["would_change"], [])
+        self.assertTrue(all(planned["after"][slot]["mute"]
+                            for slot in ("music", "laptop", "tablet")))
+        self.assertEqual(mixer_control.show(path=self.settings), original)
+
     def test_mute_all_is_single_atomic_write_and_preserves_levels_and_eq(self):
         prior = mixer_control.change({
             "master": 27, "music": {"volume": 33, "bass": 4},
