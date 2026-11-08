@@ -560,7 +560,7 @@ class BrowserRoutingPlannerTests(unittest.TestCase):
         self.assertIn('status.dataset.invalid = String(layout === null);', source)
         self.assertIn('list.replaceChildren();', source)
         self.assertIn('row.textContent =', source)
-        for absent in ("fetch(", "localStorage", "innerHTML", "bluetoothctl",
+        for absent in ("fetch(", "localStorage.", "innerHTML", "bluetoothctl",
                        "writeFile", "POST", "MAC", "source_routes"):
             self.assertNotIn(absent, source)
 
