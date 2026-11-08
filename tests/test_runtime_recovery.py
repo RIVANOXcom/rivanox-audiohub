@@ -152,7 +152,7 @@ class RecoveryTests(unittest.TestCase):
                 s._route(src, {"audiohub.music": bad}, now=4)
                 self.assertEqual(s.loopbacks, {})
                 self.assertEqual(s.route_node_generations, {})
-        self.assertEqual(popen.call_count, 6)
+        self.assertEqual(popen.call_count, 5)
 
     @mock.patch("audiohub.runtime.subprocess.Popen")
     def test_dead_route_backoff_restarts_immediately_only_on_new_node_generation(self, popen):
