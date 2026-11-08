@@ -186,6 +186,47 @@ Physical playback, clipping, multi-source isolation and USB recovery
 must still be independently observed. Even attenuating an EQ band
 is not a guarantee of safe output gain or no clipping.
 
+### Check whether saved EQ and staged PipeWire EQ still agree
+
+After changing any saved EQ band, operators need to know if their **existing**
+private PipeWire stage file still matches the current requested EQ. Without
+changing, staging or restarting anything, run:
+
+```sh
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.eq_setup --compare-staged
+```
+
+This owner-local **read-only** command compares the SHA256 of the exact
+configuration generated from one stable private mixer snapshot to the
+SHA256 of the existing private stage file. It reports one of four
+`staging_status` values:
+
+- `matches_saved`: the safe stage file bytes exactly match currently
+  saved EQ. **Not evidence that PipeWire has loaded it**.
+- `differs_from_saved`: the safe stage file is present, but saved EQ and
+  its bytes differ (e.g., a newly tuned curve awaits staging).
+- `missing`: no stage directory/file was present; this command creates
+  neither.
+- `unavailable`: the stage path/file is unsafe, oversized, racing or
+  cannot be safely inspected. It is **never** treated as a match.
+
+The output shows only fixed technical slots, bounded saved EQ values,
+the two digests where safe, and the private mixer generation; no device
+identifiers or untrusted file text is displayed. The staged file must be
+private, owned by the current non-root user, regular, singly linked and
+within the configuration size limit. Symlinked directories/files, public
+or hardlinked targets are refused, and a mixer generation changing during
+the comparison invalidates the report. No files, permissions, settings,
+running filters or audio devices are modified. Even `matches_saved`
+explicitly reports `live_eq_applied=false`,
+`pipewire_restarted=false` and `hardware_audio_verified=false`.
+
+If staging is different or missing, review `--preview-saved` first.
+Stage only with the separate deliberate revision-guarded
+`--stage-saved --confirm-local-eq-stage` command from the section above.
+Any actual PipeWire reload remains a separate operator-authorized lab
+step and cannot be inferred from this read-only comparison.
+
 ### Tune all three bands of one input in one reviewed change
 
 The older `set-eq SLOT BAND DB` command edits one band at a time. To
