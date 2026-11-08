@@ -699,6 +699,91 @@ class EqSetupFileSafetyTests(unittest.TestCase):
                 self.assertFalse(self.config(home).parent.exists())
                 self.assertEqual(settings.read_bytes(), before)
 
+    def test_eq_overview_explains_requested_mix_headroom_without_live_claim(self):
+        from audiohub.mixer import mix_gain_budget, effective_master_gain
+        with tempfile.TemporaryDirectory() as tmp:
+            home = self.home(tmp)
+            settings = home / "private" / "settings.json"
+            state = mixer_control.change({
+                "master": 75,
+                "music": {"volume": 80, "bass": 6, "mid": 0,
+                          "treble": 0, "mute": False},
+                "laptop": {"mute": True},
+                "tablet": {"mute": True},
+            }, path=settings, confirmed=True)
+            before = settings.read_bytes()
+            with (mock.patch.object(Path, "home", return_value=home),
+                  mock.patch.object(eq_setup, "SETTINGS", settings)):
+                with redirect_stdout(StringIO()) as output:
+                    eq_setup.main(["--compare-staged", "--format", "overview"])
+                overview = output.getvalue()
+                projection = mixer_control.gain_headroom_projection(state)
+                self.assertIn("REQUESTED MIX HEADROOM", overview)
+                self.assertIn("Requested master: 75%", overview)
+                self.assertIn("Unmuted inputs: music", overview)
+                self.assertIn(
+                    f'Conservative mix factor: {projection["conservative_mix_factor_percent"]:.2f}%',
+                    overview)
+                self.assertIn(
+                    f'Projected capped master: {projection["projected_master_percent"]:.2f}%',
+                    overview)
+                self.assertAlmostEqual(
+                    projection["conservative_mix_factor_percent"],
+                    round(100 * mix_gain_budget(state), 2))
+                self.assertAlmostEqual(
+                    projection["projected_master_percent"],
+                    round(100 * effective_master_gain(state), 2))
+                self.assertIn("NOT a look-ahead limiter or peak test", overview)
+                self.assertIn("NOT VERIFIED: current PipeWire load", overview)
+                self.assertIn("ON-DISK STAGE: MISSING", overview)
+                self.assertNotIn(str(home), overview)
+                self.assertEqual(settings.read_bytes(), before)
+                self.assertFalse(self.config(home).parent.exists())
+
+                with redirect_stdout(StringIO()) as output:
+                    eq_setup.main(["--compare-staged"])
+                legacy_json = json.loads(output.getvalue())
+                self.assertNotIn("gain_headroom", legacy_json)
+                self.assertEqual(legacy_json["mode"],
+                                 "read-only-saved-vs-staged-eq")
+                self.assertFalse(legacy_json["settings_written"])
+                self.assertFalse(legacy_json["live_eq_applied"])
+                with redirect_stdout(StringIO()) as output:
+                    eq_setup.main(["--compare-staged", "--format", "json"])
+                self.assertEqual(json.loads(output.getvalue()), legacy_json)
+                with redirect_stdout(StringIO()) as output:
+                    eq_setup.main(["--compare-staged", "--format", "text"])
+                self.assertNotIn("REQUESTED MIX HEADROOM", output.getvalue())
+                self.assertEqual(settings.read_bytes(), before)
+
+    def test_eq_headroom_display_rejects_malformed_user_supplied_report(self):
+        report = {
+            "staging_status": "missing",
+            "equalizer": {
+                slot: {"bass": 0, "mid": 0, "treble": 0}
+                for slot in ("music", "laptop", "tablet")
+            },
+            "gain_headroom": {
+                "requested_master_percent": 75,
+                "conservative_mix_factor_percent": 90.0,
+                "projected_master_percent": 67.5,
+                "unmuted_sources": ["music"],
+            },
+        }
+        self.assertIn("67.50%", eq_setup.format_staged_eq_overview(report))
+        for bad in (None, "100", True, object(), -2):
+            changed = dict(report)
+            changed["gain_headroom"] = dict(report["gain_headroom"])
+            changed["gain_headroom"]["requested_master_percent"] = bad
+            with self.subTest(bad=repr(bad)):
+                with self.assertRaises(ValueError):
+                    eq_setup.format_staged_eq_overview(changed)
+        changed = dict(report)
+        changed["gain_headroom"] = dict(report["gain_headroom"])
+        changed["gain_headroom"]["unmuted_sources"] = ["music;echo"]
+        with self.assertRaises(ValueError):
+            eq_setup.format_staged_eq_overview(changed)
+
     def test_eq_overview_identifies_exact_fixed_profile_shapes_and_custom_curve(self):
         from audiohub import mixer_control
         for name, expected in (
