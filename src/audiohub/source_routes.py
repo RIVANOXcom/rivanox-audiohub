@@ -841,14 +841,42 @@ def format_local_input_board(slots_report, mixer_report, *, input_names=None):
                 or not 0 <= controls["volume"] <= 100
                 or type(controls["mute"]) is not bool):
             raise ValueError("Invalid private mixer channel")
+    # The Pi supervisor already computes a bounded set of controls waiting
+    # for software acknowledgement. Use only the fixed technical allowlist:
+    # never print an untrusted device name, free-form status, or MAC address.
+    state = mixer_report["supervisor"]
+    pending = mixer_report.get("pending_controls")
+    allowed = {"master"} | {
+        slot + "." + field
+        for slot in CHANNELS for field in ("volume", "mute")
+    }
+    if state == "unavailable":
+        if pending is not None:
+            raise ValueError("Inconsistent private mixer availability")
+        pending = []
+    elif (type(pending) is not list
+          or len(pending) > len(allowed)
+          or any(type(name) is not str or name not in allowed
+                 for name in pending)
+          or len(set(pending)) != len(pending)
+          or (state == "accepted" and pending)
+          or (state == "pending" and not pending)):
+        raise ValueError("Invalid private mixer acknowledgement")
+    pending_set = set(pending)
     marks = {True: "yes", False: "no"}
     lines = [
         "AudioHub private local input overview (read-only)",
         "Source policy: " + slots_report["route_policy"],
         "Requested master: " + str(requested["master"]) + "%",
-        "Mixer supervisor: " + mixer_report["supervisor"] +
+        "Mixer supervisor: " + state +
         " (software-only; not proof of sound)",
     ]
+    if requested["master"] == 0:
+        lines.append("CHECK: Requested master level is 0%; the output may be silent.")
+    if state == "unavailable":
+        lines.append("CHECK: No current software acknowledgement; recheck the supervisor.")
+    elif "master" in pending_set:
+        lines.append("CHECK: Requested master level awaits software acknowledgement.")
     for slot in CHANNELS:
         reservation = slots_report["slots"][slot]
         if reservation["lan_reserved"]:
@@ -860,14 +888,31 @@ def format_local_input_board(slots_report, mixer_report, *, input_names=None):
         else:
             role = "Unreserved"
         controls = requested[slot]
-        lines.append(
+        line = (
             _captioned_slot(slot, input_names) + ": " + role +
             " | requested " + str(controls["volume"]) + "%" +
             " | mute " + marks[controls["mute"]]
         )
+        checks = []
+        if controls["mute"]:
+            checks.append("requested mute is ON")
+        if controls["volume"] == 0:
+            checks.append("requested level is 0%")
+        waiting = [field for field in ("volume", "mute")
+                   if slot + "." + field in pending_set]
+        if waiting:
+            checks.append("software acknowledgement pending: " +
+                          ", ".join(waiting))
+        if checks:
+            line += " | CHECK: " + "; ".join(checks)
+        lines.append(line)
     lines.append(
         "Route and mixer settings are independently sampled, NOT synchronized; "
         "recheck both before a local change."
+    )
+    lines.append(
+        "Checks describe requested settings and software acknowledgement only; "
+        "they cannot diagnose actual PCM or speaker sound."
     )
     lines.append(
         "No Bluetooth identity, A2DP stream, PCM samples, live speaker level "
