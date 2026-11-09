@@ -113,6 +113,8 @@ def build(root, directory, sha):
         "driver_included": False,
         "credentials_included": False,
         "windows_scream_driver_required": True,
+        "driverless_speaker_soundcheck_available": True,
+        "windows_scream_driver_required_for_soundcheck": False,
         "source_files": inventory,
     }
     content["SOURCE-MANIFEST.json"] = (

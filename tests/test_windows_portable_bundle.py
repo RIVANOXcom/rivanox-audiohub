@@ -49,6 +49,8 @@ class WindowsPortableBundleTests(unittest.TestCase):
             self.assertEqual(manifest["source_sha"], SHA)
             self.assertFalse(manifest["credentials_included"])
             self.assertFalse(manifest["driver_included"])
+            self.assertTrue(manifest["driverless_speaker_soundcheck_available"])
+            self.assertFalse(manifest["windows_scream_driver_required_for_soundcheck"])
             self.assertFalse(manifest["hardware_verified"])
             self.assertFalse(manifest["public_release_ready"])
             self.assertIn(self.prefix + "/audiohub/windows_bridge_gui.py", paths)

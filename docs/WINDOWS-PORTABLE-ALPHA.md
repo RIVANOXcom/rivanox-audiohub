@@ -10,8 +10,9 @@ included. Nothing starts automatically.
 ## Four steps for a manually authorized isolated test
 
 1. **Prerequisites.** Windows 10/11, separately installed Python 3.11 or
-   newer with TLS 1.3, and an independently installed Windows Scream virtual
-   audio driver. Configure its **unicast 48 kHz/16-bit/stereo UDP** output
+   newer with TLS 1.3. **Only for Windows program-audio streaming**, a
+   separately installed Windows Scream virtual audio driver is also needed.
+   Configure its **unicast 48 kHz/16-bit/stereo UDP** output
    exclusively to **127.0.0.1:4010**. The driver's ability to do this has
    **not been verified on a real Windows machine**. Its default multicast
    mode is not compatible. Do not use raw Scream on a home/work LAN.
@@ -63,6 +64,40 @@ included. Nothing starts automatically.
 If Python is not registered as `py`, use `python` with a separately
 installed compatible version. Do not disable Windows execution or security
 policies to run this package.
+
+## First hardware step: quiet speaker tone WITHOUT a Scream driver
+
+Before configuring the Windows Scream driver, an operator can verify the
+**authenticated Windows-to-Pi PCM audio path** using a self-generated
+440 Hz / 5-second test tone at approximately -29.5 dBFS with 200 ms fades.
+This requires no Windows Scream driver, program audio capture, third-party
+runtime package, or external audio file. It still requires the isolated
+Pi4 with the separately configured local private PipeWire/USB sound sink,
+fresh shared key, pinned certificate, explicit Pi server start, and approved
+network access. Start at minimum speaker/master gain to avoid surprises.
+
+**GUI:** use `py -3 START-WINDOWS-BRIDGE.py --gui`, select
+**Pi speaker test: quiet 5-second tone (no Scream driver)**, fill the
+private Pi IP, verified certificate fingerprint and key path. Choose
+**Check locally (offline)**, type `ISOLATED`, then **Start isolated session**.
+The same **Stop** button can interrupt the short tone. No Windows UDP port
+is opened in soundcheck mode. The Pi still authenticates the TLS connection
+before any audio is emitted. There is no automatic retry.
+
+**Terminal (no Tk required):** use
+`py -3 START-WINDOWS-BRIDGE.py --test-tone --check-only` to check the
+local parameters without network access, then — with the Pi receiver
+already manually running on the isolated bench —
+`py -3 START-WINDOWS-BRIDGE.py --test-tone` and confirm `ISOLATED`.
+The 5-second tone stops independently of a 1–30 minute maximum session.
+A successful frame count means only that data was submitted; the operator
+must personally confirm actual sound from Edifier R600USB and separately
+verify both sound channels, volume, USB recovery and reconnection. A tone
+does **NOT** prove Windows Scream driver compatibility or Bluetooth mixing.
+
+The tone is generated on the Windows bridge, not from the Pi local
+soundcheck utility; it therefore exercises the encrypted network protocol,
+pinned Pi certificate, manual sender authentication and Pi playback route.
 
 ## Smoke test, cancellation, rollback
 
