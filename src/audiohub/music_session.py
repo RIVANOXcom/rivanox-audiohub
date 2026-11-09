@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import math
 import select
+import signal
 import sys
 import threading
 import time
@@ -18,8 +19,8 @@ from . import local_music
 
 POLL_SECONDS = 0.15
 QUIT_JOIN_SECONDS = 3.0
-COMMAND_HELP = ("Enter: [s] status, [l] queue, [n] next, [p] previous, "
-                "[r] replay, [1-8] jump to selected track, [q] quit, [h] help.")
+COMMAND_HELP = ("Enter: [u] pause/resume, [s] status, [l] queue, [n] next, "
+                "[p] previous, [r] replay, [1-8] jump, [q] quit, [h] help.")
 
 
 def read_terminal_command(timeout=POLL_SECONDS, *, stream=None):
@@ -41,17 +42,19 @@ def read_terminal_command(timeout=POLL_SECONDS, *, stream=None):
     if len(line) > 16:
         return "?"
     value = line.strip().lower()
-    return value if value in ("s", "l", "n", "p", "r", "q", "h",
+    return value if value in ("u", "s", "l", "n", "p", "r", "q", "h",
                               "1", "2", "3", "4", "5", "6", "7", "8") else "?"
 
 
-def status_message(position, count, started_at, deadline, *, clock=time.monotonic):
+def status_message(position, count, started_at, deadline, *, clock=time.monotonic,
+                   paused=False):
     now = clock()
     elapsed = max(0, int(now - started_at))
     remaining = max(0, math.ceil(deadline - now))
     return ("Music track " + str(position) + "/" + str(count)
             + " | elapsed " + str(elapsed) + " s"
             + " | session remaining " + str(remaining) + " s"
+            + (" | PAUSED (owned player only)" if paused else "")
             + " | local only; audio not physically verified.")
 
 
@@ -113,6 +116,7 @@ def run_session(paths, *, max_minutes=15, read_command=read_terminal_command,
         finished = threading.Event()
         lock = threading.Lock()
         active = [None]
+        paused = [False]  # guarded by lock; never signals unrelated processes
         failures = []
 
         def on_player(child):
@@ -120,6 +124,10 @@ def run_session(paths, *, max_minutes=15, read_command=read_terminal_command,
                 active[0] = child
                 if cancelled.is_set() and child.poll() is None:
                     child.terminate()
+                elif paused[0] and child.poll() is None:
+                    # A local pause command can arrive before pw-cat spawns.
+                    # Apply it to the newly owned child, never PipeWire itself.
+                    child.send_signal(signal.SIGSTOP)
 
         def worker():
             try:
@@ -146,8 +154,36 @@ def run_session(paths, *, max_minutes=15, read_command=read_terminal_command,
             cancelled.set()
             with lock:
                 child = active[0]
+                was_paused = paused[0]
+                paused[0] = False
                 if child is not None and child.poll() is None:
-                    child.terminate()
+                    if was_paused:
+                        # A stopped POSIX process cannot run its ordinary
+                        # termination handler until SIGCONT has been sent.
+                        try:
+                            child.send_signal(signal.SIGCONT)
+                        except OSError:
+                            pass  # kill fallback below, only this child
+                    try:
+                        child.terminate()
+                    except OSError:
+                        pass  # can race with natural track completion
+
+        def toggle_pause():
+            with lock:
+                child = active[0]
+                want_pause = not paused[0]
+                if child is not None:
+                    if child.poll() is not None:
+                        return None
+                    try:
+                        child.send_signal(signal.SIGSTOP if want_pause
+                                          else signal.SIGCONT)
+                    except OSError:
+                        # A disappearing child cannot be marked paused.
+                        return None
+                paused[0] = want_pause
+                return want_pause
 
         requested = None
         try:
@@ -157,8 +193,18 @@ def run_session(paths, *, max_minutes=15, read_command=read_terminal_command,
                     break
                 command = read_command(POLL_SECONDS)
                 if command == "s":
+                    with lock:
+                        is_paused = paused[0]
                     out(status_message(position, report["files"], start,
-                                       deadline, clock=clock))
+                                       deadline, clock=clock, paused=is_paused))
+                elif command == "u":
+                    result = toggle_pause()
+                    if result is None:
+                        out("Player unavailable; pause/resume was NOT applied.")
+                    else:
+                        out("Owned local music player PAUSED; session time limit continues."
+                            if result else
+                            "Owned local music player RESUMED; no settings changed.")
                 elif command == "h":
                     out(COMMAND_HELP)
                 elif command == "l":

@@ -341,3 +341,16 @@ already-authorized physical terminal, keep the original session
 limit, display no private filenames and leave Bluetooth, network,
 PipeWire routing and EQ unchanged. See
 [local WAV controls](docs/LOCAL-MUSIC-PLAYBACK.md).
+
+### Pause and resume your local Pi4 WAV session
+
+From a manually started `--play --interactive` terminal session,
+`u` + Enter pauses the current **owned local music player**,
+and another `u` + Enter resumes it. The `s` status command shows
+whether it is paused. Existing next/previous/replay/jump, quit,
+Ctrl+C and the total session deadline continue to work while paused.
+The player is resumed before termination to avoid leaving a stopped
+process behind. PipeWire services, Bluetooth sources, routing and
+security permissions are unchanged. Buffered speaker audio can
+continue briefly; **real Pi4/Edifier audibility is still unverified**.
+See [local music operator instructions](docs/LOCAL-MUSIC-PLAYBACK.md).

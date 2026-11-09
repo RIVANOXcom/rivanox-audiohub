@@ -1,5 +1,6 @@
 """Interactive local Pi4 WAV session: terminal-only skip, status, stop, safety."""
 import io
+import signal
 from pathlib import Path
 import subprocess
 import sys
@@ -19,6 +20,10 @@ class FakeChild:
         self.terminated = False
         self.killed = False
         self.exit_code = None
+        self.sent_signals = []
+
+    def send_signal(self, number):
+        self.sent_signals.append(number)
 
     def poll(self):
         return self.exit_code
@@ -304,6 +309,100 @@ class MusicSessionTests(unittest.TestCase):
         self.assertRaises(ValueError, music_session.queue_message, base, 3)
         bad = {**base, "tracks":[{"duration_ms":-5}, base["tracks"][1]]}
         self.assertRaises(ValueError, music_session.queue_message, bad, 1)
+
+
+
+    def run_paused(self, commands):
+        """Drive a session only after the worker owns an actual fake child."""
+        commands = iter(commands)
+        def read(_timeout):
+            until = time.monotonic() + 2
+            while not self.children and time.monotonic() < until:
+                time.sleep(0.001)
+            if not self.children:
+                raise AssertionError("player was never spawned")
+            return next(commands, None)
+        with mock.patch.object(local_music, "music_sink_available",
+                               return_value=True), \
+             mock.patch.object(local_music.os, "geteuid", return_value=1000):
+            return music_session.run_session(
+                self.paths, max_minutes=1, read_command=read,
+                playback=self.waiting_playback, out=self.out.append,
+                require_tty=False)
+
+    def test_pause_and_resume_signal_only_owned_child(self):
+        self.assertFalse(self.run_paused(["u", "s", "u", "q"]))
+        self.assertEqual(self.played, [self.paths[0]])
+        self.assertEqual(self.children[0].sent_signals,
+                         [signal.SIGSTOP, signal.SIGCONT])
+        self.assertTrue(self.children[0].terminated)
+        status = "\n".join(self.out)
+        self.assertIn("PAUSED", status)
+        self.assertIn("RESUMED", status)
+        self.assertIn("PAUSED (owned player only)", status)
+        self.assertNotIn("secret-title", status)
+        self.assertNotIn(str(self.dir), status)
+
+    def test_quit_while_paused_resumes_before_child_termination(self):
+        self.assertFalse(self.run_paused(["u", "q"]))
+        self.assertEqual(self.children[0].sent_signals,
+                         [signal.SIGSTOP, signal.SIGCONT])
+        self.assertTrue(self.children[0].terminated)
+        self.assertNotIn("secret-title", "\n".join(self.out))
+
+    def test_child_pause_signal_failure_does_not_claim_paused(self):
+        class RejectPause(FakeChild):
+            def send_signal(self, number):
+                raise OSError("permission details /private/ignored.wav")
+
+        def playback(paths, *, max_minutes, stop, on_player,
+                     session_deadline, notify):
+            child = RejectPause()
+            self.children.append(child)
+            on_player(child)
+            while not stop.wait(0.002):
+                pass
+            raise InterruptedError("operator cancel")
+
+        commands = iter(["u", "q"])
+        def read(_timeout):
+            until = time.monotonic() + 2
+            while not self.children and time.monotonic() < until:
+                time.sleep(0.001)
+            return next(commands, None)
+        with mock.patch.object(local_music, "music_sink_available", return_value=True), \
+             mock.patch.object(local_music.os, "geteuid", return_value=1000):
+            self.assertFalse(music_session.run_session(
+                self.paths, max_minutes=1, read_command=read,
+                playback=playback, out=self.out.append, require_tty=False))
+        self.assertTrue(self.children[0].terminated)
+        self.assertNotIn("permission details", "\n".join(self.out))
+        self.assertNotIn("PAUSED; session", "\n".join(self.out))
+
+    def test_pause_is_optional_and_regular_next_and_status_unchanged(self):
+        self.assertFalse(self.run_with(["s", "n", "q"]))
+        self.assertEqual(len(self.children), 2)
+        self.assertTrue(all(not x.sent_signals for x in self.children))
+        self.assertNotIn("PAUSED", "\n".join(self.out))
+        self.assertIn("session remaining", "\n".join(self.out))
+
+    def test_decoder_accepts_u_without_echoing_untrusted_input(self):
+        with mock.patch.object(music_session.select, "select",
+                               return_value=([1], [], [])):
+            self.assertEqual(music_session.read_terminal_command(
+                stream=io.StringIO("U\n")), "u")
+            self.assertEqual(music_session.read_terminal_command(
+                stream=io.StringIO("SECRET-WIFI-PASSPHRASE\n")), "?")
+
+    def test_status_paused_is_explicit_and_keeps_wall_clock_deadline(self):
+        text = music_session.status_message(
+            2, 4, 100, 180, clock=lambda: 150, paused=True)
+        self.assertIn("PAUSED (owned player only)", text)
+        self.assertIn("session remaining 30 s", text)
+        self.assertIn("Music track 2/4", text)
+        self.assertNotIn("secret-title", text)
+        self.assertNotIn("PAUSED", music_session.status_message(
+            2, 4, 100, 180, clock=lambda: 150))
 
 
 if __name__ == "__main__":
