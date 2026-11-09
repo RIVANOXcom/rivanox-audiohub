@@ -43,7 +43,7 @@ def validate_local_setup(server_ip, pin_sha256, key_path, minutes):
 
 
 def interactive_bridge(*, input_fn=input, output=print, execute=None,
-                       check_only=False):
+                       check_only=False, test_tone=False):
     """One understandable, deliberately manual session with an explicit gate.
 
     The private key is read from disk and never printed or sent in the
@@ -51,10 +51,17 @@ def interactive_bridge(*, input_fn=input, output=print, execute=None,
     No settings are saved; a repeat session requires new consent.
     """
     check_python_tls()
+    if not isinstance(test_tone, bool):
+        raise ValueError("Invalid explicit test mode")
     if execute is None:
         execute = secure_lan.run_bridge
     output("RIVANOX AudioHub - isolated Windows audio experiment")
-    output("Requires external Python 3.11+, Windows Scream loopback-unicast,")
+    output("Requires external Python 3.11+ and a private Pi test bench.")
+    output("Quiet 5-second speaker test: NO Windows Scream driver required."
+           if test_tone else "Scream streaming: external Windows driver with loopback unicast required.")
+    # Driver is only required for real Windows program audio, NOT for speaker soundcheck.
+    # This choice never changes Pi routing or enables a receiver service.
+    # Keep manual confirmation for either mode.
     output("a separately authorized Pi, and a physically isolated test LAN.")
     output("No installer, driver, keys or certificates are included.")
     ip = input_fn("Isolated Pi IPv4 (e.g. 192.168.10.30): ").strip()
@@ -64,7 +71,10 @@ def interactive_bridge(*, input_fn=input, output=print, execute=None,
     validate_local_setup(ip, pin, key_file, minutes)
     output("Local configuration checks passed. Windows key-file ACLs")
     output("and the external Scream driver are NOT verified by this check.")
-    output("Windows Scream must unicast only to 127.0.0.1:4010.")
+    if test_tone:
+        output("QUIET TONE: keep speaker volume LOW. Human sound check required.")
+    else:
+        output("Windows Scream must unicast only to 127.0.0.1:4010.")
     if check_only:
         output("CHECK ONLY: no TCP/UDP listener opened and no audio transmitted.")
         return 0
@@ -73,11 +83,14 @@ def interactive_bridge(*, input_fn=input, output=print, execute=None,
     if confirmation != "ISOLATED":
         output("Cancelled; no network connection opened.")
         return 1
-    frames = execute(
+    params = dict(
         server_ip=ip, port=secure_lan.DEFAULT_PORT,
         udp_port=secure_lan.DEFAULT_UDP_PORT, key_file=key_file,
         pin_sha256=pin, session_minutes=minutes, isolated_lab=True,
     )
+    if test_tone:
+        params["test_tone"] = True
+    frames = execute(**params)
     output("Isolated session closed. Accepted local PCM frames: " + str(frames))
     output("A frame count is not proof of sound from the Pi USB speaker.")
     return 0
@@ -89,6 +102,8 @@ def main(argv=None):
                         help="Check Python TLS 1.3 support, without any credentials or ports")
     parser.add_argument("--check-only", action="store_true",
                         help="Validate operator-provided local setup without opening sockets")
+    parser.add_argument("--test-tone", action="store_true",
+                        help="Send a quiet five-second Pi speaker soundcheck without Scream")
     parser.add_argument("--gui", action="store_true",
                         help="Open optional local graphical lab controls; no automatic connection")
     args = parser.parse_args(argv)
@@ -102,7 +117,7 @@ def main(argv=None):
             print("Python TLS 1.3 supported. No keys, driver, network,")
             print("audio or Windows hardware have been verified.")
             return 0
-        return interactive_bridge(check_only=args.check_only)
+        return interactive_bridge(check_only=args.check_only, test_tone=args.test_tone)
     except (EOFError, KeyboardInterrupt):
         print("\nCancelled; no automatic retry.", file=sys.stderr)
         return 2
