@@ -7,6 +7,65 @@ authenticated TCP audio bridge. It runs using Python's standard library.
 There is no installer, Windows driver, certificate, password or shared key
 included. Nothing starts automatically.
 
+## Offline certificate cross-check (recommended before any audio test)
+
+The Windows GUI now has a **Choose public cert…** file picker. A copied
+Pi PUBLIC server certificate alone **does not establish trust**. Its SHA256
+must be compared against the value separately observed at the Pi's
+**physically trusted console** or over another owner-verified offline
+channel. Never accept a fingerprint supplied only with an untrusted
+download, chat message, LAN discovery or certificate file.
+
+1. With the Pi4 physically under your control, confirm the isolated
+   test identity. On the trusted Pi console, print the certificate's
+   **DER SHA256**, not the text-file/PEM SHA256:
+
+       set -o pipefail
+       openssl x509 -in /path/to/your/pi-server-public.crt -outform DER | sha256sum
+
+   Compare all **64 lowercase hexadecimal characters** through an
+   independently trusted offline channel. No server private key should
+   ever leave the Pi.
+2. Copy **only the public certificate** in PEM or DER format to a
+   private operator-approved folder on the Windows test PC. Keep the
+   individually provisioned 32-byte per-bench shared key separately
+   protected, and verify Windows key-file NTFS ACLs manually.
+3. In \`py -3 START-WINDOWS-BRIDGE.py --gui\`, type the independently
+   verified Pi SHA256 into the existing fingerprint field; it is
+   intentionally **not filled automatically**. Select the public
+   certificate with **Choose public cert…**. Choose
+   **Check locally (offline)**. The GUI compares the local certificate's
+   exact DER SHA256 to the independently entered fingerprint, without
+   opening TCP/UDP. A mismatch, missing/linked/invalid cert or an
+   unrelated private key file blocks the connection. The comparison
+   is repeated before every manually authorized Start.
+4. Terminal-only users can check the same certificate by running:
+
+       py -3 START-WINDOWS-BRIDGE.py --certificate-file "C:\path\pi-public.crt" --check-only
+
+   After entering the Pi address, fingerprint and private key path,
+   this performs the same fail-closed offline check. Only after
+   separate isolated-lab approval, run the command without
+   \`--check-only\`, confirm \`ISOLATED\` and run the existing
+   5-second speaker test or the normal Windows Scream bridge.
+   To *inspect* a public certificate without keys or sockets, use
+   \`py -3 START-WINDOWS-BRIDGE.py --show-cert-fingerprint "C:\path\pi-public.crt"\`.
+   **An inspection of a Windows-local certificate is not an independent
+   trust check.** Only a hash confirmed at the trusted Pi console
+   establishes the expected identity.
+
+The local verification parses exactly one X.509 public certificate
+using Python's installed OpenSSL, accepts PEM or DER, refuses linked,
+oversized, non-X.509 or private-key files, and compares the DER SHA256
+in constant time. It creates no certificates, keys, accounts, trust
+store changes, network privileges or services. It does **not**
+automatically validate the certificate's origin, hostname, expiry,
+issuer trust chain, owner identity or rotation/revocation state.
+The existing pinned TLS 1.3 handshake still checks the certificate
+against the independently entered value; its Pi-side HMAC key proof
+remains mandatory. On a real consumer product, owner enrollment and
+certificate/key rotation will need additional approved work.
+
 ## Four steps for a manually authorized isolated test
 
 1. **Prerequisites.** Windows 10/11, separately installed Python 3.11 or

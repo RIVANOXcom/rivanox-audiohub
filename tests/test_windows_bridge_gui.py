@@ -59,6 +59,7 @@ class GuiOfflineTests(unittest.TestCase):
         win = gui.BridgeWindow.__new__(gui.BridgeWindow)
         win.test_tone = _Value(False)
         win.tone_channel = _Value("Both speakers")
+        win.cert_path = _Value("")
         win.entries = {
             "ip": _Value("192.168.10.30"), "pin": _Value("f" * 64),
             "key": _Value(str(self.key)), "minutes": _Value("1"),
@@ -263,6 +264,24 @@ class GuiOfflineTests(unittest.TestCase):
         win.entries["pin"].set("invalid")
         self.assertFalse(win.start())
         bridge.assert_not_called()
+
+    def test_public_certificate_picker_never_replaces_offline_pi_pin(self):
+        win = self._fake_window(mock.Mock())
+        win.filedialog = mock.Mock()
+        win.filedialog.askopenfilename.return_value = "C:\\pi-public.pem"
+        pin_before = win.entries["pin"].get()
+        win._pick_certificate()
+        self.assertEqual(win.cert_path.get(), "C:\\pi-public.pem")
+        self.assertEqual(win.entries["pin"].get(), pin_before)
+        win.filedialog.askopenfilename.assert_called_once()
+        self.assertIn("PUBLIC", win.filedialog.askopenfilename.call_args.kwargs["title"])
+
+    def test_selected_invalid_public_certificate_refuses_gui_start(self):
+        win = self._fake_window(mock.Mock())
+        win.cert_path.set(str(self.key))  # private key file is NOT X.509
+        self.assertFalse(win.check())
+        self.assertFalse(win.start())
+        win.bridge.assert_not_called()
 
     def test_gui_module_imports_without_tk_or_linux_fcntl(self):
         # No graphical dependencies imported until explicit --gui invocation.

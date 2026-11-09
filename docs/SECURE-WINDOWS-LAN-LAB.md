@@ -150,6 +150,34 @@ not an accepted hardware test or production GO. Manual submission
 and independent review belong to the owner and the existing PAPA
 project process. See the Windows portable first-run guide for details.
 
+## Trusted Pi fingerprint vs. untrusted local certificate
+
+Before enabling a manual Windows bridge session, obtain the Pi TLS
+server's **DER-form SHA256** from the Pi4 *physically trusted console*,
+for example via
+\`openssl x509 -in pi-server-public.crt -outform DER | sha256sum\`
+after checking that OpenSSL succeeded. Do not hash the PEM text; the
+TLS client pins the DER X.509 bytes.
+
+On Windows the optional public-certificate picker and terminal
+\`--certificate-file\` argument cross-check a PEM or DER *public*
+certificate against the independently typed hash, entirely offline.
+A matching local certificate **does not** mean the local file was
+obtained through a trusted channel. The GUI never accepts it as a
+new default fingerprint and will refuse a mismatch before opening
+any network port. A simple standalone
+\`--show-cert-fingerprint FILE\` prints a PUBLIC certificate's DER
+SHA256 without reading private keys or opening network sockets;
+if used on Windows, independently verify this value at the Pi console.
+See the Windows first-run guide for the complete workflow.
+
+This does not generate/rotate credentials, establish a mobile phone
+owner identity, validate a standard public PKI chain, or replace the
+actual TLS1.3 pinned connection/HMAC server challenge. Protect the
+per-bench 32-byte PSK with Pi POSIX and Windows NTFS file permissions;
+never place TLS private keys or PSKs in a ZIP, public Git repository,
+operator observation JSON or screenshot.
+
 ## Manual hardware smoke-test and rollback
 
 1. Verify the exact Git commit and Source CI, independently confirm TLS

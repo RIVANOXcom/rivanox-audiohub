@@ -86,6 +86,17 @@ automatic hardware verification or release approval. This removes the
 need to copy sensitive terminal logs to report a physical fault.
 See [operator observation instructions](./docs/WINDOWS-PORTABLE-ALPHA.md).
 
+Before testing, the Windows GUI can now **offline-compare the Pi's
+public X.509 PEM/DER certificate to a separately confirmed DER SHA256**
+from the physically trusted Pi console. The certificate picker never
+replaces the independently entered fingerprint, and a mismatch
+blocks the connection before networking. The portable terminal
+equivalents are \`--certificate-file\` and
+\`--show-cert-fingerprint\`. This shortens error-prone onboarding but
+does not create trusted owner identity, certificates, keys or
+automatic provisioning. Read the
+[offline certificate cross-check walkthrough](./docs/WINDOWS-PORTABLE-ALPHA.md).
+
 ### Authenticated Windows audio: isolated engineering preview only
 
 A separate optional **TLS 1.3, pinned-cert, 32-byte shared-key challenge-response**

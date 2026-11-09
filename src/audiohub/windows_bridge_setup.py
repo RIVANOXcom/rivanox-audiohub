@@ -13,6 +13,7 @@ import ssl
 import sys
 
 from . import secure_lan
+from . import certificate_onboarding
 
 
 def check_python_tls():
@@ -29,7 +30,7 @@ def _read_minutes(raw):
     return secure_lan.validate_session_minutes(int(raw))
 
 
-def validate_local_setup(server_ip, pin_sha256, key_path, minutes):
+def validate_local_setup(server_ip, pin_sha256, key_path, minutes, certificate_file=None):
     """Read-only configuration validation; never dial or open a UDP port."""
     secure_lan.validate_options(server_ip, "127.0.0.1",
                                 secure_lan.DEFAULT_PORT, True)
@@ -39,11 +40,16 @@ def validate_local_setup(server_ip, pin_sha256, key_path, minutes):
     if not key.is_absolute():
         raise ValueError("The private key must have an absolute file path")
     secure_lan.read_private_key(key)
+    if certificate_file is not None and certificate_file != "":
+        # Always compare with the independently obtained Pi fingerprint.
+        # A downloaded public certificate alone is NEVER a trust anchor.
+        certificate_onboarding.verify_public_certificate(certificate_file, pin_sha256)
     return str(key)
 
 
 def interactive_bridge(*, input_fn=input, output=print, execute=None,
-                       check_only=False, test_tone=False, test_channel="both"):
+                       check_only=False, test_tone=False, test_channel="both",
+                       certificate_file=None):
     """One understandable, deliberately manual session with an explicit gate.
 
     The private key is read from disk and never printed or sent in the
@@ -71,7 +77,12 @@ def interactive_bridge(*, input_fn=input, output=print, execute=None,
     pin = input_fn("Verified Pi TLS certificate SHA256 (64 lowercase hex): ").strip()
     key_file = input_fn("Absolute path to private 32-byte shared key file: ").strip()
     minutes = _read_minutes(input_fn("Session minutes [10, maximum 30]: "))
-    validate_local_setup(ip, pin, key_file, minutes)
+    validate_local_setup(ip, pin, key_file, minutes, certificate_file)
+    if certificate_file:
+        output("Pi public certificate MATCHES independently entered SHA256 (offline).")
+        output("You must verify that fingerprint from trusted Pi console yourself.")
+    else:
+        output("No local public certificate file compared. Verify Pi SHA256 independently.")
     output("Local configuration checks passed. Windows key-file ACLs")
     output("and the external Scream driver are NOT verified by this check.")
     if test_tone:
@@ -108,6 +119,10 @@ def main(argv=None):
                         help="Check Python TLS 1.3 support, without any credentials or ports")
     parser.add_argument("--check-only", action="store_true",
                         help="Validate operator-provided local setup without opening sockets")
+    parser.add_argument("--show-cert-fingerprint", type=str, default=None,
+                        help="Offline DER SHA256 of one local PUBLIC cert; only trust if run on trusted Pi console")
+    parser.add_argument("--certificate-file", type=str, default=None,
+                        help="Optional local Pi PUBLIC PEM/DER cert; refuse unless it matches independently verified pin")
     parser.add_argument("--test-tone", action="store_true",
                         help="Send a quiet five-second Pi speaker soundcheck without Scream")
     parser.add_argument("--test-channel", choices=secure_lan.TONE_CHANNELS, default="both",
@@ -116,6 +131,12 @@ def main(argv=None):
                         help="Open optional local graphical lab controls; no automatic connection")
     args = parser.parse_args(argv)
     try:
+        if args.show_cert_fingerprint:
+            fingerprint = certificate_onboarding.certificate_sha256(args.show_cert_fingerprint)
+            print("Public X.509 DER SHA256: " + fingerprint)
+            print("A local certificate is NOT trustworthy without the trusted Pi console.")
+            print("No socket opened, key read, or trust installed.")
+            return 0
         if args.gui:
             # Tk is optional and imported ONLY when the operator requests GUI.
             from .windows_bridge_gui import launch
@@ -126,7 +147,8 @@ def main(argv=None):
             print("audio or Windows hardware have been verified.")
             return 0
         return interactive_bridge(check_only=args.check_only, test_tone=args.test_tone,
-                                  test_channel=args.test_channel)
+                                  test_channel=args.test_channel,
+                                  certificate_file=args.certificate_file)
     except (EOFError, KeyboardInterrupt):
         print("\nCancelled; no automatic retry.", file=sys.stderr)
         return 2
