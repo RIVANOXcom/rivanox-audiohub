@@ -236,3 +236,48 @@ Real Pi4/Edifier audio pause, stop, source isolation and safe output
 level require a low-volume physical bench test. The controls are
 unverified operator alpha software, not a speaker acceptance or
 owner-authenticated phone controller.
+
+## One-command guided local album selection (Pi4 operator alpha)
+
+You can now choose a local album **without remembering several flags**.
+At the already-authorized **physical Pi4 terminal**, run as the
+unprivileged audiohub user:
+
+    PYTHONPATH=/opt/audiohub/src python3 -m audiohub.local_music \
+      --guided --library /home/audiohub/PrivateMusic --minutes 10
+
+The command first lists at most 40 valid WAV tracks by **number,
+duration and audio format**. Private filenames are hidden by default.
+The music folder must be a real, non-symlinked, absolute, privately
+controlled directory as in the existing library command.
+
+The tool then asks for **up to 8 distinct track numbers** in playback
+order (for example `2,1,4`). Pressing Enter without a selection
+cancels without sound. Invalid selections can be corrected twice; three
+invalid attempts cancel. No file, playlist or operator responses are
+stored or sent over a network.
+
+After a valid selection the tool shows the total planned duration and
+asks for an **exact uppercase `PLAY` confirmation**. Any different
+answer, EOF or a missing terminal cancels without starting the player.
+Only after `PLAY` does the existing local interactive controller start,
+with `u` pause/resume, `s` status, `n` next, `p` previous, `r` replay,
+`l` queue overview, `1`–`8` direct jump and `q` stop. Press Ctrl+C
+for local interruption. Session duration continues to be limited even
+while paused; low physical speaker volume is required on first test.
+
+Use `--show-titles` only if you explicitly want sanitized filenames
+visible at a trusted private terminal; terminal transcripts may reveal
+them. The guided command is deliberately incompatible with `--play`,
+`--interactive`, `--tracks` or direct WAV arguments, because it owns
+the entire preview→selection→human confirmation→play sequence. The
+existing direct-file and `--library --tracks --play` commands continue
+to behave as before.
+
+**Operator test and rollback:** The new UI exists in the unverified
+Pi4 ARM64 alpha built from its exact source commit, not older images.
+After separate permission, flash a spare SD (keep the previous
+working SD). Test preview and cancel first, then controlled PLAY at
+low speaker volume, test pause and quit, and return to old SD if
+necessary. No settings are written by this wizard and neither real
+Edifier sound nor owner authentication is inferred from software tests.
