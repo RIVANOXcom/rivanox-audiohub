@@ -300,6 +300,51 @@ class GuiOfflineTests(unittest.TestCase):
         self.assertFalse(win.start())
         bridge.assert_not_called()
 
+    def test_rotation_dialog_requires_independent_pi_confirmation_and_never_dials(self):
+        from audiohub import key_onboarding
+        win = self._fake_window(mock.Mock())
+        win.tk = mock.Mock()
+        win.tk.StringVar.side_effect = lambda value=None: _Value(value)
+        win.tk.BooleanVar.side_effect = lambda value=None: _Value(value)
+        win.ttk = mock.Mock()
+        win.filedialog = mock.Mock()
+        second = self.key.parent / "next-key"
+        second.write_bytes(bytes(range(32)))
+        if os.name == "posix":
+            second.chmod(0o600)
+        current_code = key_onboarding.local_key_code(self.key)
+        next_code = key_onboarding.local_key_code(second)
+        self.assertTrue(win.prepare_rotation())
+        self.assertFalse(win.checked)
+        win.bridge.assert_not_called()
+        self.assertTrue(any("disabled" in event for event in win.start_button.events))
+        # Two private code entries, both masked. Never filled automatically.
+        textvars = [
+            call.kwargs["textvariable"]
+            for call in win.ttk.Entry.call_args_list
+        ]
+        self.assertEqual(len(textvars), 3)
+        self.assertEqual(sum(call.kwargs.get("show") == "*"
+                             for call in win.ttk.Entry.call_args_list), 2)
+        self.assertEqual([v.get() for v in textvars], ["", "", ""])
+        check = next(call.kwargs["command"]
+                     for call in win.ttk.Button.call_args_list
+                     if call.kwargs.get("text", "").startswith("Compare old"))
+        with mock.patch.object(transport.socket, "create_connection") as dial:
+            check()
+            dial.assert_not_called()
+            win.bridge.assert_not_called()
+            textvars[0].set(str(second))
+            textvars[1].set(current_code)
+            textvars[2].set(next_code)
+            win.ttk.Checkbutton.call_args.kwargs["variable"].set(True)
+            check()
+            dial.assert_not_called()
+        self.assertIn("OFFLINE", win.status.get())
+        self.assertNotIn(current_code, win.status.get())
+        self.assertNotIn(next_code, win.status.get())
+        win.bridge.assert_not_called()
+
     def test_selected_invalid_public_certificate_refuses_gui_start(self):
         win = self._fake_window(mock.Mock())
         win.cert_path.set(str(self.key))  # private key file is NOT X.509
