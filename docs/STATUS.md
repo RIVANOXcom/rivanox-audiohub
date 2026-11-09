@@ -8,8 +8,7 @@ A new unprivileged Pi4 command plays validated user-provided PCM WAV
 through the existing private `audiohub.music` PipeWire sink with
 bounded duration and 20% initial stream gain. Preview is default; only
 an explicit terminal `--play` triggers playback, Ctrl+C stops; no
-network, pairing, permission or mixer changes. Source tests and native
-Pi4 package checks still do **not** prove actual audible playback.
+network, pairing, permission or mixer changes. A local album picker now lists numbered tracks from one bounded private directory,\npermits explicit ordered selection and hides names by default. Source tests and native\nPi4 package checks still do **not** prove actual audible playback.
 See [local WAV source playback](LOCAL-MUSIC-PLAYBACK.md).
 
 ## Goals
