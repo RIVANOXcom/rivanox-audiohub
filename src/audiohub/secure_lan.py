@@ -98,6 +98,7 @@ TONE_SECONDS = 5
 TONE_AMPLITUDE = 1100  # -29.5 dBFS; low-level operator bench test only.
 TONE_RATE = 48000
 TONE_FRAMES_PER_PACKET = 240  # 5 ms PCM, 960-byte TLS frame.
+TONE_CHANNELS = ("both", "left", "right", "sequence")
 
 
 def validate_key_bytes(key):
@@ -226,30 +227,65 @@ def forward_loopback_pcm(udp, stream, deadline, stop_event=None):
     return count
 
 
-def make_test_tone_pcm(start_sample, samples, total_samples):
-    """Generate bounded, 48 kHz stereo S16LE sine with 200 ms fade edges."""
+def validate_tone_channel(channel):
+    if not isinstance(channel, str) or channel not in TONE_CHANNELS:
+        raise ValueError("Choose only both, left, right, or sequence")
+    return channel
+
+
+def make_test_tone_pcm(start_sample, samples, total_samples, *, channel="both"):
+    """Generate bounded S16LE 48k stereo, fading each audible channel.
+
+    In sequence mode, LEFT occupies 0..2 s, then 0.5 s silence, then RIGHT
+    2.5..4.5 s, ending with 0.5 s silence. No audio exceeds five seconds.
+    """
     if (not isinstance(start_sample, int) or isinstance(start_sample, bool)
             or not isinstance(samples, int) or not 1 <= samples <= TONE_FRAMES_PER_PACKET
             or not isinstance(total_samples, int) or total_samples < samples
             or start_sample < 0 or start_sample + samples > total_samples):
         raise ValueError("Invalid bounded test tone frame parameters")
+    channel = validate_tone_channel(channel)
     payload = bytearray()
     fade_samples = TONE_RATE // 5
+    # In sequence mode the segments never overlap, including fade edges.
+    left_end = 2 * TONE_RATE
+    right_start = TONE_RATE * 5 // 2
+    right_end = TONE_RATE * 9 // 2
     for offset in range(start_sample, start_sample + samples):
-        envelope = min(1.0, offset / fade_samples,
-                       max(0, total_samples - 1 - offset) / fade_samples)
+        if channel == "sequence":
+            if offset < left_end:
+                active = "left"
+                local = offset
+                remaining = left_end - 1 - offset
+            elif right_start <= offset < right_end:
+                active = "right"
+                local = offset - right_start
+                remaining = right_end - 1 - offset
+            else:
+                payload.extend(b"\x00\x00\x00\x00")
+                continue
+        else:
+            active = channel
+            local = offset
+            remaining = total_samples - 1 - offset
+        envelope = min(1.0, local / fade_samples,
+                       max(0, remaining) / fade_samples)
         sample = round(TONE_AMPLITUDE * envelope
-                       * math.sin((2 * math.pi * TONE_HZ * offset) / TONE_RATE))
-        payload.extend(struct.pack("<hh", sample, sample))
+                       * math.sin((2 * math.pi * TONE_HZ * local) / TONE_RATE))
+        payload.extend(struct.pack("<hh",
+                                   sample if active in ("both", "left") else 0,
+                                   sample if active in ("both", "right") else 0))
     return bytes(payload)
 
 
-def forward_test_tone(stream, deadline, stop_event=None, *, seconds=TONE_SECONDS):
+def forward_test_tone(stream, deadline, stop_event=None, *, seconds=TONE_SECONDS,
+                      channel="both"):
     """One low-level, 5-second max test; NEVER opens a Windows Scream UDP port.
 
     This checks the authenticated PCM route, not the Windows sound driver.
     Returned packet counts are not proof of actual audible output.
     """
+    validate_tone_channel(channel)
     if (isinstance(seconds, bool) or not isinstance(seconds, (int, float))
             or not 0 < seconds <= TONE_SECONDS):
         raise ValueError("Test tone must be positive and at most 5 seconds")
@@ -271,7 +307,8 @@ def forward_test_tone(stream, deadline, stop_event=None, *, seconds=TONE_SECONDS
                 time.sleep(remaining)
         if time.monotonic() >= tone_deadline or (stop_event is not None and stop_event.is_set()):
             break
-        pcm = make_test_tone_pcm(index, min(TONE_FRAMES_PER_PACKET, total - index), total)
+        pcm = make_test_tone_pcm(index, min(TONE_FRAMES_PER_PACKET, total - index), total,
+                                 channel=channel)
         stream.sendall(struct.pack("!H", len(pcm)) + pcm)
         sent += 1
     return sent
@@ -366,11 +403,14 @@ def run_server(*, bind_ip, sender_ip, port, key_file, cert_file,
 
 def run_bridge(*, server_ip, port, udp_port, key_file, pin_sha256,
                session_minutes=10, isolated_lab=False, stop_event=None,
-               test_tone=False):
+               test_tone=False, test_channel="both"):
     if not isolated_lab:
         raise ValueError("Explicit isolated-lab Windows bridge opt-in required")
     if not isinstance(test_tone, bool):
         raise ValueError("Invalid manual tone selection")
+    validate_tone_channel(test_channel)
+    if not test_tone and test_channel != "both":
+        raise ValueError("Channel selection requires explicit test tone")
     validate_options(server_ip, "127.0.0.1", port, True)
     if isinstance(udp_port, bool) or not isinstance(udp_port, int) or not 1024 <= udp_port <= 65535:
         raise ValueError("Local UDP port must be 1024..65535")
@@ -386,7 +426,8 @@ def run_bridge(*, server_ip, port, udp_port, key_file, pin_sha256,
             if stop_event is not None and stop_event.is_set():
                 return 0  # Stop requested during TLS setup; no UDP listener.
             if test_tone:
-                return forward_test_tone(stream, deadline, stop_event=stop_event)
+                return forward_test_tone(stream, deadline, stop_event=stop_event,
+                                         channel=test_channel)
             # Scream MUST unicast to loopback. No LAN-facing UDP bind exists.
             with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp:
                 udp.bind(("127.0.0.1", udp_port))
