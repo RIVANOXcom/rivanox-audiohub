@@ -106,7 +106,7 @@ class LocalMusicTests(unittest.TestCase):
         self.assertEqual(self.events[0][1], ["pw-dump"])
         spawn = next(x for x in self.events if x[0] == "spawn")
         self.assertEqual(spawn[1], [
-            "pw-cat", "--playback", "--target=audiohub.music",
+            "pw-cat", "--playback", "--raw", "--target=audiohub.music",
             "--rate=48000", "--channels=2", "--format=s16",
             "--volume=0.20", "-"
         ])
