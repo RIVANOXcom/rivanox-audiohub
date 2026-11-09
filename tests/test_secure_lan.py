@@ -33,6 +33,14 @@ class SecureLanTests(unittest.TestCase):
         if os.name == "posix":
             self.secret_path.chmod(0o600)
 
+    def test_random_binary_secret_preserves_windows_ctrl_z_and_crlf(self):
+        # A random pre-shared key may include DOS EOF (0x1a) and CRLF.
+        # Windows os.open must use O_BINARY, not its default text mode.
+        binary_key = bytes((0x1a, 0x0d, 0x0a)) + bytes(range(29))
+        self.assertEqual(len(binary_key), 32)
+        self.secret_path.write_bytes(binary_key)
+        self.assertEqual(lan.read_private_key(self.secret_path), binary_key)
+
     def test_private_secret_must_be_exact_regular_not_linked_and_private(self):
         self.assertEqual(lan.read_private_key(self.secret_path), self.secret)
         self.secret_path.write_bytes(b"a" * 33)
