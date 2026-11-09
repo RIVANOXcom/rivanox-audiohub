@@ -44,6 +44,106 @@ class SoundCheckTests(unittest.TestCase):
         self.assertEqual(lan.make_test_tone_pcm(0, 1, total), b"\x00" * 4)
         self.assertEqual(lan.make_test_tone_pcm(total - 1, 1, total), b"\x00" * 4)
 
+    def test_each_stereo_channel_is_isolated_without_mixing(self):
+        total = lan.TONE_RATE * lan.TONE_SECONDS
+        for channel in ("left", "right", "both"):
+            with self.subTest(channel=channel):
+                pcm = lan.make_test_tone_pcm(
+                    lan.TONE_RATE, 240, total, channel=channel)
+                channels = struct.unpack("<" + "hh" * 240, pcm)
+                left = channels[0::2]
+                right = channels[1::2]
+                if channel == "left":
+                    self.assertGreater(max(map(abs, left)), 0)
+                    self.assertTrue(all(x == 0 for x in right))
+                elif channel == "right":
+                    self.assertGreater(max(map(abs, right)), 0)
+                    self.assertTrue(all(x == 0 for x in left))
+                else:
+                    self.assertEqual(left, right)
+                    self.assertGreater(max(map(abs, left)), 0)
+                self.assertLessEqual(max(map(abs, channels)), lan.TONE_AMPLITUDE)
+
+    def test_sequence_left_silence_right_and_silence_in_five_seconds(self):
+        total = lan.TONE_RATE * lan.TONE_SECONDS
+        samples = (
+            (lan.TONE_RATE, True, False),       # 1 s: left only
+            (lan.TONE_RATE * 9 // 4, False, False),  # 2.25 s: gap
+            (lan.TONE_RATE * 3, False, True),  # 3 s: right only
+            (lan.TONE_RATE * 19 // 4, False, False),  # 4.75 s: silence
+        )
+        for start, want_left, want_right in samples:
+            with self.subTest(start=start):
+                pcm = lan.make_test_tone_pcm(
+                    start, 240, total, channel="sequence")
+                values = struct.unpack("<" + "hh" * 240, pcm)
+                left = values[0::2]
+                right = values[1::2]
+                self.assertEqual(any(x != 0 for x in left), want_left)
+                self.assertEqual(any(x != 0 for x in right), want_right)
+                self.assertLessEqual(max(map(abs, values)), lan.TONE_AMPLITUDE)
+
+    def test_sequence_edges_have_fade_and_zero_cross_silence(self):
+        total = lan.TONE_RATE * lan.TONE_SECONDS
+        for n in (0, 2 * lan.TONE_RATE - 1,
+                  5 * lan.TONE_RATE // 2, 9 * lan.TONE_RATE // 2,
+                  total - 1):
+            with self.subTest(sample=n):
+                self.assertEqual(
+                    lan.make_test_tone_pcm(n, 1, total, channel="sequence"),
+                    bytes(4))
+
+    def test_channel_mode_rejects_unknown_and_unauthorized_selection(self):
+        for name in (None, "", "LEFT", "center", "left-right", True, 1):
+            with self.subTest(name=name), self.assertRaises(ValueError):
+                lan.validate_tone_channel(name)
+        self.assertEqual(
+            tuple(lan.validate_tone_channel(name) for name in lan.TONE_CHANNELS),
+            ("both", "left", "right", "sequence"))
+        with mock.patch.object(lan.socket, "create_connection") as create:
+            with self.assertRaisesRegex(ValueError, "requires explicit"):
+                lan.run_bridge(
+                    server_ip="192.168.10.30", port=4044, udp_port=4010,
+                    key_file=self.key, pin_sha256=self.pin,
+                    isolated_lab=True, test_tone=False, test_channel="left")
+            create.assert_not_called()
+
+    def test_channel_selection_flows_through_tls_no_udp(self):
+        stream = mock.MagicMock()
+        stream.__enter__.return_value = stream
+        raw = mock.MagicMock()
+        raw.__enter__.return_value = raw
+        with mock.patch.object(lan.socket, "create_connection", return_value=raw), \
+             mock.patch.object(lan, "make_client_tls", return_value=stream), \
+             mock.patch.object(lan, "authenticate_client", return_value=True), \
+             mock.patch.object(lan, "forward_test_tone", return_value=4) as tone, \
+             mock.patch.object(lan.socket, "socket") as udp:
+            result = lan.run_bridge(
+                server_ip="192.168.10.30", port=4044, udp_port=4010,
+                key_file=self.key, pin_sha256=self.pin,
+                isolated_lab=True, test_tone=True, test_channel="sequence")
+            self.assertEqual(result, 4)
+            self.assertEqual(tone.call_args.kwargs["channel"], "sequence")
+            udp.assert_not_called()
+
+    def test_cli_channel_requires_tone_and_explicit_operator_consent(self):
+        output = []
+        execute = mock.Mock(return_value=7)
+        answer = iter(["192.168.10.30", self.pin, str(self.key), "1",
+                       "ISOLATED"])
+        self.assertEqual(setup.interactive_bridge(
+            input_fn=lambda _: next(answer), output=output.append,
+            execute=execute, test_tone=True, test_channel="right"), 0)
+        execute.assert_called_once()
+        self.assertEqual(execute.call_args.kwargs["test_channel"], "right")
+        self.assertIn("right", " ".join(output))
+        with mock.patch.object(lan.socket, "create_connection") as dial, \
+             self.assertRaises(ValueError):
+            setup.interactive_bridge(
+                input_fn=lambda _: self.fail("should not prompt"),
+                test_channel="right")
+            dial.assert_not_called()
+
     def test_tone_rejects_unbounded_or_malformed_generation(self):
         for args in ((-1, 5, 240000), (0, 0, 240000),
                      (0, 241, 240000), (240000, 1, 240000),
