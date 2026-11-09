@@ -153,6 +153,70 @@ and the real network HMAC challenge is still mandatory. No credentials
 are added to the Windows ZIP or to GitHub. Rotating keys and obtaining
 operator-approved credentials on real hardware remain separate work.
 
+
+## Guided staged key rotation preview (manual authorization still required)
+
+The operator can now **preflight two private key copies** offline before a
+manual changeover. This is useful when replacing a temporary test key: it
+finds accidental reuse, old/new file aliases and mismatches *before* an
+authorized cutover. The tool never creates, copies, backs up, activates,
+rotates, revokes or deletes credentials, changes a Pi service, or opens any
+port. **No operator permission to rotate is inferred from a passing check.**
+The Pi4 image in this test pair predates this Windows-only feature.
+
+1. On a physically trusted, isolated Pi console, the **operator** first
+   establishes an authorized secure staging/recovery procedure: stop or
+   account for any concurrent sessions, preserve the existing working key
+   in protected operator-controlled storage, and separately stage a fresh
+   cryptographically random **32-byte** secret on both Pi and Windows
+   using private channels and owner-only file permissions. Do not use the
+   AudioHub GitHub issue, ticket, email, screenshots, shell history or a
+   public share for the raw secret. This preview does none of those tasks.
+2. Compute the **current** and **new staged** *private* 32-hex comparison
+   codes independently on the physically trusted Pi for the corresponding
+   two existing private files. The standalone Python snippet in the
+   section "Optional offline matching of the two 32-byte lab key copies"
+   above works on the older Pi alpha: run it separately for the old and
+   staged files. Codes are not key bytes, but MUST still be kept private.
+3. On Windows, in the extracted package, open the GUI using
+   \`py -3 START-WINDOWS-BRIDGE.py --gui\`. Choose the active (old)
+   private key file in the original field, then click **4 · Staged PSK
+   preview (offline)**. Select the **existing staged** Windows file,
+   enter BOTH independently obtained Pi codes into the masked fields,
+   confirm you obtained them from the trusted Pi console, and press
+   **Compare old and staged copies (offline)**. A passing result only
+   means the two local key copies matched the supplied independent
+   private codes at the time of the check, and the codes were different.
+   No Pi is contacted. The dialog never switches the active key.
+4. For a keyboard-only Windows console, the same no-network preflight is
+   available as \`py -3 START-WINDOWS-BRIDGE.py --rotation-preflight\`.
+   It prompts for old and staged paths, then asks for both Pi codes using
+   non-echoing private prompts rather than command-line arguments.
+   Neither preview saves a JSON report, stores codes, or changes OS ACLs.
+5. **Only with separate operator authorization**, manually stop both
+   running sessions, switch the corresponding protected key configuration
+   on the Pi and Windows as a deliberate coordinated step, and recheck
+   the independent certificate SHA256 pin plus the newly active key
+   code. Start the existing isolated low-volume LEFT then RIGHT speaker
+   soundcheck after checking both Pi and Windows are on the *same*
+   intended new key. The preview alone does NOT validate TLS or audio.
+6. **Rollback** if the new session cannot authenticate or no sound is
+   heard: stop both manual sessions, restore the protected previous
+   key configuration on both devices through the operator's authorized
+   manual procedure, and rerun the offline old-code verification before
+   an approved low-volume soundcheck. Do not automatically overwrite,
+   delete or retire the old secret. Final revocation, cleanup, log/data
+   retention and access-control review remain owner responsibilities.
+
+Any invalid key file, linked path, hard-linked duplicate, wrong 32-byte
+size, POSIX unsafe mode, incorrect trusted Pi code or reused old secret
+makes the preview **fail closed**. Windows NTFS ACLs are not independently
+certified, and the tool cannot establish whether the Pi code really
+came from a trusted Pi. Recheck immediately before the manual cutover;
+there is no transactional Pi/Windows key switch. A passing preview is
+always \`OFFLINE_STAGING_CHECK_ONLY\`, **not** credential deployment,
+Pi ownership, physical hardware acceptance, or public release GO.
+
 ## Four steps for a manually authorized isolated test
 
 1. **Prerequisites.** Windows 10/11, separately installed Python 3.11 or
