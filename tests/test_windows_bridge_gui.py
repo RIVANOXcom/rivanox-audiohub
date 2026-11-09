@@ -59,6 +59,7 @@ class GuiOfflineTests(unittest.TestCase):
         win = gui.BridgeWindow.__new__(gui.BridgeWindow)
         win.test_tone = _Value(False)
         win.tone_channel = _Value("Both speakers")
+        win.cert_path = _Value("")
         win.entries = {
             "ip": _Value("192.168.10.30"), "pin": _Value("f" * 64),
             "key": _Value(str(self.key)), "minutes": _Value("1"),
