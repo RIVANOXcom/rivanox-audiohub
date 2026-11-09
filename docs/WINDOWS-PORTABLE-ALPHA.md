@@ -131,6 +131,51 @@ observations. Stop immediately if the speaker volume is uncomfortable.
 No automatic repair to speaker routing, Windows settings or Pi
 configuration is performed. Each repeat needs another manual session.
 
+## Record the actual physical stereo observation (optional, offline)
+
+After the operator-approved **Pi speaker test** in the GUI finishes or
+fails, a third action becomes available: **Record physical speaker
+observations (local JSON)**. This is the next step after listening to the
+Edifier R600USB on the isolated Pi4 bench, not an automated hardware
+certificate.
+
+The window asks separately what you **personally heard** from LEFT
+and RIGHT: expected side, opposite side, no sound, distortion, cannot
+determine, or not checked. Mark the personal-listening checkbox
+only if you truly listened to the physical speakers. This matters:
+a successful TLS connection or a PCM frame counter does *not*
+prove audible sound. If the connection failed before audio began,
+save both sides as **Not checked** without claiming you listened.
+
+Choose **Save private JSON locally** and an explicit new filename.
+No observation file is written automatically. A preexisting destination
+is never overwritten. The small report includes only the selected
+test mode, whether the session completed, was stopped or failed,
+the client PCM frame count, UTC time, manually selected observations
+and the source SHA from the local alpha manifest *when available*.
+It deliberately contains **no Pi address, Windows username, private
+key, key path, certificate fingerprint, serial, audio waveform,
+free-text field or network endpoint**. Source SHA in a local JSON
+is not a signature or proof of hardware authenticity.
+
+Every exported record is classified
+`UNVERIFIED_HUMAN_OBSERVATION`, with `hardware_verified=false`,
+`release_ready=false` and `review_required=true`, even when
+both speakers were heard. This is an operator-authored observation,
+not an automatic approval or a new production GO. The report is
+never sent to GitHub, Workbench, RIVANOX, the Pi or a third party.
+The owner may **separately** submit the file through an approved
+private review channel. Protect the local JSON with normal
+Windows account permissions and delete it later only under the
+owner's own retention procedure. No additional OS changes occur.
+
+For the first test, select **Left then right (5 seconds)**, listen,
+then record whether the two sounds came from the expected speaker
+positions. If distorted or silent, stop and leave the result
+explicitly unapproved; inspect physical USB/audio routing offline.
+A successful report export does not verify concurrent Bluetooth,
+Scream driver compatibility or 24-hour stability.
+
 ## Smoke test, cancellation, rollback
 
 Confirm actual low-volume USB sound from an Edifier R600USB on a separate
