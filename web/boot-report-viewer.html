@@ -245,6 +245,7 @@
     let before = -1;
     for (const s of obj.snapshots) {
       if (!plain(s) || !Number.isInteger(s.seconds_since_probe_start) ||
+          s.seconds_since_probe_start < 0 ||
           s.seconds_since_probe_start < before ||
           s.seconds_since_probe_start > 3600 ||
           typeof s.usb_audio_detected !== "boolean" ||
