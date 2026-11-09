@@ -55,6 +55,21 @@ be reassigned among the three internal EQ inputs.** It does not pair,
 authenticate or enroll devices and is not accessible from the web UI.
 See [offline source routing for the development bench](./docs/FLEXIBLE-SOURCE-ROUTING-LAB.md).
 
+### Driverless isolated Pi4 speaker soundcheck (alpha)
+
+A built-in, opt-in **5-second quiet 440 Hz** test tone now allows an
+operator to test the encrypted Windows-to-Pi4 audio route before
+installing/configuring any Windows Scream driver. In the portable
+Windows GUI choose **Pi speaker test**; alternatively use
+`py -3 START-WINDOWS-BRIDGE.py --test-tone`. The test has
+a hard five-second duration, 200 ms fade, explicit `ISOLATED` confirmation,
+a Stop control, and opens **no Windows Scream UDP listener**. The
+private TLS key/cert, isolated lab Pi4 with working PipeWire/USB,
+human supervision, low speaker volume, and operator approval remain
+mandatory. Passing CI or seeing audio frame counts does not prove
+audible Edifier sound or Windows Scream driver interoperability.
+See [the first hardware test instructions](./docs/WINDOWS-PORTABLE-ALPHA.md).
+
 ### Authenticated Windows audio: isolated engineering preview only
 
 A separate optional **TLS 1.3, pinned-cert, 32-byte shared-key challenge-response**
