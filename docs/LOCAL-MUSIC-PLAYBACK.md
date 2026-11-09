@@ -252,13 +252,23 @@ The music folder must be a real, non-symlinked, absolute, privately
 controlled directory as in the existing library command.
 
 The tool then asks for **up to 8 distinct track numbers** in playback
-order (for example `2,1,4`). Pressing Enter without a selection
+order (for example `2,1,4`). Alternatively enter **`ALL`** to include
+every track in a small folder containing at most eight valid WAVs, or
+**`SHUFFLE`** to select up to eight randomly ordered tracks from the
+listed folder that fit the selected session duration. SHUFFLE runs only
+in memory, never creates a playlist file, and leaves the chosen library
+numbers visible for review (not private filenames). Files that would
+exceed the remaining session budget are excluded; a shuffle that fits
+nothing is refused. Pressing Enter without a selection
 cancels without sound. Invalid selections can be corrected twice; three
 invalid attempts cancel. No file, playlist or operator responses are
 stored or sent over a network.
 
-After a valid selection the tool shows the total planned duration and
-asks for an **exact uppercase `PLAY` confirmation**. Any different
+After a valid selection the tool shows the *chosen library numbers*
+and total planned duration. At the same confirmation prompt,
+**`CHANGE`** returns to the numbered selection (at most twice) so the
+operator can correct a mistaken or unwanted shuffle before any sound.
+Only **exact uppercase `PLAY`** starts the existing interactive player. Any different
 answer, EOF or a missing terminal cancels without starting the player.
 Only after `PLAY` does the existing local interactive controller start,
 with `u` pause/resume, `s` status, `n` next, `p` previous, `r` replay,
