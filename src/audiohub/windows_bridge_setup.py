@@ -119,6 +119,8 @@ def main(argv=None):
                         help="Check Python TLS 1.3 support, without any credentials or ports")
     parser.add_argument("--check-only", action="store_true",
                         help="Validate operator-provided local setup without opening sockets")
+    parser.add_argument("--show-cert-fingerprint", type=str, default=None,
+                        help="Offline DER SHA256 of one local PUBLIC cert; only trust if run on trusted Pi console")
     parser.add_argument("--certificate-file", type=str, default=None,
                         help="Optional local Pi PUBLIC PEM/DER cert; refuse unless it matches independently verified pin")
     parser.add_argument("--test-tone", action="store_true",
@@ -129,6 +131,12 @@ def main(argv=None):
                         help="Open optional local graphical lab controls; no automatic connection")
     args = parser.parse_args(argv)
     try:
+        if args.show_cert_fingerprint:
+            fingerprint = certificate_onboarding.certificate_sha256(args.show_cert_fingerprint)
+            print("Public X.509 DER SHA256: " + fingerprint)
+            print("A local certificate is NOT trustworthy without the trusted Pi console.")
+            print("No socket opened, key read, or trust installed.")
+            return 0
         if args.gui:
             # Tk is optional and imported ONLY when the operator requests GUI.
             from .windows_bridge_gui import launch
