@@ -246,3 +246,17 @@ no keys are created, transferred or rotated, and Windows NTFS ACLs
 remain operator-controlled. This is **not** owner authentication,
 hardware acceptance, or an official release. See
 [Windows operator instructions](docs/WINDOWS-PORTABLE-ALPHA.md).
+
+### Experimental offline staged PSK rotation preview
+
+For the isolated Windows-to-Pi4 TLS test lab, the operator may now
+preflight **both** existing and separately staged private 32-byte PSK
+copies against independently trusted Pi comparison codes before
+manual key rotation. Use the GUI **4 · Staged PSK preview (offline)**
+or \`py -3 START-WINDOWS-BRIDGE.py --rotation-preflight\` with hidden
+interactive code prompts. The preview rejects reused secrets, wrong
+codes and aliased files; it never creates, installs, rotates or removes
+credentials and it never connects to the Pi. A separately authorized
+operator performs coordinated cutover, low-volume hardware smoke test
+and rollback. The detailed guide is in
+[Windows isolated lab setup](docs/WINDOWS-PORTABLE-ALPHA.md).
