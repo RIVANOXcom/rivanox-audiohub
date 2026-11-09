@@ -106,7 +106,8 @@ class PairingReadinessTests(unittest.TestCase):
 
     def test_all_report_fields_are_anonymous_and_bounded(self):
         obj = self.devices(paired=1, pairable=False, discoverable=False)
-        obj[self.ADAPTER + "/dev_00"]["org.bluez.Device1"]["Name"] = "private-user"
+        next(props["org.bluez.Device1"] for props in obj.values()
+             if "org.bluez.Device1" in props)["Name"] = "private-user"
         snap = pairing.inspect_managed_objects(obj, 700)
         rendered = json.dumps(snap) + pairing.render_guide(snap)
         for bad in ("AA:BB", "private-user", "private phone", "hci0", "/org/bluez"):
