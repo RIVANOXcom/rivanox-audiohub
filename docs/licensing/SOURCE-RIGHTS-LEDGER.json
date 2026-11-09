@@ -130,6 +130,13 @@
       "model_c_eligible": false
     },
     {
+      "path": "scripts/package_windows_bridge.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
       "path": "scripts/preview_manifest.py",
       "origin_status": "pending-human-review",
       "rightsholder_verified": false,
@@ -166,6 +173,13 @@
     },
     {
       "path": "scripts/source_rights_ledger.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "scripts/START-WINDOWS-BRIDGE.py",
       "origin_status": "pending-human-review",
       "rightsholder_verified": false,
       "third_party_origin_checked": false,
@@ -235,14 +249,14 @@
       "model_c_eligible": false
     },
     {
-      "path": "src/audiohub/mixer.py",
+      "path": "src/audiohub/mixer_control.py",
       "origin_status": "pending-human-review",
       "rightsholder_verified": false,
       "third_party_origin_checked": false,
       "model_c_eligible": false
     },
     {
-      "path": "src/audiohub/mixer_control.py",
+      "path": "src/audiohub/mixer.py",
       "origin_status": "pending-human-review",
       "rightsholder_verified": false,
       "third_party_origin_checked": false,
@@ -313,6 +327,13 @@
     },
     {
       "path": "src/audiohub/webserver.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "src/audiohub/windows_bridge_setup.py",
       "origin_status": "pending-human-review",
       "rightsholder_verified": false,
       "third_party_origin_checked": false,
@@ -403,14 +424,14 @@
       "model_c_eligible": false
     },
     {
-      "path": "tests/test_mixer.py",
+      "path": "tests/test_mixer_control.py",
       "origin_status": "pending-human-review",
       "rightsholder_verified": false,
       "third_party_origin_checked": false,
       "model_c_eligible": false
     },
     {
-      "path": "tests/test_mixer_control.py",
+      "path": "tests/test_mixer.py",
       "origin_status": "pending-human-review",
       "rightsholder_verified": false,
       "third_party_origin_checked": false,
@@ -572,6 +593,20 @@
     },
     {
       "path": "tests/test_web_status.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "tests/test_windows_bridge_setup.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "tests/test_windows_portable_bundle.py",
       "origin_status": "pending-human-review",
       "rightsholder_verified": false,
       "third_party_origin_checked": false,
