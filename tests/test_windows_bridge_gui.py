@@ -58,6 +58,7 @@ class GuiOfflineTests(unittest.TestCase):
     def _fake_window(self, bridge):
         win = gui.BridgeWindow.__new__(gui.BridgeWindow)
         win.test_tone = _Value(False)
+        win.tone_channel = _Value("Both speakers")
         win.entries = {
             "ip": _Value("192.168.10.30"), "pin": _Value("f" * 64),
             "key": _Value(str(self.key)), "minutes": _Value("1"),
@@ -116,6 +117,42 @@ class GuiOfflineTests(unittest.TestCase):
         self.assertTrue(recorded[0]["test_tone"])
         self.assertTrue(recorded[0]["isolated_lab"])
         self.assertIn("Human confirmation", window.status.get())
+
+    def test_gui_explicit_left_right_sequence_uses_only_authenticated_bridge(self):
+        for label, code in (
+            ("Left speaker only", "left"),
+            ("Right speaker only", "right"),
+            ("Left then right (5 seconds)", "sequence"),
+        ):
+            with self.subTest(label=label):
+                calls = []
+                def fake_bridge(**kwargs):
+                    calls.append(kwargs)
+                    return 3
+                win = self._fake_window(fake_bridge)
+                win.test_tone.set(True)
+                win.tone_channel.set(label)
+                self.assertTrue(win.check())
+                self.assertTrue(win.start())
+                win.worker.join(timeout=5)
+                self.assertFalse(win.worker.is_alive())
+                win._poll()
+                self.assertEqual(calls[0]["test_channel"], code)
+                self.assertTrue(calls[0]["isolated_lab"])
+                self.assertTrue(calls[0]["test_tone"])
+                self.assertNotIn(str(self.key), win.status.get())
+
+    def test_bad_or_changed_gui_channel_refuses_start_offline(self):
+        bridge = mock.Mock()
+        win = self._fake_window(bridge)
+        win.test_tone.set(True)
+        win.tone_channel.set("Left speaker only")
+        self.assertTrue(win.check())
+        win.tone_channel.set("UNKNOWN")
+        self.assertFalse(win.start())
+        bridge.assert_not_called()
+        self.assertFalse(win.check())
+        bridge.assert_not_called()
 
     def test_cannot_start_without_manual_confirmation_or_valid_preflight(self):
         bridge = mock.Mock()
