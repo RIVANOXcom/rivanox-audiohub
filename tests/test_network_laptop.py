@@ -407,6 +407,64 @@ class NetworkLaptopTests(unittest.TestCase):
         close_player.assert_called_once_with(process)
         self.assertEqual(popen.call_count, 1)
 
+    def test_manual_lan_session_bounds_and_no_implicit_extension(self):
+        self.assertEqual(laptop.validate_session_minutes(1), 1)
+        self.assertEqual(laptop.validate_session_minutes(30), 30)
+        self.assertEqual(laptop.DEFAULT_SESSION_MINUTES, 10)
+        for value in (0, 31, True, False, 1.5, "10", None):
+            with self.subTest(value=value), self.assertRaisesRegex(ValueError, "1..30"):
+                laptop.validate_session_minutes(value)
+
+    @mock.patch("audiohub.network_laptop.check_audio_target")
+    @mock.patch("audiohub.network_laptop.socket.socket")
+    def test_invalid_manual_lan_session_never_binds_or_checks_audio(self, sock, target):
+        for minutes in (0, 31, True, 1.5, None):
+            with self.subTest(minutes=minutes), self.assertRaises(ValueError):
+                laptop.serve("192.168.1.10", "127.0.0.1", 4010,
+                             unsafe_lan_test=True, session_minutes=minutes)
+        sock.assert_not_called()
+        target.assert_not_called()
+
+    @mock.patch("audiohub.network_laptop.check_audio_target")
+    @mock.patch("audiohub.network_laptop.subprocess.Popen")
+    @mock.patch("audiohub.network_laptop.time.monotonic", side_effect=[100.0, 161.0])
+    @mock.patch("audiohub.network_laptop.socket.socket")
+    @mock.patch("audiohub.network_laptop.sys.stderr")
+    def test_session_expires_with_no_audio_and_closes_udp(self, stderr, sock, clock, popen, target):
+        receiver = sock.return_value.__enter__.return_value
+        receiver.recvfrom.side_effect = [socket.timeout()]
+        laptop.serve("192.168.1.10", "127.0.0.1", 4010,
+                     unsafe_lan_test=True, session_minutes=1, diagnostics=True)
+        self.assertEqual(receiver.recvfrom.call_count, 1)
+        self.assertTrue(sock.return_value.__exit__.called)
+        popen.assert_not_called()
+        emitted = " ".join(str(c) for c in stderr.write.call_args_list)
+        self.assertIn("session_expired", emitted)
+        self.assertIn("UDP listener closed", emitted)
+
+    @mock.patch("audiohub.network_laptop.check_audio_target")
+    @mock.patch("audiohub.network_laptop.close_player")
+    @mock.patch("audiohub.network_laptop.os.write", return_value=4)
+    @mock.patch("audiohub.network_laptop.os.set_blocking")
+    @mock.patch("audiohub.network_laptop.subprocess.Popen")
+    @mock.patch("audiohub.network_laptop.time.monotonic",
+                side_effect=[100.0, 100.0, 100.0, 161.0])
+    @mock.patch("audiohub.network_laptop.socket.socket")
+    def test_active_sender_cannot_extend_expiring_session(
+        self, sock, clock, popen, set_blocking, write, close_player, target
+    ):
+        receiver = sock.return_value.__enter__.return_value
+        receiver.recvfrom.side_effect = [(packet(), ("192.168.1.10", 4010))]
+        process = popen.return_value
+        process.stdin.fileno.return_value = 42
+        process.poll.return_value = None
+        laptop.serve("192.168.1.10", "127.0.0.1", 4010,
+                     unsafe_lan_test=True, session_minutes=1)
+        self.assertEqual(receiver.recvfrom.call_count, 1)
+        self.assertTrue(sock.return_value.__exit__.called)
+        write.assert_called_once_with(42, b"\x01\x02\x03\x04")
+        close_player.assert_called_once_with(process)
+
 
 if __name__ == "__main__":
     unittest.main()

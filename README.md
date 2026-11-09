@@ -57,7 +57,11 @@ See [offline source routing for the development bench](./docs/FLEXIBLE-SOURCE-RO
 
 **Hardware note:** Two simultaneous A2DP senders have not been verified
 on Pi 4. The Windows Scream receiver is plaintext/unauthenticated and is
-never started automatically. Renaming a channel does not authorize a
+never started automatically. For isolated manual bench work its UDP
+listener now auto-closes after 10 minutes by default (explicit 1–30 minute
+limit with `--session-minutes`); activity cannot extend the session.
+This does not authenticate a sender. See the
+[manual LAN session runbook](./docs/HARDWARE-OBSERVATION-RUNBOOK.md#time-limited-manual-windows-lan-bench-session-alpha-only). Renaming a channel does not authorize a
 device, select a Bluetooth peer or enable the network receiver.
 
 **Output:** A compatible USB audio speaker, initially the Edifier R600USB, plus a master output volume control.

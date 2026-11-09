@@ -26,6 +26,8 @@ HEADER_SIZE = 5
 HEALTH_CHECK_SECONDS = 3.0
 ROUTE_POLICY_CHECK_SECONDS = 1.0
 IDLE_SECONDS = 5.0
+DEFAULT_SESSION_MINUTES = 10
+MAX_SESSION_MINUTES = 30
 # Only explicit local IPv4 host addresses are allowed for manual opt-in tests.
 # ipaddress.is_private alone also includes link-local/special ranges.
 TEST_NETS = tuple(ipaddress.IPv4Network(net) for net in (
@@ -71,6 +73,14 @@ def validate_options(sender_ip, bind_ip, port, enabled):
     if not _specific_test_ip(bind):
         raise ValueError("Bind must be a specific RFC1918 or loopback IPv4 interface")
     return str(sender), str(bind), port
+
+
+def validate_session_minutes(minutes):
+    """Bound an explicitly opted-in unauthenticated UDP listener's lifetime."""
+    if (isinstance(minutes, bool) or not isinstance(minutes, int)
+            or not 1 <= minutes <= MAX_SESSION_MINUTES):
+        raise ValueError("LAN test session must last 1..30 whole minutes")
+    return minutes
 
 
 def accepted_pcm(packet, peer, sender_ip):
@@ -140,7 +150,8 @@ def close_player(process):
             process.wait(timeout=2)
 
 
-def serve(sender_ip, bind_ip, port, *, unsafe_lan_test=False, prefill_packets=1, diagnostics=False):
+def serve(sender_ip, bind_ip, port, *, unsafe_lan_test=False, prefill_packets=1,
+          diagnostics=False, session_minutes=DEFAULT_SESSION_MINUTES):
     """Manually gated receiver with finite PCM backlog and opt-in counters.
 
     This does not reconstruct missing/reordered UDP packets or authenticate
@@ -148,6 +159,7 @@ def serve(sender_ip, bind_ip, port, *, unsafe_lan_test=False, prefill_packets=1,
     """
     # Do not permit internal callers to bypass the CLI unsafe-LAN gate.
     sender_ip, bind_ip, port = validate_options(sender_ip, bind_ip, port, unsafe_lan_test)
+    session_minutes = validate_session_minutes(session_minutes)
     backlog = PcmPacketBuffer(prefill=prefill_packets)
     target = lan_target()  # Private local route plan, not a CLI/UDP source field.
     check_audio_target(target)
@@ -159,6 +171,7 @@ def serve(sender_ip, bind_ip, port, *, unsafe_lan_test=False, prefill_packets=1,
     next_health_check = 0.0
     next_policy_check = 0.0
     next_report_at = None
+    session_deadline = None
 
     def stop_player():
         nonlocal player, last_written_at, player_generation
@@ -187,6 +200,16 @@ def serve(sender_ip, bind_ip, port, *, unsafe_lan_test=False, prefill_packets=1,
         try:
             while True:
                 now = time.monotonic()
+                # The deadline never extends on sender activity or reconnect.
+                # It uses a monotonic clock and applies even if no PCM arrives.
+                if session_deadline is None:
+                    session_deadline = now + session_minutes * 60
+                if now >= session_deadline:
+                    counters.session_expired += 1
+                    print("AudioHub manual LAN test time limit reached; "
+                          "UDP listener closed. Restart requires explicit opt-in.",
+                          file=sys.stderr, flush=True)
+                    break
                 # Do not keep playing into a stale input when the operator
                 # changes the manual LAN slot. Exit and require a fresh opt-in.
                 if now >= next_policy_check:
@@ -296,11 +319,14 @@ def main(argv=None):
     parser.add_argument("--bind-ip", required=True, help="Explicit IPv4 receiver interface")
     parser.add_argument("--port", type=int, default=PORT)
     parser.add_argument("--unsafe-lan-test", action="store_true",
-                        help="Opt in to unauthenticated, trusted-LAN test only")
+                        help="Opt in to unauthenticated, isolated test bench only")
     parser.add_argument("--prefill-packets", type=int, default=1,
                         help="Require 1-16 received PCM packets before starting playback")
     parser.add_argument("--diagnostics", action="store_true",
                         help="Write aggregate counters to stderr every 60 s and on shutdown")
+    parser.add_argument("--session-minutes", type=int,
+                        default=DEFAULT_SESSION_MINUTES,
+                        help="Automatically close untrusted UDP listener after 1-30 minutes (default: 10)")
     args = parser.parse_args(argv)
     try:
         sender, bind, port = validate_options(
@@ -308,7 +334,8 @@ def main(argv=None):
         )
         serve(sender, bind, port,
               unsafe_lan_test=args.unsafe_lan_test,
-              prefill_packets=args.prefill_packets, diagnostics=args.diagnostics)
+              prefill_packets=args.prefill_packets, diagnostics=args.diagnostics,
+              session_minutes=args.session_minutes)
     except (OSError, RuntimeError, ValueError) as exc:
         parser.exit(2, "AudioHub experimental receiver unavailable: " + str(exc) + "\n")
 

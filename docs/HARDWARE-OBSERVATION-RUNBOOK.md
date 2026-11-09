@@ -115,6 +115,48 @@ unmodified. Reconnect behavior in mocks is a source-code result
 only; full three-source physical stereo PCM/latency and reliable
 USB hotplug/24-hour observation remain release blockers.
 
+## Time-limited manual Windows LAN bench session (alpha-only)
+
+The opt-in Scream UDP receiver now **stops and closes its bound UDP
+socket automatically** after a bounded elapsed time. The default session
+is **10 minutes**, and the local operator can explicitly select an
+integer **1 through 30 minutes** using `--session-minutes`. Timing uses
+the Pi's monotonic clock and is **never extended by arriving audio,
+network loss, or player re-creation**. On expiry, the receiver clears
+queued PCM, closes its managed `pw-cat` process and exits. An operator
+must separately restart the CLI with `--unsafe-lan-test` for another
+session; no web app, service or sender can renew it.
+
+For a separately authorized isolated Raspberry Pi bench, with the real
+host-only interface and sender address chosen locally (replace the
+examples; do not use these placeholders unchanged):
+
+```sh
+PYTHONPATH=/opt/audiohub/src python3 -m audiohub.network_laptop \
+  --sender-ip 192.168.10.20 --bind-ip 192.168.10.30 \
+  --unsafe-lan-test --session-minutes 10 --diagnostics
+```
+
+Both IPv4 addresses must refer to specific RFC1918/loopback hosts.
+The existing private `source_routes` policy must still reserve a manual
+LAN source slot, the exact virtual sink and chosen USB output must pass
+the preflight, and the operator must manually start the sender. Invalid
+durations, booleans from direct Python callers, wildcard addresses or
+missing opt-in fail **before a UDP socket is opened**. The new
+`session_expired` aggregate diagnostic increments once on time limit;
+no IP address, PCM or device identifier is logged.
+
+**Security boundary:** This is **NOT network authentication or
+confidentiality**. A source-IP check can be spoofed, and untrusted
+senders may transmit PCM during the allowed interval. Use only an
+isolated no-trust lab network, keep normal deployment disabled and
+never enable this in a trusted home/office LAN. Physical audible sound,
+concurrent stream reliability, legal ownership and first-owner/phone
+provisioning remain unverified. If sound stops at the scheduled time,
+confirm that the listener is closed rather than diagnosing an
+unnecessary USB failure; extend the experiment only by a new conscious
+operator launch.
+
 ## USB / Bluetooth reconnect checklist in the existing browser status panel
 
 The five-language **Audio routing status** panel now shows an ordered
