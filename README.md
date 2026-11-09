@@ -306,3 +306,15 @@ volume. No new daemon, credentials, account, file upload, route
 changes or Bluetooth permissions are required. Works offline;
 this is NOT Internet radio or phone-owner onboarding.
 See [local WAV operator instructions](docs/LOCAL-MUSIC-PLAYBACK.md).
+
+### Browse a local album without typing each WAV filename
+
+At the trusted Pi4 console, use `python3 -m audiohub.local_music
+--library /home/audiohub/PrivateMusic` to display numbered,
+privacy-preserving WAV durations without playing anything. Add
+`--tracks 2,1` for a safe queue preview and only then add `--play`
+for explicit user-controlled, bounded playback in that order.
+`--show-titles` optionally reveals sanitized filenames **on the local
+terminal only**. Music remains on the Pi, no playlist is stored and
+no unauthenticated browser/audio endpoint is opened. Full guide:
+[Local music source and folder picker](docs/LOCAL-MUSIC-PLAYBACK.md).
