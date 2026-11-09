@@ -114,6 +114,7 @@ def build(root, directory, sha):
         "credentials_included": False,
         "windows_scream_driver_required": True,
         "driverless_speaker_soundcheck_available": True,
+        "speaker_channel_soundcheck": ["both", "left", "right", "sequence"],
         "windows_scream_driver_required_for_soundcheck": False,
         "source_files": inventory,
     }
