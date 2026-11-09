@@ -10,6 +10,9 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Exact immutable PR head, never the synthetic pull-request merge SHA.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Check mandatory project policies
         shell: bash
         run: |
@@ -53,3 +56,57 @@ jobs:
           if [ -d tests ]; then python3 -m unittest discover -s tests -v; fi
           if [ -f web/app.js ]; then node --check web/app.js; fi
           bash -n build-image.sh image/stage-audiohub/prerun.sh image/stage-audiohub/01-install/00-run.sh
+      - name: Package offline Windows bridge alpha (NOT a release)
+        shell: bash
+        env:
+          SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_COMMIT"
+          python3 scripts/package_windows_bridge.py --source-sha "$SOURCE_COMMIT" --directory dist/windows
+          cd dist/windows
+          sha256sum -c SHA256SUMS-WINDOWS.txt
+          python3 - <<'PY'
+          import glob
+          import zipfile
+          archives = glob.glob("AudioHub-Windows-TLS-Bridge-ALPHA-*.zip")
+          assert len(archives) == 1
+          with zipfile.ZipFile(archives[0]) as archive:
+              assert archive.testzip() is None
+              assert len(archive.namelist()) == 9
+          print("Windows portable bridge bundle integrity PASS; NOT released")
+          PY
+      - name: Upload temporary Windows offline operator alpha
+        id: windows_alpha
+        uses: actions/upload-artifact@v4
+        with:
+          name: AUDIOHUB-WINDOWS-TLS-ALPHA-UNVERIFIED
+          path: |
+            dist/windows/AudioHub-Windows-TLS-Bridge-ALPHA-*.zip
+            dist/windows/SHA256SUMS-WINDOWS.txt
+          if-no-files-found: error
+          retention-days: 30
+      - name: Show Windows lab package in job summary
+        shell: bash
+        env:
+          BUNDLE_ARTIFACT_URL: ${{ steps.windows_alpha.outputs.artifact-url }}
+          SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test -n "$BUNDLE_ARTIFACT_URL"
+          {
+            echo "## Windows TLS audio bridge: UNVERIFIED isolated lab ALPHA"
+            echo
+            echo "**[Download temporary operator ZIP]($BUNDLE_ARTIFACT_URL)**"
+            echo
+            echo "Archive contains nested platform ZIP and SHA256SUMS-WINDOWS.txt."
+            echo "Not a Windows driver or production release. Requires Python 3.11+,"
+            echo "manually installed compatible Scream driver, private keys and"
+            echo "an explicitly authorized isolated Pi4 lab. No auto installation."
+            echo
+            echo "Source SHA: `$SOURCE_COMMIT`"
+            echo "Local bundle checksum:"
+            echo '~~~'
+            cat dist/windows/SHA256SUMS-WINDOWS.txt
+            echo '~~~'
+          } >> "$GITHUB_STEP_SUMMARY"
