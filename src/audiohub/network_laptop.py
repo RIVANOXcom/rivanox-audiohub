@@ -319,7 +319,7 @@ def main(argv=None):
     parser.add_argument("--bind-ip", required=True, help="Explicit IPv4 receiver interface")
     parser.add_argument("--port", type=int, default=PORT)
     parser.add_argument("--unsafe-lan-test", action="store_true",
-                        help="Opt in to unauthenticated, trusted-LAN test only")
+                        help="Opt in to unauthenticated, isolated test bench only")
     parser.add_argument("--prefill-packets", type=int, default=1,
                         help="Require 1-16 received PCM packets before starting playback")
     parser.add_argument("--diagnostics", action="store_true",
