@@ -40,7 +40,7 @@ class BridgeWindow:
         self.status = tk.StringVar(value="Not connected. No network port opened.")
         self.root.title("RIVANOX AudioHub - isolated Windows TLS test")
         self.root.resizable(True, True)
-        self.root.minsize(640, 420)
+        self.root.minsize(640, 460)
         frame = ttk.Frame(root, padding=18)
         frame.pack(fill="both", expand=True)
         ttk.Label(frame, text="Windows audio bridge · isolated ALPHA",
@@ -66,19 +66,25 @@ class BridgeWindow:
             if key == "key":
                 ttk.Button(frame, text="Choose local file…", command=self._pick_file).grid(
                     row=3 + 2 * idx, column=2, sticky="e", padx=(8, 0))
+        self.test_tone = tk.BooleanVar(value=False)
+        ttk.Checkbutton(
+            frame, text="Pi speaker test: quiet 5-second tone (no Scream driver)",
+            variable=self.test_tone, command=self._changed,
+        ).grid(row=12, column=0, columnspan=3, sticky="w", pady=(5, 4))
         self.check_button = ttk.Button(frame, text="1 · Check locally (offline)", command=self.check)
-        self.check_button.grid(row=12, column=0, sticky="ew", padx=(0, 8), pady=(8, 4))
+        self.check_button.grid(row=13, column=0, sticky="ew", padx=(0, 8), pady=(8, 4))
         self.start_button = ttk.Button(frame, text="2 · Start isolated session", command=self.start)
-        self.start_button.grid(row=12, column=1, sticky="ew", padx=(0, 8), pady=(8, 4))
+        self.start_button.grid(row=13, column=1, sticky="ew", padx=(0, 8), pady=(8, 4))
         self.stop_button = ttk.Button(frame, text="Stop", command=self.stop)
-        self.stop_button.grid(row=12, column=2, sticky="ew", pady=(8, 4))
+        self.stop_button.grid(row=13, column=2, sticky="ew", pady=(8, 4))
         self.start_button.state(["disabled"])
         self.stop_button.state(["disabled"])
         ttk.Label(frame, textvariable=self.status, wraplength=580).grid(
-            row=13, column=0, columnspan=3, sticky="w", pady=(8, 0))
+            row=14, column=0, columnspan=3, sticky="w", pady=(8, 0))
         ttk.Label(frame, text="The Windows Scream driver must independently send only to 127.0.0.1:4010. "
-                  "Windows NTFS key-file permissions and real audio output are not verified by this UI.",
-                  wraplength=580).grid(row=14, column=0, columnspan=3, sticky="w", pady=(12, 0))
+                  "For speaker test the Scream driver is NOT needed. "
+                  "Windows NTFS key-file permissions and real audible output are not verified.",
+                  wraplength=580).grid(row=15, column=0, columnspan=3, sticky="w", pady=(12, 0))
         frame.columnconfigure(0, weight=1)
         frame.columnconfigure(1, weight=1)
         frame.columnconfigure(2, weight=0)
@@ -143,21 +149,26 @@ class BridgeWindow:
         self.start_button.state(["disabled"])
         self.check_button.state(["disabled"])
         self.stop_button.state(["!disabled"])
-        self.status.set("Manually authorized lab connection running; no audio receipt proven.")
+        tone = bool(self.test_tone.get())
+        self.status.set("Authenticated 5-second speaker tone selected; keep volume LOW."
+                        if tone else "Manually authorized Scream bridge running; no audio receipt proven.")
         self.worker = threading.Thread(
-            target=self._execute, args=(ip, pin, path, minutes), daemon=False
+            target=self._execute, args=(ip, pin, path, minutes, tone), daemon=False
         )
         self.worker.start()
         return True
 
-    def _execute(self, ip, pin, path, minutes):
+    def _execute(self, ip, pin, path, minutes, tone=False):
         try:
-            frames = self.bridge(
+            kwargs = dict(
                 server_ip=ip, port=secure_lan.DEFAULT_PORT,
                 udp_port=secure_lan.DEFAULT_UDP_PORT, key_file=path,
                 pin_sha256=pin, session_minutes=minutes, isolated_lab=True,
                 stop_event=self.stop_event,
             )
+            if tone:
+                kwargs["test_tone"] = True
+            frames = self.bridge(**kwargs)
             self.results.put(("done", int(frames)))
         except (OSError, ValueError, RuntimeError, TimeoutError,
                 ConnectionError, PermissionError, ssl.SSLError):
@@ -191,7 +202,7 @@ class BridgeWindow:
                 if kind == "done":
                     self.status.set(
                         "Session ended. Accepted PCM frames: " + str(value) +
-                        ". Actual Edifier audio remains unverified."
+                        ". Human confirmation of actual Edifier sound is still required."
                     )
                 else:
                     self.status.set(
