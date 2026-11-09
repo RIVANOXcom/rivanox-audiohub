@@ -144,7 +144,8 @@ def display_library(items, *, show_titles=False, guided=False):
     lines.append("Names hidden unless --show-titles is explicitly selected."
                  if not show_titles else
                  "Titles are visible only in THIS local terminal; do not share a transcript.")
-    lines.append("Next: enter up to 8 track numbers when asked; nothing auto-plays."
+    lines.append("Next: choose numbers, ALL (up to 8), or SHUFFLE (time-bounded)."
+                 " Review the anonymous order before exact PLAY; no autoplay."
                  if guided else
                  "Choose up to 8 displayed numbers using --tracks 1,3; "
                  "then add --play only when ready.")
