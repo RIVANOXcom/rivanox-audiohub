@@ -159,6 +159,7 @@ During playback, type a command and press **Enter**:
 
 | Command | Action |
 |---|---|
+| `u` + Enter | Pause or resume only this music session's owned player; session time limit keeps running |
 | `s` + Enter | Show current track number, elapsed session time and remaining session limit; no filenames or user identifiers |
 | `l` + Enter | Show anonymous selected queue order and planned WAV lengths (not live playback progress) |
 | `n` + Enter | Stop just the current owned player, then start the next selected track in order |
@@ -210,3 +211,28 @@ A failed or out-of-range request does not move the playback position.
 As before, `q` or Ctrl+C safely stops playback; no settings, files,
 network endpoints, keys or device permissions are changed. This needs
 a native Pi4 test image that actually includes the new module version.
+
+### Pause and resume an explicitly started local WAV track
+
+After intentionally starting a Pi4 terminal session with
+`--play --interactive`, press **`u` + Enter** to request a pause
+and **`u` + Enter** again to continue. Only the `pw-cat` child
+that this exact local terminal session launched receives SIGSTOP or
+SIGCONT. PipeWire's system services, other user sessions, USB/BT
+audio inputs and global routing are never paused or reconfigured.
+Use `s` to show the anonymous **PAUSED** status.
+
+This is not a certified instant speaker mute: PCM frames already
+buffered downstream may be heard briefly. The original absolute
+session limit continues during pauses. Pressing `q`, skipping,
+replaying, jumping, Ctrl+C or reaching the time limit resumes an
+otherwise stopped subprocess **before** terminating that owned
+process. Neither a music player daemon nor a file-based state is
+left running, and there are no settings to roll back. If a pause
+signal cannot be applied, the operator sees a generic message
+without a file path or command error details.
+
+Real Pi4/Edifier audio pause, stop, source isolation and safe output
+level require a low-volume physical bench test. The controls are
+unverified operator alpha software, not a speaker acceptance or
+owner-authenticated phone controller.
