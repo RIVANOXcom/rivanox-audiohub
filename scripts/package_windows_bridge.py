@@ -51,7 +51,16 @@ def _source_data(root, rel):
     st = path.stat()
     if not stat.S_ISREG(st.st_mode) or not 0 < st.st_size <= 4 * 1024 * 1024:
         raise ValueError("Missing/oversized package input: " + rel)
-    return path.read_bytes()
+    # Git may check text out with CRLF on Windows. A portable source ZIP
+    # must depend on the commit, not the runner's checkout line endings.
+    data = path.read_bytes()
+    if b"\x00" in data:
+        raise ValueError("Binary input forbidden in portable source package")
+    data = data.replace(b"\r\n", b"\n")
+    if b"\r" in data:
+        raise ValueError("Unexpected carriage return in text package input")
+    data.decode("utf-8")
+    return data
 
 
 def _entry(name, payload):
@@ -59,7 +68,9 @@ def _entry(name, payload):
     info = zipfile.ZipInfo(name, (2020, 1, 1, 0, 0, 0))
     info.create_system = 3
     info.external_attr = (stat.S_IFREG | 0o644) << 16
-    info.compress_type = zipfile.ZIP_DEFLATED
+    # Compression versions vary between OS runners. Small source bundle uses
+    # stored members for a truly byte-identical cross-platform ZIP.
+    info.compress_type = zipfile.ZIP_STORED
     info.flag_bits |= 0x800
     return info, payload
 
@@ -115,8 +126,8 @@ def build(root, directory, sha):
             dir=directory, prefix=".windows-alpha-", suffix=".tmp", delete=False
         ) as handle:
             tmp_name = Path(handle.name)
-        with zipfile.ZipFile(tmp_name, "w", compression=zipfile.ZIP_DEFLATED,
-                             compresslevel=9, strict_timestamps=True) as archive:
+        with zipfile.ZipFile(tmp_name, "w", compression=zipfile.ZIP_STORED,
+                             strict_timestamps=True) as archive:
             for dest in sorted(content):
                 archive.writestr(*_entry(folder + "/" + dest, content[dest]))
         with zipfile.ZipFile(tmp_name, "r") as archive:
