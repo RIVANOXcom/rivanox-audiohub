@@ -182,13 +182,47 @@ def play_playlist(paths, *, max_minutes=15, spawn=subprocess.Popen, capture=boun
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("wav", nargs="+", help="1–8 absolute local 16-bit PCM WAV files")
+    parser.add_argument("wav", nargs="*", help="1–8 absolute local 16-bit PCM WAV files")
+    parser.add_argument("--library", metavar="FOLDER",
+                        help="Browse a private local WAV folder without playback")
+    parser.add_argument("--tracks", metavar="1,3",
+                        help="Choose 1–8 numbered library tracks (no autoplay)")
+    parser.add_argument("--show-titles", action="store_true",
+                        help="EXPLICITLY print sanitized track names on the local console")
     parser.add_argument("--minutes", type=int, default=15,
                         help="Maximum explicit session (1–30 minutes, default 15)")
     parser.add_argument("--play", action="store_true",
                         help="EXPLICITLY send limited local WAV audio to music input")
     args = parser.parse_args(argv)
     try:
+        if args.library is not None:
+            if args.wav:
+                raise ValueError("Choose either direct WAV paths or a library folder")
+            # The library is a local, read-only selection interface. It never
+            # runs a player unless BOTH --tracks and --play are explicit.
+            from . import music_library
+            items, skipped = music_library.discover_library(args.library)
+            print(music_library.display_library(items,
+                                                 show_titles=args.show_titles))
+            if skipped:
+                print(str(skipped) + " unsupported or unsafe WAV entries skipped.")
+            if args.tracks is None:
+                if args.play:
+                    raise ValueError("Pick numbered tracks before starting playback")
+                return 0
+            paths, preview = music_library.selected_paths(
+                items, args.tracks, max_minutes=args.minutes
+            )
+            print("Selection: " + str(preview["files"]) + " track(s), "
+                  + str(preview["total_duration_ms"] // 1000)
+                  + " seconds. No network or mixer changes.")
+            if not args.play:
+                print("Preview only. Repeat with --play to hear selected local tracks.")
+                return 0
+            play_playlist(paths, max_minutes=args.minutes)
+            return 0
+        if args.tracks is not None or args.show_titles:
+            raise ValueError("Numbered tracks and local titles require --library")
         preview = inspect_playlist(args.wav, max_minutes=args.minutes)
         print("Local music queue: " + str(preview["files"]) + " track(s); " +
               str(preview["total_duration_ms"] // 1000) + " seconds; no playback yet.")
