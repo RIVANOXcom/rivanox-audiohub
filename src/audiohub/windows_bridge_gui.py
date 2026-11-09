@@ -102,40 +102,40 @@ class BridgeWindow:
         ttk.Checkbutton(
             frame, text="Pi speaker test: quiet 5-second tone (no Scream driver)",
             variable=self.test_tone, command=self._changed,
-        ).grid(row=14, column=0, columnspan=3, sticky="w", pady=(5, 4))
+        ).grid(row=16, column=0, columnspan=3, sticky="w", pady=(5, 4))
         self.tone_channel = tk.StringVar(value="Both speakers")
         ttk.Label(frame, text="Speaker channel to verify (tone only):").grid(
-            row=15, column=0, columnspan=3, sticky="w")
+            row=17, column=0, columnspan=3, sticky="w")
         self.tone_choice = ttk.Combobox(
             frame, textvariable=self.tone_channel,
             values=tuple(CHANNEL_OPTIONS), state="readonly", width=32,
         )
-        self.tone_choice.grid(row=16, column=0, columnspan=3, sticky="w", pady=(0, 4))
+        self.tone_choice.grid(row=18, column=0, columnspan=3, sticky="w", pady=(0, 4))
         self.tone_channel.trace_add("write", self._changed)
         self.check_button = ttk.Button(frame, text="1 · Check locally (offline)", command=self.check)
-        self.check_button.grid(row=17, column=0, sticky="ew", padx=(0, 8), pady=(8, 4))
+        self.check_button.grid(row=19, column=0, sticky="ew", padx=(0, 8), pady=(8, 4))
         self.start_button = ttk.Button(frame, text="2 · Start isolated session", command=self.start)
-        self.start_button.grid(row=17, column=1, sticky="ew", padx=(0, 8), pady=(8, 4))
+        self.start_button.grid(row=19, column=1, sticky="ew", padx=(0, 8), pady=(8, 4))
         self.stop_button = ttk.Button(frame, text="Stop", command=self.stop)
-        self.stop_button.grid(row=17, column=2, sticky="ew", pady=(8, 4))
+        self.stop_button.grid(row=19, column=2, sticky="ew", pady=(8, 4))
         self.start_button.state(["disabled"])
         self.stop_button.state(["disabled"])
         ttk.Label(frame, textvariable=self.status, wraplength=580).grid(
-            row=18, column=0, columnspan=3, sticky="w", pady=(8, 0))
+            row=20, column=0, columnspan=3, sticky="w", pady=(8, 0))
         ttk.Label(frame, text="The Windows Scream driver must independently send only to 127.0.0.1:4010. "
                   "For speaker test the Scream driver is NOT needed. "
                   "Windows NTFS key-file permissions and real audible output are not verified.",
-                  wraplength=580).grid(row=19, column=0, columnspan=3, sticky="w", pady=(12, 0))
+                  wraplength=580).grid(row=21, column=0, columnspan=3, sticky="w", pady=(12, 0))
         self.report_button = ttk.Button(
             frame, text="3 · Record physical speaker observations (local JSON)",
             command=self.record_observation,
         )
-        self.report_button.grid(row=20, column=0, columnspan=3, sticky="ew", pady=(12, 2))
+        self.report_button.grid(row=22, column=0, columnspan=3, sticky="ew", pady=(12, 2))
         self.report_button.state(["disabled"])
         ttk.Label(
             frame, text="Manual observations only. Nothing is uploaded; no GO is granted.",
             wraplength=580,
-        ).grid(row=21, column=0, columnspan=3, sticky="w")
+        ).grid(row=23, column=0, columnspan=3, sticky="w")
         frame.columnconfigure(0, weight=1)
         frame.columnconfigure(1, weight=1)
         frame.columnconfigure(2, weight=0)
