@@ -81,6 +81,7 @@ class ReceiverCounters:
     player_stopped: int = 0
     idle_shutdown: int = 0
     output_lost: int = 0
+    session_expired: int = 0
 
     def json_line(self):
         """Stable machine-readable line for manual engineer diagnostics."""
