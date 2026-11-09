@@ -216,7 +216,7 @@ class LocalMusicLibraryTests(unittest.TestCase):
         ok, runs, output = self.guided(["1,1", "99", "2", "PLAY"])
         self.assertTrue(ok)
         self.assertEqual(runs, [([self.b], 1)])
-        self.assertEqual(output.count("Invalid track numbers"), 2)
+        self.assertEqual(output.count("Invalid selection or duration"), 2)
         self.assertNotIn(self.root.name, output)
 
     def test_guided_three_invalid_selections_fail_closed(self):
@@ -293,6 +293,110 @@ class LocalMusicLibraryTests(unittest.TestCase):
                     self.assertEqual(local_music.main(arguments), 2)
                     guided.assert_not_called()
             self.assertNotIn(str(self.a), str(log.call_args_list))
+
+
+    def test_guided_all_plays_ordered_small_album_only_after_play(self):
+        done, calls, output = self.guided(["ALL", "PLAY"])
+        self.assertTrue(done)
+        self.assertEqual(calls, [([self.a, self.b], 1)])
+        self.assertIn("Selected library track numbers: 1,2", output)
+        self.assertNotIn(str(self.root), output)
+        self.assertNotIn("favorite", output)
+
+    def test_guided_all_rejects_album_larger_than_max_files(self):
+        for number in range(7):
+            self.make_wav(self.root / ("Extra%02d.wav" % number), 15)
+        done, calls, output = self.guided(["ALL", "ALL", "ALL"])
+        self.assertFalse(done)
+        self.assertEqual(calls, [])
+        self.assertIn("Selection limit reached", output)
+        self.assertNotIn(self.a.name, output)
+
+    def test_shuffle_uses_validated_selected_set_without_printing_names(self):
+        records, _ = music_library.discover_library(self.root)
+        files, report, numbers = music_library.guided_choice(
+            records, "SHUFFLE", max_minutes=1,
+            shuffle=lambda positions: positions.reverse())
+        self.assertEqual(files, [self.b, self.a])
+        self.assertEqual(numbers, "2,1")
+        self.assertEqual(report["files"], 2)
+        self.assertNotIn(str(self.root), repr(report))
+
+    def test_shuffle_in_guided_mode_still_requires_explicit_play(self):
+        with mock.patch("secrets.SystemRandom") as random_instance:
+            random_instance.return_value.shuffle.side_effect = lambda positions: positions.reverse()
+            done, calls, output = self.guided(["SHUFFLE", "PLAY"])
+        self.assertTrue(done)
+        self.assertEqual(calls, [([self.b, self.a], 1)])
+        self.assertIn("Selected library track numbers: 2,1", output)
+        self.assertNotIn(self.b.name, output)
+
+    def test_shuffle_no_play_without_confirmation(self):
+        with mock.patch("secrets.SystemRandom") as random_instance:
+            random_instance.return_value.shuffle.side_effect = lambda positions: positions.reverse()
+            done, calls, output = self.guided(["SHUFFLE", "cancel"])
+        self.assertFalse(done)
+        self.assertEqual(calls, [])
+        self.assertIn("No playback started", output)
+
+    def test_shuffle_time_budget_keeps_only_wavs_that_fit(self):
+        records, _ = music_library.discover_library(self.root)
+        fake = [(records[0][0], {**records[0][1], "duration_ms":40000}),
+                (records[1][0], {**records[1][1], "duration_ms":40000}),
+                (records[0][0], {**records[0][1], "duration_ms":10000})]
+        def fake_selected(_items, numbers, *, max_minutes):
+            self.assertEqual(numbers, "1,3")
+            self.assertEqual(max_minutes, 1)
+            return [self.a, self.a], {"files":2}
+        with mock.patch.object(music_library, "selected_paths",
+                               side_effect=fake_selected) as picked:
+            paths, report, numbers = music_library.guided_choice(
+                fake, "SHUFFLE", max_minutes=1,
+                shuffle=lambda positions: None)
+        self.assertEqual(numbers, "1,3")
+        self.assertEqual(paths, [self.a, self.a])
+        self.assertEqual(report["files"], 2)
+        picked.assert_called_once()
+
+    def test_change_resets_selection_without_playing_old_choice(self):
+        done, calls, output = self.guided(["2", "CHANGE", "1,2", "PLAY"])
+        self.assertTrue(done)
+        self.assertEqual(calls, [([self.a, self.b], 1)])
+        self.assertIn("Selection cleared", output)
+        self.assertIn("Selected library track numbers: 2", output)
+        self.assertIn("Selected library track numbers: 1,2", output)
+        self.assertNotIn(self.a.name, output)
+
+    def test_repeated_change_cancels_without_playback(self):
+        done, calls, output = self.guided(
+            ["1", "CHANGE", "2", "CHANGE", "1", "CHANGE"])
+        self.assertFalse(done)
+        self.assertEqual(calls, [])
+        self.assertIn("Change limit reached", output)
+
+    def test_unexpected_selection_tokens_do_not_start_audio(self):
+        done, calls, output = self.guided(["all", "shuffle ", "CHANGE"])
+        self.assertFalse(done)
+        self.assertEqual(calls, [])
+        self.assertIn("Selection limit reached", output)
+
+    def test_all_and_shuffle_reject_invalid_session_time(self):
+        rows, _ = music_library.discover_library(self.root)
+        for minutes in (0, 31, True, "10", None):
+            for keyword in ("ALL", "SHUFFLE", "1"):
+                with self.subTest(minutes=minutes, keyword=keyword):
+                    with self.assertRaises(ValueError):
+                        music_library.guided_choice(
+                            rows, keyword, max_minutes=minutes)
+
+    def test_legacy_browser_prompt_keeps_explicit_flags(self):
+        rows, _ = music_library.discover_library(self.root)
+        classic = music_library.display_library(rows)
+        wizard = music_library.display_library(rows, guided=True)
+        self.assertIn("--tracks 1,3", classic)
+        self.assertNotIn("--tracks 1,3", wizard)
+        self.assertIn("enter up to 8 track numbers", wizard)
+
 
 if __name__ == "__main__":
     unittest.main()
