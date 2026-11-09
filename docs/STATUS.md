@@ -13,6 +13,17 @@
 - Self-configuring headless first boot and recoverable network provisioning
 - GitHub-hosted reproducible image builds and verified release assets
 
+## Local Bluetooth first-use feedback (still unverified)
+
+A new Pi4 local-console command `python3 -m audiohub.pairing_readiness`
+reads the BlueZ system bus without changing the controller or trusting
+devices. It explains whether initial experimental pairing appears open,
+closed, expired, full, or unexpectedly open. The existing offline first-boot
+FAT report now includes an anonymous last pairing-state summary, readable
+after shutdown without a connected screen or network. These records do
+not authenticate the owner, configure Wi-Fi, or verify Bluetooth audio.
+See [read-only Pi4 pairing guide](PI4-BLUETOOTH-FIRST-USE.md).
+
 ## Status definitions
 
 **Designed** means the architecture has been drafted. **Implemented** means code exists. **CI validated** means automated code-level tests have passed. **Hardware verified** means logs and a repeatable Pi 4 procedure demonstrate it works. **Released** means an image and checksum are available from GitHub Releases.
