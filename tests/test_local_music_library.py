@@ -171,5 +171,125 @@ class LocalMusicLibraryTests(unittest.TestCase):
         self.assertNotIn("PRIVATE", music_library.display_library(items))
 
 
+
+    def guided(self, lines, *, show_titles=False, max_minutes=1):
+        output, runs = [], []
+        choices = iter(lines)
+        def runner(paths, *, max_minutes):
+            runs.append((paths, max_minutes))
+            return True
+        with mock.patch("sys.stdin", mock.Mock(isatty=lambda: True)), \
+             mock.patch("sys.stdout", mock.Mock(isatty=lambda: True)), \
+             mock.patch.object(os, "geteuid", return_value=1000):
+            finished = music_library.guided_session(
+                self.root, max_minutes=max_minutes,
+                show_titles=show_titles, read_line=lambda: next(choices),
+                out=output.append, runner=runner)
+        return finished, runs, "\n".join(output)
+
+    def test_guided_album_requires_explicit_play_and_preserves_chosen_order(self):
+        ok, runs, output = self.guided(["2,1", "PLAY"])
+        self.assertTrue(ok)
+        self.assertEqual(runs, [([self.b, self.a], 1)])
+        self.assertIn("GUIDED LOCAL MODE", output)
+        self.assertIn("Selected 2 WAV track(s)", output)
+        self.assertIn("Explicit PLAY confirmed", output)
+        self.assertNotIn(self.a.name, output)
+        self.assertNotIn(self.b.name, output)
+        self.assertNotIn(str(self.root), output)
+
+    def test_guided_select_cancellation_never_spawns_player(self):
+        for replies in ([""], [None], ["2,1", ""],
+                        ["2,1", "play"], ["2,1", "PLAY "],
+                        ["2,1", "y"], ["2,1", None]):
+            with self.subTest(replies=replies):
+                ok, runs, output = self.guided(replies)
+                self.assertFalse(ok)
+                self.assertEqual(runs, [])
+                self.assertIn("No playback started", output)
+                self.assertNotIn(str(self.root), output)
+
+    def test_guided_invalid_selection_retries_without_audio(self):
+        ok, runs, output = self.guided(["1,1", "99", "2", "PLAY"])
+        self.assertTrue(ok)
+        self.assertEqual(runs, [([self.b], 1)])
+        self.assertEqual(output.count("Invalid track numbers"), 2)
+        self.assertNotIn(self.root.name, output)
+
+    def test_guided_three_invalid_selections_fail_closed(self):
+        for attempts in (["1,1", "3", "x"],
+                         [" " * 65, "3", "2,2"]):
+            ok, runs, output = self.guided(attempts)
+            self.assertFalse(ok)
+            self.assertEqual(runs, [])
+            self.assertIn("Selection limit reached", output)
+            self.assertNotIn(self.a.name, output)
+
+    def test_guided_cannot_autoplay_through_wrong_or_too_long_confirmation(self):
+        for answer in ("PLAY\n", "PLAY!" * 15, "PLAYNOW", "PLaY", " PLAY"):
+            ok, runs, output = self.guided(["1", answer])
+            self.assertFalse(ok)
+            self.assertEqual(runs, [])
+            self.assertIn("cancelled", output.lower())
+
+    def test_explicit_private_title_display_still_opt_in(self):
+        done, runs, output = self.guided(["1", ""], show_titles=True)
+        self.assertFalse(done)
+        self.assertEqual(runs, [])
+        self.assertIn("a demo", output)
+        self.assertNotIn(str(self.root), output)
+        self.assertIn("THIS local terminal", output)
+
+    def test_guided_refuses_nonterminal_and_root_before_folder_scan(self):
+        with mock.patch("sys.stdin", mock.Mock(isatty=lambda: False)), \
+             mock.patch("sys.stdout", mock.Mock(isatty=lambda: True)), \
+             mock.patch.object(music_library, "discover_library") as discover:
+            with self.assertRaises(PermissionError):
+                music_library.guided_session(self.root, read_line=lambda: "PLAY")
+            discover.assert_not_called()
+        with mock.patch("sys.stdin", mock.Mock(isatty=lambda: True)), \
+             mock.patch("sys.stdout", mock.Mock(isatty=lambda: True)), \
+             mock.patch.object(os, "geteuid", return_value=0), \
+             mock.patch.object(music_library, "discover_library") as discover:
+            with self.assertRaises(PermissionError):
+                music_library.guided_session(self.root, read_line=lambda: "PLAY")
+            discover.assert_not_called()
+
+    def test_bounded_terminal_input_rejects_eof_controls_and_truncation(self):
+        import io
+        with mock.patch("sys.stdin", io.StringIO("PLAY\n")):
+            self.assertEqual(music_library._terminal_line(), "PLAY")
+        for input_string in ("", "x" * 100 + "\n", "PLAY"):
+            with self.subTest(raw=input_string[:12]), \
+                 mock.patch("sys.stdin", io.StringIO(input_string)):
+                self.assertIsNone(music_library._terminal_line())
+        with mock.patch("sys.stdin", io.StringIO("PLAY\r\n")):
+            self.assertEqual(music_library._terminal_line(), "PLAY")
+
+    def test_cli_guided_needs_only_library_and_never_implicit_play(self):
+        with mock.patch("sys.stdin", mock.Mock(isatty=lambda: True)), \
+             mock.patch("sys.stdout", mock.Mock(isatty=lambda: True)), \
+             mock.patch.object(music_library, "guided_session", return_value=True) as guided:
+            self.assertEqual(local_music.main(
+                ["--library", str(self.root), "--guided", "--minutes", "1"]), 0)
+            guided.assert_called_once_with(
+                str(self.root), max_minutes=1, show_titles=False)
+
+    def test_cli_guided_rejects_ambiguous_legacy_play_flags(self):
+        combinations = (
+            ["--guided"],
+            ["--guided", "--library", str(self.root), "--play"],
+            ["--guided", "--library", str(self.root), "--interactive"],
+            ["--guided", "--library", str(self.root), "--tracks", "1"],
+            ["--guided", "--library", str(self.root), str(self.a)],
+        )
+        with mock.patch.object(music_library, "guided_session") as guided, \
+             mock.patch("builtins.print") as log:
+            for arguments in combinations:
+                with self.subTest(arguments=arguments):
+                    self.assertEqual(local_music.main(arguments), 2)
+                    guided.assert_not_called()
+            self.assertNotIn(str(self.a), str(log.call_args_list))
+
 if __name__ == "__main__":
     unittest.main()
