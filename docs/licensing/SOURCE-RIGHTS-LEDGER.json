@@ -270,6 +270,13 @@
       "model_c_eligible": false
     },
     {
+      "path": "src/audiohub/local_music.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
       "path": "src/audiohub/manual_acceptance.py",
       "origin_status": "pending-human-review",
       "rightsholder_verified": false,
@@ -453,6 +460,13 @@
     },
     {
       "path": "tests/test_license_transition.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "tests/test_local_music.py",
       "origin_status": "pending-human-review",
       "rightsholder_verified": false,
       "third_party_origin_checked": false,
