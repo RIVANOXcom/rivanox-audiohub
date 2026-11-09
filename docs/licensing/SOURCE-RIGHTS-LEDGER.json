@@ -284,6 +284,13 @@
       "model_c_eligible": false
     },
     {
+      "path": "src/audiohub/secure_lan.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
       "path": "src/audiohub/source_routes.py",
       "origin_status": "pending-human-review",
       "rightsholder_verified": false,
@@ -495,6 +502,13 @@
     },
     {
       "path": "tests/test_runtime_static.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "tests/test_secure_lan.py",
       "origin_status": "pending-human-review",
       "rightsholder_verified": false,
       "third_party_origin_checked": false,

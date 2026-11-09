@@ -55,6 +55,20 @@ be reassigned among the three internal EQ inputs.** It does not pair,
 authenticate or enroll devices and is not accessible from the web UI.
 See [offline source routing for the development bench](./docs/FLEXIBLE-SOURCE-ROUTING-LAB.md).
 
+### Authenticated Windows audio: isolated engineering preview only
+
+A separate optional **TLS 1.3, pinned-cert, 32-byte shared-key challenge-response**
+Windows bridge and Raspberry Pi receiver now provide a manual alternative to
+the spoofable raw Scream UDP lab input. The Windows bridge listens for the
+already installed Scream driver **only on 127.0.0.1**, then sends validated
+stereo PCM inside TLS to the Pi; the Pi requires an explicit owner-created
+key and certificate and never starts playback without authentication. It is
+one-shot, time-limited and **OFF by default**, with no remote UI or service.
+No Scream driver is shipped, and its Windows loopback unicast operation and
+actual audio have not been hardware tested. There are no bundled credentials.
+See [the isolated authenticated Windows bench runbook](./docs/SECURE-WINDOWS-LAN-LAB.md).
+**No normal/home-network deployment or production release is approved.**
+
 **Hardware note:** Two simultaneous A2DP senders have not been verified
 on Pi 4. The Windows Scream receiver is plaintext/unauthenticated and is
 never started automatically. For isolated manual bench work its UDP
