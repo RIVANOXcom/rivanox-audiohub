@@ -12,6 +12,7 @@ import threading
 
 from . import secure_lan
 from . import hardware_observation
+from . import key_onboarding
 from .windows_bridge_setup import check_python_tls, validate_local_setup
 
 CHANNEL_OPTIONS = {
@@ -22,14 +23,15 @@ CHANNEL_OPTIONS = {
 }
 
 
-def validate_fields(ip, pin, secret_path, minutes, certificate_file=None):
+def validate_fields(ip, pin, secret_path, minutes, certificate_file=None,
+                    expected_key_code=None):
     """Pure, offline gate reused by Check and Start; no sockets."""
     check_python_tls()
     if not isinstance(minutes, str) or not minutes.isascii() or not minutes.isdecimal():
         raise ValueError("Choose 1–30 whole minutes")
     amount = secure_lan.validate_session_minutes(int(minutes))
     path = validate_local_setup(ip.strip(), pin.strip(), secret_path, amount,
-                                certificate_file)
+                                certificate_file, expected_key_code)
     return (ip.strip(), pin.strip(), path, amount)
 
 
@@ -51,7 +53,7 @@ class BridgeWindow:
         self.status = tk.StringVar(value="Not connected. No network port opened.")
         self.root.title("RIVANOX AudioHub - isolated Windows TLS test")
         self.root.resizable(True, True)
-        self.root.minsize(640, 610)
+        self.root.minsize(640, 675)
         frame = ttk.Frame(root, padding=18)
         frame.pack(fill="both", expand=True)
         ttk.Label(frame, text="Windows audio bridge · isolated ALPHA",
@@ -85,6 +87,17 @@ class BridgeWindow:
         ttk.Button(frame, text="Choose public cert…", command=self._pick_certificate).grid(
             row=13, column=2, sticky="e", padx=(8, 0))
         self.cert_path.trace_add("write", self._changed)
+        self.expected_key_code = tk.StringVar(value="")
+        ttk.Label(
+            frame, text="Optional Pi PSK comparison code (32 hex, from trusted Pi console):",
+            wraplength=570,
+        ).grid(row=14, column=0, columnspan=3, sticky="w")
+        ttk.Entry(frame, textvariable=self.expected_key_code, width=70).grid(
+            row=15, column=0, columnspan=2, sticky="ew", pady=(0, 8))
+        ttk.Button(
+            frame, text="Show local code (offline)", command=self._show_local_key_code,
+        ).grid(row=15, column=2, sticky="e", padx=(8, 0))
+        self.expected_key_code.trace_add("write", self._changed)
         self.test_tone = tk.BooleanVar(value=False)
         ttk.Checkbutton(
             frame, text="Pi speaker test: quiet 5-second tone (no Scream driver)",
@@ -155,6 +168,24 @@ class BridgeWindow:
         if path:
             self.cert_path.set(path)  # Never overwrite the independent pin.
 
+    def _show_local_key_code(self):
+        """Display only on explicit click; no connection, storage or key export."""
+        if self._running() or self.closing:
+            return False
+        self.checked = False
+        self.start_button.state(["disabled"])
+        try:
+            code = key_onboarding.local_key_code(self.entries["key"].get())
+        except (OSError, ValueError, RuntimeError, PermissionError):
+            self.status.set("Local key-code check failed. Protect the 32-byte key file.")
+            return False
+        self.status.set(
+            "LOCAL key comparison code: " + code +
+            ". Check privately on the trusted Pi console. Never publish it. "
+            "Not a connection or owner verification."
+        )
+        return True
+
     def _channel(self):
         label = self.tone_channel.get()
         if label not in CHANNEL_OPTIONS:
@@ -167,7 +198,7 @@ class BridgeWindow:
         return validate_fields(
             self.entries["ip"].get(), self.entries["pin"].get(),
             self.entries["key"].get(), self.entries["minutes"].get(),
-            self.cert_path.get()
+            self.cert_path.get(), self.expected_key_code.get()
         )
 
     def check(self):
@@ -182,11 +213,13 @@ class BridgeWindow:
             return False
         self.checked = True
         self.status.set(
-            "Local Pi certificate matches INDEPENDENT fingerprint (offline). "
-            "No Pi/driver verification."
-            if self.cert_path.get() else
-            "No local public certificate file compared. Independently confirm "
-            "Pi SHA256. No connection made."
+            ("Pi public certificate matches independent SHA256. "
+             if self.cert_path.get() else
+             "No optional Pi public certificate file compared. ") +
+            ("Local key matches trusted Pi PSK comparison code. "
+             if self.expected_key_code.get() else
+             "No optional Pi PSK comparison code supplied. ") +
+            "No connection made; no physical Pi/driver verification."
         )
         if self.entries["confirmation"].get() == "ISOLATED":
             self.start_button.state(["!disabled"])
@@ -222,12 +255,14 @@ class BridgeWindow:
         self.status.set(("Authenticated 5-second " + channel + " speaker test; keep volume LOW.")
                         if tone else "Manually authorized Scream bridge running; no audio receipt proven.")
         self.worker = threading.Thread(
-            target=self._execute, args=(ip, pin, path, minutes, tone, channel), daemon=False
+            target=self._execute, args=(ip, pin, path, minutes, tone, channel,
+                                        self.expected_key_code.get()), daemon=False
         )
         self.worker.start()
         return True
 
-    def _execute(self, ip, pin, path, minutes, tone=False, channel="both"):
+    def _execute(self, ip, pin, path, minutes, tone=False, channel="both",
+                 expected_key_code=None):
         try:
             kwargs = dict(
                 server_ip=ip, port=secure_lan.DEFAULT_PORT,
@@ -235,6 +270,8 @@ class BridgeWindow:
                 pin_sha256=pin, session_minutes=minutes, isolated_lab=True,
                 stop_event=self.stop_event,
             )
+            if expected_key_code:
+                kwargs["expected_key_code"] = expected_key_code
             if tone:
                 kwargs["test_tone"] = True
                 if channel != "both":
