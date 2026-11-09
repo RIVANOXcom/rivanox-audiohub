@@ -22,10 +22,63 @@ import sys
 import time
 from pathlib import Path
 
-from .network_laptop import (
-    check_audio_target, close_player, lan_target, parse_scream_packet,
-    player_command, validate_options, validate_session_minutes,
-)
+# Never import Pi/Linux-only dependencies at module load: this module
+# also provides a standard-library-only Windows bridge without fcntl.
+TEST_NETWORKS = tuple(ipaddress.IPv4Network(n) for n in (
+    "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8"
+))
+
+
+def validate_options(sender_ip, bind_ip, port, enabled):
+    if not enabled:
+        raise ValueError("Explicit isolated-lab opt-in required")
+    if isinstance(port, bool) or not isinstance(port, int) or not 1024 <= port <= 65535:
+        raise ValueError("Private LAN port must be 1024..65535")
+    try:
+        addresses = [ipaddress.IPv4Address(x) for x in (sender_ip, bind_ip)]
+    except ipaddress.AddressValueError as exc:
+        raise ValueError("Specific IPv4 hosts required") from exc
+    for addr in addresses:
+        if (not any(addr in network for network in TEST_NETWORKS)
+                or addr.is_unspecified or addr.is_multicast or addr.is_reserved):
+            raise ValueError("Specific RFC1918/loopback IPv4 hosts required")
+    return str(addresses[0]), str(addresses[1]), port
+
+
+def validate_session_minutes(value):
+    if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= 30:
+        raise ValueError("Isolated session must last 1..30 whole minutes")
+    return value
+
+
+def parse_scream_packet(packet):
+    # Portable strict 48kHz/16-bit/stereo/FL+FR-or-unspecified decoder.
+    if (not isinstance(packet, bytes) or not 9 <= len(packet) <= 1157
+            or packet[:3] != bytes((1, 16, 2))
+            or int.from_bytes(packet[3:5], "little") not in (0, 3)
+            or (len(packet) - 5) % 4):
+        return None
+    return packet[5:]
+
+
+def lan_target():
+    from .network_laptop import lan_target as get_target
+    return get_target()
+
+
+def check_audio_target(target):
+    from .network_laptop import check_audio_target as check_target
+    return check_target(target)
+
+
+def player_command(target):
+    from .network_laptop import player_command as command
+    return command(target)
+
+
+def close_player(process):
+    from .network_laptop import close_player as close
+    return close(process)
 
 MAGIC = b"RVX-AUDIO1"
 DOMAIN = b"RIVANOX-AUDIOHUB-LAN-TLS-PSK-v1:"
