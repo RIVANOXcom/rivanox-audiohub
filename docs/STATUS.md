@@ -71,3 +71,13 @@ None of the planned audio feature paths has been marked hardware verified in thi
 5. Legal notices, attribution and applicable EU requirements must be assessed for the distributed artifact.
 
 No release should claim Bluetooth parallelism, zero-setup provisioning or hardware compatibility without evidence.
+
+### Local music guided terminal picker
+
+The optional Pi4 `--guided --library ABSOLUTE_FOLDER` workflow
+shows anonymous numbered WAV tracks, accepts an explicitly chosen
+bounded sequence and asks for exact uppercase `PLAY` before starting
+the existing interactive music session. Local TTY and non-root user
+are mandatory; invalid input, cancellation or failed confirmation do
+not start playback. This changes no mixer, Bluetooth, owner or service
+settings. Real hardware audio and public distribution remain NO-GO.

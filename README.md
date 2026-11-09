@@ -354,3 +354,17 @@ process behind. PipeWire services, Bluetooth sources, routing and
 security permissions are unchanged. Buffered speaker audio can
 continue briefly; **real Pi4/Edifier audibility is still unverified**.
 See [local music operator instructions](docs/LOCAL-MUSIC-PLAYBACK.md).
+
+### Guided offline local music playback (one Pi4 command)
+
+At a trusted Pi4 operator terminal, start
+`python3 -m audiohub.local_music --guided --library /home/audiohub/PrivateMusic`
+with the installed source on `PYTHONPATH` as unprivileged audiohub
+user. Select up to eight numbered WAVs when prompted; press Enter to
+cancel, or type **exactly `PLAY`** at the final prompt to start
+interactive playback. No audio starts merely from scanning or choosing
+tracks. Titles remain hidden unless `--show-titles` is explicit.
+Then use `u` pause/resume, `q` stop and the existing local controls;
+no remote service, stored playlist, new permission or device route is
+introduced. Details and safe rollback:
+[local music guide](docs/LOCAL-MUSIC-PLAYBACK.md).

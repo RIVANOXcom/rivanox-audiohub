@@ -125,10 +125,10 @@ def _safe_local_title(stem):
     return value
 
 
-def display_library(items, *, show_titles=False):
+def display_library(items, *, show_titles=False, guided=False):
     """Non-persistent terminal view. Private titles need explicit local opt-in."""
-    if type(show_titles) is not bool:
-        raise ValueError("Invalid title display option")
+    if type(show_titles) is not bool or type(guided) is not bool:
+        raise ValueError("Invalid library display option")
     lines = ["Local music library: " + str(len(items))
              + " valid WAV track(s). No playback started."]
     for n, (path, info) in enumerate(items, 1):
@@ -144,7 +144,9 @@ def display_library(items, *, show_titles=False):
     lines.append("Names hidden unless --show-titles is explicitly selected."
                  if not show_titles else
                  "Titles are visible only in THIS local terminal; do not share a transcript.")
-    lines.append("Choose up to 8 displayed numbers using --tracks 1,3; "
+    lines.append("Next: enter up to 8 track numbers when asked; nothing auto-plays."
+                 if guided else
+                 "Choose up to 8 displayed numbers using --tracks 1,3; "
                  "then add --play only when ready.")
     return "\n".join(lines)
 
@@ -154,3 +156,77 @@ def selected_paths(items, selection, *, max_minutes):
     paths = [items[i][0] for i in indices]
     report = local_music.inspect_playlist(paths, max_minutes=max_minutes)
     return paths, report
+
+
+def _terminal_line():
+    """Read one bounded operator response; never log or echo its contents."""
+    try:
+        value = __import__("sys").stdin.readline(65)
+    except (OSError, UnicodeError, ValueError, EOFError):
+        return None
+    if not value or len(value) > 64 or not value.endswith("\n"):
+        return None
+    return value[:-1].rstrip("\r")
+
+
+def guided_session(folder, *, max_minutes=15, show_titles=False,
+                   read_line=None, out=None, runner=None):
+    """One-command local music picker with explicit human PLAY confirmation.
+
+    Require a genuine local terminal before inspecting any private music
+    folder. User-typed choices are never printed back, saved or passed
+    to a shell. An empty response, EOF, three bad selections or anything
+    other than exact uppercase PLAY fail closed without starting audio.
+    """
+    import sys
+    if not sys.stdin.isatty() or not sys.stdout.isatty():
+        raise PermissionError("Guided music requires a local operator terminal")
+    if hasattr(os, "geteuid") and os.geteuid() == 0:
+        raise PermissionError("Guided music requires an unprivileged user")
+    if read_line is None:
+        read_line = _terminal_line
+    if out is None:
+        out = print
+    if runner is None:
+        from . import music_session
+        runner = music_session.run_session
+
+    entries, skipped = discover_library(folder)
+    out(display_library(entries, show_titles=show_titles, guided=True))
+    if skipped:
+        out(str(skipped) + " unsafe or unsupported WAV entries skipped.")
+    out("GUIDED LOCAL MODE: Nothing is playing. No playlist is stored.")
+    selected = None
+    for attempt in range(3):
+        out("Enter up to 8 distinct displayed track numbers, e.g. 2,1."
+            " Press Enter alone to cancel. No audio starts yet:")
+        reply = read_line()
+        if reply is None or reply == "":
+            out("Music selection cancelled. No playback started.")
+            return False
+        if type(reply) is not str or len(reply) > 64:
+            out("Invalid numbered selection. No playback started.")
+            continue
+        try:
+            selected, details = selected_paths(entries, reply,
+                                               max_minutes=max_minutes)
+            break
+        except (ValueError, OSError):
+            out("Invalid track numbers or audio duration. No playback started.")
+    if selected is None:
+        out("Selection limit reached. No playback started.")
+        return False
+
+    out("Selected " + str(details["files"]) + " WAV track(s), total "
+        + str(details["total_duration_ms"] // 1000)
+        + " s. Verify a low physical speaker volume.")
+    out("Type exact uppercase PLAY then Enter to start local interactive audio."
+        " Anything else cancels; no automatic playback:")
+    answer = read_line()
+    if type(answer) is not str or answer != "PLAY":
+        out("Music session cancelled. No playback started.")
+        return False
+    # This is the only control path from the guided picker to the
+    # existing unprivileged playback engine; no network or service writes.
+    out("Explicit PLAY confirmed. To stop, press q + Enter or Ctrl+C.")
+    return runner(selected, max_minutes=max_minutes)
