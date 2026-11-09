@@ -83,6 +83,18 @@ class WindowsPortableBundleTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertIn("No keys, driver, network", proc.stdout)
 
+    def test_crlf_windows_checkout_yields_exact_same_sha_as_lf(self):
+        linux, _ = self._build()
+        root = self.out / "windows-crlf-fixture"
+        for source, _ in package.FILES:
+            target = root / source
+            target.parent.mkdir(parents=True, exist_ok=True)
+            data = (ROOT / source).read_bytes().replace(b"\r\n", b"\n")
+            target.write_bytes(data.replace(b"\n", b"\r\n"))
+        windows_dir = self.out / "windows-artifact"
+        win = package.build(root, windows_dir, SHA)
+        self.assertEqual(linux["sha256"], win["sha256"])
+
     def test_refuses_bad_sha_and_overwrite(self):
         for value in ("main", "B" * 40, "a" * 39, "a" * 41, "../a"):
             with self.subTest(value=value), self.assertRaises(ValueError):
