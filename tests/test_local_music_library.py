@@ -395,7 +395,7 @@ class LocalMusicLibraryTests(unittest.TestCase):
         wizard = music_library.display_library(rows, guided=True)
         self.assertIn("--tracks 1,3", classic)
         self.assertNotIn("--tracks 1,3", wizard)
-        self.assertIn("enter up to 8 track numbers", wizard)
+        self.assertIn("Next: choose numbers, ALL (up to 8), or SHUFFLE", wizard)
 
 
 if __name__ == "__main__":
