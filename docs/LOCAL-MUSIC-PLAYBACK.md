@@ -121,7 +121,9 @@ Both `--tracks` and `--play` are mandatory when browsing a folder.
 The queue follows the explicitly selected order. The existing
 unprivileged `audiohub.music` sink, safe initial stream level,
 audio-format validation, timeout and **Ctrl+C** cancellation are
-unchanged. It never opens a public playlist API, persists the queue or
+unchanged. The PipeWire process explicitly receives `--raw --format=s16`
+so streamed PCM bytes from stdin are decoded as samples rather than
+mistaken for a WAV/container header. It never opens a public playlist API, persists the queue or
 modifies Wi-Fi, Bluetooth pairing, mixer EQ or access controls.
 
 If an album has more than 40 playable WAVs or 256 directory entries,
