@@ -193,5 +193,8 @@
   "sustainabilityDescription": "Tu apoyo voluntario ayuda a financiar pruebas con Raspberry Pi, seguridad, accesibilidad y mantenimiento.",
   "sustainabilityDisclosure": "Las donaciones son opcionales. AudioHub sigue disponible bajo AGPL-3.0; donar no compra una licencia comercial ni soporte prioritario.",
   "sustainabilityDonate": "Apoyar en Ko-fi",
-  "sustainabilityCommercial": "Información sobre licencias comerciales"
+  "sustainabilityCommercial": "Información sobre licencias comerciales",
+  "bootViewerTitle": "Comprender el primer inicio sin pantalla",
+  "bootViewerNotice": "Consulta tu informe de la tarjeta SD en un visor local sin conexión. Sin envío, emparejamiento ni cambios. No confirma propiedad o hardware.",
+  "bootViewerOpen": "Abrir el informe SD sin conexión"
 }
