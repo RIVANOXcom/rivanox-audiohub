@@ -279,3 +279,16 @@ compatibility. The existing NoInputNoOutput test agent is not secure
 phone-owner claiming; production ownership/phone Wi-Fi still requires a
 separate, reviewed implementation. Follow the
 [Pi4 pairing readiness guide](./docs/PI4-BLUETOOTH-FIRST-USE.md).
+
+### View the headless Pi4 SD first-boot report without Python or Wi-Fi
+
+AudioHub now includes a self-contained, five-language browser viewer
+for the anonymous \`AUDIOHUB-TEST-REPORT.json\` produced by Pi4
+first-boot diagnostics. Open \`AUDIOHUB-BOOT-REPORT-VIEWER.html\` from
+the **portable Windows test ZIP**, or
+[the source HTML viewer](web/boot-report-viewer.html), directly on
+Windows/Mac/Linux after a controlled Pi shutdown and SD removal. A
+small link in the existing AudioHub read-only web prototype opens
+the same viewer. It never uploads the chosen file, changes Bluetooth,
+or interprets SD data as ownership/hardware release approval.
+See [headless operator instructions](docs/PI4-BLUETOOTH-FIRST-USE.md).

@@ -24,6 +24,14 @@ after shutdown without a connected screen or network. These records do
 not authenticate the owner, configure Wi-Fi, or verify Bluetooth audio.
 See [read-only Pi4 pairing guide](PI4-BLUETOOTH-FIRST-USE.md).
 
+## New no-network first-boot report viewer
+
+An independent five-language offline HTML viewer allows the operator
+to inspect a bounded anonymous Pi4 SD `AUDIOHUB-TEST-REPORT.json` in
+a browser on a trusted computer without Python, LAN pairing or
+uploading the report. Bundled in the existing Windows portable ALPHA
+test workflow. This is not authenticated ownership or hardware GO.
+
 ## Status definitions
 
 **Designed** means the architecture has been drafted. **Implemented** means code exists. **CI validated** means automated code-level tests have passed. **Hardware verified** means logs and a repeatable Pi 4 procedure demonstrate it works. **Released** means an image and checksum are available from GitHub Releases.

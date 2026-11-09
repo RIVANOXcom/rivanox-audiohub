@@ -193,5 +193,8 @@
   "sustainabilityDescription": "Your voluntary support helps fund Pi hardware tests, security improvements, accessibility, and maintenance.",
   "sustainabilityDisclosure": "Donations are optional. AudioHub stays available under AGPL-3.0; a donation does not purchase a commercial license or priority support.",
   "sustainabilityDonate": "Support on Ko-fi",
-  "sustainabilityCommercial": "Commercial licensing information"
+  "sustainabilityCommercial": "Commercial licensing information",
+  "bootViewerTitle": "Understand a headless first-boot SD report",
+  "bootViewerNotice": "Open a saved SD-card diagnostic privately in a self-contained offline viewer. Nothing is uploaded, paired or changed. No owner, hardware or sound approval.",
+  "bootViewerOpen": "Open SD boot report viewer"
 }

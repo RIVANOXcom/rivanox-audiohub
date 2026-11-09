@@ -222,3 +222,10 @@
 #eq-guide-preset-curve{margin:14px 0 10px;padding:10px 12px;font-size:.87rem;line-height:1.55;color:#e9f4ff;border-left:2px solid #a9c3df;background:rgba(129,164,205,.08);overflow-wrap:anywhere}
 #eq-guide-preset-choice:focus-visible{outline:3px solid #d8a1ff;outline-offset:2px}
 @media(max-width:740px){.eq-guide-neutral .eq-guide-fields{grid-template-columns:minmax(0,1fr)}}
+
+/* Headless first-boot handoff is a plain link, not an invented device control. */
+.boot-viewer-entry{padding:20px 22px;margin:24px 0;background:#182940;border:1px solid #486b8f;border-radius:16px}
+.boot-viewer-entry h2{margin:0 0 8px}
+.boot-viewer-entry p{color:#c0d3e9;line-height:1.55;font-size:.87rem;margin:0 0 14px}
+.boot-viewer-link{display:inline-block;padding:10px 14px;min-height:44px;line-height:24px;border-radius:10px;border:1px solid #9dc6ff;background:#29486a;font-weight:700;color:#f4f9ff}
+.boot-viewer-link:focus-visible{outline:3px solid #d8a1ff;outline-offset:3px}

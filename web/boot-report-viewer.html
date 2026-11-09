@@ -1,0 +1,347 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; connect-src 'none'; img-src 'none'">
+  <title>AudioHub · Offline first-boot report</title>
+  <style>
+    :root{color-scheme:dark;font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;background:#0c1525;color:#eaf2ff}
+    *{box-sizing:border-box}body{margin:0}main{max-width:810px;margin:0 auto;padding:26px 18px 48px}
+    .top{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:20px}
+    .brand{letter-spacing:.05em;font-weight:850;color:#a9d7ff}h1{font-size:clamp(1.5rem,4vw,2.3rem);margin:10px 0}
+    h2{font-size:1.15rem;margin:0}p{color:#bfcee5}.lead{font-size:1.05rem}
+    .card{border:1px solid #385475;border-radius:16px;background:#15243c;padding:20px;margin-top:18px}
+    .notice{background:#2f291c;border-color:#866e33;color:#f8e2ad}
+    .notice p{color:#f8e2ad;margin:4px 0}.fields{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+    label{font-weight:650}select,input[type=file],button{font:inherit;color:inherit;background:#203956;border:1px solid #7395be;border-radius:9px;padding:10px;max-width:100%}
+    input[type=file]{flex:1;min-width:240px}button{cursor:pointer;min-height:44px}
+    button:hover{background:#35577d}button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #dba5ff;outline-offset:3px}
+    .results{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:14px}
+    .metric{background:#0d1d33;border:1px solid #355471;border-radius:10px;padding:12px 14px;min-width:0}
+    dt{color:#bed0eb;font-size:.88rem}dd{font-weight:750;font-size:1.05rem;margin:7px 0 0;overflow-wrap:anywhere}
+    .steps{padding-left:22px}.steps li{padding:4px 0}.small{font-size:.86rem}
+    #feedback{min-height:1.5em;font-weight:600}#advice{line-height:1.6;color:#e0edff}
+    @media(max-width:540px){.results{grid-template-columns:1fr}.card{padding:16px}.fields{align-items:stretch;flex-direction:column}.fields>*{width:100%}}
+  </style>
+</head>
+<body>
+<main>
+  <div class="top"><div class="brand">♫ RIVANOX · AudioHub</div>
+    <label for="language"><span id="language-label">Language</span>
+      <select id="language" aria-label="Language">
+        <option value="en">English</option><option value="de">Deutsch</option><option value="es">Español</option>
+        <option value="fr">Français</option><option value="it">Italiano</option>
+      </select>
+    </label>
+  </div>
+  <h1 id="title">Understand your Pi4 first boot</h1>
+  <p class="lead" id="intro">Open the AUDIOHUB-TEST-REPORT.json file from the boot partition of a safely powered-off Raspberry Pi SD card. No connection or Python installation required.</p>
+  <section class="card notice" aria-labelledby="privacy-title">
+    <h2 id="privacy-title">Private by design</h2>
+    <p id="privacy-text">This viewer is self-contained. It never uploads, saves or sends the selected report; only a fixed anonymous summary appears on screen. A boot report is not ownership, hardware or release approval.</p>
+  </section>
+  <section class="card" aria-labelledby="choose-title">
+    <h2 id="choose-title">1 · Choose your SD report</h2>
+    <p class="small" id="choose-note">Choose only AUDIOHUB-TEST-REPORT.json. Maximum 4 KiB. The file remains on your computer.</p>
+    <div class="fields">
+      <label for="report-file" id="file-label">Boot report</label>
+      <input id="report-file" type="file" accept=".json,application/json" aria-describedby="choose-note feedback">
+      <button type="button" id="clear">Clear result</button>
+    </div>
+    <p id="feedback" role="status" aria-live="polite">No file opened.</p>
+  </section>
+  <section class="card" aria-labelledby="results-title">
+    <h2 id="results-title">2 · Offline findings</h2>
+    <dl class="results">
+      <div class="metric"><dt id="pairing-label">Bluetooth pairing state</dt><dd id="pairing-value">—</dd></div>
+      <div class="metric"><dt id="paired-label">Paired devices (anonymous count)</dt><dd id="paired-value">—</dd></div>
+      <div class="metric"><dt id="controller-label">Bluetooth controller observed</dt><dd id="controller-value">—</dd></div>
+      <div class="metric"><dt id="usb-label">USB audio device observed</dt><dd id="usb-value">—</dd></div>
+      <div class="metric"><dt id="snapshots-label">First-boot observations</dt><dd id="snapshots-value">—</dd></div>
+      <div class="metric"><dt id="runtime-label">Last audio-runtime status</dt><dd id="runtime-value">—</dd></div>
+    </dl>
+  </section>
+  <section class="card" aria-labelledby="next-title">
+    <h2 id="next-title">3 · What to do next</h2>
+    <p id="advice" role="status" aria-live="polite">Choose a report to see the next safe step.</p>
+    <p id="disclaimer" class="small">The report is an SD-card observation, not live telemetry, proof of audio, device identity or permission to pair. No settings can be changed here.</p>
+  </section>
+</main>
+<script>
+"use strict";
+(() => {
+  const states = ["unavailable","ambiguous_adapter","controller_off","unexpected_open",
+    "initial_window_observed","window_closed","paired_untrusted","known_devices",
+    "device_limit","inconsistent"];
+  const texts = {
+    en: {
+      language:"Language",title:"Understand your Pi4 first boot",
+      intro:"Open AUDIOHUB-TEST-REPORT.json from the boot partition of a safely powered-off Raspberry Pi SD card. No connection or Python installation required.",
+      privacyTitle:"Private by design",privacy:"This self-contained viewer never uploads, saves or sends the report. Only a fixed anonymous summary appears. A boot report is not ownership, hardware or release approval.",
+      choose:"1 · Choose your SD report",chooseNote:"Choose AUDIOHUB-TEST-REPORT.json, maximum 4 KiB. The file stays on your computer.",
+      file:"Boot report",clear:"Clear result",empty:"No file opened.",bad:"Unsupported, incomplete or invalid report. Nothing was uploaded.",
+      loading:"Reading locally…",ready:"Read-only summary of the last recorded boot observation. No approval granted.",
+      results:"2 · Offline findings",pairing:"Bluetooth pairing state",paired:"Paired devices (anonymous count)",
+      controller:"Bluetooth controller observed",usb:"USB audio device observed",
+      snapshots:"First-boot observations",runtime:"Last audio-runtime status",
+      next:"3 · What to do next",chooseFirst:"Choose a report to see the next safe step.",
+      disclaimer:"This SD report is not live telemetry, proof of audio or ownership, or permission to pair. No settings can be changed here.",
+      yes:"Detected",no:"Not detected",unknown:"Unavailable",recent:"Reported recently",stale:"Missing or stale",
+      states:["Unavailable","Adapter unclear","Controller off","Unexpectedly open",
+        "Initial pairing window observed","Pairing window closed","Paired but not trusted",
+        "Known device(s)","Two-device limit","Inconsistent records"],
+      tips:[
+        "Check the Bluetooth service and physical controller at the trusted Pi console.",
+        "Check local adapters with an authorized operator; no pairing was changed.",
+        "Check the physical Pi Bluetooth controller and service.",
+        "Do not pair unknown devices. Secure this open window through an authorized local operator.",
+        "Only in a supervised, isolated lab: look for AudioHub on your intended phone. This is not secure owner claiming.",
+        "Existing firmware cannot securely reopen pairing remotely. Do not bypass the closed window by rebooting.",
+        "Ask the operator to inspect paired/trusted status locally; reconnection may not work.",
+        "Reconnect from the already paired device, then listen to the USB speaker. Sound is not proven by this report.",
+        "Existing devices may reconnect. New device enrollment needs a separately approved flow.",
+        "Inspect local BlueZ state with the authorized operator; do not modify device permissions."
+      ],older:"This older report has no pairing-readiness fields. Use a newer authorized Pi4 test image to see them."
+    },
+    de: {
+      language:"Sprache",title:"Den ersten Pi4-Start verstehen",
+      intro:"AUDIOHUB-TEST-REPORT.json von der Bootpartition einer sicher heruntergefahrenen Raspberry-Pi-SD-Karte öffnen. Keine Verbindung oder Python-Installation nötig.",
+      privacyTitle:"Privat statt Datenübertragung",privacy:"Dieser eigenständige Betrachter lädt die Datei niemals hoch, speichert oder sendet sie nicht. Er zeigt nur eine feste anonyme Zusammenfassung. Kein Eigentums-, Hardware- oder Release-Nachweis.",
+      choose:"1 · SD-Bericht auswählen",chooseNote:"AUDIOHUB-TEST-REPORT.json auswählen, maximal 4 KiB. Die Datei bleibt lokal.",
+      file:"Startbericht",clear:"Ergebnis löschen",empty:"Noch keine Datei geöffnet.",bad:"Nicht unterstützter, unvollständiger oder ungültiger Bericht. Nichts wurde übertragen.",
+      loading:"Lese nur lokal…",ready:"Anonyme Auswertung des letzten aufgezeichneten Startzustands. Keine Freigabe.",
+      results:"2 · Offline-Ergebnis",pairing:"Bluetooth-Kopplungsstatus",paired:"Gekoppelte Geräte (nur Anzahl)",
+      controller:"Bluetooth-Controller erkannt",usb:"USB-Audiogerät erkannt",
+      snapshots:"Erststart-Beobachtungen",runtime:"Letzter Audio-Laufzeitstatus",
+      next:"3 · Nächster Schritt",chooseFirst:"Bericht auswählen, um sichere nächste Schritte zu sehen.",
+      disclaimer:"SD-Bericht, kein Live-Zustand oder Nachweis von Ton, Besitz oder Kopplungsberechtigung. Hier werden keine Einstellungen geändert.",
+      yes:"Erkannt",no:"Nicht erkannt",unknown:"Nicht verfügbar",recent:"Zuletzt aktuell",stale:"Fehlt oder veraltet",
+      states:["Nicht verfügbar","Adapter unklar","Controller aus","Unerwartet offen",
+        "Erstes Kopplungsfenster beobachtet","Kopplungsfenster geschlossen",
+        "Gekoppelt, aber nicht vertraut","Bekannte Geräte","Zwei-Geräte-Grenze","Widersprüchliche Daten"],
+      tips:[
+        "Bluetooth-Dienst und Controller an der vertrauenswürdigen Pi-Konsole prüfen.",
+        "Adapter nur durch einen berechtigten Betreiber lokal prüfen lassen. Keine Kopplung wurde verändert.",
+        "Bluetooth-Controller und Dienst direkt am Pi überprüfen.",
+        "Keine unbekannten Geräte koppeln; unerwünschte Öffnung durch berechtigten Betreiber lokal absichern.",
+        "Nur im beaufsichtigten isolierten Labor AudioHub am eigenen Handy suchen. Das ist kein sicherer Besitznachweis.",
+        "Keine sichere Fernöffnung vorhanden. Nicht durch Neustart die Sperre umgehen.",
+        "Gekoppelt-/Vertrauensstatus lokal überprüfen lassen; Wiederverbindung kann scheitern.",
+        "Mit bereits gekoppeltem Gerät erneut verbinden und tatsächlichen Ton am USB-Lautsprecher prüfen.",
+        "Bekannte Geräte können sich erneut verbinden; neue Geräte erfordern einen separat freigegebenen Ablauf.",
+        "BlueZ-Zustand berechtigt lokal prüfen lassen, ohne Geräteberechtigungen zu ändern."
+      ],older:"Älterer Bericht ohne Kopplungsstatus. Ein neueres, freigegebenes Pi4-Testimage liefert diese Angaben."
+    },
+    es: {
+      language:"Idioma",title:"Comprender el primer arranque del Pi4",
+      intro:"Abre AUDIOHUB-TEST-REPORT.json de la partición de arranque de una tarjeta SD del Pi apagado correctamente. Sin conexión ni Python.",
+      privacyTitle:"Privacidad local",privacy:"Este visor no sube, guarda ni envía el informe. Solo muestra datos anónimos predefinidos. No confirma propiedad, hardware ni lanzamiento.",
+      choose:"1 · Seleccionar informe SD",chooseNote:"Selecciona AUDIOHUB-TEST-REPORT.json, máximo 4 KiB. El archivo permanece en tu equipo.",
+      file:"Informe de arranque",clear:"Borrar resultado",empty:"Ningún archivo abierto.",bad:"Informe no válido, incompleto o incompatible. No se transfirió nada.",
+      loading:"Lectura local…",ready:"Resumen de la última observación registrada. Sin aprobación.",
+      results:"2 · Resultados sin conexión",pairing:"Estado de emparejamiento Bluetooth",paired:"Dispositivos emparejados (cantidad)",
+      controller:"Controlador Bluetooth detectado",usb:"Audio USB detectado",
+      snapshots:"Observaciones del arranque",runtime:"Estado del motor de audio",
+      next:"3 · Próximo paso",chooseFirst:"Selecciona un informe para ver el siguiente paso seguro.",
+      disclaimer:"No son datos en vivo ni prueba de sonido, propiedad o permiso para emparejar. No modifica ajustes.",
+      yes:"Detectado",no:"No detectado",unknown:"No disponible",recent:"Reciente",stale:"Ausente o antiguo",
+      states:["No disponible","Adaptador ambiguo","Controlador apagado","Abierto inesperadamente",
+        "Ventana inicial observada","Emparejamiento cerrado","Emparejado sin confianza",
+        "Dispositivo conocido","Límite de dos dispositivos","Datos incoherentes"],
+      tips:[
+        "Comprueba localmente el servicio Bluetooth y el controlador físico.",
+        "Un operador autorizado debe revisar los adaptadores locales.",
+        "Comprueba el controlador Bluetooth del Pi.",
+        "No emparejes dispositivos desconocidos; revisa el acceso localmente.",
+        "Solo en un laboratorio aislado y supervisado: busca AudioHub en tu teléfono. No demuestra propiedad.",
+        "No fuerces una ventana nueva reiniciando el equipo.",
+        "Revisa localmente el estado de confianza antes de reconectar.",
+        "Reconecta desde el dispositivo conocido y comprueba el sonido real del altavoz USB.",
+        "Los dispositivos conocidos pueden reconectar; añadir otros requiere autorización.",
+        "Un operador autorizado debe revisar BlueZ sin cambiar permisos."
+      ],older:"El informe anterior no incluye el estado de emparejamiento. Necesita una imagen Pi4 más reciente."
+    },
+    fr: {
+      language:"Langue",title:"Comprendre le premier démarrage du Pi4",
+      intro:"Ouvrez AUDIOHUB-TEST-REPORT.json depuis la partition de démarrage d'une carte SD après arrêt correct du Pi. Sans connexion ni Python.",
+      privacyTitle:"Lecture privée",privacy:"Cette visionneuse ne transmet, n'enregistre et n'envoie aucun rapport. Seul un résumé anonyme apparaît. Aucune preuve de propriété, de matériel ou de version.",
+      choose:"1 · Choisir le rapport SD",chooseNote:"Sélectionnez AUDIOHUB-TEST-REPORT.json, 4 Kio maximum. Le fichier reste sur votre ordinateur.",
+      file:"Rapport de démarrage",clear:"Effacer le résultat",empty:"Aucun fichier ouvert.",bad:"Rapport invalide, incomplet ou non pris en charge. Aucun envoi.",
+      loading:"Lecture locale…",ready:"Résumé de la dernière observation enregistrée. Aucune validation.",
+      results:"2 · Résultats hors ligne",pairing:"État de l'appairage Bluetooth",paired:"Appareils appairés (nombre)",
+      controller:"Contrôleur Bluetooth détecté",usb:"Périphérique audio USB détecté",
+      snapshots:"Observations de démarrage",runtime:"Dernier état audio",
+      next:"3 · Étape suivante",chooseFirst:"Choisissez un rapport pour afficher la prochaine étape sûre.",
+      disclaimer:"Ce rapport n'est pas une mesure en direct ni une preuve de son, propriété ou autorisation. Aucun paramètre modifié.",
+      yes:"Détecté",no:"Non détecté",unknown:"Indisponible",recent:"Récent",stale:"Absent ou périmé",
+      states:["Indisponible","Adaptateur ambigu","Contrôleur éteint","Ouvert anormalement",
+        "Fenêtre initiale observée","Appairage fermé","Appairé sans confiance",
+        "Appareil connu","Limite de deux appareils","Données incohérentes"],
+      tips:[
+        "Vérifiez localement le service Bluetooth et le contrôleur.",
+        "Un opérateur habilité doit vérifier les adaptateurs sur le Pi.",
+        "Vérifiez le contrôleur et le service Bluetooth du Pi.",
+        "N'appairez aucun appareil inconnu ; sécurisez localement cet état.",
+        "Uniquement en laboratoire isolé et surveillé : recherchez AudioHub sur votre téléphone. Ce n'est pas une preuve de propriété.",
+        "Ne redémarrez pas pour contourner la fermeture de l'appairage.",
+        "Vérifiez localement la confiance avant de reconnecter.",
+        "Reconnectez depuis l'appareil connu, puis écoutez réellement le haut-parleur USB.",
+        "Les appareils connus peuvent se reconnecter ; tout nouvel appairage exige un accord distinct.",
+        "Faites vérifier BlueZ localement sans modifier les autorisations."
+      ],older:"Ancien rapport sans état d'appairage. Utilisez une image de test Pi4 plus récente et autorisée."
+    },
+    it: {
+      language:"Lingua",title:"Capire il primo avvio del Pi4",
+      intro:"Apri AUDIOHUB-TEST-REPORT.json dalla partizione di avvio della scheda SD dopo aver spento correttamente il Pi. Nessuna rete o Python.",
+      privacyTitle:"Privacy locale",privacy:"Questo visualizzatore non carica, salva o invia il rapporto. Mostra solo dati anonimi prestabiliti. Non prova proprietà, hardware o rilascio.",
+      choose:"1 · Scegli il rapporto SD",chooseNote:"Seleziona AUDIOHUB-TEST-REPORT.json, massimo 4 KiB. Il file resta sul computer.",
+      file:"Rapporto di avvio",clear:"Cancella risultato",empty:"Nessun file aperto.",bad:"Rapporto non valido, incompleto o incompatibile. Nessun invio.",
+      loading:"Lettura locale…",ready:"Riepilogo dell'ultima osservazione registrata. Nessuna approvazione.",
+      results:"2 · Risultati offline",pairing:"Stato associazione Bluetooth",paired:"Dispositivi associati (numero)",
+      controller:"Controller Bluetooth rilevato",usb:"Audio USB rilevato",
+      snapshots:"Osservazioni del primo avvio",runtime:"Ultimo stato audio",
+      next:"3 · Passo successivo",chooseFirst:"Scegli un rapporto per vedere i prossimi passi sicuri.",
+      disclaimer:"Non è uno stato in tempo reale né una prova di audio, proprietà o autorizzazione. Nessuna impostazione modificata.",
+      yes:"Rilevato",no:"Non rilevato",unknown:"Non disponibile",recent:"Recente",stale:"Assente o obsoleto",
+      states:["Non disponibile","Adattatore ambiguo","Controller spento","Aperto inaspettatamente",
+        "Finestra iniziale osservata","Associazione chiusa","Associato ma non attendibile",
+        "Dispositivo noto","Limite di due dispositivi","Dati incoerenti"],
+      tips:[
+        "Controlla localmente il servizio Bluetooth e il controller fisico.",
+        "Un operatore autorizzato deve controllare gli adattatori sul Pi.",
+        "Controlla il controller Bluetooth e il servizio del Pi.",
+        "Non associare dispositivi sconosciuti; verifica localmente l'accesso.",
+        "Solo in laboratorio isolato e sorvegliato: cerca AudioHub sul tuo telefono. Non prova la proprietà.",
+        "Non riavviare per aggirare la chiusura dell'associazione.",
+        "Verifica localmente lo stato di attendibilità prima della riconnessione.",
+        "Riconnetti dal dispositivo già noto, poi verifica il suono reale dell'altoparlante USB.",
+        "I dispositivi noti possono riconnettersi; aggiungerne altri richiede un'approvazione distinta.",
+        "Fai controllare BlueZ localmente senza cambiare autorizzazioni."
+      ],older:"Il vecchio rapporto non include lo stato Bluetooth. Serve un'immagine Pi4 più recente e autorizzata."
+    }
+  };
+  const byId = id => document.getElementById(id);
+  let current = null;
+  let status = "empty";
+  let serial = 0;
+  const plain = value => value !== null && typeof value === "object" &&
+    !Array.isArray(value) && Object.getPrototypeOf(value) === Object.prototype;
+  // BEGIN_BOOT_REPORT_PARSE
+  function summarizeReport(raw) {
+    if (typeof raw !== "string" || raw.length === 0 || raw.length > 4096) return null;
+    let obj;
+    try { obj = JSON.parse(raw); } catch (_) { return null; }
+    if (!plain(obj) ||
+        obj.schema !== "rivanox-audiohub-offline-boot-diagnostic/1" ||
+        obj.classification !== "UNVERIFIED_ALPHA_OFFLINE_TEST_ONLY" ||
+        obj.owner_authenticated !== false ||
+        obj.hardware_accepted !== false ||
+        obj.phone_wifi_provisioned !== false ||
+        obj.network_configuration !== "not_inspected" ||
+        !Array.isArray(obj.snapshots) ||
+        obj.snapshots.length < 1 || obj.snapshots.length > 7) return null;
+    let before = -1;
+    for (const s of obj.snapshots) {
+      if (!plain(s) || !Number.isInteger(s.seconds_since_probe_start) ||
+          s.seconds_since_probe_start < 0 ||
+          s.seconds_since_probe_start < before ||
+          s.seconds_since_probe_start > 3600 ||
+          typeof s.usb_audio_detected !== "boolean" ||
+          typeof s.bluetooth_controller_present !== "boolean" ||
+          !["recent","unavailable_or_stale"].includes(s.runtime_status)) return null;
+      before = s.seconds_since_probe_start;
+    }
+    const last = obj.snapshots[obj.snapshots.length - 1];
+    let pairing = "older";
+    let paired = null;
+    if (Object.prototype.hasOwnProperty.call(obj,"bluetooth_pairing_state") ||
+        Object.prototype.hasOwnProperty.call(obj,"bluetooth_paired_devices")) {
+      if (!states.includes(obj.bluetooth_pairing_state) ||
+          !Number.isInteger(obj.bluetooth_paired_devices) ||
+          obj.bluetooth_paired_devices < 0 ||
+          obj.bluetooth_paired_devices > 3) return null;
+      pairing = obj.bluetooth_pairing_state;
+      paired = obj.bluetooth_paired_devices;
+    }
+    // Only fixed enums, counts and strict booleans escape this function.
+    // Never retain the untrusted object, raw strings, names or other keys.
+    return Object.freeze({
+      pairing, paired, controller: last.bluetooth_controller_present,
+      usb: last.usb_audio_detected, runtime: last.runtime_status,
+      snapshots: obj.snapshots.length
+    });
+  }
+  // END_BOOT_REPORT_PARSE
+  function render() {
+    const language = byId("language").value;
+    const t = texts[language] || texts.en;
+    document.documentElement.lang = texts[language] ? language : "en";
+    const nodes = {
+      "language-label":t.language,"title":t.title,"intro":t.intro,
+      "privacy-title":t.privacyTitle,"privacy-text":t.privacy,
+      "choose-title":t.choose,"choose-note":t.chooseNote,"file-label":t.file,
+      "clear":t.clear,"results-title":t.results,
+      "pairing-label":t.pairing,"paired-label":t.paired,
+      "controller-label":t.controller,"usb-label":t.usb,
+      "snapshots-label":t.snapshots,"runtime-label":t.runtime,
+      "next-title":t.next,"disclaimer":t.disclaimer
+    };
+    Object.keys(nodes).forEach(id => { byId(id).textContent = nodes[id]; });
+    byId("feedback").textContent = t[status];
+    const label = id => byId(id);
+    if (!current) {
+      for (const id of ["pairing-value","paired-value","controller-value","usb-value",
+                         "snapshots-value","runtime-value"]) label(id).textContent = "—";
+      label("advice").textContent = t.chooseFirst;
+      return;
+    }
+    const index = states.indexOf(current.pairing);
+    label("pairing-value").textContent = index < 0 ? t.unknown : t.states[index];
+    label("paired-value").textContent = current.paired === null ? t.unknown : String(current.paired);
+    label("controller-value").textContent = current.controller ? t.yes : t.no;
+    label("usb-value").textContent = current.usb ? t.yes : t.no;
+    label("snapshots-value").textContent = String(current.snapshots);
+    label("runtime-value").textContent = current.runtime === "recent" ? t.recent : t.stale;
+    label("advice").textContent = index < 0 ? t.older : t.tips[index];
+  }
+  function clear() {
+    serial += 1; current = null; status = "empty";
+    byId("report-file").value = "";
+    render();
+  }
+  async function openReport() {
+    const request = ++serial;
+    const input = byId("report-file");
+    const file = input.files && input.files[0];
+    current = null;
+    status = "bad";
+    if (!file || !Number.isInteger(file.size) || file.size <= 0 || file.size > 4096) {
+      input.value = "";
+      render();
+      return;
+    }
+    status = "loading";
+    render();
+    try {
+      const raw = await file.text();
+      if (request !== serial) return;
+      current = summarizeReport(raw);
+      status = current ? "ready" : "bad";
+    } catch (_) {
+      if (request !== serial) return;
+      status = "bad";
+    }
+    // A reselected file is always a new manual action, even with same name.
+    input.value = "";
+    render();
+  }
+  byId("language").addEventListener("change", render);
+  byId("report-file").addEventListener("change", openReport);
+  byId("clear").addEventListener("click", clear);
+  render();
+})();
+</script>
+</body>
+</html>

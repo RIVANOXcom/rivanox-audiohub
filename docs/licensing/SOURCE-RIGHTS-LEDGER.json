@@ -655,6 +655,13 @@
       "model_c_eligible": false
     },
     {
+      "path": "tests/test_web_boot_report_viewer.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
       "path": "tests/test_web_status.py",
       "origin_status": "pending-human-review",
       "rightsholder_verified": false,
@@ -705,6 +712,13 @@
     },
     {
       "path": "web/app.js",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "web/boot-report-viewer.html",
       "origin_status": "pending-human-review",
       "rightsholder_verified": false,
       "third_party_origin_checked": false,
