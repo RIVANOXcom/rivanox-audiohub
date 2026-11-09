@@ -253,10 +253,11 @@ def forward_test_tone(stream, deadline, stop_event=None, *, seconds=TONE_SECONDS
         raise ValueError("Test tone must be positive and at most 5 seconds")
     total = int(TONE_RATE * seconds)
     start = time.monotonic()
+    tone_deadline = min(deadline, start + seconds)
     stream.settimeout(0.5)
     sent = 0
     for index in range(0, total, TONE_FRAMES_PER_PACKET):
-        if time.monotonic() >= deadline or (stop_event is not None and stop_event.is_set()):
+        if time.monotonic() >= tone_deadline or (stop_event is not None and stop_event.is_set()):
             break
         due = start + index / TONE_RATE
         remaining = due - time.monotonic()
@@ -266,7 +267,7 @@ def forward_test_tone(stream, deadline, stop_event=None, *, seconds=TONE_SECONDS
                     break
             else:
                 time.sleep(remaining)
-        if time.monotonic() >= deadline or (stop_event is not None and stop_event.is_set()):
+        if time.monotonic() >= tone_deadline or (stop_event is not None and stop_event.is_set()):
             break
         pcm = make_test_tone_pcm(index, min(TONE_FRAMES_PER_PACKET, total - index), total)
         stream.sendall(struct.pack("!H", len(pcm)) + pcm)
@@ -366,6 +367,8 @@ def run_bridge(*, server_ip, port, udp_port, key_file, pin_sha256,
                test_tone=False):
     if not isolated_lab:
         raise ValueError("Explicit isolated-lab Windows bridge opt-in required")
+    if not isinstance(test_tone, bool):
+        raise ValueError("Invalid manual tone selection")
     validate_options(server_ip, "127.0.0.1", port, True)
     if isinstance(udp_port, bool) or not isinstance(udp_port, int) or not 1024 <= udp_port <= 65535:
         raise ValueError("Local UDP port must be 1024..65535")
@@ -380,8 +383,6 @@ def run_bridge(*, server_ip, port, udp_port, key_file, pin_sha256,
             authenticate_client(stream, key)
             if stop_event is not None and stop_event.is_set():
                 return 0  # Stop requested during TLS setup; no UDP listener.
-            if not isinstance(test_tone, bool):
-                raise ValueError("Invalid manual tone selection")
             if test_tone:
                 return forward_test_tone(stream, deadline, stop_event=stop_event)
             # Scream MUST unicast to loopback. No LAN-facing UDP bind exists.
