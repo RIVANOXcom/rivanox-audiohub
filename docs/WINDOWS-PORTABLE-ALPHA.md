@@ -413,3 +413,24 @@ not imply legal, Windows driver, USB hardware or production approval.
 
 Further Pi, certificate, trust-boundary, 2 Bluetooth + LAN and recovery
 instructions: README-ISOLATED-LAB.md in this bundle.
+
+## Headless Pi4 SD report viewer without connecting Windows to the Pi
+
+The portable Windows ZIP also contains the independent, self-contained
+\`AUDIOHUB-BOOT-REPORT-VIEWER.html\` (five-language offline HTML). This
+is a read-only user interface for the existing Pi4
+\`AUDIOHUB-TEST-REPORT.json\` written on the FAT boot partition. After
+safely shutting down the **operator-authorized isolated Pi4**, remove
+the SD card, insert it in a trusted computer, open the HTML file directly
+in a modern browser and manually select the small JSON report. The
+viewer shows the fixed Bluetooth first-pairing state, paired-device
+count and observed USB/controller/runtime metrics without revealing
+private identifiers; it cannot open sockets, upload JSON, modify Pi
+settings or trigger Scream. An older Pi4 image lacking Bluetooth
+readiness fields shows the compatible aggregate status and clearly
+marks pairing details unavailable. No Python, Scream driver, active
+Pi network, browser extension or setup service is required for this
+independent offline viewer. Clear result or close the HTML file to
+discard the in-memory summary. This is **not** authenticated owner
+provisioning, Wi-Fi enrollment, Bluetooth permissions management,
+hardware verification or production approval.
