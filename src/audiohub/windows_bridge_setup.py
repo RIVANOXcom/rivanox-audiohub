@@ -15,6 +15,7 @@ import sys
 from . import secure_lan
 from . import certificate_onboarding
 from . import key_onboarding
+from . import key_rotation
 
 
 def check_python_tls():
@@ -143,10 +144,16 @@ def main(argv=None):
                         help="Send a quiet five-second Pi speaker soundcheck without Scream")
     parser.add_argument("--test-channel", choices=secure_lan.TONE_CHANNELS, default="both",
                         help="Both, left only, right only, or left-then-right (requires --test-tone)")
+    parser.add_argument("--rotation-preflight", action="store_true",
+                        help="Private read-only current/staged key copy preview; hidden Pi-code prompts")
     parser.add_argument("--gui", action="store_true",
                         help="Open optional local graphical lab controls; no automatic connection")
     args = parser.parse_args(argv)
     try:
+        if args.rotation_preflight:
+            # Codes are collected via hidden interactive prompts, never argv.
+            # No key is generated, replaced, saved, transferred or revoked.
+            return key_rotation.interactive_preflight()
         if args.show_key_code:
             code = key_onboarding.local_key_code(args.show_key_code)
             print("Local 32-byte PSK offline comparison code: " + code)
