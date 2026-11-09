@@ -57,6 +57,7 @@ class GuiOfflineTests(unittest.TestCase):
 
     def _fake_window(self, bridge):
         win = gui.BridgeWindow.__new__(gui.BridgeWindow)
+        win.test_tone = _Value(False)
         win.entries = {
             "ip": _Value("192.168.10.30"), "pin": _Value("f" * 64),
             "key": _Value(str(self.key)), "minutes": _Value("1"),
@@ -99,6 +100,22 @@ class GuiOfflineTests(unittest.TestCase):
         self.assertIn("7", window.status.get())
         self.assertNotIn(str(self.key), window.status.get())
         self.assertTrue(any("disabled" in call for call in window.stop_button.events))
+
+    def test_tone_mode_uses_authenticated_bridge_without_driver(self):
+        recorded = []
+        def fake_bridge(**kwargs):
+            recorded.append(kwargs)
+            return 4
+        window = self._fake_window(fake_bridge)
+        window.test_tone.set(True)
+        self.assertTrue(window.check())
+        self.assertTrue(window.start())
+        window.worker.join(timeout=5)
+        self.assertFalse(window.worker.is_alive())
+        window._poll()
+        self.assertTrue(recorded[0]["test_tone"])
+        self.assertTrue(recorded[0]["isolated_lab"])
+        self.assertIn("Human confirmation", window.status.get())
 
     def test_cannot_start_without_manual_confirmation_or_valid_preflight(self):
         bridge = mock.Mock()
