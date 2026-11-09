@@ -20,7 +20,7 @@ MAX_NAME_CHARS = 48
 
 
 def _private_directory(path):
-    if type(path) not in (str, Path):
+    if type(path) is not str and not isinstance(path, Path):
         raise ValueError("Provide an absolute local music folder")
     p = Path(path)
     if not p.is_absolute() or ".." in p.parts or p.is_symlink():
