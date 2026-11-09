@@ -115,6 +115,22 @@ dropouts must be confirmed by the human operator. This does NOT verify
 Windows Scream driver compatibility, two Bluetooth streams or owner
 onboarding; no default services or permissions change.
 
+## Quiet left/right speaker identification
+
+With the same pinned TLS 1.3 connection and unique manually provisioned
+test key, the Windows speaker tone can run as **both**, **left**,
+**right**, or **sequence**. Sequence uses left audio, 0.5-second silence,
+right audio, then silence, within five seconds total. Level remains
+below about -29.5 dBFS; do not raise master gain before testing.
+Choose the labeled channel in the optional Windows GUI, or pass
+`--test-tone --test-channel sequence` to the portable terminal starter.
+The Pi receiver remains the SAME authenticated private PCM sink.
+Only the Windows generated PCM sample channels change. There is no
+driver or Windows UDP port in tone mode, no system routing mutation,
+and no automatic service. Collect the physical observation of
+whether LEFT/RIGHT Edifier sound is audible or reversed. Repeat
+a failed observation manually and stop if sound or volume is unsafe.
+
 ## Manual hardware smoke-test and rollback
 
 1. Verify the exact Git commit and Source CI, independently confirm TLS

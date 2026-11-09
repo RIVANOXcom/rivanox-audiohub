@@ -99,6 +99,38 @@ The tone is generated on the Windows bridge, not from the Pi local
 soundcheck utility; it therefore exercises the encrypted network protocol,
 pinned Pi certificate, manual sender authentication and Pi playback route.
 
+## Identify left/right Edifier channels (stereo mapping)
+
+The driverless low-volume tone can now identify an accidental
+left/right swap, a silent channel or unintended mono routing. On the
+isolated lab GUI, select **Pi speaker test**, then choose
+**Left speaker only**, **Right speaker only**, or
+**Left then right (5 seconds)**. The last option plays about 2 seconds
+on LEFT, a half-second silent gap, about 2 seconds on RIGHT, and then
+silence. Each audible section starts and ends with a fade. The full
+sequence stays within 5 seconds at a fixed low level. The previous
+**Both speakers** behavior remains the default.
+
+In a Windows terminal, with the existing private key/cert and manual
+Pi TLS listener already set up, first check inputs offline:
+
+`py -3 START-WINDOWS-BRIDGE.py --test-tone --test-channel sequence --check-only`
+
+After separate operator approval and at LOW speaker volume, issue
+`py -3 START-WINDOWS-BRIDGE.py --test-tone --test-channel sequence`
+and type `ISOLATED`. To check a channel independently choose
+`--test-channel left` or `--test-channel right`.
+`--test-channel` is refused unless `--test-tone` is explicitly enabled.
+The soundcheck NEVER opens the Windows Scream UDP listener.
+
+**Observe and record physically:** did LEFT play from the expected
+speaker, did RIGHT play from the expected speaker, was either silent,
+and was the sequence distorted or swapped? The software cannot hear the
+speakers and a green GitHub CI or frame count cannot verify these
+observations. Stop immediately if the speaker volume is uncomfortable.
+No automatic repair to speaker routing, Windows settings or Pi
+configuration is performed. Each repeat needs another manual session.
+
 ## Smoke test, cancellation, rollback
 
 Confirm actual low-volume USB sound from an Edifier R600USB on a separate

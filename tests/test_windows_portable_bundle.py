@@ -50,6 +50,8 @@ class WindowsPortableBundleTests(unittest.TestCase):
             self.assertFalse(manifest["credentials_included"])
             self.assertFalse(manifest["driver_included"])
             self.assertTrue(manifest["driverless_speaker_soundcheck_available"])
+            self.assertEqual(manifest["speaker_channel_soundcheck"],
+                             ["both", "left", "right", "sequence"])
             self.assertFalse(manifest["windows_scream_driver_required_for_soundcheck"])
             self.assertFalse(manifest["hardware_verified"])
             self.assertFalse(manifest["public_release_ready"])

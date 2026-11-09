@@ -70,6 +70,13 @@ mandatory. Passing CI or seeing audio frame counts does not prove
 audible Edifier sound or Windows Scream driver interoperability.
 See [the first hardware test instructions](./docs/WINDOWS-PORTABLE-ALPHA.md).
 
+The optional **Left / Right / Left then Right** selector now lets the
+operator check actual stereo-channel mapping, not just whether any tone
+arrives. The five-second L→R sequence includes a silent separation;
+it remains a manually authorized private TLS test. The operator must
+listen to both speakers and record the result. See
+[Windows stereo channel test steps](./docs/WINDOWS-PORTABLE-ALPHA.md).
+
 ### Authenticated Windows audio: isolated engineering preview only
 
 A separate optional **TLS 1.3, pinned-cert, 32-byte shared-key challenge-response**
