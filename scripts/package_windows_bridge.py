@@ -26,6 +26,7 @@ FILES = (
     ("src/audiohub/secure_lan.py", "audiohub/secure_lan.py"),
     ("src/audiohub/windows_bridge_setup.py", "audiohub/windows_bridge_setup.py"),
     ("src/audiohub/windows_bridge_gui.py", "audiohub/windows_bridge_gui.py"),
+    ("src/audiohub/hardware_observation.py", "audiohub/hardware_observation.py"),
     ("docs/WINDOWS-PORTABLE-ALPHA.md", "README-WINDOWS-FIRST.md"),
     ("docs/SECURE-WINDOWS-LAN-LAB.md", "README-ISOLATED-LAB.md"),
     ("LICENSE", "LICENSE"),
