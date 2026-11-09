@@ -59,6 +59,21 @@ certificate pinning or protection against weak shared secrets. Keep the
 comparison code private. Key rotation/ACL setup still requires separate
 owner action and no private keys are changed by this feature.
 
+**Staged rotation without any automatic key change:** The Windows
+portable alpha now has a **4 · Staged PSK preview (offline)** dialog and
+\`--rotation-preflight\` console command. Both require the existing
+Windows key file and a separately provisioned *staged* file, plus both
+independent private comparison codes from the physically trusted Pi.
+Old/new equal codes, duplicate/hard-linked key files or a Pi code
+mismatch are rejected before opening sockets. Codes are collected
+through masked GUI inputs or non-echoing terminal prompts. The result
+never includes private paths or secrets; no key, service, permissions or
+Pi configuration is changed. An operator manually authorizes any
+staging, coordinated cutover, post-switch low-volume soundcheck and
+rollback; see docs/WINDOWS-PORTABLE-ALPHA.md for the complete six-step
+runbook. Do not confuse this preview with a key lifecycle manager,
+ownership approval or production release.
+
 On the isolated Pi, create a temporary TLS certificate and private key
 using the existing OpenSSL package, with private permissions:
 
