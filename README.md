@@ -260,3 +260,22 @@ credentials and it never connects to the Pi. A separately authorized
 operator performs coordinated cutover, low-volume hardware smoke test
 and rollback. The detailed guide is in
 [Windows isolated lab setup](docs/WINDOWS-PORTABLE-ALPHA.md).
+
+### Local-first Bluetooth pairing readiness (Pi4 ALPHA)
+
+The Pi4 now offers an **operator-facing, read-only** first-use Bluetooth
+status check. Run \`PYTHONPATH=/opt/audiohub/src python3 -m
+audiohub.pairing_readiness\` at an already-authorized **local Pi console**
+(no browser API, new pairing rights, Wi-Fi, controller writes, logs or
+network connection). The status explains whether the first-boot ten-minute
+window appears visible, closed, expired, full, untrusted, or unexpectedly
+open, with clear next steps. No MAC address, device name, personal
+information or key is printed; \`--json\` returns a bounded anonymous
+snapshot. The existing first-boot FAT \`AUDIOHUB-TEST-REPORT.json\` now
+includes \`bluetooth_pairing_state\` and \`bluetooth_paired_devices\` so
+the **headless operator can examine it after a safe shutdown and SD-card
+removal**. It never asserts ownership, sound or two-source Bluetooth
+compatibility. The existing NoInputNoOutput test agent is not secure
+phone-owner claiming; production ownership/phone Wi-Fi still requires a
+separate, reviewed implementation. Follow the
+[Pi4 pairing readiness guide](./docs/PI4-BLUETOOTH-FIRST-USE.md).
