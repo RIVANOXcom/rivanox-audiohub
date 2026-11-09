@@ -81,3 +81,34 @@ necessary to use the new Pi command and SD report; older image
 artifacts and the Windows test ZIP do not contain this Pi module.
 Use the exact GitHub CI artifact SHA and manifest, not an undocumented
 flashable release claim.
+
+## No-Python, no-network SD report viewer (Windows, Mac or Linux browser)
+
+A self-contained five-language HTML viewer is available as
+\`AUDIOHUB-BOOT-REPORT-VIEWER.html\` inside the verified experimental
+Windows operator ZIP, and as \`web/boot-report-viewer.html\` in the
+canonical GitHub source. Open the HTML file locally in an up-to-date
+browser **without running a local server or installing Python**. The Pi
+does not need a network connection. The normal AudioHub read-only web
+prototype also links to the same viewer; the file is still selected
+locally on the computer or phone and never uploaded to the Pi.
+
+After the operator **safely powers off the Pi**, remove its SD card and
+access the FAT boot partition on the computer. Select only
+\`AUDIOHUB-TEST-REPORT.json\`, no larger than 4096 bytes. The viewer
+recognizes the original offline diagnostic schema, only the fixed,
+bounded Bluetooth readiness states and the final snapshot's aggregate
+USB/controller status. It displays a localized safe next step for
+closed, open, untrusted or inconsistent Bluetooth status, and supports
+an explicit Clear action. The file is parsed in your browser memory;
+no fetch, upload, logging, persistent storage or network calls are
+performed by this standalone page. The raw JSON never becomes HTML,
+and private strings are never shown in the output. Even a valid report
+is **untrusted removable-media data**; it does not authenticate an
+owner, grant pairing access, prove a functioning Edifier speaker, or
+approve a release. New Pi4 builds can emit the Bluetooth readiness
+fields; old schema-compatible reports show only their existing
+aggregate audio health and say that Bluetooth pairing is unavailable.
+
+Rollback: close the HTML page, or use Clear result. No configuration,
+Bluetooth device, Pi service, file or SD content is ever modified.
