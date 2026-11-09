@@ -78,3 +78,61 @@ Production release still requires Pi4/Edifier bench acceptance,
 source-rights and nine rootfs copyright notice reviews, secure
 phone ownership onboarding, long-term package archival, and
 explicit operator/CEO release authorization.
+
+## Guided music-folder browser and track selection
+
+You no longer need to type every individual WAV filename. On the
+already-authorized **local** Pi4 terminal, open a small, private folder
+of owned/licensed WAV tracks. The folder must be an absolute real
+directory and must not be group/world writable. Subfolders, symbolic
+links, hidden files and unsupported formats are not traversed. At most
+256 immediate folder entries are inspected, and the tool displays at
+most 40 valid tracks. This avoids unbounded scans and never silently
+plays an arbitrary whole directory.
+
+**1. Browse without sound or network calls:**
+
+    PYTHONPATH=/opt/audiohub/src python3 -m audiohub.local_music \
+      --library /home/audiohub/PrivateMusic
+
+Track numbers, durations, mono/stereo and sample rates are shown.
+**Private filenames are hidden by default.** An operator who is
+physically alone at a trusted local Pi console can explicitly add
+`--show-titles` to show sanitized short local titles. That option
+may reveal personal titles in a terminal history or transcript and
+should not be used while recording/sharing the terminal.
+
+**2. Preview selected tracks in a chosen order** (e.g. second then first):
+
+    PYTHONPATH=/opt/audiohub/src python3 -m audiohub.local_music \
+      --library /home/audiohub/PrivateMusic --tracks 2,1
+
+Preview validates the selected tracks' total duration and file format.
+It never opens PipeWire, plays audio or saves a playlist. At most eight
+distinct numbered tracks can be selected per session.
+
+**3. Start only after the operator verifies a safe speaker volume:**
+
+    PYTHONPATH=/opt/audiohub/src python3 -m audiohub.local_music \
+      --library /home/audiohub/PrivateMusic --tracks 2,1 \
+      --minutes 10 --play
+
+Both `--tracks` and `--play` are mandatory when browsing a folder.
+The queue follows the explicitly selected order. The existing
+unprivileged `audiohub.music` sink, safe initial stream level,
+audio-format validation, timeout and **Ctrl+C** cancellation are
+unchanged. It never opens a public playlist API, persists the queue or
+modifies Wi-Fi, Bluetooth pairing, mixer EQ or access controls.
+
+If an album has more than 40 playable WAVs or 256 directory entries,
+split it into smaller, separately operator-controlled folders. An
+invalid/linked WAV is skipped without revealing its filename; if all
+tracks are invalid, the browse action fails safely. The numbered
+selection is local and must be repeated for each subsequent session.
+Previously supported explicit individual-WAV commands continue to
+work unchanged.
+
+**Rollback:** press Ctrl+C or close the local terminal session; any
+player started by this command is stopped. No playlist files, service
+settings or source permissions have been written. Physical Pi4/Edifier
+audio remains unverified until an operator hears it on the speakers.
