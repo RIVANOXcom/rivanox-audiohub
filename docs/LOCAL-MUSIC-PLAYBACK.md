@@ -160,7 +160,11 @@ During playback, type a command and press **Enter**:
 | Command | Action |
 |---|---|
 | `s` + Enter | Show current track number, elapsed session time and remaining session limit; no filenames or user identifiers |
+| `l` + Enter | Show anonymous selected queue order and planned WAV lengths (not live playback progress) |
 | `n` + Enter | Stop just the current owned player, then start the next selected track in order |
+| `p` + Enter | Stop the current player and go to the previous selected track; on track 1, restart track 1 |
+| `r` + Enter | Restart the current selected track from its beginning |
+| `1`–`8` + Enter | Jump directly to an existing numbered track in the selected queue (invalid positions do not interrupt playback) |
 | `q` + Enter | Stop the current owned player and exit the session |
 | `h` + Enter | Repeat the short help text |
 | Ctrl+C | Emergency local interruption; owned child stopped in cleanup |
@@ -189,3 +193,20 @@ non-interactively (no stdin/stdout TTY), as root, or without an actual
 increment is required; the older image with just folder browsing does
 not contain these controls. No physical Edifier volume, stereo or
 multi-source mixing has yet been certified.
+
+### Private navigation and repeat behavior
+
+The queue is limited to eight files that the operator selected explicitly
+before playing. During an active session, `l` shows only ordered numbers
+and WAV-header-derived planned durations (e.g. `2*=03:15` marks the
+selected queue position); these are NOT hardware playback timestamps.
+Private local file paths and titles remain hidden even while navigating.
+The `p` and `r` commands stop only the owned current player and
+start a fresh validated copy of the requested track, respecting the
+same original session deadline. They never bypass the configured
+maximum session runtime or create an automatic repeat loop.
+Direct numeric jumps are constrained to the selected queue's size.
+A failed or out-of-range request does not move the playback position.
+As before, `q` or Ctrl+C safely stops playback; no settings, files,
+network endpoints, keys or device permissions are changed. This needs
+a native Pi4 test image that actually includes the new module version.
