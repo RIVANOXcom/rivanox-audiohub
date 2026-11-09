@@ -111,7 +111,8 @@ jobs:
             echo '~~~'
           } >> "$GITHUB_STEP_SUMMARY"
   windows-operator-smoke:
-    # Real Windows Python/Tk/import/portable self-check, no driver/network/audio.
+    # Cross-OS byte-for-byte ZIP proof, real Windows Python/Tk/import/smoke.
+    needs: documentation-and-safety
     runs-on: windows-2025
     steps:
       - uses: actions/checkout@v4
@@ -120,6 +121,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Download exact-head Linux portable ZIP checksum
+        uses: actions/download-artifact@v4
+        with:
+          name: AUDIOHUB-WINDOWS-TLS-ALPHA-UNVERIFIED
+          path: dist/linux-baseline
       - name: Native Windows GUI/portable offline smoke
         shell: pwsh
         env:
@@ -138,6 +144,9 @@ jobs:
           $expected = ((Get-Content dist/windows/SHA256SUMS-WINDOWS.txt -Raw).Trim() -split '\s+')[0]
           $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $package.FullName).Hash.ToLowerInvariant()
           if ($expected -ne $actual) { throw 'Windows package SHA256 mismatch' }
+          $linuxExpected = ((Get-Content dist/linux-baseline/SHA256SUMS-WINDOWS.txt -Raw).Trim() -split '\s+')[0]
+          if ($linuxExpected -ne $actual) { throw 'Windows vs Linux ZIP bytes differ for exact source SHA' }
+          Write-Host ("Cross-OS identical source ZIP SHA256: " + $actual)
           Expand-Archive -LiteralPath $package.FullName -DestinationPath dist/windows/unpacked
           $folder = Join-Path (Resolve-Path dist/windows/unpacked) ("AudioHub-Windows-TLS-Bridge-ALPHA-" + $env:SOURCE_COMMIT.Substring(0, 12))
           Push-Location $folder
