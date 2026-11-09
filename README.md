@@ -318,3 +318,14 @@ for explicit user-controlled, bounded playback in that order.
 terminal only**. Music remains on the Pi, no playlist is stored and
 no unauthenticated browser/audio endpoint is opened. Full guide:
 [Local music source and folder picker](docs/LOCAL-MUSIC-PLAYBACK.md).
+
+### Control an ongoing local WAV queue without exposing a device API
+
+From an already-authorized Pi4 terminal, append `--play --interactive`
+to an explicitly selected `audiohub.local_music` queue. Enter `s`
+for anonymous session status, `n` to skip one track, `q` to stop,
+`h` for help or Ctrl+C to interrupt. A real TTY on both input/output
+is required; no background service, HTTP controller or saved playlist
+is created. Real sound is still unverified until an isolated Pi4
+hardware listening test. See
+[local music playback guide](docs/LOCAL-MUSIC-PLAYBACK.md).
