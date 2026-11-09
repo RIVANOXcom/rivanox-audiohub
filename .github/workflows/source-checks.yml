@@ -73,7 +73,7 @@ jobs:
           assert len(archives) == 1
           with zipfile.ZipFile(archives[0]) as archive:
               assert archive.testzip() is None
-              assert len(archive.namelist()) == 9
+              assert len(archive.namelist()) == 10
           print("Windows portable bridge bundle integrity PASS; NOT released")
           PY
       - name: Upload temporary Windows offline operator alpha
@@ -110,3 +110,50 @@ jobs:
             cat dist/windows/SHA256SUMS-WINDOWS.txt
             echo '~~~'
           } >> "$GITHUB_STEP_SUMMARY"
+  windows-operator-smoke:
+    # Cross-OS byte-for-byte ZIP proof, real Windows Python/Tk/import/smoke.
+    needs: documentation-and-safety
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Download exact-head Linux portable ZIP checksum
+        uses: actions/download-artifact@v4
+        with:
+          name: AUDIOHUB-WINDOWS-TLS-ALPHA-UNVERIFIED
+          path: dist/linux-baseline
+      - name: Native Windows GUI/portable offline smoke
+        shell: pwsh
+        env:
+          SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $env:PYTHONPATH = Join-Path $PWD 'src'
+          python -m unittest discover -s tests -p "test_windows*.py" -v
+          if ($LASTEXITCODE -ne 0) { throw 'Windows offline tests failed' }
+          python -c "import tkinter; print('Windows Tk runtime available: ', tkinter.TkVersion)"
+          if ($LASTEXITCODE -ne 0) { throw 'Windows Tk unavailable' }
+          python scripts/package_windows_bridge.py --source-sha $env:SOURCE_COMMIT --directory dist/windows
+          if ($LASTEXITCODE -ne 0) { throw 'Windows package build failed' }
+          $package = Get-ChildItem dist/windows -Filter "AudioHub-Windows-TLS-Bridge-ALPHA-*.zip" | Select-Object -First 1
+          if (-not $package) { throw 'No Windows alpha ZIP' }
+          $expected = ((Get-Content dist/windows/SHA256SUMS-WINDOWS.txt -Raw).Trim() -split '\s+')[0]
+          $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $package.FullName).Hash.ToLowerInvariant()
+          if ($expected -ne $actual) { throw 'Windows package SHA256 mismatch' }
+          $linuxExpected = ((Get-Content dist/linux-baseline/SHA256SUMS-WINDOWS.txt -Raw).Trim() -split '\s+')[0]
+          if ($linuxExpected -ne $actual) { throw 'Windows vs Linux ZIP bytes differ for exact source SHA' }
+          Write-Host ("Cross-OS identical source ZIP SHA256: " + $actual)
+          Expand-Archive -LiteralPath $package.FullName -DestinationPath dist/windows/unpacked
+          $folder = Join-Path (Resolve-Path dist/windows/unpacked) ("AudioHub-Windows-TLS-Bridge-ALPHA-" + $env:SOURCE_COMMIT.Substring(0, 12))
+          Push-Location $folder
+          try {
+            python START-WINDOWS-BRIDGE.py --self-check
+            if ($LASTEXITCODE -ne 0) { throw 'Portable starter failed' }
+            python START-WINDOWS-BRIDGE.py --gui --help
+            if ($LASTEXITCODE -ne 0) { throw 'Portable GUI CLI failed' }
+          } finally { Pop-Location }
+          Write-Host "Windows operator ALPHA source-only smoke PASS. No GUI launched or hardware claim."

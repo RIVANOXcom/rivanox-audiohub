@@ -89,8 +89,14 @@ def main(argv=None):
                         help="Check Python TLS 1.3 support, without any credentials or ports")
     parser.add_argument("--check-only", action="store_true",
                         help="Validate operator-provided local setup without opening sockets")
+    parser.add_argument("--gui", action="store_true",
+                        help="Open optional local graphical lab controls; no automatic connection")
     args = parser.parse_args(argv)
     try:
+        if args.gui:
+            # Tk is optional and imported ONLY when the operator requests GUI.
+            from .windows_bridge_gui import launch
+            return launch()
         if args.self_check:
             check_python_tls()
             print("Python TLS 1.3 supported. No keys, driver, network,")

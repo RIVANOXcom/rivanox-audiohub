@@ -67,7 +67,9 @@ one-shot, time-limited and **OFF by default**, with no remote UI or service.
 No Scream driver is shipped, and its Windows loopback unicast operation and
 actual audio have not been hardware tested. There are no bundled credentials.
 An independent, reproducible **Windows portable ALPHA ZIP** now provides a
-single guided Python launcher with an offline `--self-check`, a
+single guided Python launcher with an optional local labeled `--gui`
+window (IP, cert fingerprint, private key picker, offline Check, explicit
+Start and Stop), an offline `--self-check`, a
 no-network `--check-only` configuration review and an explicit `ISOLATED`
 confirmation before any TCP/UDP socket is opened. Its temporary GitHub
 Source Checks artifact includes source-code provenance and an exact SHA256;

@@ -103,7 +103,10 @@ def read_private_key(path):
     path = Path(path)
     if path.is_symlink():
         raise ValueError("Linked key files are forbidden")
-    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+    # Windows os.open defaults to text mode: a random 0x1A can look like EOF
+    # and CRLF sequences may be translated. Never read binary key in text mode.
+    flags = (os.O_RDONLY | getattr(os, "O_BINARY", 0)
+             | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0))
     fd = os.open(path, flags)
     try:
         info = os.fstat(fd)
@@ -195,12 +198,12 @@ def make_server_context(cert_file, private_key_file):
     return ctx
 
 
-def forward_loopback_pcm(udp, stream, deadline):
+def forward_loopback_pcm(udp, stream, deadline, stop_event=None):
     """Forward only valid local Scream packets, with bounded frame sizes."""
     count = 0
     udp.settimeout(0.2)
     stream.settimeout(0.5)
-    while time.monotonic() < deadline:
+    while time.monotonic() < deadline and not (stop_event and stop_event.is_set()):
         try:
             packet, peer = udp.recvfrom(2048)
         except socket.timeout:
@@ -297,7 +300,7 @@ def run_server(*, bind_ip, sender_ip, port, key_file, cert_file,
 
 
 def run_bridge(*, server_ip, port, udp_port, key_file, pin_sha256,
-               session_minutes=10, isolated_lab=False):
+               session_minutes=10, isolated_lab=False, stop_event=None):
     if not isolated_lab:
         raise ValueError("Explicit isolated-lab Windows bridge opt-in required")
     validate_options(server_ip, "127.0.0.1", port, True)
@@ -306,14 +309,18 @@ def run_bridge(*, server_ip, port, udp_port, key_file, pin_sha256,
     validate_session_minutes(session_minutes)
     key = read_private_key(key_file)
     pin = validate_pin(pin_sha256)
+    if stop_event is not None and stop_event.is_set():
+        return 0  # Cancelled before any network socket was opened.
     deadline = time.monotonic() + session_minutes * 60
     with socket.create_connection((server_ip, port), timeout=CONNECTION_SECONDS) as raw:
         with make_client_tls(raw, pin) as stream:
             authenticate_client(stream, key)
+            if stop_event is not None and stop_event.is_set():
+                return 0  # Stop requested during TLS setup; no UDP listener.
             # Scream MUST unicast to loopback. No LAN-facing UDP bind exists.
             with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp:
                 udp.bind(("127.0.0.1", udp_port))
-                return forward_loopback_pcm(udp, stream, deadline)
+                return forward_loopback_pcm(udp, stream, deadline, stop_event=stop_event)
 
 
 def main(argv=None):
