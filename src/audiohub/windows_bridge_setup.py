@@ -43,7 +43,7 @@ def validate_local_setup(server_ip, pin_sha256, key_path, minutes):
 
 
 def interactive_bridge(*, input_fn=input, output=print, execute=None,
-                       check_only=False, test_tone=False):
+                       check_only=False, test_tone=False, test_channel="both"):
     """One understandable, deliberately manual session with an explicit gate.
 
     The private key is read from disk and never printed or sent in the
@@ -53,6 +53,9 @@ def interactive_bridge(*, input_fn=input, output=print, execute=None,
     check_python_tls()
     if not isinstance(test_tone, bool):
         raise ValueError("Invalid explicit test mode")
+    secure_lan.validate_tone_channel(test_channel)
+    if test_channel != "both" and not test_tone:
+        raise ValueError("Channel selection requires --test-tone")
     if execute is None:
         execute = secure_lan.run_bridge
     output("RIVANOX AudioHub - isolated Windows audio experiment")
@@ -73,6 +76,7 @@ def interactive_bridge(*, input_fn=input, output=print, execute=None,
     output("and the external Scream driver are NOT verified by this check.")
     if test_tone:
         output("QUIET TONE: keep speaker volume LOW. Human sound check required.")
+        output("Stereo channel test: " + test_channel + ". Five seconds maximum.")
     else:
         output("Windows Scream must unicast only to 127.0.0.1:4010.")
     if check_only:
@@ -90,6 +94,8 @@ def interactive_bridge(*, input_fn=input, output=print, execute=None,
     )
     if test_tone:
         params["test_tone"] = True
+        if test_channel != "both":
+            params["test_channel"] = test_channel
     frames = execute(**params)
     output("Isolated session closed. Accepted local PCM frames: " + str(frames))
     output("A frame count is not proof of sound from the Pi USB speaker.")
@@ -104,6 +110,8 @@ def main(argv=None):
                         help="Validate operator-provided local setup without opening sockets")
     parser.add_argument("--test-tone", action="store_true",
                         help="Send a quiet five-second Pi speaker soundcheck without Scream")
+    parser.add_argument("--test-channel", choices=secure_lan.TONE_CHANNELS, default="both",
+                        help="Both, left only, right only, or left-then-right (requires --test-tone)")
     parser.add_argument("--gui", action="store_true",
                         help="Open optional local graphical lab controls; no automatic connection")
     args = parser.parse_args(argv)
@@ -117,7 +125,8 @@ def main(argv=None):
             print("Python TLS 1.3 supported. No keys, driver, network,")
             print("audio or Windows hardware have been verified.")
             return 0
-        return interactive_bridge(check_only=args.check_only, test_tone=args.test_tone)
+        return interactive_bridge(check_only=args.check_only, test_tone=args.test_tone,
+                                  test_channel=args.test_channel)
     except (EOFError, KeyboardInterrupt):
         print("\nCancelled; no automatic retry.", file=sys.stderr)
         return 2
