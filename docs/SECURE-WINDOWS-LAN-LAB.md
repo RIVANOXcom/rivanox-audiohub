@@ -66,6 +66,23 @@ with actual isolated-test values:
 PYTHONPATH=src python3 -m audiohub.secure_lan server --isolated-lab --bind-ip 192.168.10.30 --sender-ip 192.168.10.20 --port 4044 --key-file /private/audiohub-lab-psk.bin --cert-file /private/pi-lab-public.crt --cert-key-file /private/pi-lab-private.key --session-minutes 10
 ~~~
 
+For the preferred **portable Windows ALPHA test bundle**, download the
+exact-source temporary GitHub **Source Checks** artifact named
+`AUDIOHUB-WINDOWS-TLS-ALPHA-UNVERIFIED`. First verify the ZIP SHA256
+against `SHA256SUMS-WINDOWS.txt`, then extract the included inner ZIP
+into a dedicated test folder. From that folder run
+`py -3 START-WINDOWS-BRIDGE.py --self-check`, then
+`py -3 START-WINDOWS-BRIDGE.py --check-only` to review settings without
+opening any port. Only after separately approved isolated Pi preparation,
+run `py -3 START-WINDOWS-BRIDGE.py` and type the exact confirmation
+`ISOLATED`. The prompts never save your secret key or security settings.
+The external Windows Scream driver still must be configured to unicast
+only to `127.0.0.1:4010`, and its hardware support is unverified.
+See [the short first-start guide](WINDOWS-PORTABLE-ALPHA.md).
+
+The advanced source-tree command below remains available without using
+the portable launcher, but is less convenient for operators.
+
 Windows PowerShell from repository root, with an existing Scream driver
 already configured to unicast to local 127.0.0.1 UDP port 4010:
 

@@ -66,7 +66,14 @@ key and certificate and never starts playback without authentication. It is
 one-shot, time-limited and **OFF by default**, with no remote UI or service.
 No Scream driver is shipped, and its Windows loopback unicast operation and
 actual audio have not been hardware tested. There are no bundled credentials.
-See [the isolated authenticated Windows bench runbook](./docs/SECURE-WINDOWS-LAN-LAB.md).
+An independent, reproducible **Windows portable ALPHA ZIP** now provides a
+single guided Python launcher with an offline `--self-check`, a
+no-network `--check-only` configuration review and an explicit `ISOLATED`
+confirmation before any TCP/UDP socket is opened. Its temporary GitHub
+Source Checks artifact includes source-code provenance and an exact SHA256;
+there is no installer, third-party driver, secret or automatic service.
+Read the [Windows first-start guide](./docs/WINDOWS-PORTABLE-ALPHA.md) and
+[the isolated authenticated Windows bench runbook](./docs/SECURE-WINDOWS-LAN-LAB.md).
 **No normal/home-network deployment or production release is approved.**
 
 **Hardware note:** Two simultaneous A2DP senders have not been verified
