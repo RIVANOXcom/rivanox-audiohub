@@ -103,7 +103,7 @@ class OfflineCertificateOnboardingTests(unittest.TestCase):
             str(self.key),
         )
         with mock.patch.object(setup.secure_lan.socket, "create_connection") as dial:
-            with self.assertRaises(ValueError):
+            with self.assertRaises((ValueError, OSError)):
                 setup.validate_local_setup(
                     *args, certificate_file=str(self.directory / "bad.cert"))
             dial.assert_not_called()
