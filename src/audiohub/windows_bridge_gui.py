@@ -13,6 +13,7 @@ import threading
 from . import secure_lan
 from . import hardware_observation
 from . import key_onboarding
+from . import key_rotation
 from .windows_bridge_setup import check_python_tls, validate_local_setup
 
 CHANNEL_OPTIONS = {
@@ -53,7 +54,7 @@ class BridgeWindow:
         self.status = tk.StringVar(value="Not connected. No network port opened.")
         self.root.title("RIVANOX AudioHub - isolated Windows TLS test")
         self.root.resizable(True, True)
-        self.root.minsize(640, 675)
+        self.root.minsize(760, 675)
         frame = ttk.Frame(root, padding=18)
         frame.pack(fill="both", expand=True)
         ttk.Label(frame, text="Windows audio bridge · isolated ALPHA",
@@ -130,10 +131,14 @@ class BridgeWindow:
             frame, text="3 · Record physical speaker observations (local JSON)",
             command=self.record_observation,
         )
-        self.report_button.grid(row=22, column=0, columnspan=3, sticky="ew", pady=(12, 2))
+        self.report_button.grid(row=22, column=0, columnspan=2, sticky="ew", pady=(12, 2), padx=(0, 8))
+        ttk.Button(
+            frame, text="4 · Staged PSK preview (offline)",
+            command=self.prepare_rotation,
+        ).grid(row=22, column=2, sticky="ew", pady=(12, 2))
         self.report_button.state(["disabled"])
         ttk.Label(
-            frame, text="Manual observations only. Nothing is uploaded; no GO is granted.",
+            frame, text="Manual observations and offline key preview only. Nothing installed or uploaded; no GO.",
             wraplength=580,
         ).grid(row=23, column=0, columnspan=3, sticky="w")
         frame.columnconfigure(0, weight=1)
@@ -184,6 +189,92 @@ class BridgeWindow:
             ". Check privately on the trusted Pi console. Never publish it. "
             "Not a connection or owner verification."
         )
+        return True
+
+    def _assess_rotation(self, staged_path, current_pi_code, staged_pi_code):
+        """Only compare existing current/staged files and independent Pi codes."""
+        if self._running() or self.closing:
+            raise ValueError("Cannot check key rotation while a session is active")
+        return key_rotation.inspect_staged_rotation(
+            self.entries["key"].get(), staged_path, current_pi_code, staged_pi_code
+        )
+
+    def prepare_rotation(self):
+        """Guided preview dialog: no key changes, no sockets, no auto-approval."""
+        if self._running() or self.closing:
+            return False
+        self.checked = False
+        self.start_button.state(["disabled"])
+        dlg = self.tk.Toplevel(self.root)
+        dlg.title("AudioHub – private staged key rotation preview")
+        dlg.minsize(560, 390)
+        dlg.transient(self.root)
+        dlg.grab_set()
+        area = self.ttk.Frame(dlg, padding=18)
+        area.pack(fill="both", expand=True)
+        self.ttk.Label(
+            area, text="Check old and staged key copies – OFFLINE ONLY",
+            font=("Segoe UI", 12, "bold"), wraplength=500,
+        ).pack(anchor="w", pady=(0, 6))
+        self.ttk.Label(
+            area, text="First stage separate private 32-byte files on Pi and Windows "
+                       "using an operator-approved process. The current key is read "
+                       "from the main window; it is not modified. Never transfer "
+                       "private keys via this tool. Keep the old key for recovery.",
+            wraplength=500,
+        ).pack(anchor="w", pady=(0, 10))
+        staged = self.tk.StringVar(value="")
+        self.ttk.Label(area, text="New STAGED Windows key (not active):").pack(anchor="w")
+        self.ttk.Entry(area, textvariable=staged, width=64).pack(fill="x")
+        def choose():
+            path = self.filedialog.askopenfilename(
+                parent=dlg, title="Choose existing STAGED PRIVATE 32-byte key"
+            )
+            if path:
+                staged.set(path)
+        self.ttk.Button(area, text="Choose staged key file…", command=choose
+                        ).pack(anchor="w", pady=(4, 10))
+        old_code = self.tk.StringVar(value="")
+        new_code = self.tk.StringVar(value="")
+        for label, code_var in (
+            ("PRIVATE current-key code from physically trusted Pi:", old_code),
+            ("PRIVATE staged-key code from physically trusted Pi:", new_code),
+        ):
+            self.ttk.Label(area, text=label).pack(anchor="w")
+            self.ttk.Entry(area, textvariable=code_var,
+                           show="*", width=40).pack(fill="x", pady=(0, 8))
+        confirmed = self.tk.BooleanVar(value=False)
+        self.ttk.Checkbutton(
+            area, variable=confirmed,
+            text="I independently obtained BOTH codes from the trusted Pi console",
+        ).pack(anchor="w", pady=(3, 6))
+        result = self.tk.StringVar(value="No verification yet. No changes made.")
+        self.ttk.Label(area, textvariable=result, wraplength=500
+                       ).pack(anchor="w", pady=(3, 6))
+
+        def check():
+            if not confirmed.get():
+                result.set("Not checked: obtain both private Pi codes independently.")
+                return
+            try:
+                self._assess_rotation(staged.get(), old_code.get(), new_code.get())
+            except (OSError, ValueError, RuntimeError, PermissionError):
+                result.set("PREVIEW FAILED. Do not switch keys. Verify both protected "
+                           "files and trusted Pi codes. No changes made.")
+                return
+            result.set("OFFLINE COPY MATCH: current and staged key pairs differ and "
+                       "match the supplied Pi codes. NO rotation performed, "
+                       "NO network/hardware verification or deployment GO. "
+                       "Only operator-authorized manual switching and separate "
+                       "post-switch sound tests can complete the process.")
+            self.status.set("Staged key preview passed locally; existing session "
+                            "still uses OLD key. No rotation performed.")
+        self.ttk.Button(
+            area, text="Compare old and staged copies (offline)", command=check
+        ).pack(anchor="w", pady=(6, 3))
+        self.ttk.Button(
+            area, text="Close – keep both keys unchanged", command=dlg.destroy
+        ).pack(anchor="e")
         return True
 
     def _channel(self):
