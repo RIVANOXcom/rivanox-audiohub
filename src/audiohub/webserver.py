@@ -26,6 +26,7 @@ ALLOWED = {
     "/": ("index.html", "text/html; charset=utf-8"),
     "/index.html": ("index.html", "text/html; charset=utf-8"),
     "/app.js": ("app.js", "text/javascript; charset=utf-8"),
+    "/boot-report-viewer.html": ("boot-report-viewer.html", "text/html; charset=utf-8"),
     "/styles.css": ("styles.css", "text/css; charset=utf-8"),
     **{"/locales/" + code + ".json": ("locales/" + code + ".json", "application/json; charset=utf-8")
        for code in ("en", "de", "es", "fr", "it")},
