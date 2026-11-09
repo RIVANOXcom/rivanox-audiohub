@@ -166,6 +166,48 @@ class SecureLanTests(unittest.TestCase):
             write.assert_called_once_with(42, b"ABCD")
             close.assert_called_once_with(process)
 
+    def test_windows_import_does_not_require_linux_fcntl(self):
+        code = (
+            'import sys; sys.modules["fcntl"] = None; '
+            'from audiohub import secure_lan; '
+            'assert secure_lan.DEFAULT_PORT == 4044'
+        )
+        result = subprocess.run(
+            [sys.executable, "-c", code], capture_output=True, text=True,
+            timeout=8, env={**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[1] / "src")}
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_pcm_forwarding_does_not_read_disk_policy_each_frame(self):
+        stream = mock.Mock()
+        stream.recv.side_effect = ([b"\x00\x04", b"ABCD"] * 4) + [b""]
+        process = mock.Mock()
+        process.stdin.fileno.return_value = 42
+        process.poll.return_value = None
+        with mock.patch.object(lan, "lan_target", return_value="audiohub.laptop") as policy, \
+             mock.patch.object(lan, "check_audio_target", return_value=(3, 9)) as graph, \
+             mock.patch.object(lan.subprocess, "Popen", return_value=process), \
+             mock.patch.object(lan, "close_player"), \
+             mock.patch.object(lan.os, "set_blocking"), \
+             mock.patch.object(lan.os, "write", return_value=4) as write:
+            with self.assertRaises(ConnectionError):
+                lan.consume_authenticated_pcm(stream, "audiohub.laptop",
+                                              time.monotonic() + 10)
+            self.assertEqual(write.call_count, 4)
+            self.assertEqual(policy.call_count, 1)
+            self.assertEqual(graph.call_count, 1)
+
+    def test_private_routing_mismatch_refuses_before_spawning_audio(self):
+        stream = mock.Mock()
+        with mock.patch.object(lan, "lan_target", return_value="audiohub.music"), \
+             mock.patch.object(lan, "check_audio_target") as graph, \
+             mock.patch.object(lan.subprocess, "Popen") as player:
+            with self.assertRaisesRegex(RuntimeError, "reservation changed"):
+                lan.consume_authenticated_pcm(stream, "audiohub.laptop",
+                                              time.monotonic() + 10)
+            graph.assert_not_called()
+            player.assert_not_called()
+
     @unittest.skipUnless(shutil.which("openssl"), "OpenSSL command required for live TLS probe")
     def test_real_tls13_certificate_pin_accepts_only_exact_cert(self):
         certificate = Path(self.folder.name) / "device.crt"
