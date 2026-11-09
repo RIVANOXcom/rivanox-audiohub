@@ -167,8 +167,9 @@ class SecureLanTests(unittest.TestCase):
              mock.patch.object(lan, "close_player") as close, \
              mock.patch.object(lan.os, "set_blocking"), \
              mock.patch.object(lan.os, "write", return_value=4) as write:
-            with self.assertRaises(ConnectionError):
-                lan.consume_authenticated_pcm(stream, "audiohub.laptop", time.monotonic() + 10)
+            count = lan.consume_authenticated_pcm(
+                stream, "audiohub.laptop", time.monotonic() + 10)
+            self.assertEqual(count, 1)
             cmd = popen.call_args.args[0]
             self.assertIn("--target=audiohub.laptop", cmd)
             write.assert_called_once_with(42, b"ABCD")
