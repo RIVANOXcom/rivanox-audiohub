@@ -14,6 +14,7 @@ import sys
 
 from . import secure_lan
 from . import certificate_onboarding
+from . import key_onboarding
 
 
 def check_python_tls():
@@ -30,7 +31,8 @@ def _read_minutes(raw):
     return secure_lan.validate_session_minutes(int(raw))
 
 
-def validate_local_setup(server_ip, pin_sha256, key_path, minutes, certificate_file=None):
+def validate_local_setup(server_ip, pin_sha256, key_path, minutes, certificate_file=None,
+                         expected_key_code=None):
     """Read-only configuration validation; never dial or open a UDP port."""
     secure_lan.validate_options(server_ip, "127.0.0.1",
                                 secure_lan.DEFAULT_PORT, True)
@@ -40,6 +42,8 @@ def validate_local_setup(server_ip, pin_sha256, key_path, minutes, certificate_f
     if not key.is_absolute():
         raise ValueError("The private key must have an absolute file path")
     secure_lan.read_private_key(key)
+    if expected_key_code is not None and expected_key_code != "":
+        key_onboarding.verify_local_key_code(key, expected_key_code)
     if certificate_file is not None and certificate_file != "":
         # Always compare with the independently obtained Pi fingerprint.
         # A downloaded public certificate alone is NEVER a trust anchor.
@@ -49,7 +53,7 @@ def validate_local_setup(server_ip, pin_sha256, key_path, minutes, certificate_f
 
 def interactive_bridge(*, input_fn=input, output=print, execute=None,
                        check_only=False, test_tone=False, test_channel="both",
-                       certificate_file=None):
+                       certificate_file=None, expected_key_code=None):
     """One understandable, deliberately manual session with an explicit gate.
 
     The private key is read from disk and never printed or sent in the
@@ -77,12 +81,18 @@ def interactive_bridge(*, input_fn=input, output=print, execute=None,
     pin = input_fn("Verified Pi TLS certificate SHA256 (64 lowercase hex): ").strip()
     key_file = input_fn("Absolute path to private 32-byte shared key file: ").strip()
     minutes = _read_minutes(input_fn("Session minutes [10, maximum 30]: "))
-    validate_local_setup(ip, pin, key_file, minutes, certificate_file)
+    validate_local_setup(ip, pin, key_file, minutes, certificate_file,
+                         expected_key_code)
     if certificate_file:
         output("Pi public certificate MATCHES independently entered SHA256 (offline).")
         output("You must verify that fingerprint from trusted Pi console yourself.")
     else:
         output("No local public certificate file compared. Verify Pi SHA256 independently.")
+    if expected_key_code:
+        output("Windows key copy MATCHES independently checked Pi code (offline).")
+        output("A key comparison is NOT authentication or physical owner proof.")
+    else:
+        output("Optional Pi key-copy match not checked. Pi HMAC still required.")
     output("Local configuration checks passed. Windows key-file ACLs")
     output("and the external Scream driver are NOT verified by this check.")
     if test_tone:
@@ -103,6 +113,8 @@ def interactive_bridge(*, input_fn=input, output=print, execute=None,
         udp_port=secure_lan.DEFAULT_UDP_PORT, key_file=key_file,
         pin_sha256=pin, session_minutes=minutes, isolated_lab=True,
     )
+    if expected_key_code:
+        params["expected_key_code"] = expected_key_code
     if test_tone:
         params["test_tone"] = True
         if test_channel != "both":
@@ -119,6 +131,10 @@ def main(argv=None):
                         help="Check Python TLS 1.3 support, without any credentials or ports")
     parser.add_argument("--check-only", action="store_true",
                         help="Validate operator-provided local setup without opening sockets")
+    parser.add_argument("--show-key-code", type=str, default=None,
+                        help="Show offline code of one existing PRIVATE 32-byte key; keep code private")
+    parser.add_argument("--expected-key-code", type=str, default=None,
+                        help="Optional 32-hex code independently read from trusted Pi console")
     parser.add_argument("--show-cert-fingerprint", type=str, default=None,
                         help="Offline DER SHA256 of one local PUBLIC cert; only trust if run on trusted Pi console")
     parser.add_argument("--certificate-file", type=str, default=None,
@@ -131,6 +147,12 @@ def main(argv=None):
                         help="Open optional local graphical lab controls; no automatic connection")
     args = parser.parse_args(argv)
     try:
+        if args.show_key_code:
+            code = key_onboarding.local_key_code(args.show_key_code)
+            print("Local 32-byte PSK offline comparison code: " + code)
+            print("NOT authentication or proof of Pi ownership. Keep code private.")
+            print("No socket opened, key bytes displayed, or settings changed.")
+            return 0
         if args.show_cert_fingerprint:
             fingerprint = certificate_onboarding.certificate_sha256(args.show_cert_fingerprint)
             print("Public X.509 DER SHA256: " + fingerprint)
@@ -148,7 +170,8 @@ def main(argv=None):
             return 0
         return interactive_bridge(check_only=args.check_only, test_tone=args.test_tone,
                                   test_channel=args.test_channel,
-                                  certificate_file=args.certificate_file)
+                                  certificate_file=args.certificate_file,
+                                  expected_key_code=args.expected_key_code)
     except (EOFError, KeyboardInterrupt):
         print("\nCancelled; no automatic retry.", file=sys.stderr)
         return 2
