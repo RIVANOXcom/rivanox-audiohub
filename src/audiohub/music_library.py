@@ -125,10 +125,10 @@ def _safe_local_title(stem):
     return value
 
 
-def display_library(items, *, show_titles=False):
+def display_library(items, *, show_titles=False, guided=False):
     """Non-persistent terminal view. Private titles need explicit local opt-in."""
-    if type(show_titles) is not bool:
-        raise ValueError("Invalid title display option")
+    if type(show_titles) is not bool or type(guided) is not bool:
+        raise ValueError("Invalid library display option")
     lines = ["Local music library: " + str(len(items))
              + " valid WAV track(s). No playback started."]
     for n, (path, info) in enumerate(items, 1):
@@ -144,7 +144,9 @@ def display_library(items, *, show_titles=False):
     lines.append("Names hidden unless --show-titles is explicitly selected."
                  if not show_titles else
                  "Titles are visible only in THIS local terminal; do not share a transcript.")
-    lines.append("Choose up to 8 displayed numbers using --tracks 1,3; "
+    lines.append("Next: enter up to 8 track numbers when asked; nothing auto-plays."
+                 if guided else
+                 "Choose up to 8 displayed numbers using --tracks 1,3; "
                  "then add --play only when ready.")
     return "\n".join(lines)
 
@@ -190,7 +192,7 @@ def guided_session(folder, *, max_minutes=15, show_titles=False,
         runner = music_session.run_session
 
     entries, skipped = discover_library(folder)
-    out(display_library(entries, show_titles=show_titles))
+    out(display_library(entries, show_titles=show_titles, guided=True))
     if skipped:
         out(str(skipped) + " unsafe or unsupported WAV entries skipped.")
     out("GUIDED LOCAL MODE: Nothing is playing. No playlist is stored.")
