@@ -73,7 +73,7 @@ jobs:
           assert len(archives) == 1
           with zipfile.ZipFile(archives[0]) as archive:
               assert archive.testzip() is None
-              assert len(archive.namelist()) == 9
+              assert len(archive.namelist()) == 10
           print("Windows portable bridge bundle integrity PASS; NOT released")
           PY
       - name: Upload temporary Windows offline operator alpha
