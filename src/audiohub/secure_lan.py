@@ -12,6 +12,7 @@ import argparse
 import hashlib
 import hmac
 import ipaddress
+import math
 import os
 import socket
 import ssl
@@ -90,6 +91,11 @@ DEFAULT_UDP_PORT = 4010
 CONNECTION_SECONDS = 3
 FRAME_SECONDS = 2
 HEALTH_SECONDS = 3
+TONE_HZ = 440
+TONE_SECONDS = 5
+TONE_AMPLITUDE = 1100  # -29.5 dBFS; low-level operator bench test only.
+TONE_RATE = 48000
+TONE_FRAMES_PER_PACKET = 240  # 5 ms PCM, 960-byte TLS frame.
 
 
 def validate_key_bytes(key):
@@ -218,6 +224,56 @@ def forward_loopback_pcm(udp, stream, deadline, stop_event=None):
     return count
 
 
+def make_test_tone_pcm(start_sample, samples, total_samples):
+    """Generate bounded, 48 kHz stereo S16LE sine with 200 ms fade edges."""
+    if (not isinstance(start_sample, int) or isinstance(start_sample, bool)
+            or not isinstance(samples, int) or not 1 <= samples <= TONE_FRAMES_PER_PACKET
+            or not isinstance(total_samples, int) or total_samples < samples
+            or start_sample < 0 or start_sample + samples > total_samples):
+        raise ValueError("Invalid bounded test tone frame parameters")
+    payload = bytearray()
+    fade_samples = TONE_RATE // 5
+    for offset in range(start_sample, start_sample + samples):
+        envelope = min(1.0, offset / fade_samples,
+                       max(0, total_samples - 1 - offset) / fade_samples)
+        sample = round(TONE_AMPLITUDE * envelope
+                       * math.sin((2 * math.pi * TONE_HZ * offset) / TONE_RATE))
+        payload.extend(struct.pack("<hh", sample, sample))
+    return bytes(payload)
+
+
+def forward_test_tone(stream, deadline, stop_event=None, *, seconds=TONE_SECONDS):
+    """One low-level, 5-second max test; NEVER opens a Windows Scream UDP port.
+
+    This checks the authenticated PCM route, not the Windows sound driver.
+    Returned packet counts are not proof of actual audible output.
+    """
+    if (isinstance(seconds, bool) or not isinstance(seconds, (int, float))
+            or not 0 < seconds <= TONE_SECONDS):
+        raise ValueError("Test tone must be positive and at most 5 seconds")
+    total = int(TONE_RATE * seconds)
+    start = time.monotonic()
+    stream.settimeout(0.5)
+    sent = 0
+    for index in range(0, total, TONE_FRAMES_PER_PACKET):
+        if time.monotonic() >= deadline or (stop_event is not None and stop_event.is_set()):
+            break
+        due = start + index / TONE_RATE
+        remaining = due - time.monotonic()
+        if remaining > 0:
+            if stop_event is not None:
+                if stop_event.wait(timeout=remaining):
+                    break
+            else:
+                time.sleep(remaining)
+        if time.monotonic() >= deadline or (stop_event is not None and stop_event.is_set()):
+            break
+        pcm = make_test_tone_pcm(index, min(TONE_FRAMES_PER_PACKET, total - index), total)
+        stream.sendall(struct.pack("!H", len(pcm)) + pcm)
+        sent += 1
+    return sent
+
+
 def consume_authenticated_pcm(stream, target, deadline):
     """Play verified TLS frames to the private route; no audio after graph loss."""
     # Do not read owner-private policy on every 6 ms PCM frame. Keep
@@ -238,7 +294,13 @@ def consume_authenticated_pcm(stream, target, deadline):
                     raise RuntimeError("PipeWire generation changed; stop to avoid stale playback")
                 last_check = now
             frame_deadline = min(deadline, time.monotonic() + FRAME_SECONDS)
-            length = struct.unpack("!H", _read_exact(stream, 2, frame_deadline))[0]
+            try:
+                header = _read_exact(stream, 2, frame_deadline)
+            except ConnectionError:
+                if count:
+                    break  # Peer completed at least one full authenticated frame.
+                raise
+            length = struct.unpack("!H", header)[0]
             if not 4 <= length <= MAX_PCM_BYTES or length % 4:
                 raise ValueError("Invalid private stereo PCM frame")
             pcm = _read_exact(stream, length, frame_deadline)
@@ -300,7 +362,8 @@ def run_server(*, bind_ip, sender_ip, port, key_file, cert_file,
 
 
 def run_bridge(*, server_ip, port, udp_port, key_file, pin_sha256,
-               session_minutes=10, isolated_lab=False, stop_event=None):
+               session_minutes=10, isolated_lab=False, stop_event=None,
+               test_tone=False):
     if not isolated_lab:
         raise ValueError("Explicit isolated-lab Windows bridge opt-in required")
     validate_options(server_ip, "127.0.0.1", port, True)
@@ -317,6 +380,10 @@ def run_bridge(*, server_ip, port, udp_port, key_file, pin_sha256,
             authenticate_client(stream, key)
             if stop_event is not None and stop_event.is_set():
                 return 0  # Stop requested during TLS setup; no UDP listener.
+            if not isinstance(test_tone, bool):
+                raise ValueError("Invalid manual tone selection")
+            if test_tone:
+                return forward_test_tone(stream, deadline, stop_event=stop_event)
             # Scream MUST unicast to loopback. No LAN-facing UDP bind exists.
             with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp:
                 udp.bind(("127.0.0.1", udp_port))
