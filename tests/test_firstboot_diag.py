@@ -273,6 +273,31 @@ class DiagnosticTests(unittest.TestCase):
         self.runtime_write({"updated_at": 100, "usb_output": True})
         self.assertFalse(diag.sample(self.runtime, self.uid + 1, now=101)["usb_audio_detected"])
 
+    def test_headless_sd_report_adds_only_anonymous_bluetooth_pairing_state(self):
+        clock = Clock()
+        healthy = {
+            "state": "known_devices", "paired_devices": 1,
+            "private_device_mac": "AA:BB:CC:DD:EE:FF",
+            "private_name": "a person's phone",
+        }
+        with mock.patch.object(diag.pairing_readiness, "read_local_bluez",
+                               return_value=healthy) as reading:
+            self.assertTrue(diag.run_probe(
+                sleep=clock.sleep, now=clock.now, mono=clock.mono,
+                output_dir=self.output, runtime_path=self.runtime,
+                user_id=self.uid, require_mount=False,
+                controller_path=self.root / "missing-controller",
+            ))
+        report = json.loads((self.output / diag.OUTPUT_NAME).read_text())
+        self.assertEqual(reading.call_count, len(diag.CHECKPOINT_DELAYS))
+        self.assertEqual(report["bluetooth_pairing_state"], "known_devices")
+        self.assertEqual(report["bluetooth_paired_devices"], 1)
+        self.assertFalse(report["owner_authenticated"])
+        self.assertFalse(report["hardware_accepted"])
+        self.assertNotIn("AA:BB", json.dumps(report))
+        self.assertNotIn("a person's phone", json.dumps(report))
+        self.assertLessEqual(len(json.dumps(report).encode()), diag.MAX_REPORT_BYTES)
+
     def test_report_requires_real_mounted_boot_partition(self):
         payload = {"schema": diag.SCHEMA, "snapshots": []}
         self.assertFalse(diag.write_report(self.output, payload))

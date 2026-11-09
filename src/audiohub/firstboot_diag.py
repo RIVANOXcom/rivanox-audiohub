@@ -16,6 +16,8 @@ import secrets
 import stat
 import time
 
+from . import pairing_readiness
+
 OUTPUT_DIR = Path("/boot/firmware")
 OUTPUT_NAME = "AUDIOHUB-TEST-REPORT.json"
 CHECKPOINT_DELAYS = (0, 30, 30, 60, 60, 120, 300)
@@ -236,6 +238,8 @@ def run_probe(*, sleep=time.sleep, now=time.time, mono=time.monotonic,
         "owner_authenticated": False,
         "phone_wifi_provisioned": False,
         "network_configuration": "not_inspected",
+        "bluetooth_pairing_state": "unavailable",
+        "bluetooth_paired_devices": 0,
         "snapshots": [],
     }
     wrote = False
@@ -249,6 +253,11 @@ def run_probe(*, sleep=time.sleep, now=time.time, mono=time.monotonic,
             "seconds_since_probe_start": _bounded(round(mono() - beginning), 3600),
             **metrics,
         })
+        # SD FAT report includes only anonymous coarse pairing readiness.
+        # Exactly one latest status, not seven detailed device records.
+        pairing = pairing_readiness.read_local_bluez()
+        report["bluetooth_pairing_state"] = pairing["state"]
+        report["bluetooth_paired_devices"] = pairing["paired_devices"]
         # A partial report remains useful even if the Pi is switched off.
         wrote = write_report(output_dir, report, require_mount=require_mount) or wrote
     return wrote
