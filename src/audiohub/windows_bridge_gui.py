@@ -22,13 +22,14 @@ CHANNEL_OPTIONS = {
 }
 
 
-def validate_fields(ip, pin, secret_path, minutes):
+def validate_fields(ip, pin, secret_path, minutes, certificate_file=None):
     """Pure, offline gate reused by Check and Start; no sockets."""
     check_python_tls()
     if not isinstance(minutes, str) or not minutes.isascii() or not minutes.isdecimal():
         raise ValueError("Choose 1–30 whole minutes")
     amount = secure_lan.validate_session_minutes(int(minutes))
-    path = validate_local_setup(ip.strip(), pin.strip(), secret_path, amount)
+    path = validate_local_setup(ip.strip(), pin.strip(), secret_path, amount,
+                                certificate_file)
     return (ip.strip(), pin.strip(), path, amount)
 
 
@@ -50,7 +51,7 @@ class BridgeWindow:
         self.status = tk.StringVar(value="Not connected. No network port opened.")
         self.root.title("RIVANOX AudioHub - isolated Windows TLS test")
         self.root.resizable(True, True)
-        self.root.minsize(640, 540)
+        self.root.minsize(640, 610)
         frame = ttk.Frame(root, padding=18)
         frame.pack(fill="both", expand=True)
         ttk.Label(frame, text="Windows audio bridge · isolated ALPHA",
@@ -76,44 +77,52 @@ class BridgeWindow:
             if key == "key":
                 ttk.Button(frame, text="Choose local file…", command=self._pick_file).grid(
                     row=3 + 2 * idx, column=2, sticky="e", padx=(8, 0))
+        self.cert_path = tk.StringVar(value="")
+        ttk.Label(frame, text="Optional Pi PUBLIC certificate file (PEM or DER):").grid(
+            row=12, column=0, columnspan=3, sticky="w")
+        ttk.Entry(frame, textvariable=self.cert_path, width=70).grid(
+            row=13, column=0, columnspan=2, sticky="ew", pady=(0, 8))
+        ttk.Button(frame, text="Choose public cert…", command=self._pick_certificate).grid(
+            row=13, column=2, sticky="e", padx=(8, 0))
+        self.cert_path.trace_add("write", self._changed)
         self.test_tone = tk.BooleanVar(value=False)
         ttk.Checkbutton(
             frame, text="Pi speaker test: quiet 5-second tone (no Scream driver)",
             variable=self.test_tone, command=self._changed,
-        ).grid(row=12, column=0, columnspan=3, sticky="w", pady=(5, 4))
+        ).grid(row=14, column=0, columnspan=3, sticky="w", pady=(5, 4))
         self.tone_channel = tk.StringVar(value="Both speakers")
         ttk.Label(frame, text="Speaker channel to verify (tone only):").grid(
-            row=13, column=0, columnspan=3, sticky="w")
+            row=15, column=0, columnspan=3, sticky="w")
         self.tone_choice = ttk.Combobox(
             frame, textvariable=self.tone_channel,
             values=tuple(CHANNEL_OPTIONS), state="readonly", width=32,
         )
-        self.tone_choice.grid(row=14, column=0, columnspan=3, sticky="w", pady=(0, 4))
+        self.tone_choice.grid(row=16, column=0, columnspan=3, sticky="w", pady=(0, 4))
         self.tone_channel.trace_add("write", self._changed)
         self.check_button = ttk.Button(frame, text="1 · Check locally (offline)", command=self.check)
-        self.check_button.grid(row=15, column=0, sticky="ew", padx=(0, 8), pady=(8, 4))
+        self.check_button.grid(row=17, column=0, sticky="ew", padx=(0, 8), pady=(8, 4))
         self.start_button = ttk.Button(frame, text="2 · Start isolated session", command=self.start)
-        self.start_button.grid(row=15, column=1, sticky="ew", padx=(0, 8), pady=(8, 4))
+        self.start_button.grid(row=17, column=1, sticky="ew", padx=(0, 8), pady=(8, 4))
         self.stop_button = ttk.Button(frame, text="Stop", command=self.stop)
-        self.stop_button.grid(row=15, column=2, sticky="ew", pady=(8, 4))
+        self.stop_button.grid(row=17, column=2, sticky="ew", pady=(8, 4))
         self.start_button.state(["disabled"])
         self.stop_button.state(["disabled"])
         ttk.Label(frame, textvariable=self.status, wraplength=580).grid(
-            row=16, column=0, columnspan=3, sticky="w", pady=(8, 0))
+            row=18, column=0, columnspan=3, sticky="w", pady=(8, 0))
         ttk.Label(frame, text="The Windows Scream driver must independently send only to 127.0.0.1:4010. "
                   "For speaker test the Scream driver is NOT needed. "
                   "Windows NTFS key-file permissions and real audible output are not verified.",
-                  wraplength=580).grid(row=17, column=0, columnspan=3, sticky="w", pady=(12, 0))
+                  wraplength=580).grid(row=19, column=0, columnspan=3, sticky="w", pady=(12, 0))
         self.report_button = ttk.Button(
             frame, text="3 · Record physical speaker observations (local JSON)",
             command=self.record_observation,
         )
-        self.report_button.grid(row=18, column=0, columnspan=3, sticky="ew", pady=(12, 2))
+        self.report_button.grid(row=20, column=0, columnspan=3, sticky="ew", pady=(12, 2))
         self.report_button.state(["disabled"])
         ttk.Label(
             frame, text="Manual observations only. Nothing is uploaded; no GO is granted.",
             wraplength=580,
-        ).grid(row=19, column=0, columnspan=3, sticky="w")
+        ).grid(row=21, column=0, columnspan=3, sticky="w")
         frame.columnconfigure(0, weight=1)
         frame.columnconfigure(1, weight=1)
         frame.columnconfigure(2, weight=0)
@@ -135,6 +144,17 @@ class BridgeWindow:
         if path:
             self.entries["key"].set(path)
 
+    def _pick_certificate(self):
+        if self._running():
+            return
+        path = self.filedialog.askopenfilename(
+            title="Choose Pi PUBLIC TLS certificate (NEVER private key)",
+            filetypes=[("Public certificate", "*.pem *.crt *.cer *.der"),
+                       ("All files", "*.*")],
+        )
+        if path:
+            self.cert_path.set(path)  # Never overwrite the independent pin.
+
     def _channel(self):
         label = self.tone_channel.get()
         if label not in CHANNEL_OPTIONS:
@@ -146,7 +166,8 @@ class BridgeWindow:
             self._channel()  # Fail closed before opening any TCP/UDP socket.
         return validate_fields(
             self.entries["ip"].get(), self.entries["pin"].get(),
-            self.entries["key"].get(), self.entries["minutes"].get()
+            self.entries["key"].get(), self.entries["minutes"].get(),
+            self.cert_path.get()
         )
 
     def check(self):
@@ -160,7 +181,13 @@ class BridgeWindow:
             self.status.set("Local check failed. Recheck IP, key file, SHA256 and duration offline.")
             return False
         self.checked = True
-        self.status.set("Local format and key file checked. Not connected; no Pi/driver proof.")
+        self.status.set(
+            "Local Pi certificate matches INDEPENDENT fingerprint (offline). "
+            "No Pi/driver verification."
+            if self.cert_path.get() else
+            "No local public certificate file compared. Independently confirm "
+            "Pi SHA256. No connection made."
+        )
         if self.entries["confirmation"].get() == "ISOLATED":
             self.start_button.state(["!disabled"])
         return True
