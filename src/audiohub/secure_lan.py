@@ -2,7 +2,9 @@
 """Manual, explicitly authorized TLS Windows-audio bridge for an isolated lab.
 
 This is NOT a service or automatic image feature. Windows Scream must be
-configured to unicast *only to local loopback*, not across the network.
+configured to unicast *only to local loopback* for Windows program audio.
+The separately selected driverless speaker soundcheck emits a short, quiet
+5-second local PCM tone without opening any Windows Scream UDP socket.
 The Pi receives only mutually authenticated TLS 1.3 frames. No default keys,
 certificates, web access, network discovery, or unattended setup exist.
 """
