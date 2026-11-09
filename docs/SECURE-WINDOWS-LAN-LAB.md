@@ -95,6 +95,26 @@ Use a physically isolated network, not public, home or corporate Wi-Fi/LAN.
 No operator authorization to flash a card or alter a firewall is implied
 by these instructions.
 
+## Driverless Pi speaker soundcheck
+
+A separate, manually selected authenticated 440 Hz sine at ~-29.5 dBFS
+(5 seconds maximum, 200 ms fade) is available in the Windows portable
+GUI and terminal launcher. It does NOT require an installed Scream driver
+or raw UDP loopback input. This checks the existing secured TLS1.3
+Windows-to-Pi PCM/USB route without claiming actual audible sound.
+The Pi receiver and privately provisioned per-bench certificate/PSK,
+isolated test network and explicit operator approval are still required.
+
+On Windows select the GUI checkbox **Pi speaker test: quiet 5-second tone**
+or run `py -3 START-WINDOWS-BRIDGE.py --test-tone` after an offline
+`--test-tone --check-only` preflight. Start the separate Pi receiver
+first, select LOW speaker volume, confirm `ISOLATED`, listen and press
+Stop if necessary. The tone ends after at most five seconds and never
+opens a Windows Scream UDP socket. Real Edifier/USB sound, levels and
+dropouts must be confirmed by the human operator. This does NOT verify
+Windows Scream driver compatibility, two Bluetooth streams or owner
+onboarding; no default services or permissions change.
+
 ## Manual hardware smoke-test and rollback
 
 1. Verify the exact Git commit and Source CI, independently confirm TLS
