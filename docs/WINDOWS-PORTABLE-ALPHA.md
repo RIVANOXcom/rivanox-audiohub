@@ -22,7 +22,22 @@ included. Nothing starts automatically.
    **DER SHA-256 hex fingerprint** over a trusted offline channel. Never
    copy the Pi TLS private key to Windows. Do not use the example addresses
    or placeholder hashes without replacing them.
-3. **Check without connecting.** In a terminal in this extracted folder:
+3. **Optional graphical test controls.** In a terminal inside this extracted
+   folder, launch the local graphical setup:
+
+       py -3 START-WINDOWS-BRIDGE.py --gui
+
+   The GUI contains labeled Pi IP, exact TLS certificate SHA256, hidden
+   private-key path with file picker, session duration and an explicit
+   `ISOLATED` confirmation. Choose **Check locally (offline)** before
+   **Start isolated session**. Check runs without any socket; Start
+   rechecks everything and opens exactly one authenticated test session.
+   **Stop** requests that TCP/UDP and playback forwarding close; the
+   window does not reconnect automatically. If the desktop Tk interface
+   is not installed, use the terminal workflow below. Neither workflow
+   creates credentials, modifies ACLs or installs a Scream driver.
+
+3a. **Terminal checks without connecting.** In a terminal in this extracted folder:
    
        py -3 START-WINDOWS-BRIDGE.py --self-check
        py -3 START-WINDOWS-BRIDGE.py --check-only
