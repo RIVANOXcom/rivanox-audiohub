@@ -48,6 +48,9 @@ class WindowsPortableBundleTests(unittest.TestCase):
                 archive.read(self.prefix + "/SOURCE-MANIFEST.json"))
             self.assertEqual(manifest["source_sha"], SHA)
             self.assertFalse(manifest["credentials_included"])
+            self.assertTrue(manifest["offline_certificate_sha256_verification"])
+            self.assertFalse(manifest["trust_on_first_use"])
+            self.assertIn(self.prefix + "/audiohub/certificate_onboarding.py", paths)
             self.assertFalse(manifest["driver_included"])
             self.assertTrue(manifest["driverless_speaker_soundcheck_available"])
             self.assertEqual(manifest["speaker_channel_soundcheck"],
