@@ -103,7 +103,10 @@ def read_private_key(path):
     path = Path(path)
     if path.is_symlink():
         raise ValueError("Linked key files are forbidden")
-    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+    # Windows os.open defaults to text mode: a random 0x1A can look like EOF
+    # and CRLF sequences may be translated. Never read binary key in text mode.
+    flags = (os.O_RDONLY | getattr(os, "O_BINARY", 0)
+             | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0))
     fd = os.open(path, flags)
     try:
         info = os.fstat(fd)
