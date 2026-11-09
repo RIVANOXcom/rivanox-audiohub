@@ -10,8 +10,9 @@ included. Nothing starts automatically.
 ## Four steps for a manually authorized isolated test
 
 1. **Prerequisites.** Windows 10/11, separately installed Python 3.11 or
-   newer with TLS 1.3, and an independently installed Windows Scream virtual
-   audio driver. Configure its **unicast 48 kHz/16-bit/stereo UDP** output
+   newer with TLS 1.3. **Only for Windows program-audio streaming**, a
+   separately installed Windows Scream virtual audio driver is also needed.
+   Configure its **unicast 48 kHz/16-bit/stereo UDP** output
    exclusively to **127.0.0.1:4010**. The driver's ability to do this has
    **not been verified on a real Windows machine**. Its default multicast
    mode is not compatible. Do not use raw Scream on a home/work LAN.
