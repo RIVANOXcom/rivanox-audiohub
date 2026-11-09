@@ -104,7 +104,7 @@ jobs:
             echo "manually installed compatible Scream driver, private keys and"
             echo "an explicitly authorized isolated Pi4 lab. No auto installation."
             echo
-            echo "Source SHA: `$SOURCE_COMMIT`"
+            echo "Source SHA: $SOURCE_COMMIT"
             echo "Local bundle checksum:"
             echo '~~~'
             cat dist/windows/SHA256SUMS-WINDOWS.txt
