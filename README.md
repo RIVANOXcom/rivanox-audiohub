@@ -292,3 +292,17 @@ small link in the existing AudioHub read-only web prototype opens
 the same viewer. It never uploads the chosen file, changes Bluetooth,
 or interprets SD data as ownership/hardware release approval.
 See [headless operator instructions](docs/PI4-BLUETOOTH-FIRST-USE.md).
+
+### Play local WAV music through AudioHub without pairing or a cloud service
+
+An operator can now play **their own** bounded 16-bit PCM WAV files
+as an actual, independently controlled source in the existing
+\`audiohub.music\` mixer input. Preview up to eight files with
+\`python3 -m audiohub.local_music /absolute/path/file.wav\`, then
+explicitly select \`--play\` at the trusted Pi4 terminal; press
+**Ctrl+C** to stop. Audio is streamed into a **fixed music virtual
+sink**, never a default speaker fallback, with low initial stream
+volume. No new daemon, credentials, account, file upload, route
+changes or Bluetooth permissions are required. Works offline;
+this is NOT Internet radio or phone-owner onboarding.
+See [local WAV operator instructions](docs/LOCAL-MUSIC-PLAYBACK.md).
