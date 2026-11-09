@@ -329,3 +329,15 @@ is required; no background service, HTTP controller or saved playlist
 is created. Real sound is still unverified until an isolated Pi4
 hardware listening test. See
 [local music playback guide](docs/LOCAL-MUSIC-PLAYBACK.md).
+
+### Navigate a local audio queue without a network remote
+
+On an explicitly started Pi4 `--play --interactive` session, the
+operator can also press `l` + Enter for an anonymous ordered queue
+and planned WAV durations, `p` to play the preceding selected track,
+`r` to replay the current track, or a valid number `1`–`8` to jump
+directly within the selected queue. All commands are local to the
+already-authorized physical terminal, keep the original session
+limit, display no private filenames and leave Bluetooth, network,
+PipeWire routing and EQ unchanged. See
+[local WAV controls](docs/LOCAL-MUSIC-PLAYBACK.md).
