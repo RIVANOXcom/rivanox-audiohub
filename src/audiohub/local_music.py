@@ -119,7 +119,7 @@ def _play_one(path, metadata, *, deadline, spawn, stop=None, on_player=None):
                     or reader.getsampwidth() != 2 or reader.getcomptype() != "NONE"):
                 raise ValueError("Audio file metadata changed")
             command = [
-                "pw-cat", "--playback", "--target=" + TARGET,
+                "pw-cat", "--playback", "--raw", "--target=" + TARGET,
                 "--rate=" + str(metadata["rate"]),
                 "--channels=" + str(metadata["channels"]),
                 "--format=s16", "--volume=" + STREAM_VOLUME, "-"
