@@ -13,6 +13,17 @@ permits explicit ordered selection and hides names by default. Source tests and 
 Pi4 package checks still do **not** prove actual audible playback.
 See [local WAV source playback](LOCAL-MUSIC-PLAYBACK.md).
 
+## Local music playback interactive session
+
+The optional `--play --interactive` flag supports an explicitly
+selected local WAV queue with status, next-track and stop commands at
+a trusted Pi4 operator terminal. No remote API, permissions,
+persistent data or mixer changes. Existing default preview and
+direct `--play` remain backward compatible. A fix to the original
+player wait also handles long tracks within the configured 30-minute
+session instead of failing after a fixed 10-second wait. Actual Pi4
+speaker audio and production approval remain unverified.
+
 ## Goals
 
 - USB speaker playback using Edifier R600USB where recognized as a USB-audio device
