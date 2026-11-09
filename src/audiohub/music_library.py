@@ -144,7 +144,8 @@ def display_library(items, *, show_titles=False, guided=False):
     lines.append("Names hidden unless --show-titles is explicitly selected."
                  if not show_titles else
                  "Titles are visible only in THIS local terminal; do not share a transcript.")
-    lines.append("Next: enter up to 8 track numbers when asked; nothing auto-plays."
+    lines.append("Next: choose numbers, ALL (up to 8), or SHUFFLE (time-bounded)."
+                 " Review the anonymous order before exact PLAY; no autoplay."
                  if guided else
                  "Choose up to 8 displayed numbers using --tracks 1,3; "
                  "then add --play only when ready.")
@@ -156,6 +157,56 @@ def selected_paths(items, selection, *, max_minutes):
     paths = [items[i][0] for i in indices]
     report = local_music.inspect_playlist(paths, max_minutes=max_minutes)
     return paths, report
+
+
+
+def guided_choice(items, reply, *, max_minutes, shuffle=None):
+    """Resolve manual, ALL or SHUFFLE selection without starting audio.
+
+    SHUFFLE samples a fresh private order from the *already listed* WAVs
+    and greedily fits up to eight into the existing total session time.
+    The resulting choices are returned as display numbers as well as
+    paths, so the operator can review or change before confirming PLAY.
+    """
+    if type(reply) is not str or not 1 <= len(reply) <= 64:
+        raise ValueError("Choose displayed track numbers or ALL/SHUFFLE")
+    if type(max_minutes) is not int or not 1 <= max_minutes <= 30:
+        raise ValueError("Select a bounded music session")
+    if reply == "ALL":
+        if len(items) > local_music.MAX_FILES:
+            raise ValueError("ALL is limited to eight WAVs; choose numbers")
+        indices = list(range(len(items)))
+    elif reply == "SHUFFLE":
+        import secrets
+        indices = list(range(len(items)))
+        if shuffle is None:
+            secrets.SystemRandom().shuffle(indices)
+        else:
+            shuffle(indices)
+        chosen = []
+        duration = 0
+        limit_ms = min(local_music.MAX_SECONDS, max_minutes * 60) * 1000
+        for index in indices:
+            track_ms = items[index][1]["duration_ms"]
+            if (type(track_ms) is int and track_ms > 0 and
+                    duration + track_ms <= limit_ms):
+                chosen.append(index)
+                duration += track_ms
+            if len(chosen) == local_music.MAX_FILES:
+                break
+        if not chosen:
+            raise ValueError("No WAV tracks fit the chosen session time")
+        indices = chosen
+    else:
+        indices = parse_track_numbers(reply, len(items))
+    if not indices:
+        raise ValueError("No selected tracks")
+    # selected_paths revalidates every input WAV for the actual
+    # recording format and maximum play time before any confirmation.
+    numbers = ",".join(str(index + 1) for index in indices)
+    paths, preview = selected_paths(items, numbers, max_minutes=max_minutes)
+    return paths, preview, numbers
+
 
 
 def _terminal_line():
@@ -171,12 +222,11 @@ def _terminal_line():
 
 def guided_session(folder, *, max_minutes=15, show_titles=False,
                    read_line=None, out=None, runner=None):
-    """One-command local music picker with explicit human PLAY confirmation.
+    """One-command guided local picker with bounded revision and PLAY gate.
 
-    Require a genuine local terminal before inspecting any private music
-    folder. User-typed choices are never printed back, saved or passed
-    to a shell. An empty response, EOF, three bad selections or anything
-    other than exact uppercase PLAY fail closed without starting audio.
+    ALL selects a small album; SHUFFLE prepares a short anonymous queue;
+    CHANGE returns to selection at most twice. Nothing starts until the
+    operator reviews the numbered order and enters exact uppercase PLAY.
     """
     import sys
     if not sys.stdin.isatty() or not sys.stdout.isatty():
@@ -196,37 +246,44 @@ def guided_session(folder, *, max_minutes=15, show_titles=False,
     if skipped:
         out(str(skipped) + " unsafe or unsupported WAV entries skipped.")
     out("GUIDED LOCAL MODE: Nothing is playing. No playlist is stored.")
-    selected = None
-    for attempt in range(3):
-        out("Enter up to 8 distinct displayed track numbers, e.g. 2,1."
-            " Press Enter alone to cancel. No audio starts yet:")
-        reply = read_line()
-        if reply is None or reply == "":
-            out("Music selection cancelled. No playback started.")
+    changes = 0
+    while True:
+        selected = None
+        for attempt in range(3):
+            out("Enter 1-8 distinct numbers (2,1), ALL (up to 8), or SHUFFLE."
+                " SHUFFLE chooses up to 8 within session time."
+                " Enter alone cancels; no audio starts yet:")
+            reply = read_line()
+            if reply is None or reply == "":
+                out("Music selection cancelled. No playback started.")
+                return False
+            try:
+                selected, details, numbers = guided_choice(
+                    entries, reply, max_minutes=max_minutes)
+                break
+            except (ValueError, OSError, TypeError, IndexError):
+                out("Invalid selection or duration. No playback started.")
+        if selected is None:
+            out("Selection limit reached. No playback started.")
             return False
-        if type(reply) is not str or len(reply) > 64:
-            out("Invalid numbered selection. No playback started.")
-            continue
-        try:
-            selected, details = selected_paths(entries, reply,
-                                               max_minutes=max_minutes)
-            break
-        except (ValueError, OSError):
-            out("Invalid track numbers or audio duration. No playback started.")
-    if selected is None:
-        out("Selection limit reached. No playback started.")
-        return False
 
-    out("Selected " + str(details["files"]) + " WAV track(s), total "
-        + str(details["total_duration_ms"] // 1000)
-        + " s. Verify a low physical speaker volume.")
-    out("Type exact uppercase PLAY then Enter to start local interactive audio."
-        " Anything else cancels; no automatic playback:")
-    answer = read_line()
-    if type(answer) is not str or answer != "PLAY":
-        out("Music session cancelled. No playback started.")
-        return False
-    # This is the only control path from the guided picker to the
-    # existing unprivileged playback engine; no network or service writes.
-    out("Explicit PLAY confirmed. To stop, press q + Enter or Ctrl+C.")
-    return runner(selected, max_minutes=max_minutes)
+        out("Selected library track numbers: " + numbers
+            + " (private filenames hidden).")
+        out("Selected " + str(details["files"]) + " WAV track(s), total "
+            + str(details["total_duration_ms"] // 1000)
+            + " s. Verify a low physical speaker volume.")
+        out("Type exact uppercase PLAY then Enter to play; CHANGE to reselect."
+            " Anything else cancels; no automatic playback:")
+        answer = read_line()
+        if answer == "CHANGE":
+            changes += 1
+            if changes > 2:
+                out("Change limit reached. No playback started.")
+                return False
+            out("Selection cleared. Choose again; no playback started.")
+            continue
+        if type(answer) is not str or answer != "PLAY":
+            out("Music session cancelled. No playback started.")
+            return False
+        out("Explicit PLAY confirmed. To stop, press q + Enter or Ctrl+C.")
+        return runner(selected, max_minutes=max_minutes)

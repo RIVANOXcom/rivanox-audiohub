@@ -360,8 +360,11 @@ See [local music operator instructions](docs/LOCAL-MUSIC-PLAYBACK.md).
 At a trusted Pi4 operator terminal, start
 `python3 -m audiohub.local_music --guided --library /home/audiohub/PrivateMusic`
 with the installed source on `PYTHONPATH` as unprivileged audiohub
-user. Select up to eight numbered WAVs when prompted; press Enter to
-cancel, or type **exactly `PLAY`** at the final prompt to start
+user. Select up to eight numbered WAVs, enter `ALL` for a small album,
+or `SHUFFLE` to pick up to eight random tracks within the session time.
+Press Enter to
+cancel, enter `CHANGE` at the review step to reselect (up to twice),
+or type **exactly `PLAY`** at the final prompt to start
 interactive playback. No audio starts merely from scanning or choosing
 tracks. Titles remain hidden unless `--show-titles` is explicit.
 Then use `u` pause/resume, `q` stop and the existing local controls;

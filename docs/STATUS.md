@@ -81,3 +81,15 @@ the existing interactive music session. Local TTY and non-root user
 are mandatory; invalid input, cancellation or failed confirmation do
 not start playback. This changes no mixer, Bluetooth, owner or service
 settings. Real hardware audio and public distribution remain NO-GO.
+
+### Guided WAV album selection shortcuts
+
+The Pi4 offline terminal wizard now offers `ALL` for at most eight
+listed WAVs or `SHUFFLE` for a locally random, bounded selection that
+fits the existing maximum session duration. It displays the chosen
+*anonymous library numbers* before sound. The operator can type
+`CHANGE` twice to correct the queue; only exact uppercase `PLAY`
+activates the already validated interactive music player. No new
+network service, audio route, ownership binding, keys, media files
+or persistent playlists were introduced. Real Edifier playback and
+public-release gates remain unverified.
