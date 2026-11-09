@@ -95,7 +95,7 @@ def music_sink_available(*, capture=bounded_command_output):
     return TARGET in discovery.virtual_sinks(nodes)
 
 
-def _play_one(path, metadata, *, deadline, spawn, stop=None):
+def _play_one(path, metadata, *, deadline, spawn, stop=None, on_player=None):
     # Reopen and inspect at playback time: never rely solely on a stale preview.
     if _open_wav(path) != metadata:
         raise ValueError("Audio file changed since the local preview")
@@ -119,7 +119,7 @@ def _play_one(path, metadata, *, deadline, spawn, stop=None):
                     or reader.getsampwidth() != 2 or reader.getcomptype() != "NONE"):
                 raise ValueError("Audio file metadata changed")
             command = [
-                "pw-cat", "--playback", "--target=" + TARGET,
+                "pw-cat", "--playback", "--raw", "--target=" + TARGET,
                 "--rate=" + str(metadata["rate"]),
                 "--channels=" + str(metadata["channels"]),
                 "--format=s16", "--volume=" + STREAM_VOLUME, "-"
@@ -127,6 +127,8 @@ def _play_one(path, metadata, *, deadline, spawn, stop=None):
             child = spawn(command, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
                           stderr=subprocess.DEVNULL, shell=False,
                           start_new_session=True)
+            if on_player is not None:
+                on_player(child)
             sent = 0
             while sent < metadata["frames"]:
                 if (time.monotonic() >= deadline
@@ -139,7 +141,20 @@ def _play_one(path, metadata, *, deadline, spawn, stop=None):
                 child.stdin.write(data)
                 sent += frames
             child.stdin.close()
-            if child.wait(timeout=max(1, min(10, deadline - time.monotonic()))) != 0:
+            # A 30-minute track cannot finish within the old fixed 10s
+            # wait. Check cancel/deadline on every short interval instead,
+            # including after the entire WAV was sent into the player's pipe.
+            while True:
+                remaining = deadline - time.monotonic()
+                if (remaining <= 0 or
+                        (stop is not None and stop.is_set())):
+                    raise InterruptedError("Local music playback stopped or timed out")
+                try:
+                    result = child.wait(timeout=min(0.25, remaining))
+                    break
+                except subprocess.TimeoutExpired:
+                    continue
+            if result != 0:
                 raise RuntimeError("Local PipeWire playback tool was unavailable")
             return True
     except BrokenPipeError as exc:
@@ -162,7 +177,7 @@ def _play_one(path, metadata, *, deadline, spawn, stop=None):
 
 
 def play_playlist(paths, *, max_minutes=15, spawn=subprocess.Popen, capture=bounded_command_output,
-                  stop=None, notify=print):
+                  stop=None, notify=print, session_deadline=None, on_player=None):
     """One explicit local playback session, never a persistent service."""
     report = inspect_playlist(paths, max_minutes=max_minutes)
     if hasattr(os, "geteuid") and os.geteuid() == 0:
@@ -170,12 +185,17 @@ def play_playlist(paths, *, max_minutes=15, spawn=subprocess.Popen, capture=boun
     if not music_sink_available(capture=capture):
         raise RuntimeError("AudioHub music sink unavailable; no default-output fallback")
     deadline = time.monotonic() + min(MAX_SECONDS, max_minutes * 60)
+    if session_deadline is not None:
+        if type(session_deadline) not in (int, float):
+            raise ValueError("Invalid session deadline")
+        deadline = min(deadline, session_deadline)
     for i, (path, metadata) in enumerate(zip(paths, report["tracks"]), 1):
         if time.monotonic() >= deadline:
             raise TimeoutError("Local playlist session deadline reached")
         notify("Playing track " + str(i) + "/" + str(report["files"])
                + " privately through music input; Ctrl+C stops.")
-        _play_one(path, metadata, deadline=deadline, spawn=spawn, stop=stop)
+        _play_one(path, metadata, deadline=deadline, spawn=spawn, stop=stop,
+                  on_player=on_player)
     notify("Local playback finished. Audible sound was NOT automatically verified.")
     return True
 
@@ -193,8 +213,14 @@ def main(argv=None):
                         help="Maximum explicit session (1–30 minutes, default 15)")
     parser.add_argument("--play", action="store_true",
                         help="EXPLICITLY send limited local WAV audio to music input")
+    parser.add_argument("--interactive", action="store_true",
+                        help="With --play: use local terminal s=status, n=next, q=stop; Enter required")
     args = parser.parse_args(argv)
     try:
+        if args.interactive and not args.play:
+            raise ValueError("--interactive requires explicit --play")
+        if args.interactive and (not sys.stdin.isatty() or not sys.stdout.isatty()):
+            raise PermissionError("Interactive control requires an operator terminal")
         if args.library is not None:
             if args.wav:
                 raise ValueError("Choose either direct WAV paths or a library folder")
@@ -219,7 +245,11 @@ def main(argv=None):
             if not args.play:
                 print("Preview only. Repeat with --play to hear selected local tracks.")
                 return 0
-            play_playlist(paths, max_minutes=args.minutes)
+            if args.interactive:
+                from . import music_session
+                music_session.run_session(paths, max_minutes=args.minutes)
+            else:
+                play_playlist(paths, max_minutes=args.minutes)
             return 0
         if args.tracks is not None or args.show_titles:
             raise ValueError("Numbered tracks and local titles require --library")
@@ -229,7 +259,11 @@ def main(argv=None):
         if not args.play:
             print("To play locally, repeat with --play. No source, setting or route changed.")
             return 0
-        play_playlist(args.wav, max_minutes=args.minutes)
+        if args.interactive:
+            from . import music_session
+            music_session.run_session(args.wav, max_minutes=args.minutes)
+        else:
+            play_playlist(args.wav, max_minutes=args.minutes)
         return 0
     except KeyboardInterrupt:
         print("Local music playback stopped. No route or setting changed.")

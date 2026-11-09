@@ -121,7 +121,9 @@ Both `--tracks` and `--play` are mandatory when browsing a folder.
 The queue follows the explicitly selected order. The existing
 unprivileged `audiohub.music` sink, safe initial stream level,
 audio-format validation, timeout and **Ctrl+C** cancellation are
-unchanged. It never opens a public playlist API, persists the queue or
+unchanged. The PipeWire process explicitly receives `--raw --format=s16`
+so streamed PCM bytes from stdin are decoded as samples rather than
+mistaken for a WAV/container header. It never opens a public playlist API, persists the queue or
 modifies Wi-Fi, Bluetooth pairing, mixer EQ or access controls.
 
 If an album has more than 40 playable WAVs or 256 directory entries,
@@ -136,3 +138,54 @@ work unchanged.
 player started by this command is stopped. No playlist files, service
 settings or source permissions have been written. Physical Pi4/Edifier
 audio remains unverified until an operator hears it on the speakers.
+
+## Manual live track controls (new Pi4 local-terminal ALPHA)
+
+To control the **current explicitly selected local playlist** without
+restarting AudioHub, add BOTH `--play` AND `--interactive`. Neither
+option alone allows interactive playback:
+
+    PYTHONPATH=/opt/audiohub/src python3 -m audiohub.local_music \
+      --library /home/audiohub/PrivateMusic --tracks 2,1 \
+      --minutes 10 --play --interactive
+
+The command needs a real operator-controlled **stdin AND stdout TTY**
+and must run as the unprivileged audiohub PipeWire user. Do not open a
+network-exposed shell or use an automation to start it. The selected
+library files are previewed and strictly validated as before; the
+session only starts after the operator explicitly includes `--play`.
+
+During playback, type a command and press **Enter**:
+
+| Command | Action |
+|---|---|
+| `s` + Enter | Show current track number, elapsed session time and remaining session limit; no filenames or user identifiers |
+| `n` + Enter | Stop just the current owned player, then start the next selected track in order |
+| `q` + Enter | Stop the current owned player and exit the session |
+| `h` + Enter | Repeat the short help text |
+| Ctrl+C | Emergency local interruption; owned child stopped in cleanup |
+
+The track is displayed only as `track X/Y`, with no private title or
+file path. The status is **session elapsed time** rather than exact PCM
+playback position or proof of audible sound. Files stay on the Pi4;
+there is no playlist file, public HTTP/IPC control endpoint, cloud,
+Bluetooth adjustment or change to PipeWire's existing music sink.
+Each child is only owned by this local invocation. If the audio tool
+blocks, stop signals also terminate only its owned child, never the
+global PipeWire service, another user session or another input.
+
+An older direct-files invocation works as well:
+
+    PYTHONPATH=/opt/audiohub/src python3 -m audiohub.local_music \
+      --minutes 5 --play --interactive /absolute/private/one.wav \
+      /absolute/private/two.wav
+
+**Stop and rollback:** type `q` + Enter, press Ctrl+C or close the
+local controlling terminal. The interactive mode exits when the input
+terminal disconnects or its session duration is exceeded. No saved
+settings or permissions exist to revert. The session refuses to run
+non-interactively (no stdin/stdout TTY), as root, or without an actual
+`audiohub.music` target. A native Pi4 test image containing this
+increment is required; the older image with just folder browsing does
+not contain these controls. No physical Edifier volume, stereo or
+multi-source mixing has yet been certified.
