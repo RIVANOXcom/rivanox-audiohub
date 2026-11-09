@@ -129,24 +129,23 @@ const file = raw => ({size:Buffer.byteLength(raw,"utf8"),text:async()=>raw});
     assert.notEqual(el("pairing-value").textContent,"—");
   }
   // Malicious or unsupported files must clear stale rendered result.
-  for(const bad of [
-    good.replace('"owner_authenticated":false','"owner_authenticated":true'),
-    good.replace('"classification":"UNVERIFIED_ALPHA_OFFLINE_TEST_ONLY"',
-                 '"classification":"APPROVED"'),
-    good.replace('"bluetooth_pairing_state":"known_devices"',
-                 '"bluetooth_pairing_state":"SECRET-USER-NAME"'),
-    good.replace('"bluetooth_paired_devices":1','"bluetooth_paired_devices":999'),
-    "{oops", JSON.stringify({...report,snapshots:[]}),
-    JSON.stringify({...report,snapshots:[{...report.snapshots[1],
-      seconds_since_probe_start:-1}]}),
-    JSON.stringify({...report,phone_wifi_provisioned:true}),
-    "x".repeat(5000)
+  for(const [reason,bad] of [
+    ["owner status", JSON.stringify({...report, owner_authenticated:true})],
+    ["release claims", JSON.stringify({...report, classification:"APPROVED"})],
+    ["unknown Bluetooth state", JSON.stringify({...report, bluetooth_pairing_state:"SECRET-USER-NAME"})],
+    ["invalid paired count", JSON.stringify({...report, bluetooth_paired_devices:999})],
+    ["broken JSON", "{oops"],
+    ["missing snapshots", JSON.stringify({...report,snapshots:[]})],
+    ["invalid observation time", JSON.stringify({...report,snapshots:[{...report.snapshots[1],
+      seconds_since_probe_start:-1}]})],
+    ["false Wi-Fi status", JSON.stringify({...report,phone_wifi_provisioned:true})],
+    ["oversized", "x".repeat(5000)]
   ]){
     el("report-file").files = [file(bad)];
     await listeners["report-file:change"]();
-    assert.equal(el("pairing-value").textContent,"—");
-    assert.equal(el("paired-value").textContent,"—");
-    assert.notEqual(el("feedback").textContent,"");
+    assert.equal(el("pairing-value").textContent,"—",reason);
+    assert.equal(el("paired-value").textContent,"—",reason);
+    assert.notEqual(el("feedback").textContent,"",reason);
   }
   // An older valid source report is allowed but cannot invent new pairing fields.
   const older = {...report};
