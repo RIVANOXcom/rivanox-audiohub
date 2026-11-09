@@ -131,6 +131,25 @@ and no automatic service. Collect the physical observation of
 whether LEFT/RIGHT Edifier sound is audible or reversed. Repeat
 a failed observation manually and stop if sound or volume is unsafe.
 
+## Owner-controlled offline observation capture
+
+The portable GUI's **Record physical speaker observations (local JSON)**
+button appears after a manual Pi speaker-tone session ends or fails.
+An operator can record actual L/R listening results, silence, swapped
+speaker sides or distortion without copying logs, addresses, credentials,
+certificate pins or names. The report requires an explicit per-speaker
+choice and a physical-listening confirmation before audible sound may
+be claimed. A failed connection can be recorded as both sides
+not-checked.
+
+The file is **not** automatically uploaded, does not contact the Pi,
+does not change audio configuration, never overwrites a prior file,
+and explicitly keeps `hardware_verified=false` and
+`release_ready=false`. This is an operator's unaudited observation,
+not an accepted hardware test or production GO. Manual submission
+and independent review belong to the owner and the existing PAPA
+project process. See the Windows portable first-run guide for details.
+
 ## Manual hardware smoke-test and rollback
 
 1. Verify the exact Git commit and Source CI, independently confirm TLS

@@ -26,6 +26,7 @@ FILES = (
     ("src/audiohub/secure_lan.py", "audiohub/secure_lan.py"),
     ("src/audiohub/windows_bridge_setup.py", "audiohub/windows_bridge_setup.py"),
     ("src/audiohub/windows_bridge_gui.py", "audiohub/windows_bridge_gui.py"),
+    ("src/audiohub/hardware_observation.py", "audiohub/hardware_observation.py"),
     ("docs/WINDOWS-PORTABLE-ALPHA.md", "README-WINDOWS-FIRST.md"),
     ("docs/SECURE-WINDOWS-LAN-LAB.md", "README-ISOLATED-LAB.md"),
     ("LICENSE", "LICENSE"),
@@ -115,6 +116,8 @@ def build(root, directory, sha):
         "windows_scream_driver_required": True,
         "driverless_speaker_soundcheck_available": True,
         "speaker_channel_soundcheck": ["both", "left", "right", "sequence"],
+        "local_operator_observation_json": True,
+        "manual_observation_not_hardware_approval": True,
         "windows_scream_driver_required_for_soundcheck": False,
         "source_files": inventory,
     }

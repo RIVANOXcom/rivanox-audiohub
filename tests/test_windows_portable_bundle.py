@@ -55,6 +55,9 @@ class WindowsPortableBundleTests(unittest.TestCase):
             self.assertFalse(manifest["windows_scream_driver_required_for_soundcheck"])
             self.assertFalse(manifest["hardware_verified"])
             self.assertFalse(manifest["public_release_ready"])
+            self.assertTrue(manifest["local_operator_observation_json"])
+            self.assertTrue(manifest["manual_observation_not_hardware_approval"])
+            self.assertIn(self.prefix + "/audiohub/hardware_observation.py", paths)
             self.assertIn(self.prefix + "/audiohub/windows_bridge_gui.py", paths)
             for name, item in manifest["source_files"].items():
                 payload = archive.read(self.prefix + "/" + name)

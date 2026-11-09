@@ -67,11 +67,14 @@ class GuiOfflineTests(unittest.TestCase):
         win.checked = False
         win.closing = False
         win.worker = None
+        win.active_soundcheck_channel = None
+        win.last_soundcheck = None
         win.stop_event = threading.Event()
         win.results = queue.Queue()
         win.start_button = _Button()
         win.stop_button = _Button()
         win.check_button = _Button()
+        win.report_button = _Button()
         win.status = _Value("Not connected")
         win.bridge = bridge
         win.root = mock.Mock()
@@ -114,6 +117,8 @@ class GuiOfflineTests(unittest.TestCase):
         window.worker.join(timeout=5)
         self.assertFalse(window.worker.is_alive())
         window._poll()
+        self.assertEqual(window.last_soundcheck["channel"], "both")
+        self.assertEqual(window.last_soundcheck["frames"], 4)
         self.assertTrue(recorded[0]["test_tone"])
         self.assertTrue(recorded[0]["isolated_lab"])
         self.assertIn("Human confirmation", window.status.get())
@@ -137,6 +142,8 @@ class GuiOfflineTests(unittest.TestCase):
                 win.worker.join(timeout=5)
                 self.assertFalse(win.worker.is_alive())
                 win._poll()
+                self.assertEqual(win.last_soundcheck["channel"], code)
+                self.assertTrue(any("!disabled" in e for e in win.report_button.events))
                 self.assertEqual(calls[0]["test_channel"], code)
                 self.assertTrue(calls[0]["isolated_lab"])
                 self.assertTrue(calls[0]["test_tone"])
@@ -153,6 +160,95 @@ class GuiOfflineTests(unittest.TestCase):
         bridge.assert_not_called()
         self.assertFalse(win.check())
         bridge.assert_not_called()
+
+    def test_report_not_available_before_real_tone_attempt(self):
+        win = self._fake_window(mock.Mock(return_value=10))
+        self.assertFalse(win.record_observation())
+        self.assertTrue(win.check())
+        self.assertTrue(win.start())
+        win.worker.join(timeout=5)
+        win._poll()
+        # A normal Windows Scream audio session is not the manual tone test.
+        self.assertIsNone(win.last_soundcheck)
+        self.assertFalse(any("!disabled" in x for x in win.report_button.events))
+
+    def test_failed_tone_session_can_record_failure_without_audio_claim(self):
+        def fake_bridge(**kwargs):
+            raise ConnectionError("this secret local path must not be disclosed")
+        win = self._fake_window(fake_bridge)
+        win.test_tone.set(True)
+        win.tone_channel.set("Left then right (5 seconds)")
+        self.assertTrue(win.check())
+        self.assertTrue(win.start())
+        win.worker.join(timeout=5)
+        win._poll()
+        self.assertEqual(win.last_soundcheck, {
+            "channel": "sequence", "outcome": "connection_failed", "frames": 0,
+        })
+        self.assertTrue(any("!disabled" in x for x in win.report_button.events))
+        self.assertNotIn("secret local path", win.status.get())
+
+    def test_manual_observation_dialog_saves_only_on_explicit_operator_action(self):
+        win = self._fake_window(mock.Mock())
+        win.last_soundcheck = {
+            "channel": "sequence", "outcome": "completed", "frames": 500,
+        }
+        win.tk = mock.Mock()
+        win.tk.StringVar.side_effect = lambda value=None: _Value(value)
+        win.tk.BooleanVar.side_effect = lambda value=None: _Value(value)
+        win.ttk = mock.Mock()
+        win.filedialog = mock.Mock()
+        outfile = Path(self.key.parent) / "operator-observation.json"
+        win.filedialog.asksaveasfilename.return_value = str(outfile)
+        self.assertTrue(win.record_observation())
+        self.assertFalse(outfile.exists())  # Dialog alone never writes.
+        # Two string variables for L/R selection; one for in-dialog status.
+        # Track actual entries by the combobox textvariables.
+        dropdown_vars = [
+            c.kwargs["textvariable"] for c in win.ttk.Combobox.call_args_list
+        ]
+        self.assertEqual(len(dropdown_vars), 2)
+        dropdown_vars[0].set("Heard from expected speaker")
+        dropdown_vars[1].set("No sound")
+        confirm = win.ttk.Checkbutton.call_args.kwargs["variable"]
+        confirm.set(True)
+        save_buttons = [
+            c for c in win.ttk.Button.call_args_list
+            if c.kwargs.get("text", "").startswith("Save private JSON")
+        ]
+        self.assertEqual(len(save_buttons), 1)
+        save_buttons[0].kwargs["command"]()
+        self.assertTrue(outfile.exists())
+        import json
+        recorded = json.loads(outfile.read_text(encoding="ascii"))
+        self.assertEqual(recorded["left_speaker_observation"], "heard_expected")
+        self.assertEqual(recorded["right_speaker_observation"], "silent")
+        self.assertTrue(recorded["operator_physically_listened"])
+        self.assertFalse(recorded["hardware_verified"])
+        self.assertFalse(recorded["release_ready"])
+        self.assertNotIn(str(self.key), outfile.read_text(encoding="ascii"))
+        self.assertNotIn("192.168.", outfile.read_text(encoding="ascii"))
+        win.tk.Toplevel.return_value.destroy.assert_called_once()
+
+    def test_report_dialog_refuses_heard_claim_without_personally_listening(self):
+        win = self._fake_window(mock.Mock())
+        win.last_soundcheck = {
+            "channel": "left", "outcome": "connection_failed", "frames": 0,
+        }
+        win.tk = mock.Mock()
+        win.tk.StringVar.side_effect = lambda value=None: _Value(value)
+        win.tk.BooleanVar.side_effect = lambda value=None: _Value(value)
+        win.ttk = mock.Mock()
+        win.filedialog = mock.Mock()
+        self.assertTrue(win.record_observation())
+        labels = [
+            c.kwargs["textvariable"] for c in win.ttk.Combobox.call_args_list
+        ]
+        labels[0].set("Heard from expected speaker")
+        save = next(c.kwargs["command"] for c in win.ttk.Button.call_args_list
+                    if c.kwargs.get("text", "").startswith("Save private JSON"))
+        save()
+        win.filedialog.asksaveasfilename.assert_not_called()
 
     def test_cannot_start_without_manual_confirmation_or_valid_preflight(self):
         bridge = mock.Mock()
