@@ -267,7 +267,7 @@ class BridgeWindow:
                        "NO network/hardware verification or deployment GO. "
                        "Only operator-authorized manual switching and separate "
                        "post-switch sound tests can complete the process.")
-            self.status.set("Staged key preview passed locally; existing session "
+            self.status.set("OFFLINE staged key preview passed locally; existing session "
                             "still uses OLD key. No rotation performed.")
         self.ttk.Button(
             area, text="Compare old and staged copies (offline)", command=check
