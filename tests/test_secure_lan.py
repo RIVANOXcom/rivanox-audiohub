@@ -199,9 +199,9 @@ class SecureLanTests(unittest.TestCase):
              mock.patch.object(lan, "close_player"), \
              mock.patch.object(lan.os, "set_blocking"), \
              mock.patch.object(lan.os, "write", return_value=4) as write:
-            with self.assertRaises(ConnectionError):
-                lan.consume_authenticated_pcm(stream, "audiohub.laptop",
-                                              time.monotonic() + 10)
+            count = lan.consume_authenticated_pcm(stream, "audiohub.laptop",
+                                                   time.monotonic() + 10)
+            self.assertEqual(count, 4)
             self.assertEqual(write.call_count, 4)
             self.assertEqual(policy.call_count, 1)
             self.assertEqual(graph.call_count, 1)
