@@ -336,7 +336,7 @@ class MusicSessionTests(unittest.TestCase):
         self.assertEqual(self.children[0].sent_signals,
                          [signal.SIGSTOP, signal.SIGCONT])
         self.assertTrue(self.children[0].terminated)
-        status = "\\n".join(self.out)
+        status = "\n".join(self.out)
         self.assertIn("PAUSED", status)
         self.assertIn("RESUMED", status)
         self.assertIn("PAUSED (owned player only)", status)
@@ -348,7 +348,7 @@ class MusicSessionTests(unittest.TestCase):
         self.assertEqual(self.children[0].sent_signals,
                          [signal.SIGSTOP, signal.SIGCONT])
         self.assertTrue(self.children[0].terminated)
-        self.assertNotIn("secret-title", "\\n".join(self.out))
+        self.assertNotIn("secret-title", "\n".join(self.out))
 
     def test_child_pause_signal_failure_does_not_claim_paused(self):
         class RejectPause(FakeChild):
@@ -376,23 +376,23 @@ class MusicSessionTests(unittest.TestCase):
                 self.paths, max_minutes=1, read_command=read,
                 playback=playback, out=self.out.append, require_tty=False))
         self.assertTrue(self.children[0].terminated)
-        self.assertNotIn("permission details", "\\n".join(self.out))
-        self.assertNotIn("PAUSED; session", "\\n".join(self.out))
+        self.assertNotIn("permission details", "\n".join(self.out))
+        self.assertNotIn("PAUSED; session", "\n".join(self.out))
 
     def test_pause_is_optional_and_regular_next_and_status_unchanged(self):
         self.assertFalse(self.run_with(["s", "n", "q"]))
         self.assertEqual(len(self.children), 2)
         self.assertTrue(all(not x.sent_signals for x in self.children))
-        self.assertNotIn("PAUSED", "\\n".join(self.out))
-        self.assertIn("session remaining", "\\n".join(self.out))
+        self.assertNotIn("PAUSED", "\n".join(self.out))
+        self.assertIn("session remaining", "\n".join(self.out))
 
     def test_decoder_accepts_u_without_echoing_untrusted_input(self):
         with mock.patch.object(music_session.select, "select",
                                return_value=([1], [], [])):
             self.assertEqual(music_session.read_terminal_command(
-                stream=io.StringIO("U\\n")), "u")
+                stream=io.StringIO("U\n")), "u")
             self.assertEqual(music_session.read_terminal_command(
-                stream=io.StringIO("SECRET-WIFI-PASSPHRASE\\n")), "?")
+                stream=io.StringIO("SECRET-WIFI-PASSPHRASE\n")), "?")
 
     def test_status_paused_is_explicit_and_keeps_wall_clock_deadline(self):
         text = music_session.status_message(
