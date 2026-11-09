@@ -114,6 +114,8 @@ def build(root, directory, sha):
         "public_release_ready": False,
         "driver_included": False,
         "credentials_included": False,
+        "offline_certificate_sha256_verification": True,
+        "trust_on_first_use": False,
         "windows_scream_driver_required": True,
         "driverless_speaker_soundcheck_available": True,
         "speaker_channel_soundcheck": ["both", "left", "right", "sequence"],
