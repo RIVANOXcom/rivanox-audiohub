@@ -193,7 +193,7 @@ class LocalMusicLibraryTests(unittest.TestCase):
         self.assertTrue(ok)
         self.assertEqual(runs, [([self.b, self.a], 1)])
         self.assertIn("GUIDED LOCAL MODE", output)
-        self.assertIn("Next: enter up to 8 track numbers", output)
+        self.assertIn("Next: choose numbers, ALL (up to 8), or SHUFFLE", output)
         self.assertNotIn("then add --play", output)
         self.assertIn("Selected 2 WAV track(s)", output)
         self.assertIn("Explicit PLAY confirmed", output)
