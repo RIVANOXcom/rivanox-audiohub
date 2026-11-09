@@ -16,7 +16,8 @@ See [local WAV source playback](LOCAL-MUSIC-PLAYBACK.md).
 ## Local music playback interactive session
 
 The optional `--play --interactive` flag supports an explicitly
-selected local WAV queue with anonymous overview, previous/replay,
+selected local WAV queue with reversible child-only pause/resume,
+anonymous overview, previous/replay,
 direct numbered jumping, status, next-track and stop commands at
 a trusted Pi4 operator terminal. No remote API, permissions,
 persistent data or mixer changes. Existing default preview and
