@@ -51,6 +51,7 @@ class WindowsPortableBundleTests(unittest.TestCase):
             self.assertFalse(manifest["driver_included"])
             self.assertFalse(manifest["hardware_verified"])
             self.assertFalse(manifest["public_release_ready"])
+            self.assertIn(self.prefix + "/audiohub/windows_bridge_gui.py", paths)
             for name, item in manifest["source_files"].items():
                 payload = archive.read(self.prefix + "/" + name)
                 self.assertEqual(item["sha256"], hashlib.sha256(payload).hexdigest())
