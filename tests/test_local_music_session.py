@@ -233,5 +233,78 @@ class MusicSessionTests(unittest.TestCase):
         self.assertEqual(player.waits, 4)
 
 
+    def test_replay_current_track_without_exposing_private_names(self):
+        self.assertFalse(self.run_with(["r", "s", "q"]))
+        self.assertEqual(self.played, [self.paths[0], self.paths[0]])
+        self.assertTrue(all(x.terminated for x in self.children))
+        display = "\n".join(self.out)
+        self.assertIn("Replaying selected track", display)
+        self.assertIn("Music track 1/2", display)
+        self.assertNotIn("secret-title", display)
+        self.assertNotIn(str(self.dir), display)
+
+    def test_previous_track_from_second_goes_back_to_first(self):
+        self.assertFalse(self.run_with(["n", "p", "q"]))
+        self.assertEqual(self.played, [self.paths[0], self.paths[1], self.paths[0]])
+        self.assertTrue(all(x.terminated for x in self.children))
+        self.assertIn("Playing prior selected track", "\n".join(self.out))
+
+    def test_previous_at_first_track_restarts_first_without_underflow(self):
+        self.assertFalse(self.run_with(["p", "q"]))
+        self.assertEqual(self.played, [self.paths[0], self.paths[0]])
+        self.assertIn("replaying track 1", "\n".join(self.out))
+
+    def test_direct_number_jumps_backwards_and_forwards_in_private_queue(self):
+        third = self.dir / "private-third.wav"
+        with wave.open(str(third), "wb") as wav:
+            wav.setnchannels(2)
+            wav.setsampwidth(2)
+            wav.setframerate(48000)
+            wav.writeframes(b"\x00\x01\x00\x02" * 80)
+        selected = [self.paths[0], self.paths[1], third]
+        self.assertFalse(self.run_with(["3", "1", "q"], paths=selected))
+        self.assertEqual(self.played, [self.paths[0], third, self.paths[0]])
+        self.assertTrue(all(x.terminated for x in self.children))
+        output = "\n".join(self.out)
+        self.assertIn("Jumping to selected queue track 3", output)
+        self.assertIn("Jumping to selected queue track 1", output)
+        self.assertNotIn("private-third", output)
+
+    def test_invalid_jump_does_not_end_player_or_change_selection(self):
+        self.assertFalse(self.run_with(["8", "9", "q"]))
+        self.assertEqual(self.played, [self.paths[0]])
+        output = "\n".join(self.out)
+        self.assertIn("Track number outside this local queue", output)
+        self.assertIn("Unknown local command", output)
+        self.assertNotIn(str(self.paths[0]), output)
+
+    def test_queue_overview_is_anonymous_and_marks_selected_track(self):
+        self.assertFalse(self.run_with(["l", "n", "l", "q"]))
+        summary = "\n".join(self.out)
+        self.assertIn("Selected WAV queue: track 1/2", summary)
+        self.assertIn("1*=00:01", summary)
+        self.assertIn("2*=00:01", summary)
+        self.assertIn("NOT live progress", summary)
+        self.assertNotIn("secret-title", summary)
+        self.assertNotIn(str(self.dir), summary)
+
+    def test_command_decoder_accepts_navigation_but_never_echoes_garbage(self):
+        with mock.patch.object(music_session.select, "select",
+                               return_value=([1], [], [])):
+            for command in ("p", "r", "l", "1", "8"):
+                self.assertEqual(music_session.read_terminal_command(
+                    stream=io.StringIO(command.upper() + "\n")), command)
+            for garbage in ("10", "0", "\x1b[31m", "SECURE-CODE", "2,3"):
+                self.assertEqual(music_session.read_terminal_command(
+                    stream=io.StringIO(garbage + "\n")), "?")
+
+    def test_invalid_queue_metadata_rejected_before_display(self):
+        base = local_music.inspect_playlist(self.paths, max_minutes=1)
+        self.assertRaises(ValueError, music_session.queue_message, base, 0)
+        self.assertRaises(ValueError, music_session.queue_message, base, 3)
+        bad = {**base, "tracks":[{"duration_ms":-5}, base["tracks"][1]]}
+        self.assertRaises(ValueError, music_session.queue_message, bad, 1)
+
+
 if __name__ == "__main__":
     unittest.main()
