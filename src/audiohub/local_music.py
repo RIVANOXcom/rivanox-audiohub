@@ -205,6 +205,8 @@ def main(argv=None):
     parser.add_argument("wav", nargs="*", help="1–8 absolute local 16-bit PCM WAV files")
     parser.add_argument("--library", metavar="FOLDER",
                         help="Browse a private local WAV folder without playback")
+    parser.add_argument("--guided", action="store_true",
+                        help="One-command private local album picker; requires exact PLAY confirmation at TTY")
     parser.add_argument("--tracks", metavar="1,3",
                         help="Choose 1–8 numbered library tracks (no autoplay)")
     parser.add_argument("--show-titles", action="store_true",
@@ -217,6 +219,18 @@ def main(argv=None):
                         help="With --play: use local terminal s=status, n=next, q=stop; Enter required")
     args = parser.parse_args(argv)
     try:
+        if args.guided:
+            if (args.library is None or args.wav or args.tracks is not None
+                    or args.play or args.interactive):
+                raise ValueError(
+                    "Guided mode accepts only --library and optional --show-titles"
+                )
+            from . import music_library
+            music_library.guided_session(
+                args.library, max_minutes=args.minutes,
+                show_titles=args.show_titles
+            )
+            return 0
         if args.interactive and not args.play:
             raise ValueError("--interactive requires explicit --play")
         if args.interactive and (not sys.stdin.isatty() or not sys.stdout.isatty()):
