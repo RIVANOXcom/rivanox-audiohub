@@ -39,6 +39,13 @@
       "model_c_eligible": false
     },
     {
+      "path": "docs/PI4-BLUETOOTH-FIRST-USE.md",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
       "path": "image/stage-audiohub/00-packages/00-packages-nr",
       "origin_status": "pending-human-review",
       "rightsholder_verified": false,
@@ -312,6 +319,13 @@
       "model_c_eligible": false
     },
     {
+      "path": "src/audiohub/pairing_readiness.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
       "path": "src/audiohub/process_capture.py",
       "origin_status": "pending-human-review",
       "rightsholder_verified": false,
@@ -502,6 +516,13 @@
     },
     {
       "path": "tests/test_network_laptop.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "tests/test_pairing_readiness.py",
       "origin_status": "pending-human-review",
       "rightsholder_verified": false,
       "third_party_origin_checked": false,
