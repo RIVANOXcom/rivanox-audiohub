@@ -233,3 +233,16 @@ Read [CONTRIBUTING.md](./CONTRIBUTING.md), report functional bugs through [GitHu
 ---
 
 <div align="center">**AudioHub by RIVANOX — practical audio freedom, without the complexity.**</div>
+
+### Experimental Windows/Pi4 offline PSK-copy comparison
+
+The isolated Windows operator alpha can now display a private local
+32-hex HMAC-based check code for its existing 32-byte shared-key file
+(\`--show-key-code ABSOLUTE_PATH\`). Compare only against the independently
+computed code from the physically trusted Pi console; optionally enter
+the Pi code in the GUI or use \`--expected-key-code CODE\` to refuse a
+mismatch before network access. No secret bytes are displayed or sent,
+no keys are created, transferred or rotated, and Windows NTFS ACLs
+remain operator-controlled. This is **not** owner authentication,
+hardware acceptance, or an official release. See
+[Windows operator instructions](docs/WINDOWS-PORTABLE-ALPHA.md).
