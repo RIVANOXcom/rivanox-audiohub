@@ -256,6 +256,13 @@
       "model_c_eligible": false
     },
     {
+      "path": "src/audiohub/key_onboarding.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
       "path": "src/audiohub/manual_acceptance.py",
       "origin_status": "pending-human-review",
       "rightsholder_verified": false,
@@ -649,6 +656,13 @@
     },
     {
       "path": "tests/test_windows_certificate_onboarding.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "tests/test_windows_key_onboarding.py",
       "origin_status": "pending-human-review",
       "rightsholder_verified": false,
       "third_party_origin_checked": false,

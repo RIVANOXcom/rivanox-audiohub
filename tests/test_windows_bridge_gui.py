@@ -60,6 +60,7 @@ class GuiOfflineTests(unittest.TestCase):
         win.test_tone = _Value(False)
         win.tone_channel = _Value("Both speakers")
         win.cert_path = _Value("")
+        win.expected_key_code = _Value("")
         win.entries = {
             "ip": _Value("192.168.10.30"), "pin": _Value("f" * 64),
             "key": _Value(str(self.key)), "minutes": _Value("1"),
@@ -275,6 +276,29 @@ class GuiOfflineTests(unittest.TestCase):
         self.assertEqual(win.entries["pin"].get(), pin_before)
         win.filedialog.askopenfilename.assert_called_once()
         self.assertIn("PUBLIC", win.filedialog.askopenfilename.call_args.kwargs["title"])
+
+    def test_private_key_code_preview_is_explicit_offline_only(self):
+        from audiohub import key_onboarding
+        bridge = mock.Mock(return_value=3)
+        win = self._fake_window(bridge)
+        self.assertTrue(win._show_local_key_code())
+        code = key_onboarding.local_key_code(self.key)
+        self.assertIn(code, win.status.get())
+        self.assertNotIn(str(self.key), win.status.get())
+        bridge.assert_not_called()
+        self.assertFalse(win.checked)
+        win.expected_key_code.set(code)
+        self.assertTrue(win.check())
+        self.assertTrue(win.start())
+        win.worker.join(timeout=5)
+        self.assertFalse(win.worker.is_alive())
+        self.assertEqual(bridge.call_args.kwargs["expected_key_code"], code)
+        win._poll()
+        bridge.reset_mock()
+        win.expected_key_code.set("f" * 32)
+        self.assertFalse(win.check())
+        self.assertFalse(win.start())
+        bridge.assert_not_called()
 
     def test_selected_invalid_public_certificate_refuses_gui_start(self):
         win = self._fake_window(mock.Mock())

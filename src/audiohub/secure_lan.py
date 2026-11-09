@@ -403,7 +403,7 @@ def run_server(*, bind_ip, sender_ip, port, key_file, cert_file,
 
 def run_bridge(*, server_ip, port, udp_port, key_file, pin_sha256,
                session_minutes=10, isolated_lab=False, stop_event=None,
-               test_tone=False, test_channel="both"):
+               test_tone=False, test_channel="both", expected_key_code=None):
     if not isolated_lab:
         raise ValueError("Explicit isolated-lab Windows bridge opt-in required")
     if not isinstance(test_tone, bool):
@@ -416,6 +416,10 @@ def run_bridge(*, server_ip, port, udp_port, key_file, pin_sha256,
         raise ValueError("Local UDP port must be 1024..65535")
     validate_session_minutes(session_minutes)
     key = read_private_key(key_file)
+    if expected_key_code is not None:
+        # Verify the SAME key bytes used for authentication before opening a socket.
+        from . import key_onboarding
+        key_onboarding.verify_key_bytes(key, expected_key_code)
     pin = validate_pin(pin_sha256)
     if stop_event is not None and stop_event.is_set():
         return 0  # Cancelled before any network socket was opened.

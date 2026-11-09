@@ -66,6 +66,93 @@ against the independently entered value; its Pi-side HMAC key proof
 remains mandatory. On a real consumer product, owner enrollment and
 certificate/key rotation will need additional approved work.
 
+
+## Optional offline matching of the two 32-byte lab key copies
+
+A certificate SHA256 pin verifies the Pi TLS certificate, but cannot tell
+whether the separate Windows and Pi shared-secret **files match**. The
+Windows portable alpha now offers an optional, *read-only* key-copy check
+before any manually authorized session, without printing or transferring
+the 32 secret bytes. It does **not** create, repair, replace, synchronize
+or rotate credentials. Keep both existing files private and independently
+protect their file permissions. The resulting 32-hex character code is a
+domain-separated 128-bit HMAC truncation. It is only a private equality
+check of full-entropy 32-byte random PSKs: NOT a password, proof of the
+Pi's identity, a new login, or a substitute for authenticated TLS/HMAC.
+Do not publicly post the code: it can help guess a weak underlying key.
+
+**1. On the physically trusted, isolated Pi console**, read the EXISTING
+32-byte secret file only after selecting its correct private path. The
+current Pi4 alpha predates the Windows key-code module, so use this
+self-contained Python 3 snippet on the Pi instead of assuming that
+a new Pi image or module has been installed:
+
+~~~sh
+python3 - <<'PY'
+import hashlib
+import hmac
+import os
+import stat
+from pathlib import Path
+p = Path(input("Absolute path of existing Pi 32-byte private PSK: ").strip())
+if not p.is_absolute() or any(x.is_symlink() for x in (p, *p.parents)):
+    raise SystemExit("Unsafe or linked path")
+fd = os.open(p, os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0))
+try:
+    meta = os.fstat(fd)
+    if (not stat.S_ISREG(meta.st_mode) or meta.st_size != 32
+            or meta.st_mode & 0o077 or meta.st_uid != os.geteuid()):
+        raise SystemExit("Pi key needs 32 bytes and private owner-only mode")
+    raw = os.read(fd, 33)
+finally:
+    os.close(fd)
+if len(raw) != 32:
+    raise SystemExit("Wrong key size")
+print("PRIVATE Pi key comparison code:",
+      hmac.new(raw, b"RIVANOX-AUDIOHUB-OFFLINE-PSK-CHECK-v1",
+               hashlib.sha256).hexdigest()[:32])
+PY
+~~~
+
+Only the *comparison code*, never the raw key, may be manually compared
+between the trusted Pi console and the Windows GUI. Keep this code within
+the isolated owner's test procedure. If the Pi/Windows copies disagree,
+STOP: re-provision the copies manually through an approved private path;
+never attempt to fix the mismatch by changing a key automatically.
+
+**2. On Windows**, inside the extracted and checksum-verified portable
+test folder, with the existing private PSK stored under user-controlled
+NTFS ACLs, show its local code *only when needed*:
+
+~~~text
+py -3 START-WINDOWS-BRIDGE.py --show-key-code "C:\private\audiohub-lab-psk.bin"
+~~~
+
+No ports open. The program prints a 32-hex local comparison code, not the
+secret or file path. In the graphical app, selecting **Show local code
+(offline)** performs the same read-only operation; it never fills in or
+replaces the independently obtained Pi code.
+
+**3. Compare privately**, and optionally type the Pi code into the
+**Pi PSK comparison code** field in the GUI. **Check locally (offline)**
+rejects a mismatch; **Start isolated session** checks again. The actual
+bridge also verifies the *same loaded key bytes* before it opens the TCP
+socket. Terminal-only operators can add
+~~~text
+--expected-key-code <the-private-32-hex-code-from-trusted-Pi>
+~~~
+to \`--check-only\` or a separately approved live invocation; this
+option never carries the 32 secret bytes. A shell history may retain the
+code. Do not mix it up with the separate 64-hex *certificate* SHA256 pin.
+
+A matching optional code only indicates matching key copies. It does not
+attest Pi ownership, key randomness, TLS configuration, Windows NTFS
+ACLs, a deployed Pi receiver, audible sound or secure key rotation.
+If no expected code was entered, previous manual behavior remains intact,
+and the real network HMAC challenge is still mandatory. No credentials
+are added to the Windows ZIP or to GitHub. Rotating keys and obtaining
+operator-approved credentials on real hardware remain separate work.
+
 ## Four steps for a manually authorized isolated test
 
 1. **Prerequisites.** Windows 10/11, separately installed Python 3.11 or

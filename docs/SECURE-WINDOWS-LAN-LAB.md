@@ -43,6 +43,22 @@ wrong-size, nonregular, group-readable or foreign-owned key file. Manual
 secret distribution, revocation and user-friendly key rotation are not
 implemented. Never place the key in a command argument, logs or screenshot.
 
+**Optional offline check of existing key copies:** New Windows CLI
+\`--show-key-code ABSOLUTE_PRIVATE_KEY_PATH\` and GUI **Show local code
+(offline)** derive a private 32-hex equality code using
+HMAC-SHA256(key, \`RIVANOX-AUDIOHUB-OFFLINE-PSK-CHECK-v1\`), truncated
+to 128 bits. It never reveals the 32 raw bytes, generates a key or opens a
+socket. Obtain the separately computed Pi code only from the trusted
+physical Pi console (see WINDOWS-PORTABLE-ALPHA.md for the compatible
+standalone Pi snippet; the older Pi alpha does not include the new
+module). Optionally pass \`--expected-key-code CODE\` during Windows
+\`--check-only\` or manual run, or fill the optional GUI field. Mismatch
+blocks BEFORE dialing, including a last check on the key bytes loaded
+by the real bridge. Matching is NOT identity proof, authorization,
+certificate pinning or protection against weak shared secrets. Keep the
+comparison code private. Key rotation/ACL setup still requires separate
+owner action and no private keys are changed by this feature.
+
 On the isolated Pi, create a temporary TLS certificate and private key
 using the existing OpenSSL package, with private permissions:
 
