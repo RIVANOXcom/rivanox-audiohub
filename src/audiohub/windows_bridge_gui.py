@@ -13,6 +13,13 @@ import threading
 from . import secure_lan
 from .windows_bridge_setup import check_python_tls, validate_local_setup
 
+CHANNEL_OPTIONS = {
+    "Both speakers": "both",
+    "Left speaker only": "left",
+    "Right speaker only": "right",
+    "Left then right (5 seconds)": "sequence",
+}
+
 
 def validate_fields(ip, pin, secret_path, minutes):
     """Pure, offline gate reused by Check and Start; no sockets."""
@@ -40,7 +47,7 @@ class BridgeWindow:
         self.status = tk.StringVar(value="Not connected. No network port opened.")
         self.root.title("RIVANOX AudioHub - isolated Windows TLS test")
         self.root.resizable(True, True)
-        self.root.minsize(640, 460)
+        self.root.minsize(640, 510)
         frame = ttk.Frame(root, padding=18)
         frame.pack(fill="both", expand=True)
         ttk.Label(frame, text="Windows audio bridge · isolated ALPHA",
@@ -71,20 +78,29 @@ class BridgeWindow:
             frame, text="Pi speaker test: quiet 5-second tone (no Scream driver)",
             variable=self.test_tone, command=self._changed,
         ).grid(row=12, column=0, columnspan=3, sticky="w", pady=(5, 4))
+        self.tone_channel = tk.StringVar(value="Both speakers")
+        ttk.Label(frame, text="Speaker channel to verify (tone only):").grid(
+            row=13, column=0, columnspan=3, sticky="w")
+        self.tone_choice = ttk.Combobox(
+            frame, textvariable=self.tone_channel,
+            values=tuple(CHANNEL_OPTIONS), state="readonly", width=32,
+        )
+        self.tone_choice.grid(row=14, column=0, columnspan=3, sticky="w", pady=(0, 4))
+        self.tone_channel.trace_add("write", self._changed)
         self.check_button = ttk.Button(frame, text="1 · Check locally (offline)", command=self.check)
-        self.check_button.grid(row=13, column=0, sticky="ew", padx=(0, 8), pady=(8, 4))
+        self.check_button.grid(row=15, column=0, sticky="ew", padx=(0, 8), pady=(8, 4))
         self.start_button = ttk.Button(frame, text="2 · Start isolated session", command=self.start)
-        self.start_button.grid(row=13, column=1, sticky="ew", padx=(0, 8), pady=(8, 4))
+        self.start_button.grid(row=15, column=1, sticky="ew", padx=(0, 8), pady=(8, 4))
         self.stop_button = ttk.Button(frame, text="Stop", command=self.stop)
-        self.stop_button.grid(row=13, column=2, sticky="ew", pady=(8, 4))
+        self.stop_button.grid(row=15, column=2, sticky="ew", pady=(8, 4))
         self.start_button.state(["disabled"])
         self.stop_button.state(["disabled"])
         ttk.Label(frame, textvariable=self.status, wraplength=580).grid(
-            row=14, column=0, columnspan=3, sticky="w", pady=(8, 0))
+            row=16, column=0, columnspan=3, sticky="w", pady=(8, 0))
         ttk.Label(frame, text="The Windows Scream driver must independently send only to 127.0.0.1:4010. "
                   "For speaker test the Scream driver is NOT needed. "
                   "Windows NTFS key-file permissions and real audible output are not verified.",
-                  wraplength=580).grid(row=15, column=0, columnspan=3, sticky="w", pady=(12, 0))
+                  wraplength=580).grid(row=17, column=0, columnspan=3, sticky="w", pady=(12, 0))
         frame.columnconfigure(0, weight=1)
         frame.columnconfigure(1, weight=1)
         frame.columnconfigure(2, weight=0)
@@ -106,7 +122,15 @@ class BridgeWindow:
         if path:
             self.entries["key"].set(path)
 
+    def _channel(self):
+        label = self.tone_channel.get()
+        if label not in CHANNEL_OPTIONS:
+            raise ValueError("Unknown speaker channel selection")
+        return secure_lan.validate_tone_channel(CHANNEL_OPTIONS[label])
+
     def _params(self):
+        if self.test_tone.get():
+            self._channel()  # Fail closed before opening any TCP/UDP socket.
         return validate_fields(
             self.entries["ip"].get(), self.entries["pin"].get(),
             self.entries["key"].get(), self.entries["minutes"].get()
@@ -150,15 +174,16 @@ class BridgeWindow:
         self.check_button.state(["disabled"])
         self.stop_button.state(["!disabled"])
         tone = bool(self.test_tone.get())
-        self.status.set("Authenticated 5-second speaker tone selected; keep volume LOW."
+        channel = self._channel() if tone else "both"
+        self.status.set(("Authenticated 5-second " + channel + " speaker test; keep volume LOW.")
                         if tone else "Manually authorized Scream bridge running; no audio receipt proven.")
         self.worker = threading.Thread(
-            target=self._execute, args=(ip, pin, path, minutes, tone), daemon=False
+            target=self._execute, args=(ip, pin, path, minutes, tone, channel), daemon=False
         )
         self.worker.start()
         return True
 
-    def _execute(self, ip, pin, path, minutes, tone=False):
+    def _execute(self, ip, pin, path, minutes, tone=False, channel="both"):
         try:
             kwargs = dict(
                 server_ip=ip, port=secure_lan.DEFAULT_PORT,
@@ -168,6 +193,8 @@ class BridgeWindow:
             )
             if tone:
                 kwargs["test_tone"] = True
+                if channel != "both":
+                    kwargs["test_channel"] = channel
             frames = self.bridge(**kwargs)
             self.results.put(("done", int(frames)))
         except (OSError, ValueError, RuntimeError, TimeoutError,
