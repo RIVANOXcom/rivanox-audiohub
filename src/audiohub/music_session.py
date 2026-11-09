@@ -200,7 +200,7 @@ def run_session(paths, *, max_minutes=15, read_command=read_terminal_command,
                 elif command == "u":
                     result = toggle_pause()
                     if result is None:
-                        out("Track already ended; pause/resume not applied.")
+                        out("Player unavailable; pause/resume was NOT applied.")
                     else:
                         out("Owned local music player PAUSED; session time limit continues."
                             if result else
