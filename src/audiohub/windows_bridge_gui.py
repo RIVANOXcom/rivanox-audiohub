@@ -11,6 +11,7 @@ import ssl
 import threading
 
 from . import secure_lan
+from . import hardware_observation
 from .windows_bridge_setup import check_python_tls, validate_local_setup
 
 CHANNEL_OPTIONS = {
@@ -43,11 +44,13 @@ class BridgeWindow:
         self.worker = None
         self.checked = False
         self.closing = False
+        self.active_soundcheck_channel = None
+        self.last_soundcheck = None
         self.entries = {}
         self.status = tk.StringVar(value="Not connected. No network port opened.")
         self.root.title("RIVANOX AudioHub - isolated Windows TLS test")
         self.root.resizable(True, True)
-        self.root.minsize(640, 510)
+        self.root.minsize(640, 540)
         frame = ttk.Frame(root, padding=18)
         frame.pack(fill="both", expand=True)
         ttk.Label(frame, text="Windows audio bridge · isolated ALPHA",
@@ -101,6 +104,16 @@ class BridgeWindow:
                   "For speaker test the Scream driver is NOT needed. "
                   "Windows NTFS key-file permissions and real audible output are not verified.",
                   wraplength=580).grid(row=17, column=0, columnspan=3, sticky="w", pady=(12, 0))
+        self.report_button = ttk.Button(
+            frame, text="3 · Record physical speaker observations (local JSON)",
+            command=self.record_observation,
+        )
+        self.report_button.grid(row=18, column=0, columnspan=3, sticky="ew", pady=(12, 2))
+        self.report_button.state(["disabled"])
+        ttk.Label(
+            frame, text="Manual observations only. Nothing is uploaded; no GO is granted.",
+            wraplength=580,
+        ).grid(row=19, column=0, columnspan=3, sticky="w")
         frame.columnconfigure(0, weight=1)
         frame.columnconfigure(1, weight=1)
         frame.columnconfigure(2, weight=0)
@@ -170,11 +183,15 @@ class BridgeWindow:
             return False
         self.checked = False
         self.stop_event.clear()
+        self.last_soundcheck = None
+        self.active_soundcheck_channel = None
+        self.report_button.state(["disabled"])
         self.start_button.state(["disabled"])
         self.check_button.state(["disabled"])
         self.stop_button.state(["!disabled"])
         tone = bool(self.test_tone.get())
         channel = self._channel() if tone else "both"
+        self.active_soundcheck_channel = channel if tone else None
         self.status.set(("Authenticated 5-second " + channel + " speaker test; keep volume LOW.")
                         if tone else "Manually authorized Scream bridge running; no audio receipt proven.")
         self.worker = threading.Thread(
@@ -211,6 +228,109 @@ class BridgeWindow:
         self.stop_button.state(["disabled"])
         self.status.set("Stop requested. Closing the manual lab connection.")
 
+    def record_observation(self):
+        """Give the human a private, opt-in record, never hardware approval."""
+        if self._running() or self.last_soundcheck is None:
+            return False
+        session = dict(self.last_soundcheck)
+        dlg = self.tk.Toplevel(self.root)
+        dlg.title("AudioHub – physical stereo observations (manual)")
+        dlg.minsize(500, 360)
+        dlg.transient(self.root)
+        dlg.grab_set()
+        area = self.ttk.Frame(dlg, padding=18)
+        area.pack(fill="both", expand=True)
+        self.ttk.Label(
+            area, text="Record what YOU actually heard at the Pi4",
+            font=("Segoe UI", 12, "bold"), wraplength=460,
+        ).pack(anchor="w")
+        self.ttk.Label(
+            area, text=("Selected test: " + session["channel"] +
+                        " · client PCM frames: " + str(session["frames"]) +
+                        " · session: " + session["outcome"]),
+            wraplength=460,
+        ).pack(anchor="w", pady=(6, 9))
+        self.ttk.Label(
+            area, text="Frames do not prove sound. Never paste device IP, "
+                       "secret, fingerprint, personal details or logs.",
+            wraplength=460,
+        ).pack(anchor="w", pady=(0, 10))
+        choices = {
+            "Not checked": "not_checked",
+            "Heard from expected speaker": "heard_expected",
+            "Heard from opposite speaker": "heard_opposite",
+            "No sound": "silent",
+            "Distorted / clipping": "distorted",
+            "Cannot determine": "uncertain",
+        }
+        left = self.tk.StringVar(value="Not checked")
+        right = self.tk.StringVar(value="Not checked")
+        for label, variable in (
+            ("What did you hear from the LEFT speaker?", left),
+            ("What did you hear from the RIGHT speaker?", right),
+        ):
+            self.ttk.Label(area, text=label).pack(anchor="w")
+            self.ttk.Combobox(
+                area, textvariable=variable, values=tuple(choices),
+                state="readonly", width=39,
+            ).pack(fill="x", pady=(2, 8))
+        listened = self.tk.BooleanVar(value=False)
+        self.ttk.Checkbutton(
+            area, variable=listened,
+            text="I personally listened to the physical Pi4/Edifier speakers",
+        ).pack(anchor="w", pady=(3, 5))
+        local_status = self.tk.StringVar(
+            value="Manual report only, not evidence of approved hardware or release."
+        )
+        self.ttk.Label(area, textvariable=local_status,
+                       wraplength=460).pack(anchor="w", pady=(3, 8))
+
+        def save():
+            try:
+                report = hardware_observation.build_observation(
+                    channel=session["channel"], outcome=session["outcome"],
+                    frames=session["frames"], left=choices[left.get()],
+                    right=choices[right.get()], listened=bool(listened.get()),
+                    source_sha=hardware_observation.package_source_sha(),
+                )
+            except (ValueError, KeyError, TypeError):
+                local_status.set(
+                    "Choose valid observations and confirm physical listening "
+                    "before claiming audible sound."
+                )
+                return
+            destination = self.filedialog.asksaveasfilename(
+                parent=dlg, title="Save PRIVATE manual observations locally",
+                defaultextension=".json",
+                filetypes=[("JSON observation", "*.json")],
+                initialfile="AudioHub-Pi4-manual-stereo-observation.json",
+                confirmoverwrite=False,
+            )
+            if not destination:
+                local_status.set("Not saved. Nothing was uploaded.")
+                return
+            try:
+                hardware_observation.save_observation(destination, report)
+            except (OSError, ValueError):
+                local_status.set(
+                    "Could not create the local JSON. Existing files are never "
+                    "overwritten; choose a new filename."
+                )
+                return
+            self.status.set(
+                "Local manual observation saved by operator. Not a hardware or release GO."
+            )
+            dlg.destroy()
+
+        self.ttk.Button(
+            area, text="Save private JSON locally (no upload)",
+            command=save,
+        ).pack(anchor="w", pady=(3, 2))
+        self.ttk.Button(
+            area, text="Cancel – no report", command=dlg.destroy,
+        ).pack(anchor="e")
+        return True
+
     def close(self):
         if self._running():
             self.closing = True
@@ -226,6 +346,14 @@ class BridgeWindow:
                 self.stop_button.state(["disabled"])
                 self.check_button.state(["!disabled"])
                 self.start_button.state(["disabled"])
+                if self.active_soundcheck_channel is not None:
+                    self.last_soundcheck = {
+                        "channel": self.active_soundcheck_channel,
+                        "outcome": ("stopped" if self.stop_event.is_set() else "completed")
+                        if kind == "done" else "connection_failed",
+                        "frames": value if kind == "done" else 0,
+                    }
+                    self.report_button.state(["!disabled"])
                 if kind == "done":
                     self.status.set(
                         "Session ended. Accepted PCM frames: " + str(value) +
