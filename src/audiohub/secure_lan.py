@@ -217,16 +217,20 @@ def forward_loopback_pcm(udp, stream, deadline):
 
 def consume_authenticated_pcm(stream, target, deadline):
     """Play verified TLS frames to the private route; no audio after graph loss."""
+    # Do not read owner-private policy on every 6 ms PCM frame. Keep
+    # bounded health polling (the same cadence as the existing LAN test).
+    if lan_target() != target:
+        raise RuntimeError("Private LAN reservation changed")
     starting_generation = check_audio_target(target)
     last_check = time.monotonic()
     process = None
     count = 0
     try:
         while time.monotonic() < deadline:
-            if lan_target() != target:
-                raise RuntimeError("Private LAN reservation changed")
             now = time.monotonic()
             if now - last_check >= HEALTH_SECONDS:
+                if lan_target() != target:
+                    raise RuntimeError("Private LAN reservation changed")
                 if check_audio_target(target) != starting_generation:
                     raise RuntimeError("PipeWire generation changed; stop to avoid stale playback")
                 last_check = now
