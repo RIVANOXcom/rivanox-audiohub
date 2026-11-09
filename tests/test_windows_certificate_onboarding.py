@@ -97,7 +97,7 @@ class OfflineCertificateOnboardingTests(unittest.TestCase):
             cert.read_public_cert_der(linked)
 
     def test_cli_offline_preflight_rejects_wrong_cert_before_connection(self):
-        args = ["192.168.10.30", FIXTURE_PIN, str(self.key), "10"]
+        args = ["192.168.10.30", FIXTURE_PIN, str(self.key), 10]
         self.assertEqual(
             setup.validate_local_setup(*args, certificate_file=str(self.cert)),
             str(self.key),
