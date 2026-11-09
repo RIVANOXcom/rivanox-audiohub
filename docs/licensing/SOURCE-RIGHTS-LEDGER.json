@@ -333,6 +333,13 @@
       "model_c_eligible": false
     },
     {
+      "path": "src/audiohub/windows_bridge_gui.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
       "path": "src/audiohub/windows_bridge_setup.py",
       "origin_status": "pending-human-review",
       "rightsholder_verified": false,
@@ -593,6 +600,13 @@
     },
     {
       "path": "tests/test_web_status.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "tests/test_windows_bridge_gui.py",
       "origin_status": "pending-human-review",
       "rightsholder_verified": false,
       "third_party_origin_checked": false,
