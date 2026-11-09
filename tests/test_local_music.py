@@ -13,9 +13,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from audiohub import local_music
 
 
+class CapturedSink(io.BytesIO):
+    def close(self):
+        # Observe the sent PCM after the playback protocol closes its pipe.
+        self.saved = self.getvalue()
+        super().close()
+
+
 class FakePlayer:
     def __init__(self, code=0):
-        self.stdin = io.BytesIO()
+        self.stdin = CapturedSink()
         self.code = code
         self.waited = False
         self.terminated = False
@@ -93,7 +100,7 @@ class LocalMusicTests(unittest.TestCase):
             self.assertTrue(local_music.play_playlist(
                 [self.wav], max_minutes=1, spawn=self.spawn,
                 capture=self.capture, notify=lambda text: self.events.append(("message", text))))
-        self.assertEqual(self.players[0].stdin.getvalue(), self.samples)
+        self.assertEqual(self.players[0].stdin.saved, self.samples)
         self.assertTrue(self.players[0].waited)
         self.assertEqual(self.events[0][0], "capture")
         self.assertEqual(self.events[0][1], ["pw-dump"])
@@ -118,7 +125,7 @@ class LocalMusicTests(unittest.TestCase):
                 [self.wav, second], max_minutes=1, spawn=self.spawn,
                 capture=self.capture, notify=lambda _: None))
         self.assertEqual(len(self.players), 2)
-        self.assertEqual([p.stdin.getvalue() for p in self.players],
+        self.assertEqual([p.stdin.saved for p in self.players],
                          [self.samples, b"\x05\x06\x07\x08" * 50])
 
     def test_no_target_fails_without_fallback_or_spawn(self):
