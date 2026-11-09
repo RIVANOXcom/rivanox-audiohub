@@ -130,6 +130,25 @@ class OfflineCertificateOnboardingTests(unittest.TestCase):
         self.assertNotIn(str(self.key), joined)
         self.assertNotIn(FIXTURE_PIN, joined)
 
+    def test_public_fingerprint_cli_prints_only_public_digest_without_network(self):
+        with mock.patch.object(setup.secure_lan.socket, "create_connection") as dial, \
+             mock.patch("builtins.print") as output:
+            result = setup.main(["--show-cert-fingerprint", str(self.cert)])
+            self.assertEqual(result, 0)
+            dial.assert_not_called()
+        lines = "\n".join(str(c.args[0]) for c in output.call_args_list)
+        self.assertIn(FIXTURE_PIN, lines)
+        self.assertIn("NOT trustworthy", lines)
+        self.assertIn("No socket opened", lines)
+        self.assertNotIn(str(self.key), lines)
+
+    def test_cli_just_show_cert_refuses_invalid_public_bytes(self):
+        invalid = self.directory / "not-a-certificate"
+        invalid.write_text("not X.509 PEM or DER")
+        with mock.patch("builtins.print"):
+            self.assertEqual(
+                setup.main(["--show-cert-fingerprint", str(invalid)]), 2)
+
     def test_gui_offline_match_validates_without_connecting(self):
         args = ("192.168.10.30", FIXTURE_PIN, str(self.key), "10")
         self.assertEqual(gui.validate_fields(*args, certificate_file=str(self.cert)),
