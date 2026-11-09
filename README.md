@@ -77,6 +77,15 @@ it remains a manually authorized private TLS test. The operator must
 listen to both speakers and record the result. See
 [Windows stereo channel test steps](./docs/WINDOWS-PORTABLE-ALPHA.md).
 
+After a manual test the Windows GUI can now capture **separate physical
+LEFT/RIGHT observations** and explicitly save a small private JSON
+report. The owner records whether each speaker was heard correctly,
+swapped, silent or distorted. Nothing is uploaded, no credentials or
+device identifiers are exported, and the report **never** constitutes
+automatic hardware verification or release approval. This removes the
+need to copy sensitive terminal logs to report a physical fault.
+See [operator observation instructions](./docs/WINDOWS-PORTABLE-ALPHA.md).
+
 ### Authenticated Windows audio: isolated engineering preview only
 
 A separate optional **TLS 1.3, pinned-cert, 32-byte shared-key challenge-response**
