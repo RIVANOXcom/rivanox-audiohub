@@ -7,12 +7,26 @@ if [ "$#" -eq 1 ] && { [ "$1" = "--help" ] || [ "$1" = "-h" ]; }; then
   export PYTHONPATH
   exec /usr/bin/python3 -m audiohub.music_transfer --help
 fi
-if [ "$#" -ne 2 ] && [ "$#" -ne 3 ]; then
+if [ "$#" -ne 2 ] && [ "$#" -ne 3 ] && [ "$#" -ne 4 ]; then
   printf '%s\n' 'Use: audiohub-music-transfer backup|restore|verify-backup|verify-restore ABSOLUTE_FOLDER [--resume]' >&2
   exit 2
 fi
 case "$1" in
-  backup|restore) ;;
+  backup|restore)
+    if [ "$#" -gt 3 ]; then
+      printf '%s\n' 'Standard WAV copy needs one private directory.' >&2; exit 2
+    fi
+    ;;
+  backup-old)
+    if [ "$#" -ne 3 ] && [ "$#" -ne 4 ]; then
+      printf '%s\n' 'backup-old needs a read-only old music directory and separate private archive.' >&2; exit 2
+    fi
+    ;;
+  verify-backup-old)
+    if [ "$#" -ne 3 ]; then
+      printf '%s\n' 'verify-backup-old needs exact old music and private archive paths.' >&2; exit 2
+    fi
+    ;;
   verify-backup|verify-restore)
     if [ "$#" -ne 2 ]; then
       printf '%s\n' 'Verification is read-only and has no resume flag.' >&2
@@ -21,14 +35,24 @@ case "$1" in
     ;;
   *) printf '%s\n' 'Choose backup, restore, verify-backup or verify-restore.' >&2; exit 2 ;;
 esac
-if [ "$#" -eq 3 ] && [ "$3" != "--resume" ]; then
+if [ "$#" -eq 3 ] && [ "$1" != "backup-old" ] && [ "$1" != "verify-backup-old" ] && [ "$3" != "--resume" ]; then
   printf '%s\n' 'Only exact --resume is supported on backup and restore.' >&2
+  exit 2
+fi
+if [ "$#" -eq 4 ] && { [ "$1" != "backup-old" ] || [ "$4" != "--resume" ]; }; then
+  printf '%s\n' 'Only exact --resume is supported on backup-old.' >&2
   exit 2
 fi
 case "$2" in
   /*) ;;
   *) printf '%s\n' 'External directory must be absolute and private.' >&2; exit 2 ;;
 esac
+if [ "$1" = "backup-old" ] || [ "$1" = "verify-backup-old" ]; then
+  case "$3" in
+    /*) ;;
+    *) printf '%s\n' 'Private backup archive directory must be absolute.' >&2; exit 2 ;;
+  esac
+fi
 if [ "$(/usr/bin/id -u)" -eq 0 ]; then
   printf '%s\n' 'Only an unprivileged local operator may transfer WAVs.' >&2
   exit 2
