@@ -8,10 +8,11 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import wave
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from audiohub import mixer_control, preset_transfer
+from audiohub import mixer_control, preset_transfer, music_transfer
 from audiohub.mixer import defaults
 
 
@@ -228,6 +229,201 @@ class PresetTransferTests(unittest.TestCase):
             self.assertIn(action, code)
         self.assertIn('exec /usr/bin/python3 -m audiohub.preset_transfer "$@"',
                       code)
+
+    def seed_sd_backup(self):
+        self.old_music = self.root / "OldMusic"
+        self.new_music = self.root / "NewMusic"
+        self.old_music.mkdir(mode=0o700)
+        self.new_music.mkdir(mode=0o700)
+        self.old_music.chmod(0o700)
+        self.new_music.chmod(0o700)
+        name = "private-audio.wav"
+        with wave.open(str(self.old_music / name), "wb") as output:
+            output.setnchannels(2)
+            output.setsampwidth(2)
+            output.setframerate(48000)
+            output.writeframes(b"\x00\x01\x00\x02" * 250)
+        (self.old_music / name).chmod(0o600)
+        self.assertTrue(music_transfer.transfer(
+            "backup", str(self.media), music_dir=str(self.old_music),
+            confirm=lambda: True, require_terminal=False, out=self.logs.append))
+        self.assertTrue(self.export())
+        return name
+
+    def sd_plan(self):
+        return preset_transfer.plan_new_sd(
+            str(self.media), settings_path=self.new_settings,
+            profile_path=self.new_profiles, music_dir=str(self.new_music),
+            out=self.logs.append, require_terminal=False)
+
+    def sd_check_new(self):
+        return preset_transfer.check_new(
+            str(self.media), settings_path=self.new_settings,
+            profile_path=self.new_profiles, music_dir=str(self.new_music),
+            out=self.logs.append, require_terminal=False)
+
+    def sd_check_backup(self):
+        return preset_transfer.check_backup(
+            str(self.media), str(self.old_music), str(self.old),
+            out=self.logs.append, require_terminal=False)
+
+    def test_sd_plan_reveals_missing_wav_profile_and_eq_without_writes(self):
+        name = self.seed_sd_backup()
+        snapshot = (self.old_settings.read_bytes(), self.old_profiles.read_bytes(),
+                    (self.media / name).read_bytes())
+        plan = self.sd_plan()
+        self.assertEqual(plan["wav_total"], 1)
+        self.assertEqual(plan["wav_missing"], 1)
+        self.assertEqual(plan["profile_missing"], 1)
+        self.assertGreater(plan["eq_bands_different"], 0)
+        self.assertFalse(plan["eq_non_neutral_conflict"])
+        self.assertFalse(plan["ready_for_final_readonly_check"])
+        self.assertTrue(plan["no_files_changed"])
+        self.assertFalse(self.new.exists())
+        self.assertEqual((self.old_settings.read_bytes(), self.old_profiles.read_bytes(),
+                          (self.media / name).read_bytes()), snapshot)
+        logs = "\n".join(self.logs)
+        self.assertIn("restore PRIVATE_FOLDER --resume", logs)
+        self.assertIn("merge-profiles PRIVATE_FOLDER", logs)
+        self.assertIn("restore-eq PRIVATE_FOLDER", logs)
+        self.assertNotIn(name, logs)
+        self.assertNotIn(str(self.root), logs)
+
+    def test_sd_readonly_backup_check_and_full_new_sd_verify(self):
+        name = self.seed_sd_backup()
+        self.assertTrue(self.sd_check_backup())
+        self.assertFalse(self.new.exists())
+        self.assertTrue(music_transfer.transfer(
+            "restore", str(self.media), music_dir=str(self.new_music),
+            confirm=lambda: True, require_terminal=False, out=self.logs.append))
+        self.assertEqual(self.sd_plan()["wav_matched"], 1)
+        self.assertFalse(self.sd_plan()["ready_for_final_readonly_check"])
+        self.assertTrue(self.merge())
+        self.assertTrue(self.import_eq())
+        plan = self.sd_plan()
+        self.assertTrue(plan["ready_for_final_readonly_check"])
+        before = ((self.new_music / name).stat().st_ino,
+                  self.new_profiles.stat().st_ino,
+                  self.new_settings.stat().st_ino)
+        self.assertTrue(self.sd_check_new())
+        self.assertEqual(((self.new_music / name).stat().st_ino,
+                          self.new_profiles.stat().st_ino,
+                          self.new_settings.stat().st_ino), before)
+        self.assertIn("New SD data check passed", "\n".join(self.logs))
+
+    def test_sd_backup_check_fails_if_old_settings_changed_since_export(self):
+        self.seed_sd_backup()
+        self.assertTrue(self.sd_check_backup())
+        mixer_control.change({"music": {"bass": 4}},
+                             path=self.old_settings, confirmed=True)
+        with self.assertRaises(ValueError):
+            self.sd_check_backup()
+        self.assertFalse(self.new.exists())
+
+    def test_sd_backup_check_refuses_missing_or_changed_wav(self):
+        name = self.seed_sd_backup()
+        (self.media / name).unlink()  # Test fixture only.
+        with self.assertRaises(FileNotFoundError):
+            self.sd_check_backup()
+        self.assertFalse(self.new.exists())
+
+    def test_sd_new_check_refuses_incomplete_data(self):
+        self.seed_sd_backup()
+        with self.assertRaises(FileNotFoundError):
+            self.sd_check_new()
+        self.assertTrue(music_transfer.transfer(
+            "restore", str(self.media), music_dir=str(self.new_music),
+            confirm=lambda: True, require_terminal=False, out=self.logs.append))
+        with self.assertRaises(ValueError):
+            self.sd_check_new()
+        self.assertFalse(self.new.exists())
+
+    def test_sd_plan_rejects_colliding_wav_without_modifying_either(self):
+        name = self.seed_sd_backup()
+        target = self.new_music / name
+        target.write_bytes((self.media / name).read_bytes() + b"changed")
+        target.chmod(0o600)
+        before = target.read_bytes()
+        with self.assertRaises(ValueError):
+            self.sd_plan()
+        self.assertEqual(target.read_bytes(), before)
+        self.assertFalse(self.new.exists())
+
+    def test_sd_plan_reports_existing_profile_conflicts_and_non_neutral_eq(self):
+        self.seed_sd_backup()
+        mixer_control.save_volume_profile(
+            "private-one", 66, 66, 66, 66,
+            path=self.new_profiles, confirmed=True)
+        mixer_control.change({"music": {"bass": 8}},
+                             path=self.new_settings, confirmed=True)
+        profiles_before = self.new_profiles.read_bytes()
+        mixer_before = self.new_settings.read_bytes()
+        result = self.sd_plan()
+        self.assertEqual(result["profile_conflicts"], 1)
+        self.assertTrue(result["eq_non_neutral_conflict"])
+        self.assertFalse(result["ready_for_final_readonly_check"])
+        self.assertEqual(self.new_profiles.read_bytes(), profiles_before)
+        self.assertEqual(self.new_settings.read_bytes(), mixer_before)
+        self.assertIn("BLOCKED", "\n".join(self.logs))
+
+    def test_sd_plan_allows_extra_local_profiles_without_misleading_failure(self):
+        name = self.seed_sd_backup()
+        self.assertTrue(music_transfer.transfer(
+            "restore", str(self.media), music_dir=str(self.new_music),
+            confirm=lambda: True, require_terminal=False, out=self.logs.append))
+        mixer_control.save_volume_profile(
+            "extra-local", 10, 10, 10, 10,
+            path=self.new_profiles, confirmed=True)
+        self.assertTrue(self.merge())
+        self.assertTrue(self.import_eq())
+        self.assertTrue(self.sd_plan()["ready_for_final_readonly_check"])
+        self.assertTrue(self.sd_check_new())
+        self.assertTrue((self.new_music / name).exists())
+
+    def test_sd_checks_reject_privileged_or_nonlocal_console(self):
+        self.seed_sd_backup()
+        with mock.patch.object(preset_transfer.os, "geteuid", return_value=0):
+            with self.assertRaises(PermissionError):
+                self.sd_plan()
+            with self.assertRaises(PermissionError):
+                self.sd_check_backup()
+            with self.assertRaises(PermissionError):
+                self.sd_check_new()
+        with mock.patch.object(preset_transfer.sys.stdin, "isatty",
+                               return_value=False):
+            with self.assertRaises(PermissionError):
+                preset_transfer.plan_new_sd(
+                    str(self.media), settings_path=self.new_settings,
+                    profile_path=self.new_profiles, music_dir=str(self.new_music))
+        self.assertFalse(self.new.exists())
+
+    def test_sd_cli_wiring_installed_launcher_and_readonly_guards(self):
+        with mock.patch.object(preset_transfer, "plan_new_sd",
+                               return_value={"wav_total": 1}) as plan:
+            self.assertEqual(preset_transfer.main(["plan-new", str(self.media)]), 0)
+            self.assertEqual(plan.call_args.args, (str(self.media),))
+        with mock.patch.object(preset_transfer, "check_new", return_value=True):
+            self.assertEqual(preset_transfer.main(["check-new", str(self.media)]), 0)
+        with mock.patch.object(preset_transfer, "check_backup",
+                               return_value=True) as check:
+            self.assertEqual(preset_transfer.main(
+                ["check-backup", str(self.media), str(self.old), str(self.old)]), 0)
+            self.assertEqual(check.call_args.args,
+                             (str(self.media), str(self.old), str(self.old)))
+        script = (Path(__file__).resolve().parents[1] /
+                  "image/stage-audiohub/01-install/files/bin/audiohub-presets-transfer")
+        self.assertEqual(subprocess.run(
+            ["/bin/sh", "-n", str(script)], capture_output=True).returncode, 0)
+        text = script.read_text()
+        for name in ("plan-new", "check-new", "check-backup"):
+            self.assertIn(name, text)
+        for invalid in (["check-backup", str(self.media), "relative", str(self.old)],
+                        ["check-backup", str(self.media), str(self.old), "relative"],
+                        ["check-new", "relative"],
+                        ["plan-new", str(self.media), "extra"]):
+            self.assertEqual(subprocess.run(
+                ["/bin/sh", str(script), *invalid], capture_output=True,
+                timeout=5).returncode, 2)
 
     def test_export_restore_verify_preserves_active_volume_and_never_moves_owner_data(self):
         saved_settings = self.old_settings.read_bytes()
