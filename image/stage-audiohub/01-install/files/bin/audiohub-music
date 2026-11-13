@@ -101,7 +101,7 @@ if [ "$list_only" -eq 1 ]; then
   exec /usr/bin/python3 -m audiohub.local_music --library "$folder"
 fi
 
-# This script NEVER passes --play. PLAY is a separate explicit TTY input
+# This script NEVER starts playback. PLAY is a separate explicit TTY input
 # within the bounded existing music_library.guided_session confirmation gate.
 if [ "$titles" -eq 1 ]; then
   exec /usr/bin/python3 -m audiohub.local_music \
