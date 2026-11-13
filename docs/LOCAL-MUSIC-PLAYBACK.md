@@ -454,3 +454,39 @@ read-only and privately with ordinary authorized operator access,
 stop; do not automatically remount it writable, change permissions,
 reset credentials or attempt a privileged workaround. Retain both
 SD cards as rollback until real Edifier playback is verified.
+
+### Interrupted transfer recovery and read-only verification (PR #260)
+
+Normal backup and restore still refuse any existing destination filename.
+After an interrupted copy, use an explicit **resume** on the same
+trusted, unprivileged local terminal and previously mounted private media:
+
+    audiohub-music-transfer backup /absolute/private/external-folder --resume
+    audiohub-music-transfer restore /absolute/private/external-folder --resume
+
+Resume hashes **both** sides of every existing same-name WAV before any
+new copy. Existing copies must be regular, same-owner, single-link,
+private (0600) and identical byte-for-byte. Any unsafe, changed or
+differing file refuses the entire operation **before any new copy**.
+Identical WAVs are skipped, missing WAVs still need the exact uppercase
+COPY confirmation. When all WAVs match, no copy or confirmation is needed.
+This resumes a multi-file operation, not a partially written individual file.
+
+Verify source WAVs against the destination without writing anything:
+
+    audiohub-music-transfer verify-backup /absolute/private/external-folder
+    audiohub-music-transfer verify-restore /absolute/private/external-folder
+
+verify-backup reads local music as source; verify-restore reads external
+storage as source. Both require a local non-root TTY and owner-private
+folders, but neither asks for COPY. Every supported source WAV must
+exist unchanged at the destination with matching SHA256 and safe metadata.
+An empty source set or a missing, unsafe or different WAV refuses success.
+Extra destination files are NOT examined as a mirror guarantee; nothing
+is deleted, renamed or overwritten. Private names are not printed.
+
+These actions do **not** migrate Wi-Fi, owner identity, Bluetooth trust,
+EQ settings, other personal files, operating system or device permissions.
+Keep the old SD and independent media intact; a failed copy can retain
+earlier completed new files. Operator SD swap and physical Edifier
+hardware acceptance are separately approved, not performed by the tool.
