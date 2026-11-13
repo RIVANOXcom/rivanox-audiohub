@@ -297,6 +297,125 @@ class MusicTransferTests(unittest.TestCase):
             self.assertEqual(music_transfer.main(
                 ["verify-backup", "/private", "--resume"]), 2)
 
+    def old_sd_cli(self, args, *, consent=True):
+        fake_input = mock.Mock()
+        fake_input.isatty.return_value = True
+        fake_input.readline.return_value = "COPY\n" if consent else "NO\n"
+        fake_output = mock.Mock()
+        fake_output.isatty.return_value = True
+        with mock.patch.object(music_transfer.os, "geteuid", return_value=1000), \
+             mock.patch.object(music_transfer.sys, "stdin", fake_input), \
+             mock.patch.object(music_transfer.sys, "stdout", fake_output):
+            result = music_transfer.main(args)
+        return result
+
+    def test_first_migration_old_sd_backup_without_old_launcher(self):
+        original = self.wav.read_bytes()
+        self.music.chmod(0o500)  # Operator already mounted source read-only.
+        self.assertEqual(self.old_sd_cli([
+            "backup-old", str(self.music), str(self.external)]), 0)
+        archived = self.external / self.name
+        self.assertEqual(archived.read_bytes(), original)
+        self.assertEqual(self.wav.read_bytes(), original)
+        self.assertEqual(stat.S_IMODE(self.music.stat().st_mode), 0o500)
+        self.assertEqual(stat.S_IMODE(archived.stat().st_mode), 0o600)
+        before_source = self.wav.stat()
+        before_target = archived.stat()
+        self.assertEqual(self.old_sd_cli([
+            "verify-backup-old", str(self.music), str(self.external)],
+            consent=False), 0)
+        self.assertEqual((self.wav.stat().st_ino, self.wav.stat().st_mtime_ns),
+                         (before_source.st_ino, before_source.st_mtime_ns))
+        self.assertEqual((archived.stat().st_ino, archived.stat().st_mtime_ns),
+                         (before_target.st_ino, before_target.st_mtime_ns))
+
+    def test_old_sd_copy_cancelled_preserves_both_source_and_archive(self):
+        self.music.chmod(0o500)
+        before = self.wav.read_bytes()
+        self.assertEqual(self.old_sd_cli([
+            "backup-old", str(self.music), str(self.external)],
+            consent=False), 1)
+        self.assertEqual(list(self.external.iterdir()), [])
+        self.assertEqual(self.wav.read_bytes(), before)
+        self.assertEqual(stat.S_IMODE(self.music.stat().st_mode), 0o500)
+
+    def test_old_sd_resume_skips_matching_copy_and_rejects_conflicting_bytes(self):
+        self.music.chmod(0o500)
+        self.assertEqual(self.old_sd_cli([
+            "backup-old", str(self.music), str(self.external)]), 0)
+        archive = self.external / self.name
+        before_inode = archive.stat().st_ino
+        self.assertEqual(self.old_sd_cli([
+            "backup-old", str(self.music), str(self.external), "--resume"],
+            consent=False), 0)
+        self.assertEqual(archive.stat().st_ino, before_inode)
+        archive.chmod(0o600)
+        archive.write_bytes(archive.read_bytes()[:-1] + b"\x09")
+        modified = archive.read_bytes()
+        self.assertEqual(self.old_sd_cli([
+            "backup-old", str(self.music), str(self.external), "--resume"]), 2)
+        self.assertEqual(archive.read_bytes(), modified)
+        self.assertEqual(self.old_sd_cli([
+            "verify-backup-old", str(self.music), str(self.external)]), 2)
+
+    def test_old_sd_source_symlink_and_public_archive_fail_closed(self):
+        alias = self.root / "linked_old"
+        alias.symlink_to(self.music, target_is_directory=True)
+        self.assertEqual(self.old_sd_cli([
+            "backup-old", str(alias), str(self.external)]), 2)
+        self.assertEqual(list(self.external.iterdir()), [])
+        self.external.chmod(0o755)
+        self.assertEqual(self.old_sd_cli([
+            "backup-old", str(self.music), str(self.external)]), 2)
+        self.assertEqual(list(self.external.iterdir()), [])
+
+    def test_old_sd_cli_invalid_grammar_and_single_path_not_accepted(self):
+        for args in (
+            ["backup-old", str(self.music)],
+            ["backup-old", str(self.music), str(self.external), "--wrong"],
+            ["backup-old", str(self.music), str(self.external), "--resume", "extra"],
+            ["verify-backup-old", str(self.music)],
+            ["verify-backup-old", str(self.music), str(self.external), "--resume"],
+            ["backup", str(self.external), "--resume", "extra"],
+        ):
+            with self.subTest(args=args):
+                self.assertEqual(music_transfer.main(args), 2)
+
+    def test_old_sd_cli_dispatch_reuses_exact_existing_transfer_engine(self):
+        with mock.patch.object(music_transfer, "transfer", return_value=True) as fn:
+            for args, expected in (
+                (["backup-old", "/old", "/archive"], {"resume": False, "verify": False}),
+                (["backup-old", "/old", "/archive", "--resume"],
+                 {"resume": True, "verify": False}),
+                (["verify-backup-old", "/old", "/archive"],
+                 {"resume": False, "verify": True}),
+            ):
+                with self.subTest(args=args):
+                    self.assertEqual(music_transfer.main(args), 0)
+                    self.assertEqual(fn.call_args.args, ("backup", "/archive"))
+                    self.assertEqual(fn.call_args.kwargs,
+                                     {"music_dir": "/old", **expected})
+
+    def test_old_sd_launcher_rejects_relative_old_and_archive_before_python(self):
+        wrapper = (Path(__file__).resolve().parents[1] /
+                   "image/stage-audiohub/01-install/files/bin/audiohub-music-transfer")
+        self.assertEqual(subprocess.run(
+            ["/bin/sh", "-n", str(wrapper)], capture_output=True).returncode, 0)
+        for args in (
+            ["backup-old", "relative", "/tmp"],
+            ["backup-old", "/tmp", "relative"],
+            ["backup-old", "/tmp", "/tmp", "--wrong"],
+            ["verify-backup-old", "relative", "/tmp"],
+            ["verify-backup-old", "/tmp", "relative"],
+            ["verify-backup-old", "/tmp", "/tmp", "--resume"],
+            ["backup-old", "/tmp"],
+        ):
+            with self.subTest(args=args):
+                result = subprocess.run(
+                    ["/bin/sh", str(wrapper), *args],
+                    capture_output=True, timeout=5)
+                self.assertEqual(result.returncode, 2, result.stderr)
+
     def test_shell_wrapper_help_and_bad_arguments(self):
         wrapper = (Path(__file__).resolve().parents[1] /
                    "image/stage-audiohub/01-install/files/bin/audiohub-music-transfer")
