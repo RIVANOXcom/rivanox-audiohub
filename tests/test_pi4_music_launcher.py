@@ -290,17 +290,24 @@ class MusicLauncherTests(unittest.TestCase):
 
     def test_guided_speaker_command_is_exclusive_and_safe_in_launcher(self):
         help_text = self.shell("--help").stdout
-        self.assertIn("audiohub-music --speaker-guide", help_text)
+        self.assertIn("audiohub-music --speaker-guide [left|right|both]", help_text)
+        self.assertIn("targeted left/right/both side", help_text)
         self.assertIn("LOCAL physical observations", help_text)
         self.assertIn("RETRY same side once", help_text)
         self.assertIn("no auto-next", help_text)
         shell = LAUNCHER.read_text(encoding="utf-8")
         self.assertIn('if [ "$#" -ge 1 ] && [ "$1" = "--speaker-guide" ]; then', shell)
         self.assertIn('exec /usr/bin/python3 -m audiohub.local_music --speaker-guide', shell)
+        self.assertIn('exec /usr/bin/python3 -m audiohub.local_music --speaker-guide "$2"', shell)
+        self.assertIn("left|right|both) ;;", shell)
         for args in (("--speaker-guide", "--speaker-guide"),
                      ("--speaker-guide", "--speaker-test"),
                      ("--speaker-guide", "--level", "quiet"),
                      ("--speaker-guide", "--check"),
+                     ("--speaker-guide", "RIGHT"),
+                     ("--speaker-guide", "sequence"),
+                     ("--speaker-guide", "left", "--play"),
+                     ("--speaker-guide", "both", "--speaker-check"),
                      ("--speaker-guide", "/home/audiohub/PrivateMusic"),
                      ("/home/audiohub/PrivateMusic", "--speaker-guide")):
             with self.subTest(args=args):
@@ -316,6 +323,13 @@ class MusicLauncherTests(unittest.TestCase):
         self.assertIn("speaker_guide_noninteractive_output=", native)
         self.assertIn("/usr/local/bin/audiohub-music --speaker-guide", native)
         self.assertIn('test "$speaker_guide_noninteractive_status" -eq 2', native)
+        self.assertIn("Local player unavailable or stopped", native)
+
+    def test_native_targeted_guide_refuses_unattended_chroot(self):
+        native = STAGE.read_text(encoding="utf-8")
+        self.assertIn("targeted_guide_noninteractive_output=", native)
+        self.assertIn("/usr/local/bin/audiohub-music --speaker-guide right", native)
+        self.assertIn('test "$targeted_guide_noninteractive_status" -eq 2', native)
         self.assertIn("Local player unavailable or stopped", native)
 
     def test_builder_installs_real_command_and_prepares_private_folder(self):
