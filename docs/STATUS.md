@@ -19,6 +19,10 @@ The installed Pi4 `audiohub-music --speaker-guide` now guides a local
 unprivileged operator through LEFT, RIGHT, BOTH independent original
 short stereo tests without a WAV file. Each stage needs fresh uppercase
 PLAY consent and a physical CORRECT/WRONG/SILENT/UNSURE observation.
+Operators can now use explicit `audiohub-music --speaker-guide right`,
+`... left` or `... both` to recheck **only one** corrected channel
+without replaying unrelated channels; each has fresh PLAY and local
+feedback, and the summary marks all other channels untested.
 An unexpected WRONG, SILENT or UNSURE answer now stops automatic
 progression. The operator can explicitly RETRY only the same channel
 once with a new PLAY consent, or STOP. After two attempts the guide
