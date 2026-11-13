@@ -256,3 +256,16 @@ and no route, volume, EQ, permission, wireless, service or source file
 is modified. Native chroot tests this installed command in a
 deliberately empty library. This is not verification of physical
 Edifier sound, 2BT+LAN or production acceptance.
+
+### Pi4 operator stereo-channel music mode
+
+The existing music launcher accepts `--channel both|left|right`.
+LEFT/RIGHT silence only opposite interleaved 16-bit PCM side of
+a stereo WAV in bounded memory chunks, without touching the on-disk
+file or amplifying remaining channel data. Mono files are rejected
+before player spawn. The selection is displayed before exact PLAY
+and retained only within that local session across skip/replay/repeat.
+--check and --list remain non-playing without channel options.
+No global mixer/EQ, other sources, wireless/owner, output routes or
+device state are changed. This is not a verified Edifier physical
+left/right test or a production release.
