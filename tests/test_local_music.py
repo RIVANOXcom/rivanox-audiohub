@@ -110,6 +110,139 @@ class LocalMusicTests(unittest.TestCase):
                               (24000 + 9600) * 2 * 4],
                          bytes(9600 * 4))
 
+    def test_repeated_speaker_channels_are_bounded_pcm_and_keep_opposite_silent(self):
+        import struct
+        single = local_music.SPEAKER_TEST_SIGNAL_FRAMES
+        gap = local_music.SPEAKER_TEST_GAP_FRAMES
+        total_frames = 3 * (single + gap)
+        original = b"".join(local_music.speaker_test_pcm())
+        self.assertEqual(b"".join(local_music.speaker_test_pcm("sequence")), original)
+        for channel in ("left", "right", "both"):
+            with self.subTest(channel=channel):
+                chunks = list(local_music.speaker_test_pcm(channel))
+                self.assertTrue(all(len(chunk) <= local_music.FRAMES_PER_CHUNK * 4
+                                    and len(chunk) % 4 == 0 for chunk in chunks))
+                data = b"".join(chunks)
+                self.assertEqual(len(data), total_frames * 4)
+                for repeat in range(3):
+                    start = repeat * (single + gap)
+                    # Three audible pulses, each intentionally starts at zero.
+                    self.assertEqual(struct.unpack_from("<hh", data, start * 4),
+                                     (0, 0))
+                    samples = [struct.unpack_from("<hh", data, (start + i) * 4)
+                               for i in range(500, 1000)]
+                    if channel == "left":
+                        self.assertTrue(any(l != 0 for l, _ in samples))
+                        self.assertTrue(all(r == 0 for _, r in samples))
+                    elif channel == "right":
+                        self.assertTrue(any(r != 0 for _, r in samples))
+                        self.assertTrue(all(l == 0 for l, _ in samples))
+                    else:
+                        self.assertTrue(any(l != 0 for l, _ in samples))
+                        self.assertTrue(all(l == r for l, r in samples))
+                    self.assertEqual(
+                        data[(start + single) * 4:(start + single + gap) * 4],
+                        b"\x00" * (gap * 4))
+                values = struct.unpack("<" + "h" * (total_frames * 2), data)
+                self.assertLessEqual(max(map(abs, values)), 655)
+
+    def test_repeated_speaker_modes_send_only_owned_quiet_private_stream(self):
+        import struct
+        with mock.patch.object(local_music.sys, "stdin",
+                               mock.Mock(isatty=lambda: True)), \
+             mock.patch.object(local_music.sys, "stdout",
+                               mock.Mock(isatty=lambda: True)), \
+             mock.patch.object(local_music.os, "geteuid", return_value=1000):
+            for channel in ("left", "right", "both"):
+                with self.subTest(channel=channel):
+                    self.events.clear()
+                    self.players.clear()
+                    messages = []
+                    self.assertTrue(local_music.play_speaker_test(
+                        mode=channel, spawn=self.spawn, capture=self.capture,
+                        read_line=lambda: "PLAY\n", out=messages.append))
+                    self.assertEqual(len(self.players), 1)
+                    self.assertEqual(self.events[0][1], ["pw-dump"])
+                    self.assertEqual(self.events[1][1], [
+                        "pw-cat", "--playback", "--raw",
+                        "--target=audiohub.music", "--rate=48000",
+                        "--channels=2", "--format=s16", "--volume=0.05", "-"])
+                    self.assertIn(channel.upper(), "\n".join(messages))
+                    self.assertIn("NOT certified", "\n".join(messages))
+                    pcm = self.players[0].stdin.saved
+                    self.assertEqual(len(pcm), 3 * (24000 + 9600) * 4)
+                    left, right = struct.unpack_from("<hh", pcm, 700 * 4)
+                    if channel == "left":
+                        self.assertEqual(right, 0)
+                        self.assertNotEqual(left, 0)
+                    if channel == "right":
+                        self.assertEqual(left, 0)
+                        self.assertNotEqual(right, 0)
+                    if channel == "both":
+                        self.assertNotEqual(left, 0)
+                        self.assertEqual(left, right)
+
+    def test_repeated_speaker_mode_invalid_never_requests_pipewire(self):
+        with mock.patch.object(local_music.sys, "stdin",
+                               mock.Mock(isatty=lambda: True)), \
+             mock.patch.object(local_music.sys, "stdout",
+                               mock.Mock(isatty=lambda: True)), \
+             mock.patch.object(local_music.os, "geteuid", return_value=1000):
+            for mode in ("ALL", "sequence ", "mono", "LEFT", "", None, 1, True):
+                with self.subTest(mode=mode):
+                    with self.assertRaises(ValueError):
+                        local_music.play_speaker_test(
+                            mode=mode, spawn=self.spawn, capture=self.capture,
+                            read_line=lambda: "PLAY\n")
+                    with self.assertRaises(ValueError):
+                        list(local_music.speaker_test_pcm(mode))
+            self.assertEqual(self.events, [])
+            self.assertEqual(self.players, [])
+
+    def test_repeated_speaker_requires_fresh_play_each_run(self):
+        with mock.patch.object(local_music.sys, "stdin",
+                               mock.Mock(isatty=lambda: True)), \
+             mock.patch.object(local_music.sys, "stdout",
+                               mock.Mock(isatty=lambda: True)), \
+             mock.patch.object(local_music.os, "geteuid", return_value=1000):
+            replies = iter(("PLAY\n", "play\n", "PLAY\n"))
+            self.assertTrue(local_music.play_speaker_test(
+                mode="left", spawn=self.spawn, capture=self.capture,
+                read_line=lambda: next(replies), out=lambda _: None))
+            self.assertFalse(local_music.play_speaker_test(
+                mode="right", spawn=self.spawn, capture=self.capture,
+                read_line=lambda: next(replies), out=lambda _: None))
+            self.assertTrue(local_music.play_speaker_test(
+                mode="both", spawn=self.spawn, capture=self.capture,
+                read_line=lambda: next(replies), out=lambda _: None))
+            self.assertEqual(len(self.players), 2)
+            self.assertEqual(sum(1 for x in self.events if x[0] == "capture"), 2)
+
+    def test_speaker_mode_cli_is_explicit_and_rejects_all_extra_flags(self):
+        with mock.patch.object(local_music, "play_speaker_test",
+                               return_value=True) as player, \
+             mock.patch("builtins.print"):
+            for mode in ("left", "right", "both"):
+                with self.subTest(mode=mode):
+                    player.reset_mock()
+                    self.assertEqual(local_music.main(
+                        ["--speaker-test", mode]), 0)
+                    player.assert_called_once_with(mode=mode)
+            player.reset_mock()
+            for args in (
+                ["--speaker-test", "sequence"],
+                ["--speaker-test", "LEFT"],
+                ["--speaker-test", "mono"],
+                ["--speaker-test", "left", "right"],
+                ["--speaker-test", "left", "--check"],
+                ["--speaker-test", "right", "--level", "quiet"],
+                ["--speaker-test", "both", "--play"],
+                ["left", "--speaker-test"],
+            ):
+                with self.subTest(args=args):
+                    self.assertEqual(local_music.main(args), 2)
+                    player.assert_not_called()
+
     def test_builtin_speaker_diagnostic_requires_exact_play_before_sink(self):
         with mock.patch.object(local_music.sys, "stdin",
                                mock.Mock(isatty=lambda: True)), \
