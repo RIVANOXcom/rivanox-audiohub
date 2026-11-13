@@ -91,8 +91,8 @@ public X.509 PEM/DER certificate to a separately confirmed DER SHA256**
 from the physically trusted Pi console. The certificate picker never
 replaces the independently entered fingerprint, and a mismatch
 blocks the connection before networking. The portable terminal
-equivalents are `--certificate-file` and
-`--show-cert-fingerprint`. This shortens error-prone onboarding but
+equivalents are \`--certificate-file\` and
+\`--show-cert-fingerprint\`. This shortens error-prone onboarding but
 does not create trusted owner identity, certificates, keys or
 automatic provisioning. Read the
 [offline certificate cross-check walkthrough](./docs/WINDOWS-PORTABLE-ALPHA.md).
@@ -238,9 +238,9 @@ Read [CONTRIBUTING.md](./CONTRIBUTING.md), report functional bugs through [GitHu
 
 The isolated Windows operator alpha can now display a private local
 32-hex HMAC-based check code for its existing 32-byte shared-key file
-(`--show-key-code ABSOLUTE_PATH`). Compare only against the independently
+(\`--show-key-code ABSOLUTE_PATH\`). Compare only against the independently
 computed code from the physically trusted Pi console; optionally enter
-the Pi code in the GUI or use `--expected-key-code CODE` to refuse a
+the Pi code in the GUI or use \`--expected-key-code CODE\` to refuse a
 mismatch before network access. No secret bytes are displayed or sent,
 no keys are created, transferred or rotated, and Windows NTFS ACLs
 remain operator-controlled. This is **not** owner authentication,
@@ -253,7 +253,7 @@ For the isolated Windows-to-Pi4 TLS test lab, the operator may now
 preflight **both** existing and separately staged private 32-byte PSK
 copies against independently trusted Pi comparison codes before
 manual key rotation. Use the GUI **4 · Staged PSK preview (offline)**
-or `py -3 START-WINDOWS-BRIDGE.py --rotation-preflight` with hidden
+or \`py -3 START-WINDOWS-BRIDGE.py --rotation-preflight\` with hidden
 interactive code prompts. The preview rejects reused secrets, wrong
 codes and aliased files; it never creates, installs, rotates or removes
 credentials and it never connects to the Pi. A separately authorized
@@ -264,15 +264,15 @@ and rollback. The detailed guide is in
 ### Local-first Bluetooth pairing readiness (Pi4 ALPHA)
 
 The Pi4 now offers an **operator-facing, read-only** first-use Bluetooth
-status check. Run `PYTHONPATH=/opt/audiohub/src python3 -m
-audiohub.pairing_readiness` at an already-authorized **local Pi console**
+status check. Run \`PYTHONPATH=/opt/audiohub/src python3 -m
+audiohub.pairing_readiness\` at an already-authorized **local Pi console**
 (no browser API, new pairing rights, Wi-Fi, controller writes, logs or
 network connection). The status explains whether the first-boot ten-minute
 window appears visible, closed, expired, full, untrusted, or unexpectedly
 open, with clear next steps. No MAC address, device name, personal
-information or key is printed; `--json` returns a bounded anonymous
-snapshot. The existing first-boot FAT `AUDIOHUB-TEST-REPORT.json` now
-includes `bluetooth_pairing_state` and `bluetooth_paired_devices` so
+information or key is printed; \`--json\` returns a bounded anonymous
+snapshot. The existing first-boot FAT \`AUDIOHUB-TEST-REPORT.json\` now
+includes \`bluetooth_pairing_state\` and \`bluetooth_paired_devices\` so
 the **headless operator can examine it after a safe shutdown and SD-card
 removal**. It never asserts ownership, sound or two-source Bluetooth
 compatibility. The existing NoInputNoOutput test agent is not secure
@@ -283,8 +283,8 @@ separate, reviewed implementation. Follow the
 ### View the headless Pi4 SD first-boot report without Python or Wi-Fi
 
 AudioHub now includes a self-contained, five-language browser viewer
-for the anonymous `AUDIOHUB-TEST-REPORT.json` produced by Pi4
-first-boot diagnostics. Open `AUDIOHUB-BOOT-REPORT-VIEWER.html` from
+for the anonymous \`AUDIOHUB-TEST-REPORT.json\` produced by Pi4
+first-boot diagnostics. Open \`AUDIOHUB-BOOT-REPORT-VIEWER.html\` from
 the **portable Windows test ZIP**, or
 [the source HTML viewer](web/boot-report-viewer.html), directly on
 Windows/Mac/Linux after a controlled Pi shutdown and SD removal. A
@@ -297,9 +297,9 @@ See [headless operator instructions](docs/PI4-BLUETOOTH-FIRST-USE.md).
 
 An operator can now play **their own** bounded 16-bit PCM WAV files
 as an actual, independently controlled source in the existing
-`audiohub.music` mixer input. Preview up to eight files with
-`python3 -m audiohub.local_music /absolute/path/file.wav`, then
-explicitly select `--play` at the trusted Pi4 terminal; press
+\`audiohub.music\` mixer input. Preview up to eight files with
+\`python3 -m audiohub.local_music /absolute/path/file.wav\`, then
+explicitly select \`--play\` at the trusted Pi4 terminal; press
 **Ctrl+C** to stop. Audio is streamed into a **fixed music virtual
 sink**, never a default speaker fallback, with low initial stream
 volume. No new daemon, credentials, account, file upload, route
