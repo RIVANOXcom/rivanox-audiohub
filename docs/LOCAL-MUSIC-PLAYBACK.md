@@ -678,3 +678,35 @@ the operator can validate stereo/Edifier output, SPL, USB routing,
 2BT+LAN mixing or 24-hour stability. Rollback is manual reinsertion
 of the original SD after operator decision. This is an
 UNVERIFIED_ALPHA_TEST_ONLY feature, not a production release.
+
+## Repeat a single original speaker side without importing a WAV
+
+If the first 2.1-second pattern is too brief to identify a speaker,
+use the existing local diagnostic with a strictly predefined channel:
+
+    audiohub-music --speaker-test left
+    audiohub-music --speaker-test right
+    audiohub-music --speaker-test both
+
+The old no-argument command still plays LEFT, RIGHT, BOTH in order.
+A selected mode plays three separate 0.5-second pulses of that one
+channel, each followed by 0.2 seconds of silence. Each invocation
+lasts 2.1 seconds, is generated only in bounded RAM (no private
+music files), and uses the same original PCM16 peak <=655/32767
+and fixed quiet PipeWire stream gain 0.05. The opposite channel
+is silent; there is no boost, output reassignment or EQ change.
+
+Every single invocation, including repeating the same side, needs
+a new exact uppercase PLAY confirmation on the trusted unprivileged
+local Pi4 terminal. No folders, --play, --level, --minutes, --check,
+--list or other flags can be combined with this command. Invalid
+channel names fail closed without playing sound.
+
+Keep the physical Edifier amplifier volume LOW. If a channel is
+inaudible, do not assume a hardware PASS or blindly raise speaker
+SPL. Record actual LEFT/RIGHT/BOTH physical speaker observations
+using a separately approved spare SD. No successful software test
+certifies the analog output, two-Bluetooth-plus-LAN mixing,
+24-hour stability, Wi-Fi owner pairing or production. The original
+SD is retained for separate manual rollback; no SD operation or
+persistent test result is triggered by this command.

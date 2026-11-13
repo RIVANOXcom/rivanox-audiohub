@@ -594,3 +594,14 @@ routes, owner pairing or services. This is **not** certified physical
 speaker sound or calibrated safe SPL; keep Edifier hardware volume low
 for a separately authorized physical test. See
 [local music operator guide](docs/LOCAL-MUSIC-PLAYBACK.md).
+
+**Repeatable first Pi4 speaker test:** The original no-WAV
+audiohub-music --speaker-test (LEFT then RIGHT then BOTH) now also
+supports audiohub-music --speaker-test left, right or both for
+three short pulses of the same side. Its fixed PCM16 peak, 2.1-second
+duration, private audiohub.music sink and quiet stream gain remain
+unchanged. Every run needs a fresh uppercase PLAY confirmation on the
+unprivileged Pi4 terminal. No files, global mixer, EQ, route, service
+or permissions change. These cues support a separately authorized
+physical Edifier test; passing source tests alone proves no speaker
+sound. See docs/LOCAL-MUSIC-PLAYBACK.md.

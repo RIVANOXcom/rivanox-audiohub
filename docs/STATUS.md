@@ -284,3 +284,16 @@ no file, mixer, global gain, EQ, routing, device rights, credential,
 network, SD or source change. Native chroot tests fail-closed no-TTY
 behavior. Physical USB/Edifier stereo, amplifier SPL, 2BT+LAN and
 production acceptance remain unverified; test image only.
+
+### Repeatable original no-WAV Pi4 side playback
+
+The installed audiohub-music --speaker-test [left|right|both]
+preserves the original 2.1s LEFT/RIGHT/BOTH sequence by default,
+and now permits 3x repeated 0.5s pulses of one selected channel,
+with 0.2s silence after each pulse. The fixed private sink, quiet
+0.05 stream gain and <=655/32767 sample peak stay unchanged.
+A fresh uppercase PLAY is required on every local unprivileged
+TTY invocation. Invalid flags and modes refuse before player spawn;
+no WAV, SD/file writes, mixer/EQ/route/owner/network changes or
+automatic hardware PASS. Real physical Edifier speakers, 2BT+LAN
+and production still await separate operator acceptance.

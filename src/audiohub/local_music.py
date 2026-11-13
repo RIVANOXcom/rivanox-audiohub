@@ -316,14 +316,17 @@ SPEAKER_TEST_SECONDS = 3 * (SPEAKER_TEST_SIGNAL_FRAMES +
                             SPEAKER_TEST_GAP_FRAMES) / SPEAKER_TEST_RATE
 
 
-def speaker_test_pcm():
-    """Produce bounded original LEFT, RIGHT, BOTH PCM16 without any files.
+def speaker_test_pcm(mode="sequence"):
+    """Generate original stereo PCM for the sequence or one repeated side.
 
     440 Hz starts/ends at zero via a 10 ms envelope. Silence gaps make the
     ordering distinguishable. Each yielded block contains whole stereo
     frames and is at most FRAMES_PER_CHUNK * 4 bytes.
     """
-    for side in ("left", "right", "both"):
+    if type(mode) is not str or mode not in ("sequence",) + STEREO_MODES:
+        raise ValueError("Only sequence, left, right or both speaker test is supported")
+    sides = ("left", "right", "both") if mode == "sequence" else (mode,) * 3
+    for side in sides:
         for start in range(0, SPEAKER_TEST_SIGNAL_FRAMES, FRAMES_PER_CHUNK):
             block = bytearray()
             for frame in range(start, min(start + FRAMES_PER_CHUNK,
@@ -342,7 +345,7 @@ def speaker_test_pcm():
             yield b"\x00" * (frames * 4)
 
 
-def play_speaker_test(*, spawn=subprocess.Popen,
+def play_speaker_test(*, mode="sequence", spawn=subprocess.Popen,
                       capture=bounded_command_output, read_line=None,
                       out=print, clock=time.monotonic):
     """Opt-in low-stream-gain hardware diagnostic; never certify sound.
@@ -351,13 +354,20 @@ def play_speaker_test(*, spawn=subprocess.Popen,
     network changes. Strict local TTY and exact PLAY before any player
     child. The only subprocess writes PCM to the existing private sink.
     """
+    if type(mode) is not str or mode not in ("sequence",) + STEREO_MODES:
+        raise ValueError("Choose sequence, left, right or both speaker diagnostic")
     if (not sys.stdin.isatty() or not sys.stdout.isatty()
             or (hasattr(os, "geteuid") and os.geteuid() == 0)):
         raise PermissionError("Speaker diagnostic needs an unprivileged local TTY")
     if read_line is None:
         read_line = lambda: sys.stdin.readline(12)
-    out("LOCAL STEREO TEST: original 440 Hz test signal, LEFT then RIGHT "
-        "then BOTH, 0.5 s each with silence gaps; duration 2.1 s.")
+    if mode == "sequence":
+        out("LOCAL STEREO TEST: original 440 Hz test signal, LEFT then RIGHT "
+            "then BOTH, 0.5 s each with silence gaps; duration 2.1 s.")
+    else:
+        out("LOCAL STEREO TEST: original 440 Hz " + mode.upper() +
+            " channel only, three 0.5 s pulses with silence gaps; "
+            "duration 2.1 s. The opposite channel stays silent.")
     out("Test samples peak at 2% of PCM16 and use QUIET private stream "
         "gain 0.05. Physical speaker volume must already be LOW.")
     out("Hardware SPL, actual channels and Edifier output are NOT verified. "
@@ -378,7 +388,7 @@ def play_speaker_test(*, spawn=subprocess.Popen,
         child = spawn(command, stdin=subprocess.PIPE,
                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                       shell=False, start_new_session=True)
-        for chunk in speaker_test_pcm():
+        for chunk in speaker_test_pcm(mode=mode):
             if clock() >= deadline:
                 raise TimeoutError("Bounded stereo diagnostic deadline reached")
             child.stdin.write(chunk)
@@ -394,8 +404,8 @@ def play_speaker_test(*, spawn=subprocess.Popen,
                 continue
         if code != 0:
             raise RuntimeError("Local stereo diagnostic tool failed")
-        out("Test stream finished. Actual physical LEFT, RIGHT and BOTH "
-            "sound must be checked by the operator; NOT certified.")
+        out("Test stream finished. Actual physical stereo speaker sound "
+            "must be checked by the operator; NOT certified.")
         return True
     except BrokenPipeError as exc:
         raise RuntimeError("Local stereo diagnostic player disconnected") from exc
@@ -418,7 +428,7 @@ def main(argv=None):
     parser.add_argument("--library", metavar="FOLDER",
                         help="Browse a private local WAV folder without playback")
     parser.add_argument("--speaker-test", action="store_true",
-                        help="Explicit local 2.1s low-level stereo sample; requires TTY PLAY")
+                        help="Local 2.1s stereo pattern or repeated left/right/both; needs TTY PLAY")
     parser.add_argument("--check", action="store_true",
                         help="Read-only WAV, private music sink and player tool readiness; NO sound")
     parser.add_argument("--guided", action="store_true",
@@ -442,9 +452,12 @@ def main(argv=None):
     args = parser.parse_args(options)
     try:
         if args.speaker_test:
-            if options != ["--speaker-test"]:
-                raise ValueError("Speaker diagnostic accepts no other options")
-            return 0 if play_speaker_test() else 2
+            if options == ["--speaker-test"]:
+                return 0 if play_speaker_test() else 2
+            if (len(options) == 2 and options[0] == "--speaker-test"
+                    and options[1] in STEREO_MODES):
+                return 0 if play_speaker_test(mode=options[1]) else 2
+            raise ValueError("Speaker test accepts only optional left, right or both")
         if args.check:
             if (args.library is None or args.wav or args.guided
                     or args.tracks is not None or args.play or args.interactive
