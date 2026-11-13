@@ -368,6 +368,104 @@ class LocalMusicTests(unittest.TestCase):
             player.return_value = False
             self.assertEqual(local_music.main(["--speaker-test"]), 2)
 
+    def test_first_sound_check_works_with_no_wav_or_library_access(self):
+        from audiohub import music_library
+        messages = []
+        with mock.patch.object(local_music.os, "geteuid", return_value=1000), \
+             mock.patch.object(music_library, "discover_library") as library, \
+             mock.patch.object(local_music.subprocess, "Popen") as spawn, \
+             mock.patch.object(local_music, "play_speaker_test") as play:
+            ready = local_music.check_first_sound_readiness(
+                capture=self.capture, which=lambda tool: "/usr/bin/pw-cat",
+                out=messages.append)
+            library.assert_not_called()
+            spawn.assert_not_called()
+            play.assert_not_called()
+        self.assertTrue(ready)
+        self.assertEqual(self.events[0][1], ["pw-dump"])
+        report = "\n".join(messages)
+        for phrase in ("FIRST SOUND CHECK", "no WAV files needed",
+                       "Private PipeWire music input: READY",
+                       "Local PipeWire playback tool: AVAILABLE",
+                       "READY FOR MANUAL TRY, NOT sound-verified",
+                       "audiohub-music --speaker-guide",
+                       "NO sound", "UNVERIFIED"):
+            self.assertIn(phrase, report)
+        self.assertNotIn(str(self.wav), report)
+        self.assertNotIn(str(self.root), report)
+        self.assertFalse(self.players)
+
+    def test_first_sound_check_missing_sink_still_reports_player(self):
+        messages = []
+        capture = lambda argv, **kwargs: self.captured_graph("other.sink")
+        with mock.patch.object(local_music.os, "geteuid", return_value=1000):
+            self.assertFalse(local_music.check_first_sound_readiness(
+                capture=capture, which=lambda _: "/usr/bin/pw-cat",
+                out=messages.append))
+        report = "\n".join(messages)
+        self.assertIn("Private PipeWire music input: NEEDS ATTENTION", report)
+        self.assertIn("No default audio fallback", report)
+        self.assertIn("Local PipeWire playback tool: AVAILABLE", report)
+        self.assertIn("NOT READY FOR MANUAL TRY", report)
+        self.assertNotIn("READY FOR MANUAL TRY, NOT", report)
+
+    def test_first_sound_check_missing_tool_and_private_failures_are_safe(self):
+        msgs = []
+        with mock.patch.object(local_music.os, "geteuid", return_value=1000):
+            self.assertFalse(local_music.check_first_sound_readiness(
+                capture=self.capture, which=lambda _: None, out=msgs.append))
+        report = "\n".join(msgs)
+        self.assertIn("Private PipeWire music input: READY", report)
+        self.assertIn("Local PipeWire playback tool: NEEDS ATTENTION", report)
+        msgs = []
+        def unsafe_capture(*args, **kwargs):
+            raise RuntimeError("PRIVATE_MAC secret device")
+        def unsafe_which(tool):
+            raise OSError("PRIVATE_AUDIO_FILE_PATH")
+        with mock.patch.object(local_music.os, "geteuid", return_value=1000):
+            self.assertFalse(local_music.check_first_sound_readiness(
+                capture=unsafe_capture, which=unsafe_which, out=msgs.append))
+        report = "\n".join(msgs)
+        self.assertIn("NOT READY FOR MANUAL TRY", report)
+        self.assertNotIn("PRIVATE_", report)
+        self.assertNotIn("secret", report)
+
+    def test_first_sound_check_refuses_root_before_graph_query(self):
+        with mock.patch.object(local_music.os, "geteuid", return_value=0), \
+             mock.patch.object(local_music.subprocess, "Popen") as spawn:
+            with self.assertRaises(PermissionError):
+                local_music.check_first_sound_readiness(
+                    capture=self.capture, which=lambda _: "/bin/pw-cat")
+            spawn.assert_not_called()
+        self.assertEqual(self.events, [])
+
+    def test_first_sound_cli_is_exclusive_and_never_invokes_audio(self):
+        with mock.patch.object(local_music, "check_first_sound_readiness",
+                               return_value=True) as check, \
+             mock.patch.object(local_music, "play_speaker_test") as player, \
+             mock.patch.object(local_music, "guided_speaker_check") as guide, \
+             mock.patch("builtins.print"):
+            self.assertEqual(local_music.main(["--speaker-check"]), 0)
+            check.assert_called_once_with()
+            player.assert_not_called()
+            guide.assert_not_called()
+            check.reset_mock()
+            for args in (["--speaker-check", "--check"],
+                         ["--speaker-check", "--speaker-guide"],
+                         ["--speaker-check", "--speaker-test"],
+                         ["--speaker-check", "--level", "quiet"],
+                         ["--speaker-check", "--minutes", "1"],
+                         ["--speaker-check", "--library", "/tmp/private"],
+                         ["--speaker-check", "--speaker-check"],
+                         ["/tmp/private", "--speaker-check"]):
+                with self.subTest(args=args):
+                    self.assertEqual(local_music.main(args), 2)
+                    check.assert_not_called()
+                    player.assert_not_called()
+                    guide.assert_not_called()
+            check.return_value = False
+            self.assertEqual(local_music.main(["--speaker-check"]), 2)
+
     def test_check_music_readiness_three_safe_prerequisites_no_play(self):
         messages = []
         with mock.patch.object(local_music.subprocess, "Popen") as spawn:
