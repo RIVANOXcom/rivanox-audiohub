@@ -11,6 +11,10 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from audiohub import local_music, music_library
 
+# Preserve the real implementation for unit tests while legacy guided-picker
+# tests have a deterministic always-ready simulator for absent Pi hardware.
+REAL_GUIDED_ALBUM_PREFLIGHT = music_library.guided_playback_readiness
+
 
 class LocalMusicLibraryTests(unittest.TestCase):
     def setUp(self):
@@ -200,7 +204,7 @@ class LocalMusicLibraryTests(unittest.TestCase):
                                return_value=True) as graph, \
              mock.patch.object(local_music, "play_playlist") as player, \
              mock.patch.object(music_library, "discover_library") as scan:
-            ok = music_library.guided_playback_readiness(
+            ok = REAL_GUIDED_ALBUM_PREFLIGHT(
                 capture=lambda *a, **kw: None,
                 which=lambda _: "/usr/bin/pw-cat", out=output.append)
         self.assertTrue(ok)
@@ -221,7 +225,7 @@ class LocalMusicLibraryTests(unittest.TestCase):
         with mock.patch.object(local_music, "music_sink_available",
                                return_value=False), \
              mock.patch.object(local_music, "play_playlist") as player:
-            self.assertFalse(music_library.guided_playback_readiness(
+            self.assertFalse(REAL_GUIDED_ALBUM_PREFLIGHT(
                 which=lambda _: None, out=output.append))
         player.assert_not_called()
         report = "\n".join(output)
@@ -237,7 +241,7 @@ class LocalMusicLibraryTests(unittest.TestCase):
                 output = []
                 with mock.patch.object(local_music, "music_sink_available",
                                        return_value=sink):
-                    self.assertFalse(music_library.guided_playback_readiness(
+                    self.assertFalse(REAL_GUIDED_ALBUM_PREFLIGHT(
                         which=lambda _: tool, out=output.append))
                 report = "\n".join(output)
                 self.assertIn("READY" if sink else "NEEDS ATTENTION", report)
@@ -252,7 +256,7 @@ class LocalMusicLibraryTests(unittest.TestCase):
             raise OSError("PRIVATE_DEVICE_MAC")
         with mock.patch.object(local_music, "music_sink_available",
                                side_effect=fail_capture):
-            self.assertFalse(music_library.guided_playback_readiness(
+            self.assertFalse(REAL_GUIDED_ALBUM_PREFLIGHT(
                 which=fail_tool, out=output.append))
         report = "\n".join(output)
         self.assertIn("NOT READY", report)
@@ -284,7 +288,7 @@ class LocalMusicLibraryTests(unittest.TestCase):
                 sound.assert_not_called()
                 report = "\n".join(output)
                 self.assertIn("GUIDED ALBUM STOPPED BEFORE SELECTION OR PLAY", report)
-                self.assertIn("No WAVs were scanned", report)
+                self.assertIn("no WAVs were scanned", report)
                 self.assertNotIn(str(self.root), report)
                 self.assertNotIn("SECRET-ALBUM-PATH", report)
 
