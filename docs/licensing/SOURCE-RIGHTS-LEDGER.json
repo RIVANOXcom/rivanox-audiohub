@@ -39,13 +39,6 @@
       "model_c_eligible": false
     },
     {
-      "path": "docs/PRESET-TRANSFER.md",
-      "origin_status": "pending-human-review",
-      "rightsholder_verified": false,
-      "third_party_origin_checked": false,
-      "model_c_eligible": false
-    },
-    {
       "path": "image/stage-audiohub/00-packages/00-packages-nr",
       "origin_status": "pending-human-review",
       "rightsholder_verified": false,
