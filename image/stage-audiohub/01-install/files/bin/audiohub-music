@@ -21,6 +21,8 @@ usage() {
     '--speaker-check checks built-in FIRST SOUND without a WAV library and never plays sound.' \
     '--speaker-test creates a brief original 2.1s LEFT/RIGHT/BOTH signal in RAM. No WAV required.' \
     'Optional left, right or both replays that channel 3 times with short silence gaps.' \
+    '--speaker-guide FIRST checks private sink and pw-cat without WAV or sound.' \
+    'It refuses all PLAY unless both local first-sound prerequisites are READY.' \
     '--speaker-guide checks all three sides, or ONLY one targeted left/right/both side.' \
     'It asks for separate PLAY per side and LOCAL physical observations.' \
     'If unsure/wrong, RETRY same side once with fresh PLAY, or STOP; no auto-next.' \
