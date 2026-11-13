@@ -93,3 +93,18 @@ activates the already validated interactive music player. No new
 network service, audio route, ownership binding, keys, media files
 or persistent playlists were introduced. Real Edifier playback and
 public-release gates remain unverified.
+
+### Native Pi4 operator launcher for guided music
+
+A new **unverified test image** installs `/usr/local/bin/audiohub-music`
+plus an initially empty `/home/audiohub/PrivateMusic` (0700,
+operator-owned). A trusted locally logged-in unprivileged Pi4 operator
+can type `audiohub-music` instead of a PYTHONPATH-based Python CLI.
+The launcher shows `--help`, allows one optional absolute private
+folder, and delegates to the existing guided WAV player with an exact
+PLAY confirmation. Native ARM64 installation executes a nonplaying
+command smoke and rootfs checks for the installed entrypoint. This
+does not add a network controller or guarantee headless phone setup.
+No in-place updater or automatic data migration is introduced; spare
+SD and separately retained operator music are required for rollback.
+Real hardware audio, rights and public release gates remain NO-GO.
