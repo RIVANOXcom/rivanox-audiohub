@@ -1,0 +1,187 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+"""Offline operator WAV transfer: no overwrite, no links, explicit consent."""
+from pathlib import Path
+import os
+import stat
+import subprocess
+import sys
+import tempfile
+import unittest
+from unittest import mock
+import wave
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+from audiohub import music_transfer
+
+
+class MusicTransferTests(unittest.TestCase):
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.root = Path(tmp.name)
+        self.music = self.root / "PrivateMusic"
+        self.external = self.root / "PrivateExternal"
+        self.music.mkdir(mode=0o700)
+        self.external.mkdir(mode=0o700)
+        self.music.chmod(0o700)
+        self.external.chmod(0o700)
+        self.name = "secret-artist.wav"
+        self.wav = self.music / self.name
+        with wave.open(str(self.wav), "wb") as track:
+            track.setnchannels(2)
+            track.setsampwidth(2)
+            track.setframerate(48000)
+            track.writeframes(b"\x00\x01\x00\x02" * 250)
+        self.output = []
+
+    def run_transfer(self, operation, *, allow=True, external=None, music=None):
+        with mock.patch.object(music_transfer.os, "geteuid", return_value=1000):
+            return music_transfer.transfer(
+                operation,
+                str(self.external if external is None else external),
+                music_dir=str(self.music if music is None else music),
+                confirm=lambda: allow,
+                out=self.output.append,
+                require_terminal=False)
+
+    def test_private_backup_then_restore_preserves_wav_without_overwrite(self):
+        original = self.wav.read_bytes()
+        self.assertTrue(self.run_transfer("backup"))
+        archived = self.external / self.name
+        self.assertEqual(archived.read_bytes(), original)
+        self.assertEqual(self.wav.read_bytes(), original)
+        self.assertEqual(stat.S_IMODE(archived.stat().st_mode), 0o600)
+        self.assertEqual(archived.stat().st_nlink, 1)
+        text = "\n".join(self.output)
+        self.assertIn("1 supported tracks", text)
+        self.assertIn("Private transfer fingerprint", text)
+        self.assertNotIn(self.name, text)
+        self.assertNotIn(str(self.root), text)
+        self.wav.unlink()  # ONLY the test fixture, never production transfer.
+        self.output.clear()
+        self.assertTrue(self.run_transfer("restore"))
+        self.assertEqual(self.wav.read_bytes(), original)
+        self.assertEqual(stat.S_IMODE(self.wav.stat().st_mode), 0o600)
+        self.assertEqual(archived.read_bytes(), original)
+        self.assertNotIn(self.name, "\n".join(self.output))
+
+    def test_any_nonexact_operator_confirmation_cancels_without_writes(self):
+        for answer in (False, None, 0, "COPY", True if False else "copy"):
+            with self.subTest(answer=answer):
+                self.output.clear()
+                self.assertFalse(self.run_transfer("backup", allow=answer))
+                self.assertEqual(list(self.external.iterdir()), [])
+                self.assertIn("Transfer cancelled", "\n".join(self.output))
+
+    def test_second_backup_does_not_overwrite_any_existing_private_file(self):
+        self.assertTrue(self.run_transfer("backup"))
+        original = (self.external / self.name).read_bytes()
+        with self.assertRaises(FileExistsError):
+            self.run_transfer("backup")
+        self.assertEqual((self.external / self.name).read_bytes(), original)
+        self.assertEqual(list(self.external.iterdir()), [self.external / self.name])
+
+    def test_external_symlink_is_rejected_even_when_it_points_to_private_dir(self):
+        alias = self.root / "private-alias"
+        alias.symlink_to(self.external, target_is_directory=True)
+        with self.assertRaises((OSError, ValueError)):
+            self.run_transfer("backup", external=alias)
+        self.assertEqual(list(self.external.iterdir()), [])
+
+    def test_external_directory_must_exist_be_private_and_operator_owned(self):
+        for bad in (self.root / "missing", self.root):
+            with self.subTest(bad=bad), self.assertRaises((OSError, PermissionError)):
+                self.run_transfer("backup", external=bad)
+        self.external.chmod(0o755)
+        with self.assertRaises(PermissionError):
+            self.run_transfer("backup")
+        self.assertEqual(list(self.external.iterdir()), [])
+
+    def test_source_hardlink_refused_without_creating_copies(self):
+        alias = self.music / "second.wav"
+        os.link(self.wav, alias)
+        with self.assertRaises(ValueError):
+            self.run_transfer("backup")
+        self.assertEqual(list(self.external.iterdir()), [])
+
+    def test_source_symlink_refused_and_missing_wav_ignored(self):
+        linked = self.music / "hidden-link.wav"
+        linked.symlink_to(self.wav)
+        with self.assertRaises(ValueError):
+            self.run_transfer("backup")
+        self.assertEqual(list(self.external.iterdir()), [])
+
+    def test_invalid_wav_causes_no_backup_rather_than_silent_loss(self):
+        (self.music / "broken.wav").write_bytes(b"garbage")
+        with self.assertRaises(ValueError):
+            self.run_transfer("backup")
+        self.assertEqual(list(self.external.iterdir()), [])
+
+    def test_cancel_restoration_leaves_existing_music_unchanged(self):
+        self.assertTrue(self.run_transfer("backup"))
+        self.wav.unlink()  # test fixture only
+        self.assertFalse(self.run_transfer("restore", allow=False))
+        self.assertFalse(self.wav.exists())
+        self.assertTrue((self.external / self.name).exists())
+
+    def test_reject_same_source_and_destination_before_any_write(self):
+        with self.assertRaises(ValueError):
+            self.run_transfer("backup", external=self.music)
+        self.assertEqual(list(self.music.iterdir()), [self.wav])
+
+    def test_explicit_copy_fails_closed_on_insufficient_capacity(self):
+        with mock.patch.object(music_transfer, "_check_available",
+                               side_effect=OSError("full disk")):
+            with self.assertRaises(OSError):
+                self.run_transfer("backup")
+        self.assertEqual(list(self.external.iterdir()), [])
+
+    def test_nonroot_and_terminal_guards(self):
+        with self.assertRaises(PermissionError):
+            music_transfer.transfer("backup", str(self.external),
+                                    music_dir=str(self.music),
+                                    confirm=lambda: True,
+                                    require_terminal=False)
+        with mock.patch.object(music_transfer.os, "geteuid", return_value=1000), \
+             mock.patch.object(music_transfer.sys, "stdin",
+                               mock.Mock(isatty=lambda: False)):
+            with self.assertRaises(PermissionError):
+                music_transfer.transfer("backup", str(self.external),
+                                        music_dir=str(self.music),
+                                        confirm=lambda: True)
+        self.assertEqual(list(self.external.iterdir()), [])
+
+    def test_shell_wrapper_help_and_bad_arguments(self):
+        wrapper = (Path(__file__).resolve().parents[1] /
+                   "image/stage-audiohub/01-install/files/bin/audiohub-music-transfer")
+        result = subprocess.run(["/bin/sh", "-n", str(wrapper)],
+                                capture_output=True, timeout=5)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        text = wrapper.read_text(encoding="utf-8")
+        self.assertIn("audiohub.music_transfer", text)
+        self.assertNotIn("sudo ", text)
+        self.assertNotIn("eval ", text)
+        for args in ([], ["backup"], ["invalid", "/tmp"],
+                     ["backup", "relative"], ["backup", "--play"]):
+            with self.subTest(args=args):
+                result = subprocess.run(["/bin/sh", str(wrapper), *args],
+                                        capture_output=True, timeout=5)
+                self.assertEqual(result.returncode, 2)
+
+    def test_native_image_stages_transfer_command_and_owner_only_music_folder(self):
+        root = Path(__file__).resolve().parents[1]
+        install = (root / "image/stage-audiohub/01-install/00-run.sh").read_text()
+        audit = (root / "image/stage-audiohub/02-audit/00-run.sh").read_text()
+        self.assertIn('install -m755 files/bin/audiohub-music-transfer', install)
+        self.assertIn('audiohub-music-transfer --help', install)
+        self.assertIn('test -x "${ROOTFS_DIR}/usr/local/bin/audiohub-music-transfer"', audit)
+        self.assertIn('test ! -L "${ROOTFS_DIR}/usr/local/bin/audiohub-music-transfer"', audit)
+        self.assertIn("PrivateMusic", install)
+
+    def test_cli_help_is_offline_and_does_not_open_music(self):
+        self.assertEqual(music_transfer.main(["--help"]), 0)
+        self.assertEqual(music_transfer.main([]), 2)
+
+
+if __name__ == "__main__":
+    unittest.main()
