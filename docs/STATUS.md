@@ -2,6 +2,18 @@
 
 **Status:** Alpha / pre-release. No verified ready-to-flash Pi 4 image has been published. Native ARM64 test-only SD images have been built and uploaded to GitHub Actions (latest prior-to-renaming run 42057278883; 159 tests, 48 rootfs checks). **No real Pi4/Edifier playback, ownership security or product-ready Release has been verified.**
 
+## First-use guided private WAV album readiness (unverified alpha)
+
+The installed native Pi4 default `audiohub-music` guided album picker
+now checks the existing private music input and player tool before
+scanning private WAV folders, asking for track selection or any PLAY.
+It stops with concrete, redacted recovery hints if either dependency
+is missing. The read-only `--list` remains available offline with no
+PipeWire requirement, and `--check` reports broader WAV-library
+readiness. This does not automatically start playback, certify
+hardware, modify routing or handle owner setup; each valid queue still
+needs explicit local PLAY. See [operator guidance](LOCAL-MUSIC-PLAYBACK.md).
+
 ## Read-only WAV-free first-sound readiness (unverified alpha)
 
 A separate installed `audiohub-music --speaker-check` verifies only

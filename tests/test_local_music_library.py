@@ -11,6 +11,10 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from audiohub import local_music, music_library
 
+# Preserve the real implementation for unit tests while legacy guided-picker
+# tests have a deterministic always-ready simulator for absent Pi hardware.
+REAL_GUIDED_ALBUM_PREFLIGHT = music_library.guided_playback_readiness
+
 
 class LocalMusicLibraryTests(unittest.TestCase):
     def setUp(self):
@@ -22,6 +26,12 @@ class LocalMusicLibraryTests(unittest.TestCase):
         self.a = self.root / "a demo.wav"
         self.make_wav(self.b, 200)
         self.make_wav(self.a, 100)
+        # Existing picker tests exercise album choices, not real Pi hardware.
+        # The new prerequisite helper gets separate positive/negative tests.
+        readiness = mock.patch.object(music_library, "guided_playback_readiness",
+                                      return_value=True)
+        readiness.start()
+        self.addCleanup(readiness.stop)
 
     def make_wav(self, target, frames):
         with wave.open(str(target), "wb") as track:
@@ -187,6 +197,100 @@ class LocalMusicLibraryTests(unittest.TestCase):
                 show_titles=show_titles, read_line=lambda: next(choices),
                 out=output.append, runner=runner)
         return finished, runs, "\n".join(output)
+
+    def test_real_guided_album_precheck_is_readonly_and_independent(self):
+        output = []
+        with mock.patch.object(local_music, "music_sink_available",
+                               return_value=True) as graph, \
+             mock.patch.object(local_music, "play_playlist") as player, \
+             mock.patch.object(music_library, "discover_library") as scan:
+            ok = REAL_GUIDED_ALBUM_PREFLIGHT(
+                capture=lambda *a, **kw: None,
+                which=lambda _: "/usr/bin/pw-cat", out=output.append)
+        self.assertTrue(ok)
+        graph.assert_called_once()
+        player.assert_not_called()
+        scan.assert_not_called()
+        report = "\n".join(output)
+        for phrase in ("LOCAL ALBUM PRECHECK", "Private music input: READY",
+                       "Local playback tool: AVAILABLE",
+                       "READY FOR MANUAL SELECTION", "No WAV opened",
+                       "UNVERIFIED"):
+            self.assertIn(phrase, report)
+        for private in (self.a.name, self.b.name, str(self.root)):
+            self.assertNotIn(private, report)
+
+    def test_precheck_reports_both_missing_prerequisites_without_sound(self):
+        output = []
+        with mock.patch.object(local_music, "music_sink_available",
+                               return_value=False), \
+             mock.patch.object(local_music, "play_playlist") as player:
+            self.assertFalse(REAL_GUIDED_ALBUM_PREFLIGHT(
+                which=lambda _: None, out=output.append))
+        player.assert_not_called()
+        report = "\n".join(output)
+        self.assertIn("Private music input: NEEDS ATTENTION", report)
+        self.assertIn("Local playback tool: NEEDS ATTENTION", report)
+        self.assertIn("NOT READY", report)
+        self.assertIn("--check or --list", report)
+        self.assertNotIn(str(self.root), report)
+
+    def test_precheck_independently_checks_sink_and_tool_failure(self):
+        for sink, tool in ((True, None), (False, "/usr/bin/pw-cat")):
+            with self.subTest(sink=sink, tool=tool):
+                output = []
+                with mock.patch.object(local_music, "music_sink_available",
+                                       return_value=sink):
+                    self.assertFalse(REAL_GUIDED_ALBUM_PREFLIGHT(
+                        which=lambda _: tool, out=output.append))
+                report = "\n".join(output)
+                self.assertIn("READY" if sink else "NEEDS ATTENTION", report)
+                self.assertIn("AVAILABLE" if tool else
+                              "Local playback tool: NEEDS ATTENTION", report)
+
+    def test_private_backend_errors_never_leak_to_album_precheck(self):
+        output = []
+        def fail_capture(*args, **kw):
+            raise RuntimeError("PRIVATE_WAV_NAME")
+        def fail_tool(name):
+            raise OSError("PRIVATE_DEVICE_MAC")
+        with mock.patch.object(local_music, "music_sink_available",
+                               side_effect=fail_capture):
+            self.assertFalse(REAL_GUIDED_ALBUM_PREFLIGHT(
+                which=fail_tool, out=output.append))
+        report = "\n".join(output)
+        self.assertIn("NOT READY", report)
+        self.assertNotIn("PRIVATE_", report)
+        self.assertNotIn(str(self.root), report)
+
+    def test_guided_precheck_failure_aborts_before_private_library_scan_or_play(self):
+        for choice in ("missing_sink", "missing_tool", "exception"):
+            with self.subTest(choice=choice):
+                called, output = [], []
+                def preflight(*, out):
+                    called.append("preflight")
+                    out("Local playback tool: NEEDS ATTENTION")
+                    if choice == "exception":
+                        raise RuntimeError("SECRET-ALBUM-PATH")
+                    return False
+                with mock.patch("sys.stdin", mock.Mock(isatty=lambda: True)), \
+                     mock.patch("sys.stdout", mock.Mock(isatty=lambda: True)), \
+                     mock.patch.object(os, "geteuid", return_value=1000), \
+                     mock.patch.object(music_library, "discover_library") as scan, \
+                     mock.patch.object(local_music, "play_playlist") as sound:
+                    self.assertFalse(music_library.guided_session(
+                        self.root, preflight=preflight,
+                        read_line=lambda: called.append("read"),
+                        out=output.append,
+                        runner=lambda *a, **kw: called.append("runner")))
+                self.assertEqual(called, ["preflight"])
+                scan.assert_not_called()
+                sound.assert_not_called()
+                report = "\n".join(output)
+                self.assertIn("GUIDED ALBUM STOPPED BEFORE SELECTION OR PLAY", report)
+                self.assertIn("no WAVs were scanned", report)
+                self.assertNotIn(str(self.root), report)
+                self.assertNotIn("SECRET-ALBUM-PATH", report)
 
     def test_guided_album_requires_explicit_play_and_preserves_chosen_order(self):
         ok, runs, output = self.guided(["2,1", "PLAY"])

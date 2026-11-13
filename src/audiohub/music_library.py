@@ -8,6 +8,7 @@ file names are hidden unless the operator explicitly opts into local display.
 from __future__ import annotations
 
 import os
+import shutil
 from pathlib import Path
 import stat
 import unicodedata
@@ -220,9 +221,44 @@ def _terminal_line():
     return value[:-1].rstrip("\r")
 
 
+def guided_playback_readiness(*, capture=local_music.bounded_command_output,
+                              which=shutil.which, out=print):
+    """Read-only no-filenames readiness for the actual operator WAV session.
+
+    This is independent of the user's selected WAV folder. It inspects only
+    the existing private PipeWire target and installed local playback tool.
+    The standalone --list keeps working without PipeWire or a local TTY.
+    """
+    out("LOCAL ALBUM PRECHECK: before track selection or any PLAY.")
+    try:
+        sink = local_music.music_sink_available(capture=capture)
+    except (OSError, ValueError, RuntimeError, TypeError):
+        sink = False
+    out("Private music input: " +
+        ("READY" if sink else
+         "NEEDS ATTENTION; inspect unprivileged audiohub PipeWire runtime "
+         "and audiohub.music. Never route to the default output."))
+    try:
+        player = bool(which("pw-cat"))
+    except (OSError, ValueError, RuntimeError, TypeError):
+        player = False
+    out("Local playback tool: " +
+        ("AVAILABLE" if player else
+         "NEEDS ATTENTION; check existing PipeWire tools for audiohub user."))
+    if sink and player:
+        out("Album prerequisites: READY FOR MANUAL SELECTION (not sound-verified).")
+    else:
+        out("Album prerequisites: NOT READY; use audiohub-music --check or "
+            "--list for silent diagnosis; no workaround via global routing.")
+    out("No WAV opened by this check, no sound, no settings, no network, "
+        "no credentials or private track names disclosed.")
+    out("Pi4/Edifier output, safe physical level and owner are UNVERIFIED.")
+    return sink and player
+
+
 def guided_session(folder, *, max_minutes=15, show_titles=False,
                    read_line=None, out=None, runner=None, level="normal",
-                   channel="both"):
+                   channel="both", preflight=None):
     """One-command guided local picker with bounded revision and PLAY gate.
 
     ALL selects a small album; SHUFFLE prepares a short anonymous queue;
@@ -244,6 +280,21 @@ def guided_session(folder, *, max_minutes=15, show_titles=False,
     if runner is None:
         from . import music_session
         runner = music_session.run_session
+
+    # The default installed Pi4 album command runs this check automatically.
+    # Do not ask the user to select private tracks or type PLAY for an
+    # unavailable music input/tool. No fallback to USB/default system sound.
+    if preflight is None:
+        preflight = guided_playback_readiness
+    try:
+        ready = preflight(out=out)
+    except (OSError, ValueError, RuntimeError, TypeError):
+        ready = False
+    if not ready:
+        out("GUIDED ALBUM STOPPED BEFORE SELECTION OR PLAY.")
+        out("No music player was started and no WAVs were scanned. "
+            "The hardware remains UNVERIFIED.")
+        return False
 
     entries, skipped = discover_library(folder)
     out(display_library(entries, show_titles=show_titles, guided=True))

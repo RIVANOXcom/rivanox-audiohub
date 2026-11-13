@@ -80,6 +80,15 @@ set -e
 test "$speaker_side_noninteractive_status" -eq 2
 case "$speaker_side_noninteractive_output" in *"Local player unavailable or stopped"*) ;; *) exit 1 ;; esac
 
+# Native installed default guided ALBUM mode must refuse unattended execution
+# BEFORE scanning WAV files, reading operator input or spawning playback.
+set +e
+album_guide_noninteractive_output="$(runuser -u audiohub -- /usr/local/bin/audiohub-music 2>&1)"
+album_guide_noninteractive_status="$?"
+set -e
+test "$album_guide_noninteractive_status" -eq 2
+case "$album_guide_noninteractive_output" in *"Local player unavailable or stopped"*) ;; *) exit 1 ;; esac
+
 # The installed guided speaker check must also refuse native unattended
 # chroot execution before any sink inspection or audible player subprocess.
 set +e

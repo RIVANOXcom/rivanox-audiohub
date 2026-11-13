@@ -291,6 +291,7 @@ class MusicLauncherTests(unittest.TestCase):
     def test_guided_speaker_command_is_exclusive_and_safe_in_launcher(self):
         help_text = self.shell("--help").stdout
         self.assertIn("audiohub-music --speaker-guide [left|right|both]", help_text)
+        self.assertIn("album wizard checks private input/player FIRST", help_text)
         self.assertIn("targeted left/right/both side", help_text)
         self.assertIn("FIRST checks private sink and playback tool", help_text)
         self.assertIn("refuses all PLAY unless both", help_text)
@@ -320,6 +321,13 @@ class MusicLauncherTests(unittest.TestCase):
         self.assertNotIn("pw-cat", shell)
         self.assertNotIn("sudo ", shell)
         self.assertNotIn("eval ", shell)
+
+    def test_native_default_guided_album_refuses_nonterminal_without_audio(self):
+        native = STAGE.read_text(encoding="utf-8")
+        self.assertIn("album_guide_noninteractive_output=", native)
+        self.assertIn("runuser -u audiohub -- /usr/local/bin/audiohub-music 2>&1", native)
+        self.assertIn('test "$album_guide_noninteractive_status" -eq 2', native)
+        self.assertIn("Local player unavailable or stopped", native)
 
     def test_native_chroot_guided_speaker_never_starts_without_tty(self):
         native = STAGE.read_text(encoding="utf-8")
