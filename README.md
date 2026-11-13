@@ -582,3 +582,15 @@ operator reviews the mode and still must explicitly type PLAY on
 the local terminal. Actual Pi4/Edifier stereo requires a separate
 authorized, physically observed test; source isolation is not
 hardware certification. See [music runbook](docs/LOCAL-MUSIC-PLAYBACK.md).
+
+**First Pi4 speaker sound without copying music:** The existing
+`audiohub-music --speaker-test` now synthesizes its own 2.1-second
+stereo PCM16 pattern (LEFT / RIGHT / BOTH, with silence gaps) in RAM.
+It requires an unprivileged local terminal and an independent exact
+`PLAY` confirmation; the maximum PCM sample is ~2% full-scale and
+the owned music stream uses fixed quiet gain 0.05. It needs no WAV
+archive, writes no files and cannot change PipeWire global mixing,
+routes, owner pairing or services. This is **not** certified physical
+speaker sound or calibrated safe SPL; keep Edifier hardware volume low
+for a separately authorized physical test. See
+[local music operator guide](docs/LOCAL-MUSIC-PLAYBACK.md).

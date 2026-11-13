@@ -183,6 +183,46 @@ class MusicLauncherTests(unittest.TestCase):
         self.assertIn('test "$invalid_channel_status" -eq 2', script)
         self.assertIn("Only both, left or right stereo", script)
 
+    def test_builtin_original_speaker_sample_has_exclusive_operator_entry(self):
+        output = self.shell("--help")
+        self.assertEqual(output.returncode, 0, output.stderr)
+        for phrase in ("audiohub-music --speaker-test", "original 2.1s",
+                       "No WAV required", "separate PLAY", "quiet stream"):
+            self.assertIn(phrase, output.stdout)
+        text = LAUNCHER.read_text(encoding="utf-8")
+        self.assertIn('if [ "$#" -eq 1 ] && [ "$1" = "--speaker-test" ]; then', text)
+        self.assertIn('exec /usr/bin/python3 -m audiohub.local_music --speaker-test', text)
+        self.assertNotIn("pw-cat", text)
+        self.assertNotIn(" --play", text)
+        self.assertNotIn("sudo ", text)
+        self.assertNotIn("eval ", text)
+
+    def test_builtin_speaker_test_rejects_all_other_options_before_python(self):
+        for args in (
+            ("--speaker-test", "--speaker-test"),
+            ("--speaker-test", "--level", "quiet"),
+            ("--speaker-test", "--minutes", "5"),
+            ("--speaker-test", "--channel", "left"),
+            ("--speaker-test", "--list"),
+            ("--speaker-test", "--check"),
+            ("--speaker-test", "--show-titles"),
+            ("--speaker-test", "/home/audiohub/PrivateMusic"),
+            ("/home/audiohub/PrivateMusic", "--speaker-test"),
+            ("--check", "--speaker-test"),
+        ):
+            with self.subTest(args=args):
+                output = self.shell(*args)
+                self.assertEqual(output.returncode, 2, output.stderr)
+                self.assertTrue(output.stderr.strip())
+                self.assertNotIn("PLAY confirmed", output.stdout)
+
+    def test_native_chroot_refuses_nonterminal_speaker_test_no_audio(self):
+        text = STAGE.read_text(encoding="utf-8")
+        self.assertIn("speaker_noninteractive_output=", text)
+        self.assertIn("/usr/local/bin/audiohub-music --speaker-test", text)
+        self.assertIn('test "$speaker_noninteractive_status" -eq 2', text)
+        self.assertIn("Local player unavailable or stopped", text)
+
     def test_builder_installs_real_command_and_prepares_private_folder(self):
         script = STAGE.read_text(encoding="utf-8")
         self.assertIn('install -m755 files/bin/audiohub-music', script)

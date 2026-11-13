@@ -61,6 +61,16 @@ set -e
 test "$invalid_channel_status" -eq 2
 case "$invalid_channel_output" in *"Only both, left or right stereo"*) ;; *) exit 1 ;; esac
 
+# Installed original stereo diagnostic is never allowed to emit audio
+# unattended in a native build chroot. It must reach Python's TTY gate,
+# not become an unknown shell command or spawn a player.
+set +e
+speaker_noninteractive_output="$(runuser -u audiohub -- /usr/local/bin/audiohub-music --speaker-test 2>&1)"
+speaker_noninteractive_status="$?"
+set -e
+test "$speaker_noninteractive_status" -eq 2
+case "$speaker_noninteractive_output" in *"Local player unavailable or stopped"*) ;; *) exit 1 ;; esac
+
 # Real installed non-playing --check is a multi-prerequisite operator status.
 # The fresh image contains no WAVs, so readiness must refuse with safe guidance.
 # It must never start an audio session, reconfigure PipeWire or expose titles.

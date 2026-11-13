@@ -269,3 +269,18 @@ and retained only within that local session across skip/replay/repeat.
 No global mixer/EQ, other sources, wireless/owner, output routes or
 device state are changed. This is not a verified Edifier physical
 left/right test or a production release.
+
+### Original no-WAV local Pi4 stereo diagnostic
+
+The existing installed operator-only `audiohub-music --speaker-test`
+now allows a first hardware sound trial with no licensed/private WAV
+file provisioned. Synthesizes 2.1 s of original LEFT / RIGHT / BOTH
+440-Hz stereo PCM16 in bounded RAM, 10ms fades and silence gaps,
+peak <=655/32767, private pw-cat gain fixed to quiet 0.05. Requires
+unprivileged local input/output TTY, exclusive command and exact
+uppercase PLAY before any PipeWire player is spawned. Private
+audiohub.music sink only, bounded deadline, cleanup of owned child;
+no file, mixer, global gain, EQ, routing, device rights, credential,
+network, SD or source change. Native chroot tests fail-closed no-TTY
+behavior. Physical USB/Edifier stereo, amplifier SPL, 2BT+LAN and
+production acceptance remain unverified; test image only.

@@ -8,10 +8,12 @@ already-authorized Pi terminal can explicitly start or stop playback.
 from __future__ import annotations
 
 import argparse
+import math
 import os
 import shutil
 from pathlib import Path
 import stat
+import struct
 import subprocess
 import sys
 import time
@@ -304,11 +306,119 @@ def check_music_readiness(folder, *, capture=bounded_command_output,
     return ready
 
 
+# Original diagnostic PCM is synthesized in RAM, never saved to the SD.
+# Deliberately short, low-amplitude fixed-pattern stereo, not a SPL guarantee.
+SPEAKER_TEST_RATE = 48000
+SPEAKER_TEST_SIGNAL_FRAMES = SPEAKER_TEST_RATE // 2
+SPEAKER_TEST_GAP_FRAMES = SPEAKER_TEST_RATE // 5
+SPEAKER_TEST_PEAK = 655  # About 2% of PCM16 full scale, then quiet stream 0.05.
+SPEAKER_TEST_SECONDS = 3 * (SPEAKER_TEST_SIGNAL_FRAMES +
+                            SPEAKER_TEST_GAP_FRAMES) / SPEAKER_TEST_RATE
+
+
+def speaker_test_pcm():
+    """Produce bounded original LEFT, RIGHT, BOTH PCM16 without any files.
+
+    440 Hz starts/ends at zero via a 10 ms envelope. Silence gaps make the
+    ordering distinguishable. Each yielded block contains whole stereo
+    frames and is at most FRAMES_PER_CHUNK * 4 bytes.
+    """
+    for side in ("left", "right", "both"):
+        for start in range(0, SPEAKER_TEST_SIGNAL_FRAMES, FRAMES_PER_CHUNK):
+            block = bytearray()
+            for frame in range(start, min(start + FRAMES_PER_CHUNK,
+                                          SPEAKER_TEST_SIGNAL_FRAMES)):
+                envelope = min(1.0, frame / 480,
+                               (SPEAKER_TEST_SIGNAL_FRAMES - 1 - frame) / 480)
+                sample = round(SPEAKER_TEST_PEAK * envelope *
+                               math.sin(2 * math.pi * 440 * frame /
+                                        SPEAKER_TEST_RATE))
+                block.extend(struct.pack("<hh",
+                                          sample if side != "right" else 0,
+                                          sample if side != "left" else 0))
+            yield bytes(block)
+        for start in range(0, SPEAKER_TEST_GAP_FRAMES, FRAMES_PER_CHUNK):
+            frames = min(FRAMES_PER_CHUNK, SPEAKER_TEST_GAP_FRAMES - start)
+            yield b"\x00" * (frames * 4)
+
+
+def play_speaker_test(*, spawn=subprocess.Popen,
+                      capture=bounded_command_output, read_line=None,
+                      out=print, clock=time.monotonic):
+    """Opt-in low-stream-gain hardware diagnostic; never certify sound.
+
+    No WAV required. No writes, source routing, global mixer, owner or
+    network changes. Strict local TTY and exact PLAY before any player
+    child. The only subprocess writes PCM to the existing private sink.
+    """
+    if (not sys.stdin.isatty() or not sys.stdout.isatty()
+            or (hasattr(os, "geteuid") and os.geteuid() == 0)):
+        raise PermissionError("Speaker diagnostic needs an unprivileged local TTY")
+    if read_line is None:
+        read_line = lambda: sys.stdin.readline(12)
+    out("LOCAL STEREO TEST: original 440 Hz test signal, LEFT then RIGHT "
+        "then BOTH, 0.5 s each with silence gaps; duration 2.1 s.")
+    out("Test samples peak at 2% of PCM16 and use QUIET private stream "
+        "gain 0.05. Physical speaker volume must already be LOW.")
+    out("Hardware SPL, actual channels and Edifier output are NOT verified. "
+        "Type exact uppercase PLAY then Enter to start, anything else cancels:")
+    answer = read_line()
+    if answer not in ("PLAY\n", "PLAY\r\n"):
+        out("Speaker test cancelled. No sound or setting changed.")
+        return False
+    if not music_sink_available(capture=capture):
+        raise RuntimeError("Private music sink unavailable; no default fallback")
+    # Never enable other sources, change hardware routes, or increase volume.
+    command = ["pw-cat", "--playback", "--raw", "--target=" + TARGET,
+               "--rate=48000", "--channels=2", "--format=s16",
+               "--volume=" + PLAYBACK_LEVELS["quiet"], "-"]
+    deadline = clock() + 8
+    child = None
+    try:
+        child = spawn(command, stdin=subprocess.PIPE,
+                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                      shell=False, start_new_session=True)
+        for chunk in speaker_test_pcm():
+            if clock() >= deadline:
+                raise TimeoutError("Bounded stereo diagnostic deadline reached")
+            child.stdin.write(chunk)
+        child.stdin.close()
+        while True:
+            remaining = deadline - clock()
+            if remaining <= 0:
+                raise TimeoutError("Stereo diagnostic player did not exit")
+            try:
+                code = child.wait(timeout=min(0.25, remaining))
+                break
+            except subprocess.TimeoutExpired:
+                continue
+        if code != 0:
+            raise RuntimeError("Local stereo diagnostic tool failed")
+        out("Test stream finished. Actual physical LEFT, RIGHT and BOTH "
+            "sound must be checked by the operator; NOT certified.")
+        return True
+    except BrokenPipeError as exc:
+        raise RuntimeError("Local stereo diagnostic player disconnected") from exc
+    finally:
+        if child is not None:
+            if child.poll() is None:
+                child.terminate()
+                try:
+                    child.wait(timeout=2)
+                except subprocess.TimeoutExpired:
+                    child.kill()
+                    child.wait(timeout=2)
+            if child.stdin is not None and not child.stdin.closed:
+                child.stdin.close()
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("wav", nargs="*", help="1–8 absolute local 16-bit PCM WAV files")
     parser.add_argument("--library", metavar="FOLDER",
                         help="Browse a private local WAV folder without playback")
+    parser.add_argument("--speaker-test", action="store_true",
+                        help="Explicit local 2.1s low-level stereo sample; requires TTY PLAY")
     parser.add_argument("--check", action="store_true",
                         help="Read-only WAV, private music sink and player tool readiness; NO sound")
     parser.add_argument("--guided", action="store_true",
@@ -328,8 +438,13 @@ def main(argv=None):
                         help="EXPLICITLY send limited local WAV audio to music input")
     parser.add_argument("--interactive", action="store_true",
                         help="With --play: use local terminal s=status, n=next, q=stop; Enter required")
-    args = parser.parse_args(argv)
+    options = list(sys.argv[1:] if argv is None else argv)
+    args = parser.parse_args(options)
     try:
+        if args.speaker_test:
+            if options != ["--speaker-test"]:
+                raise ValueError("Speaker diagnostic accepts no other options")
+            return 0 if play_speaker_test() else 2
         if args.check:
             if (args.library is None or args.wav or args.guided
                     or args.tracks is not None or args.play or args.interactive

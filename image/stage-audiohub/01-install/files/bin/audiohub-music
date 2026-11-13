@@ -10,11 +10,14 @@ usage() {
     'Usage: audiohub-music [ABSOLUTE_PRIVATE_WAV_FOLDER] [--minutes 1..30] [--level quiet|soft|normal] [--channel both|left|right] [--show-titles]' \
     '       audiohub-music [ABSOLUTE_PRIVATE_WAV_FOLDER] --list [--show-titles]' \
     '       audiohub-music [ABSOLUTE_PRIVATE_WAV_FOLDER] --check' \
+    '       audiohub-music --speaker-test' \
     'Default: /home/audiohub/PrivateMusic, 15 minutes, normal stream level (0.20).' \
     'quiet=0.05, soft=0.10, normal=0.20; levels are stream gains, not calibrated speaker loudness.' \
     '--channel left/right silences only the opposite stereo WAV channel; mono needs both.' \
     '--list only shows valid WAV track numbers and format; it NEVER plays sound.' \
     '--check independently checks WAVs, private music input and player tool, without sound.' \
+    '--speaker-test creates a brief original 2.1s LEFT/RIGHT/BOTH signal in RAM. No WAV required.' \
+    'Requires separate PLAY at a local terminal; very low signal and quiet stream only.' \
     '--show-titles explicitly reveals sanitized private titles on this terminal.' \
     'The playback wizard shows an anonymous list; select numbers, ALL or SHUFFLE.' \
     'PLAY is required separately to start sound; CHANGE revises the queue.' \
@@ -25,6 +28,18 @@ usage() {
 if [ "$#" -eq 1 ] && { [ "$1" = "-h" ] || [ "$1" = "--help" ]; }; then
   usage
   exit 0
+fi
+
+# Separate exclusive sound test: there is never implicit playback, no WAV,
+# volume elevation, output routing, network service or privileged override.
+if [ "$#" -eq 1 ] && [ "$1" = "--speaker-test" ]; then
+  if [ "$(/usr/bin/id -u)" -eq 0 ]; then
+    printf '%s\n' 'Run as the existing unprivileged Pi operator, not root.' >&2
+    exit 2
+  fi
+  PYTHONPATH=/opt/audiohub/src
+  export PYTHONPATH
+  exec /usr/bin/python3 -m audiohub.local_music --speaker-test
 fi
 
 folder=/home/audiohub/PrivateMusic
