@@ -121,22 +121,27 @@ def _publish_exclusive(dirfd, filename, raw):
     out = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL |
                   os.O_NOFOLLOW | os.O_CLOEXEC, 0o600, dir_fd=dirfd)
     try:
-        os.fchmod(out, 0o600)
-        done = 0
-        while done < len(raw):
-            written = os.write(out, raw[done:])
-            if written <= 0:
-                raise OSError("Incomplete private preset write")
-            done += written
-        os.fsync(out)
-    finally:
-        os.close(out)
-    try:
+        try:
+            os.fchmod(out, 0o600)
+            done = 0
+            while done < len(raw):
+                written = os.write(out, raw[done:])
+                if written <= 0:
+                    raise OSError("Incomplete private preset write")
+                done += written
+            os.fsync(out)
+        finally:
+            os.close(out)
+        # Exclusive publication: EEXIST never replaces a pre-existing file.
         os.link(tmp, filename, src_dir_fd=dirfd, dst_dir_fd=dirfd,
                 follow_symlinks=False)
         os.fsync(dirfd)
     finally:
-        os.unlink(tmp, dir_fd=dirfd)
+        # Only our random temporary file is removed; user files are untouched.
+        try:
+            os.unlink(tmp, dir_fd=dirfd)
+        except FileNotFoundError:
+            pass
 
 
 def _source_snapshot(settings_path, profile_path):
@@ -319,18 +324,29 @@ def main(argv=None):
     if args in (["--help"], ["-h"]):
         print("Offline Pi4 non-secret audio preset transfer, no owner migration.")
         print("Usage: audiohub-presets-transfer export|inspect|restore-profiles|restore-eq|verify ABSOLUTE_PRIVATE_FOLDER")
+        print("       audiohub-presets-transfer export-old OLD_SD_PRIVATE_CONFIG_DIR ABSOLUTE_PRIVATE_FOLDER")
         print("Export SAVE; inactive profiles RESTORE; saved EQ APPLY-EQ to neutral EQ only.")
         print("Never imports keys, Bluetooth trust, Wi-Fi, IDs, live volume/mutes or OS.")
         return 0
-    if len(args) != 2 or args[0] not in (
-            "export", "inspect", "restore-profiles", "restore-eq", "verify"):
-        print("Specify export, inspect, restore-profiles, restore-eq or verify and one folder.")
+    old_sd_mode = len(args) == 3 and args[0] == "export-old"
+    if not (old_sd_mode or (len(args) == 2 and args[0] in (
+            "export", "inspect", "restore-profiles", "restore-eq", "verify"))):
+        print("Choose an explicit preset action and an absolute private folder.")
         return 2
     try:
-        operation = {"export": export_presets, "inspect": inspect,
-                     "restore-profiles": restore_profiles, "restore-eq": restore_eq,
-                     "verify": verify}[args[0]]
-        result = operation(args[1])
+        if old_sd_mode:
+            old_dir = Path(args[1])
+            if (not old_dir.is_absolute() or ".." in old_dir.parts or
+                    len(str(old_dir)) > 1024):
+                raise ValueError("Unsafe read-only old SD configuration location")
+            result = export_presets(
+                args[2], settings_path=old_dir / "settings.json",
+                profile_path=old_dir / "volume-profiles.json")
+        else:
+            operation = {"export": export_presets, "inspect": inspect,
+                         "restore-profiles": restore_profiles, "restore-eq": restore_eq,
+                         "verify": verify}[args[0]]
+            result = operation(args[1])
         return 0 if result is not False else 1
     except (OSError, ValueError, TypeError, UnicodeError,
             mixer_control.MixerControlUnavailable):
