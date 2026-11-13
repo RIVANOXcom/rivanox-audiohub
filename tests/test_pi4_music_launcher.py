@@ -132,6 +132,32 @@ class MusicLauncherTests(unittest.TestCase):
                 self.assertNotIn("PLAY confirmed", output.stdout)
                 self.assertTrue(output.stderr.strip())
 
+    def test_first_sound_preflight_help_and_native_chroot(self):
+        help_text = self.shell("--help").stdout
+        self.assertIn("audiohub-music --speaker-check", help_text)
+        self.assertIn("FIRST SOUND without a WAV library", help_text)
+        launcher = LAUNCHER.read_text(encoding="utf-8")
+        self.assertIn('if [ "$#" -ge 1 ] && [ "$1" = "--speaker-check" ]; then', launcher)
+        self.assertIn('exec /usr/bin/python3 -m audiohub.local_music --speaker-check', launcher)
+        for args in (("--speaker-check", "--speaker-check"),
+                     ("--speaker-check", "--speaker-guide"),
+                     ("--speaker-check", "--speaker-test"),
+                     ("--speaker-check", "--check"),
+                     ("--speaker-check", "--level", "quiet"),
+                     ("--speaker-check", "/home/audiohub/PrivateMusic"),
+                     ("/home/audiohub/PrivateMusic", "--speaker-check")):
+            with self.subTest(args=args):
+                result = self.shell(*args)
+                self.assertEqual(result.returncode, 2, result.stderr)
+                self.assertNotIn("Playing track", result.stdout)
+        self.assertNotIn("pw-cat", launcher)
+        self.assertNotIn("sudo ", launcher)
+        native = STAGE.read_text(encoding="utf-8")
+        self.assertIn("first_sound_check_output=", native)
+        self.assertIn("/usr/local/bin/audiohub-music --speaker-check", native)
+        self.assertIn("no WAV files needed.", native)
+        self.assertIn("Read-only only: NO sound", native)
+
     def test_native_chroot_smokes_installed_nonplaying_readiness(self):
         stage = STAGE.read_text(encoding="utf-8")
         self.assertIn("empty_check_output=", stage)

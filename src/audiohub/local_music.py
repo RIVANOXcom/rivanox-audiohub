@@ -306,6 +306,50 @@ def check_music_readiness(folder, *, capture=bounded_command_output,
     return ready
 
 
+def check_first_sound_readiness(*, capture=bounded_command_output,
+                                which=shutil.which, out=print):
+    """Read-only first SOUND prerequisites with NO WAV library requirement.
+
+    This checks only the existing private music sink and installed pw-cat.
+    It never opens a file, sends samples, sets a route, changes gain or
+    certifies that any physical speaker will actually produce sound.
+    """
+    if hasattr(os, "geteuid") and os.geteuid() == 0:
+        raise PermissionError("Run first-sound check as the unprivileged operator")
+    out("FIRST SOUND CHECK: built-in original stereo sample; no WAV files needed.")
+    try:
+        sink_ready = music_sink_available(capture=capture)
+    except (OSError, ValueError, RuntimeError, TypeError):
+        sink_ready = False
+    out("Private PipeWire music input: " +
+        ("READY" if sink_ready else
+         "NEEDS ATTENTION; check audiohub user PipeWire runtime and "
+         "audiohub.music sink. No default audio fallback."))
+
+    try:
+        player_ready = bool(which("pw-cat"))
+    except (OSError, ValueError, RuntimeError, TypeError):
+        player_ready = False
+    out("Local PipeWire playback tool: " +
+        ("AVAILABLE" if player_ready else
+         "NEEDS ATTENTION; check installed pw-cat for the current "
+         "unprivileged audiohub user."))
+
+    ready = sink_ready and player_ready
+    if ready:
+        out("First sound: READY FOR MANUAL TRY, NOT sound-verified.")
+        out("At a trusted local TTY with physical amplifier LOW, run "
+            "audiohub-music --speaker-guide and confirm fresh PLAY each time.")
+    else:
+        out("First sound: NOT READY FOR MANUAL TRY; correct the named "
+            "prerequisite. Never reroute to the default sink.")
+    out("Read-only only: NO sound, WAV/library access, file write, "
+        "mixer/EQ/route change, credential or network operation.")
+    out("Actual Pi4/Edifier output, safe physical loudness, other sources "
+        "and authenticated ownership remain UNVERIFIED.")
+    return ready
+
+
 # Original diagnostic PCM is synthesized in RAM, never saved to the SD.
 # Deliberately short, low-amplitude fixed-pattern stereo, not a SPL guarantee.
 SPEAKER_TEST_RATE = 48000
@@ -512,6 +556,8 @@ def main(argv=None):
     parser.add_argument("wav", nargs="*", help="1–8 absolute local 16-bit PCM WAV files")
     parser.add_argument("--library", metavar="FOLDER",
                         help="Browse a private local WAV folder without playback")
+    parser.add_argument("--speaker-check", action="store_true",
+                        help="WAV-free first-sound prerequisites only, NEVER plays")
     parser.add_argument("--speaker-guide", action="store_true",
                         help="Three-stage speaker observation; fresh PLAY for each stage")
     parser.add_argument("--speaker-test", action="store_true",
@@ -538,6 +584,10 @@ def main(argv=None):
     options = list(sys.argv[1:] if argv is None else argv)
     args = parser.parse_args(options)
     try:
+        if args.speaker_check:
+            if options != ["--speaker-check"]:
+                raise ValueError("First sound check accepts no extra arguments")
+            return 0 if check_first_sound_readiness() else 2
         if args.speaker_guide:
             if options != ["--speaker-guide"]:
                 raise ValueError("Speaker guide accepts no extra arguments")

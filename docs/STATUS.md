@@ -2,6 +2,17 @@
 
 **Status:** Alpha / pre-release. No verified ready-to-flash Pi 4 image has been published. Native ARM64 test-only SD images have been built and uploaded to GitHub Actions (latest prior-to-renaming run 42057278883; 159 tests, 48 rootfs checks). **No real Pi4/Edifier playback, ownership security or product-ready Release has been verified.**
 
+## Read-only WAV-free first-sound readiness (unverified alpha)
+
+A separate installed `audiohub-music --speaker-check` verifies only
+the existing private PipeWire music input and playback tool, so the
+operator is no longer incorrectly blocked by an intentionally empty
+WAV library before trying the original built-in first-sound sample.
+It provides specific local recovery steps and never plays sound or
+opens WAV files. An affirmative software readiness indication is
+**not** physical Pi4/Edifier speaker verification or permission to
+flash/install or distribute; see [local music guidance](LOCAL-MUSIC-PLAYBACK.md).
+
 ## Guided first physical stereo observation (unverified alpha)
 
 The installed Pi4 `audiohub-music --speaker-guide` now guides a local

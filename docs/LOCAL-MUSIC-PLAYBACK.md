@@ -756,3 +756,40 @@ media file is needed.
 The command is exclusive: extra flags, folders or WAVs are rejected.
 To cancel, do not enter PLAY; existing manual rollback is reinserting
 the untouched original SD **only after separate operator approval**.
+
+## Check whether the first built-in sound can be tried (no WAV)
+
+A **new independent read-only** preflight is available on the native
+Pi4 operator TEST image **without adding any personal WAV files**:
+
+    audiohub-music --speaker-check
+
+Unlike the older `audiohub-music --check`, which checks whether a
+private WAV library is ready for music playback, `--speaker-check`
+intentionally does **not inspect the library at all**. An empty
+`/home/audiohub/PrivateMusic` does not count as a first-sound failure.
+
+The check reads two bounded local prerequisites independently:
+the exact private `audiohub.music` PipeWire sink and whether the
+unprivileged operator can locate `pw-cat`. Each missing prerequisite
+receives an actionable, non-identifying explanation. A green
+**READY FOR MANUAL TRY** means only that these two prerequisites appear
+present: it does NOT play a sound or prove the USB output, left/right
+routing, physical SPL, speaker wiring, multi-source mixing, first-owner
+security or production suitability. The graph may change after the
+check. Failure returns exit status 2; readiness returns 0.
+
+Only after explicit permission for an isolated spare-SD hardware test
+and with the physical Edifier volume set LOW, the human operator
+can run:
+
+    audiohub-music --speaker-guide
+
+Each audible step still requires an independent uppercase **PLAY** and
+physical observation. Unexpected output stops automatic progression
+with bounded same-channel RETRY or STOP. The check neither prompts PLAY
+nor invokes the player, opens WAV files, writes a log, changes the
+global mixer/EQ/routing/owner/BT/Wi-Fi/services, or uses default-output
+fallback. It refuses extra options and root. No files or settings need
+rollback; use the old untouched SD if the operator separately approves
+a hardware rollback.
