@@ -8,10 +8,13 @@ The installed Pi4 `audiohub-music --speaker-guide` now guides a local
 unprivileged operator through LEFT, RIGHT, BOTH independent original
 short stereo tests without a WAV file. Each stage needs fresh uppercase
 PLAY consent and a physical CORRECT/WRONG/SILENT/UNSURE observation.
-The anonymous observations are displayed only on that local terminal
-and are not persisted or promoted to hardware certification. If any
-speaker fails, the guide suggests physical USB/Edifier inspection
-rather than changing global audio routes or volume. Actual hardware
+An unexpected WRONG, SILENT or UNSURE answer now stops automatic
+progression. The operator can explicitly RETRY only the same channel
+once with a new PLAY consent, or STOP. After two attempts the guide
+stops; no later channel is played on its own. The anonymous observations
+are displayed only on the local terminal and are not persisted or
+promoted to hardware certification. Failures lead to physical USB/Edifier
+inspection advice, never an automatic mixer/route/volume change. Actual hardware
 and production release remain NO-GO; see
 [local stereo operator guide](LOCAL-MUSIC-PLAYBACK.md).
 
