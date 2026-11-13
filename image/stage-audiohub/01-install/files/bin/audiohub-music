@@ -29,6 +29,7 @@ usage() {
     'After STOP/EOF, report prior observations, attempts and untested sides locally.' \
     'Requires separate PLAY at a local terminal; very low signal and quiet stream only.' \
     '--show-titles explicitly reveals sanitized private titles on this terminal.' \
+    'The album wizard checks private input/player FIRST; missing tools stop before any selection or PLAY.' \
     'The playback wizard shows an anonymous list; select numbers, ALL or SHUFFLE.' \
     'PLAY is required separately to start sound; CHANGE revises the queue.' \
     'During playback: u=pause/resume, m=repeat, n=next, q=stop, Ctrl+C=stop.' \
