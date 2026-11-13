@@ -48,5 +48,13 @@ test "$resume_status" -eq 2
 case "$verify_output" in *"Safe offline WAV transfer refused"*) ;; *) exit 1 ;; esac
 case "$resume_output" in *"Safe offline WAV transfer refused"*) ;; *) exit 1 ;; esac
 runuser -u audiohub -- /usr/local/bin/audiohub-presets-transfer --help >/dev/null
+# Native three-argument first-SD migration smoke: require Python's safe
+# non-TTY refusal, not a shell-wrapper usage error; never open/mount old SD.
+set +e
+old_preset_output="$(runuser -u audiohub -- /usr/local/bin/audiohub-presets-transfer export-old /home/audiohub/.config/audiohub /home/audiohub/PrivateMusic 2>&1)"
+old_preset_status="$?"
+set -e
+test "$old_preset_status" -eq 2
+case "$old_preset_output" in *"Private preset operation safely refused"*) ;; *) exit 1 ;; esac
 PYTHONPATH=/opt/audiohub/src runuser -u audiohub -- python3 -m audiohub.eq_setup
 CHROOT
