@@ -102,6 +102,45 @@ class MusicLauncherTests(unittest.TestCase):
                 self.assertNotIn(token, text)
         self.assertIn("PLAY is a separate explicit TTY input", text)
 
+    def test_readiness_help_and_native_wrapper_forwarding(self):
+        help_text = self.shell("--help").stdout
+        self.assertIn("--check", help_text)
+        self.assertIn("without sound", help_text)
+        source = LAUNCHER.read_text(encoding="utf-8")
+        self.assertIn("check_only=0", source)
+        self.assertIn('exec /usr/bin/python3 -m audiohub.local_music --check --library "$folder"', source)
+        self.assertIn('if [ "$check_only" -eq 1 ]; then', source)
+        self.assertIn("No default-output", (ROOT / "src/audiohub/local_music.py").read_text())
+        self.assertNotIn(" --play", source)
+        self.assertNotIn("pw-cat", source)
+
+    def test_readiness_conflicting_options_rejected_before_python_or_audio(self):
+        for args in (
+            ("--check", "--list"),
+            ("--check", "--show-titles"),
+            ("--check", "--minutes", "10"),
+            ("--check", "--level", "quiet"),
+            ("--check", "--check"),
+            ("/home/audiohub/PrivateMusic", "--list", "--check"),
+            ("/home/audiohub/PrivateMusic", "--check", "--show-titles"),
+            ("--check", "/home/audiohub/PrivateMusic", "--level", "normal"),
+        ):
+            with self.subTest(args=args):
+                output = self.shell(*args)
+                self.assertEqual(output.returncode, 2, output.stderr)
+                self.assertNotIn("Playing track", output.stdout)
+                self.assertNotIn("PLAY confirmed", output.stdout)
+                self.assertTrue(output.stderr.strip())
+
+    def test_native_chroot_smokes_installed_nonplaying_readiness(self):
+        stage = STAGE.read_text(encoding="utf-8")
+        self.assertIn("empty_check_output=", stage)
+        self.assertIn("/usr/local/bin/audiohub-music --check", stage)
+        self.assertIn('test "$empty_check_status" -eq 2', stage)
+        self.assertIn('WAV library: NEEDS ATTENTION', stage)
+        self.assertIn('Local PipeWire playback tool:', stage)
+        self.assertIn("No playback, global mixer/route change", stage)
+
     def test_builder_installs_real_command_and_prepares_private_folder(self):
         script = STAGE.read_text(encoding="utf-8")
         self.assertIn('install -m755 files/bin/audiohub-music', script)
