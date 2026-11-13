@@ -307,8 +307,13 @@ class MusicTransferTests(unittest.TestCase):
         self.assertIn("audiohub.music_transfer", text)
         self.assertNotIn("sudo ", text)
         self.assertNotIn("eval ", text)
+        self.assertIn('exec /usr/bin/python3 -m audiohub.music_transfer "$@"', text)
+        self.assertIn('verify-backup|verify-restore', text)
+        self.assertIn('[ "$3" != "--resume" ]', text)
         for args in ([], ["backup"], ["invalid", "/tmp"],
-                     ["backup", "relative"], ["backup", "--play"]):
+                     ["backup", "relative"], ["backup", "--play"],
+                     ["verify-backup", "/tmp", "--resume"],
+                     ["restore", "/tmp", "--wrong"]):
             with self.subTest(args=args):
                 result = subprocess.run(["/bin/sh", str(wrapper), *args],
                                         capture_output=True, timeout=5)
