@@ -121,6 +121,21 @@ class MusicTransferTests(unittest.TestCase):
             self.run_transfer("backup")
         self.assertEqual(list(self.external.iterdir()), [])
 
+    def test_first_sd_swap_can_restore_from_read_only_old_music_source(self):
+        # PR258 has no transfer CLI. The owner may mount the old SD
+        # separately read-only, then restore from its original WAV directory.
+        original = self.wav.read_bytes()
+        self.assertTrue(self.run_transfer("backup"))
+        archived = self.external / self.name
+        self.wav.unlink()  # test fixture only, not production.
+        self.external.chmod(0o500)
+        self.output.clear()
+        self.assertTrue(self.run_transfer("restore"))
+        self.assertEqual(self.wav.read_bytes(), original)
+        self.assertEqual(archived.read_bytes(), original)
+        self.assertEqual(stat.S_IMODE(self.external.stat().st_mode), 0o500)
+        self.assertEqual(stat.S_IMODE(self.wav.stat().st_mode), 0o600)
+
     def test_cancel_restoration_leaves_existing_music_unchanged(self):
         self.assertTrue(self.run_transfer("backup"))
         self.wav.unlink()  # test fixture only
