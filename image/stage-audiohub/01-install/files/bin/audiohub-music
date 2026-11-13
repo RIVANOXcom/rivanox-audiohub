@@ -1,45 +1,111 @@
 #!/bin/sh
 # SPDX-License-Identifier: AGPL-3.0-only
-# Local, user-invoked Pi4 music launcher. No service, audio or network starts
-# until the existing interactive wizard receives exact uppercase PLAY.
+# Operator-only Pi4 local music. No autoplay; only the existing PLAY wizard
+# launches an owned pw-cat process in the existing audiohub.music input.
 set -eu
 
 usage() {
   printf '%s\n' \
     'AudioHub local music (unverified Pi4 operator alpha)' \
-    'Usage: audiohub-music [ABSOLUTE_PRIVATE_WAV_FOLDER]' \
-    'Default: /home/audiohub/PrivateMusic' \
-    'The private folder needs your own PCM16 WAV files.' \
-    'The wizard shows an anonymous list; select numbers, ALL or SHUFFLE.' \
+    'Usage: audiohub-music [ABSOLUTE_PRIVATE_WAV_FOLDER] [--minutes 1..30] [--level quiet|soft|normal] [--show-titles]' \
+    '       audiohub-music [ABSOLUTE_PRIVATE_WAV_FOLDER] --list [--show-titles]' \
+    'Default: /home/audiohub/PrivateMusic, 15 minutes, normal stream level (0.20).' \
+    'quiet=0.05, soft=0.10, normal=0.20; levels are stream gains, not calibrated speaker loudness.' \
+    '--list only shows valid WAV track numbers and format; it NEVER plays sound.' \
+    '--show-titles explicitly reveals sanitized private titles on this terminal.' \
+    'The playback wizard shows an anonymous list; select numbers, ALL or SHUFFLE.' \
     'PLAY is required separately to start sound; CHANGE revises the queue.' \
-    'During playback: u=pause/resume, n=next, q=stop, Ctrl+C=stop.' \
-    'No network, settings or background music service is started.'
+    'During playback: u=pause/resume, m=repeat, n=next, q=stop, Ctrl+C=stop.' \
+    'No network, settings, privileged operation or background service is started.'
 }
 
 if [ "$#" -eq 1 ] && { [ "$1" = "-h" ] || [ "$1" = "--help" ]; }; then
   usage
   exit 0
 fi
-if [ "$#" -eq 0 ]; then
-  folder=/home/audiohub/PrivateMusic
-elif [ "$#" -eq 1 ]; then
-  folder=$1
-else
-  printf '%s\n' 'Expected no argument or one absolute private WAV folder; use --help.' >&2
-  exit 2
-fi
-case "$folder" in
-  /*) ;;
-  *) printf '%s\n' 'A private absolute WAV folder is required; use --help.' >&2; exit 2 ;;
-esac
+
+folder=/home/audiohub/PrivateMusic
+folder_seen=0
+minutes=15
+minutes_seen=0
+level=normal
+level_seen=0
+list_only=0
+titles=0
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --minutes)
+      if [ "$minutes_seen" -ne 0 ] || [ "$#" -lt 2 ]; then
+        printf '%s\n' 'Provide one explicit bounded --minutes value.' >&2; exit 2
+      fi
+      # Bounded digit patterns avoid shell integer overflow and extra flags.
+      case "$2" in
+        [1-9]|[12][0-9]|30) minutes=$2 ;;
+        *) printf '%s\n' 'Minutes must be a whole number from 1 through 30.' >&2; exit 2 ;;
+      esac
+      minutes_seen=1
+      shift 2
+      ;;
+    --level)
+      if [ "$level_seen" -ne 0 ] || [ "$#" -lt 2 ]; then
+        printf '%s\n' 'Provide one local --level choice.' >&2; exit 2
+      fi
+      case "$2" in
+        quiet|soft|normal) level=$2 ;;
+        *) printf '%s\n' 'Only quiet, soft or normal stream gain is supported.' >&2; exit 2 ;;
+      esac
+      level_seen=1
+      shift 2
+      ;;
+    --list)
+      if [ "$list_only" -ne 0 ]; then
+        printf '%s\n' 'Duplicate --list is not supported.' >&2; exit 2
+      fi
+      list_only=1
+      shift
+      ;;
+    --show-titles)
+      if [ "$titles" -ne 0 ]; then
+        printf '%s\n' 'Duplicate --show-titles is not supported.' >&2; exit 2
+      fi
+      titles=1
+      shift
+      ;;
+    /*)
+      if [ "$folder_seen" -ne 0 ]; then
+        printf '%s\n' 'Choose only one absolute WAV folder.' >&2; exit 2
+      fi
+      folder=$1
+      folder_seen=1
+      shift
+      ;;
+    --*|-*|*)
+      printf '%s\n' 'Invalid option or relative folder; use --help.' >&2
+      exit 2
+      ;;
+  esac
+done
+
 if [ "$(/usr/bin/id -u)" -eq 0 ]; then
   printf '%s\n' 'Run as the existing unprivileged Pi operator, not root.' >&2
   exit 2
 fi
 
-# Preserve the user's PipeWire session environment but pin our own modules.
-# A single quoted argument reaches Python; the shell does not interpret it.
 PYTHONPATH=/opt/audiohub/src
 export PYTHONPATH
+if [ "$list_only" -eq 1 ]; then
+  # Anonymous read-only listing without a TTY or any PipeWire process.
+  if [ "$titles" -eq 1 ]; then
+    exec /usr/bin/python3 -m audiohub.local_music --library "$folder" --show-titles
+  fi
+  exec /usr/bin/python3 -m audiohub.local_music --library "$folder"
+fi
+
+# This script NEVER passes --play. PLAY is a separate explicit TTY input
+# within the bounded existing music_library.guided_session confirmation gate.
+if [ "$titles" -eq 1 ]; then
+  exec /usr/bin/python3 -m audiohub.local_music \
+    --guided --library "$folder" --minutes "$minutes" --level "$level" --show-titles
+fi
 exec /usr/bin/python3 -m audiohub.local_music \
-  --guided --library "$folder" --minutes 15
+  --guided --library "$folder" --minutes "$minutes" --level "$level"
