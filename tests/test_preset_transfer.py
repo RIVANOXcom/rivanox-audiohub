@@ -267,6 +267,179 @@ class PresetTransferTests(unittest.TestCase):
             str(self.media), str(self.old_music), str(self.old),
             out=self.logs.append, require_terminal=False)
 
+    def guided(self, copy=True, profiles=True, eq=True):
+        return preset_transfer.restore_guided(
+            str(self.media), settings_path=self.new_settings,
+            profile_path=self.new_profiles, music_dir=str(self.new_music),
+            out=self.logs.append, require_terminal=False,
+            confirm_copy=lambda: copy, confirm_profiles=lambda: profiles,
+            confirm_eq=lambda: eq)
+
+    def test_guided_restores_wav_profiles_eq_with_separate_confirmations(self):
+        name = self.seed_sd_backup()
+        source = (self.media / name).read_bytes()
+        self.assertTrue(self.guided())
+        self.assertEqual((self.new_music / name).read_bytes(), source)
+        self.assertTrue(self.sd_check_new())
+        self.assertEqual(mixer_control.show(path=self.new_settings)["master"], 70)
+        self.assertFalse(mixer_control.show(path=self.new_settings)["laptop"]["mute"])
+        self.assertEqual(
+            mixer_control.list_volume_profiles(path=self.new_profiles)
+            ["profiles"]["private-one"]["master"], 20)
+        log = "\n".join(self.logs)
+        self.assertIn("Step 1/3", log)
+        self.assertIn("Step 2/3", log)
+        self.assertIn("Step 3/3", log)
+        self.assertIn("Guided stored-data migration verified", log)
+        self.assertNotIn(name, log)
+        self.assertNotIn("private-one", log)
+        self.assertNotIn(str(self.root), log)
+
+    def test_guided_preserves_local_profiles_and_active_mixer(self):
+        name = self.seed_sd_backup()
+        mixer_control.save_volume_profile(
+            "local-only", 7, 22, 33, 44,
+            path=self.new_profiles, confirmed=True)
+        mixer_control.change({"master": 27,
+                              "laptop": {"mute": True, "volume": 41}},
+                             path=self.new_settings, confirmed=True)
+        before = mixer_control.show(path=self.new_settings)
+        self.assertTrue(self.guided())
+        after = mixer_control.show(path=self.new_settings)
+        self.assertEqual(after["master"], before["master"])
+        self.assertEqual(after["laptop"]["mute"], before["laptop"]["mute"])
+        self.assertEqual(after["laptop"]["volume"], before["laptop"]["volume"])
+        saved = mixer_control.list_volume_profiles(path=self.new_profiles)["profiles"]
+        self.assertIn("local-only", saved)
+        self.assertEqual(saved["local-only"]["master"], 7)
+        self.assertIn("private-one", saved)
+        self.assertEqual((self.new_music / name).read_bytes(),
+                         (self.media / name).read_bytes())
+        self.assertTrue(self.sd_check_new())
+
+    def test_guided_cancel_copy_has_zero_destination_writes(self):
+        name = self.seed_sd_backup()
+        self.assertFalse(self.guided(copy=False))
+        self.assertFalse((self.new_music / name).exists())
+        self.assertFalse(self.new.exists())
+        self.assertTrue((self.media / name).exists())
+
+    def test_guided_cancel_merge_retains_verified_wav_for_restart(self):
+        name = self.seed_sd_backup()
+        self.assertFalse(self.guided(profiles=False))
+        first = self.new_music / name
+        self.assertTrue(first.exists())
+        inode = first.stat().st_ino
+        self.assertFalse(self.new.exists())
+        self.assertTrue(self.guided())
+        self.assertEqual(first.stat().st_ino, inode)
+        self.assertTrue(self.sd_check_new())
+
+    def test_guided_cancel_eq_keeps_wav_and_profiles_without_writing_eq(self):
+        name = self.seed_sd_backup()
+        self.assertFalse(self.guided(eq=False))
+        self.assertTrue((self.new_music / name).exists())
+        self.assertTrue(self.new_profiles.exists())
+        self.assertFalse(self.new_settings.exists())
+        self.assertTrue(self.guided(copy=False, profiles=False, eq=True))
+        self.assertTrue(self.sd_check_new())
+
+    def test_guided_conflicting_profiles_block_before_wav_copy(self):
+        name = self.seed_sd_backup()
+        mixer_control.save_volume_profile(
+            "private-one", 99, 15, 15, 15,
+            path=self.new_profiles, confirmed=True)
+        before = self.new_profiles.read_bytes()
+        with self.assertRaises(ValueError):
+            self.guided()
+        self.assertFalse((self.new_music / name).exists())
+        self.assertEqual(self.new_profiles.read_bytes(), before)
+
+    def test_guided_non_neutral_eq_blocks_before_wav_copy(self):
+        name = self.seed_sd_backup()
+        mixer_control.change({"music": {"bass": 6}},
+                             path=self.new_settings, confirmed=True)
+        before = self.new_settings.read_bytes()
+        with self.assertRaises(ValueError):
+            self.guided()
+        self.assertFalse((self.new_music / name).exists())
+        self.assertEqual(self.new_settings.read_bytes(), before)
+
+    def test_guided_different_wav_collision_blocks_before_other_writes(self):
+        name = self.seed_sd_backup()
+        target = self.new_music / name
+        original = (self.media / name).read_bytes()
+        target.write_bytes(original[:-1] + b"\x09")
+        target.chmod(0o600)
+        before = target.read_bytes()
+        with self.assertRaises(ValueError):
+            self.guided()
+        self.assertEqual(target.read_bytes(), before)
+        self.assertFalse(self.new.exists())
+
+    def test_guided_idempotent_complete_restore_does_not_change_inodes(self):
+        name = self.seed_sd_backup()
+        self.assertTrue(self.guided())
+        dest = self.new_music / name
+        earlier = [x.stat().st_ino for x in
+                   (dest, self.new_profiles, self.new_settings)]
+        self.assertTrue(self.guided(copy=False, profiles=False, eq=False))
+        later = [x.stat().st_ino for x in
+                 (dest, self.new_profiles, self.new_settings)]
+        self.assertEqual(earlier, later)
+
+    def test_guided_refuses_changed_archive_after_confirmed_wav_copy(self):
+        name = self.seed_sd_backup()
+        backup = self.media / preset_transfer.FILENAME
+        original = backup.read_bytes()
+        def altered_during_copy():
+            backup.write_bytes(original + b" ")
+            backup.chmod(0o600)
+            return True
+        with self.assertRaises(OSError):
+            preset_transfer.restore_guided(
+                str(self.media), settings_path=self.new_settings,
+                profile_path=self.new_profiles, music_dir=str(self.new_music),
+                out=self.logs.append, require_terminal=False,
+                confirm_copy=altered_during_copy,
+                confirm_profiles=lambda: True, confirm_eq=lambda: True)
+        self.assertTrue((self.new_music / name).exists())
+        self.assertFalse(self.new.exists())
+
+    def test_guided_rejects_root_or_untrusted_non_tty(self):
+        name = self.seed_sd_backup()
+        with mock.patch.object(preset_transfer.os, "geteuid", return_value=0):
+            with self.assertRaises(PermissionError):
+                self.guided()
+        with mock.patch.object(preset_transfer.sys.stdin, "isatty",
+                               return_value=False):
+            with self.assertRaises(PermissionError):
+                preset_transfer.restore_guided(
+                    str(self.media), settings_path=self.new_settings,
+                    profile_path=self.new_profiles, music_dir=str(self.new_music))
+        self.assertFalse((self.new_music / name).exists())
+        self.assertFalse(self.new.exists())
+
+    def test_guided_cli_and_native_launcher_real_dispatch(self):
+        with mock.patch.object(preset_transfer, "restore_guided",
+                               return_value=True) as call:
+            self.assertEqual(preset_transfer.main(
+                ["restore-guided", str(self.media)]), 0)
+            self.assertEqual(call.call_args.args, (str(self.media),))
+        wrapper = (Path(__file__).resolve().parents[1] /
+                   "image/stage-audiohub/01-install/files/bin/audiohub-presets-transfer")
+        self.assertEqual(subprocess.run(
+            ["/bin/sh", "-n", str(wrapper)], capture_output=True).returncode, 0)
+        self.assertIn("restore-guided", wrapper.read_text())
+        self.assertIn('exec /usr/bin/python3 -m audiohub.preset_transfer "$@"',
+                      wrapper.read_text())
+        for argv in (["restore-guided"], ["restore-guided", "relative"],
+                     ["restore-guided", str(self.media), "--no-confirm"]):
+            with self.subTest(argv=argv):
+                self.assertEqual(subprocess.run(
+                    ["/bin/sh", str(wrapper), *argv],
+                    capture_output=True, timeout=5).returncode, 2)
+
     def test_sd_plan_reveals_missing_wav_profile_and_eq_without_writes(self):
         name = self.seed_sd_backup()
         snapshot = (self.old_settings.read_bytes(), self.old_profiles.read_bytes(),

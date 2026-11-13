@@ -523,3 +523,15 @@ remains required, same-name WAVs are never overwritten. Use
 `verify-backup-old OLD_READONLY_MUSIC_DIR PRIVATE_ARCHIVE` before
 running combined `audiohub-presets-transfer check-backup`.
 See [private SD update guidance](docs/PRESET-TRANSFER.md).
+
+**Guided offline SD restore:** After an independently approved new
+Pi4 test SD starts and the separately retained WAV plus EQ/profile
+archive passes `audiohub-presets-transfer check-backup`, run
+`audiohub-presets-transfer restore-guided PRIVATE_ARCHIVE` locally as
+unprivileged `audiohub`. It previews conflicts before writing, then
+requires separate exact **COPY**, **MERGE**, and **APPLY-EQ** consent
+where needed; automatically skips already verified copies and ends with
+a read-only combined WAV/preset verification. It never mounts/flashes
+SD cards, replaces existing WAV/profile values, changes owner/wireless
+trust or claims live speaker sound. The original SD is the rollback.
+See [the manual transfer runbook](docs/PRESET-TRANSFER.md).

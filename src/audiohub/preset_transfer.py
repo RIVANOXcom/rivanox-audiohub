@@ -618,15 +618,113 @@ def check_new(external, *, settings_path=SETTINGS,
     return True
 
 
+def restore_guided(external, *, settings_path=SETTINGS,
+                   profile_path=mixer_control.PROFILE_PATH,
+                   music_dir=music_transfer.DEFAULT_MUSIC_DIR,
+                   out=print, require_terminal=True,
+                   confirm_copy=None, confirm_profiles=None, confirm_eq=None):
+    """One reviewed SD data migration with THREE distinct operator consents.
+
+    No action until combined read-only WAV/EQ/profile preflight passes.
+    Reuse the existing safe WAV resume, profile merge and neutral-only EQ
+    writers rather than implementing a separate transfer mechanism.
+    Cancellation leaves previously completed copies intact, so a later
+    invocation can continue without overwriting any original data.
+    """
+    _guard(require_terminal=require_terminal)
+    data, fingerprint = _load(external)
+    out("Guided SD restore: REVIEW first; only archived WAVs and saved "
+        "inactive audio presets are eligible. No identity or OS migration.")
+    plan = plan_new_sd(
+        external, settings_path=settings_path, profile_path=profile_path,
+        music_dir=music_dir, out=out, require_terminal=False)
+    if (plan["profile_conflicts"] or plan["profile_limit_exceeded"]
+            or plan["eq_non_neutral_conflict"]):
+        raise ValueError("Existing local profiles/EQ require manual resolution")
+    if plan["ready_for_final_readonly_check"]:
+        out("Archive already present; running final READ-ONLY comparison.")
+        return check_new(
+            external, settings_path=settings_path, profile_path=profile_path,
+            music_dir=music_dir, out=out, require_terminal=False)
+
+    def check_archive():
+        latest, latest_hash = _load(external)
+        if latest_hash != fingerprint or latest != data:
+            raise OSError("Private preset archive changed during guided restore")
+
+    check_archive()
+    if plan["wav_copy_needed"]:
+        out("Step 1/3 – restore only missing WAVs with separate COPY consent; "
+            "exact existing matches are skipped. No files overwritten.")
+        completed = music_transfer.transfer(
+            "restore", external, music_dir=music_dir, resume=True,
+            confirm=confirm_copy, out=out, require_terminal=False)
+        if completed is not True:
+            out("Guided restore STOPPED after WAV cancellation. Any earlier "
+                "verified copies are retained; rerun to resume.")
+            return False
+        # Before touching mixer saved state, the complete WAV source set
+        # must agree byte-for-byte with private destination files.
+        music_transfer.transfer(
+            "restore", external, music_dir=music_dir, verify=True,
+            out=lambda _line: None, require_terminal=False)
+        check_archive()
+    else:
+        out("Step 1/3 – all archived WAVs already match; no copy needed.")
+
+    if plan["profile_missing"]:
+        check_archive()
+        out("Step 2/3 – add only missing INACTIVE profiles with separate MERGE "
+            "consent; existing profiles and live levels remain untouched.")
+        complete = merge_profiles(
+            external, profile_path=profile_path, confirm=confirm_profiles,
+            out=out, require_terminal=False)
+        if complete is not True:
+            out("Guided restore STOPPED at profile confirmation. Existing "
+                "WAV copies are retained; no automatic rollback.")
+            return False
+        check_archive()
+    else:
+        out("Step 2/3 – archived inactive profiles already match, or none "
+            "exist; no profile write needed.")
+
+    if plan["eq_bands_different"]:
+        check_archive()
+        out("Step 3/3 – save only neutral-to-archived EQ with separate APPLY-EQ "
+            "consent; no PipeWire stage, restart or live sound change.")
+        complete = restore_eq(
+            external, settings_path=settings_path, confirm=confirm_eq,
+            out=out, require_terminal=False)
+        if complete is not True:
+            out("Guided restore STOPPED at EQ confirmation. Earlier saved "
+                "copies/profiles are retained; no automatic rollback.")
+            return False
+        check_archive()
+    else:
+        out("Step 3/3 – all archived EQ bands already match; no write needed.")
+
+    out("Final step – verify archived WAV hashes and all saved preset values "
+        "READ ONLY before claiming stored-data equality.")
+    verified = check_new(
+        external, settings_path=settings_path, profile_path=profile_path,
+        music_dir=music_dir, out=out, require_terminal=False)
+    check_archive()
+    out("Guided stored-data migration verified. No device ownership, live "
+        "PipeWire sound, SD/OS update or physical hardware test implied.")
+    return verified
+
+
 def main(argv=None):
     args = list(sys.argv[1:] if argv is None else argv)
     if args in (["--help"], ["-h"]):
         print("Offline Pi4 non-secret audio preset transfer, no owner migration.")
         print("Usage: audiohub-presets-transfer export|inspect|plan-profiles|restore-profiles|merge-profiles|restore-eq|verify|verify-merged|plan-new|check-new ABSOLUTE_PRIVATE_FOLDER")
         print("       audiohub-presets-transfer check-backup PRIVATE_BACKUP OLD_MUSIC_DIR OLD_CONFIG_DIR")
+        print("       audiohub-presets-transfer restore-guided ABSOLUTE_PRIVATE_ARCHIVE")
         print("       audiohub-presets-transfer export-old OLD_SD_PRIVATE_CONFIG_DIR ABSOLUTE_PRIVATE_FOLDER")
         print("Export SAVE; strict restore RESTORE; conflict-free profile merge MERGE.")
         print("Saved EQ APPLY-EQ to neutral EQ only; verify-merged permits extra local profiles.")
+        print("restore-guided requires separate COPY, MERGE and APPLY-EQ, then read-only verification.")
         print("Never imports keys, Bluetooth trust, Wi-Fi, IDs, live volume/mutes or OS.")
         return 0
     old_sd_mode = len(args) == 3 and args[0] == "export-old"
@@ -634,7 +732,7 @@ def main(argv=None):
     if not (old_sd_mode or backup_check_mode or (len(args) == 2 and args[0] in (
             "export", "inspect", "plan-profiles", "restore-profiles",
             "merge-profiles", "restore-eq", "verify", "verify-merged",
-            "plan-new", "check-new"))):
+            "plan-new", "check-new", "restore-guided"))):
         print("Choose an explicit preset action and an absolute private folder.")
         return 2
     try:
@@ -655,7 +753,8 @@ def main(argv=None):
                          "merge-profiles": merge_profiles,
                          "restore-eq": restore_eq,
                          "verify": verify, "verify-merged": verify_merged,
-                         "plan-new": plan_new_sd, "check-new": check_new}[args[0]]
+                         "plan-new": plan_new_sd, "check-new": check_new,
+                         "restore-guided": restore_guided}[args[0]]
             result = operation(args[1])
         return 0 if result is not False else 1
     except (OSError, ValueError, TypeError, UnicodeError,
