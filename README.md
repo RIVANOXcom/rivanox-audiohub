@@ -514,3 +514,12 @@ EQ/profile migration steps without changes; `check-new PRIVATE_ARCHIVE`
 performs a combined read-only source-set verification on the new SD.
 Separate `COPY`, `MERGE` and `APPLY-EQ` confirmations remain mandatory
 for actual restoration. See [SD update guide](docs/PRESET-TRANSFER.md).
+
+**WAV migration from an older SD:** A new Pi4 image can execute
+`audiohub-music-transfer backup-old OLD_READONLY_MUSIC_DIR PRIVATE_ARCHIVE`
+even when the old SD lacks the AudioHub transfer CLI; exact `COPY`
+remains required, same-name WAVs are never overwritten. Use
+`backup-old ... --resume` for interrupted copies and the new read-only
+`verify-backup-old OLD_READONLY_MUSIC_DIR PRIVATE_ARCHIVE` before
+running combined `audiohub-presets-transfer check-backup`.
+See [private SD update guidance](docs/PRESET-TRANSFER.md).

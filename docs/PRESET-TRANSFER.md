@@ -197,3 +197,54 @@ local terminal, with no root or network access. They do **not**
 prove physical sound, persistent hardware state, a completed OS
 update, owner trust or any of the separate production GO criteria.
 Keep original SD and archive intact for rollback.
+
+## First WAV backup from an older SD without installed transfer software
+
+The previous `audiohub-music-transfer backup ARCHIVE` command reads the
+**current running** `/home/audiohub/PrivateMusic` only. This is not
+the old SD if the operator has already booted the replacement SD.
+To avoid accidentally backing up an empty NEW music folder, the new
+image supports a two-directory *offline, explicit* first migration:
+
+    audiohub-music-transfer backup-old /absolute/old-SD/home/audiohub/PrivateMusic /absolute/external/private-folder
+
+Use the new test SD's installed command as the unprivileged `audiohub`
+user. The operator must have separately mounted the OLD SD **read-only**
+via an authorized reader and confirmed the old folder's UID matches
+the current audiohub account. No file on the old SD is executed,
+mounted, chmod'ed or edited. The destination is a separately created
+owner-only private archive directory (0700). The operator sees track
+count, byte total and new-file count, then explicitly enters exact
+`COPY` before exclusively creating verified mode-0600 WAV copies.
+The new command shares the established bounded 40-track/512-MiB,
+SHA256, no-symlink/no-hardlink, non-overwrite transfer engine.
+
+If a copy was interrupted, inspect both folders and use:
+
+    audiohub-music-transfer backup-old /absolute/old-SD/home/audiohub/PrivateMusic /absolute/external/private-folder --resume
+
+`--resume` hashes every pre-existing same-name destination WAV and
+accepts only byte-for-byte matching safe files. It never silently
+replaces existing WAV content. Differences or unsafe entries cause
+a refusal before any additional copy. Copying may leave verified
+new destination files if a later unrelated error occurs; repeat
+only after review and keep the old SD untouched.
+
+To check the WAV transfer **without any writes or COPY prompt**:
+
+    audiohub-music-transfer verify-backup-old /absolute/old-SD/home/audiohub/PrivateMusic /absolute/external/private-folder
+
+Then separately export saved EQ and inactive profiles from that
+same already-read-only old SD:
+
+    audiohub-presets-transfer export-old /absolute/old-SD/home/audiohub/.config/audiohub /absolute/external/private-folder
+
+After both source datasets exist, the existing combined
+`audiohub-presets-transfer check-backup PRIVATE_ARCHIVE OLD_MUSIC OLD_CONFIG`
+compares their WAV bytes plus the EQ/profile data before replacement.
+Do not continue to the new SD `plan-new`, separately confirmed
+`restore --resume` / `merge-profiles` / `restore-eq`, or final
+`check-new` until old-source data are verified. Keep old SD and
+private archive for rollback; none of these commands transfers
+owner identities, wireless trust or system configuration.
+Current alpha remains unverified for actual Pi4 audio hardware.

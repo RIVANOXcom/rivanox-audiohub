@@ -189,3 +189,16 @@ personal filenames, identities or changing active sound. Existing
 per-action `COPY`, `MERGE`, `APPLY-EQ` approvals and rollback
 boundaries are unchanged. Native packaging and physical audio
 remain independent, unverified release gates.
+
+### First WAV backup when the original Pi4 SD has no installed CLI
+
+The existing installed operator WAV transfer utility now offers
+`backup-old OLD_READONLY_MUSIC PRIVATE_ARCHIVE [--resume]` and
+`verify-backup-old OLD_READONLY_MUSIC PRIVATE_ARCHIVE`. Both run on
+the new test image, never on or from executable code of the old SD.
+Copy requires explicit `COPY`, hashes bounded WAVs, exclusively adds
+mode-0600 destination files and preserves old SD source bytes;
+verification only reads. This removes the manual first-migration
+gap left by the newer `export-old` EQ/profile path and pairs with
+`check-backup`/`plan-new`/`check-new`. All privileged mounts and
+SD flashing remain outside the tool and owner-authorized only.
