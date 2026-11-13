@@ -34,7 +34,7 @@ case "$2" in
   /*) ;;
   *) printf '%s\n' 'Private external directory must be absolute.' >&2; exit 2 ;;
 esac
-if [ "$#" -eq 3 ]; then
+if [ "$#" -ge 3 ]; then
   case "$3" in
     /*) ;;
     *) printf '%s\n' 'Private archive directory must be absolute.' >&2; exit 2 ;;
