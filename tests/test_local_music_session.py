@@ -81,6 +81,54 @@ class MusicSessionTests(unittest.TestCase):
                 out=self.out.append, require_tty=False,
             )
 
+    def test_quieter_level_follows_each_owned_track_and_is_not_persisted(self):
+        observed = []
+        def player(paths, *, max_minutes, stop, on_player,
+                   session_deadline, notify, level):
+            observed.append((paths[0], level))
+            child = FakeChild()
+            self.children.append(child)
+            on_player(child)
+            while not stop.wait(0.002):
+                pass
+            raise InterruptedError("test stop")
+        with mock.patch.object(local_music, "music_sink_available",
+                               return_value=True), \
+             mock.patch.object(local_music.os, "geteuid", return_value=1000):
+            commands = iter(["n", "q"])
+            self.assertFalse(music_session.run_session(
+                self.paths, max_minutes=1, read_command=lambda _: next(commands, None),
+                playback=player, out=self.out.append, require_tty=False,
+                level="quiet"))
+        self.assertEqual(observed, [(self.paths[0], "quiet"),
+                                    (self.paths[1], "quiet")])
+        self.assertTrue(all(c.terminated for c in self.children))
+        log = "\n".join(self.out)
+        self.assertIn("QUIET stream level", log)
+        self.assertNotIn("secret-title", log)
+        self.assertNotIn(str(self.dir), log)
+
+    def test_unsupported_interactive_level_is_rejected_before_audio_sink(self):
+        with mock.patch.object(local_music, "music_sink_available") as sink:
+            with self.assertRaises(ValueError):
+                music_session.run_session(
+                    self.paths, level="loud", require_tty=False,
+                    out=self.out.append)
+            sink.assert_not_called()
+
+    def test_cli_interactive_quiet_level_reaches_session_only_after_play(self):
+        with mock.patch.object(local_music.sys, "stdin",
+                               mock.Mock(isatty=lambda: True)), \
+             mock.patch.object(local_music.sys, "stdout",
+                               mock.Mock(isatty=lambda: True)), \
+             mock.patch.object(music_session, "run_session") as session, \
+             mock.patch("builtins.print"):
+            self.assertEqual(local_music.main([
+                "--interactive", "--level", "soft", "--play",
+                str(self.paths[0])]), 0)
+            session.assert_called_once_with([str(self.paths[0])],
+                                            max_minutes=15, level="soft")
+
     def test_explicit_quit_terminates_our_child_with_no_private_titles(self):
         self.assertFalse(self.run_with(["s", "h", "q"]))
         self.assertEqual(self.played, [self.paths[0]])

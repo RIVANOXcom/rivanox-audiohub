@@ -231,3 +231,17 @@ and empty custom profiles are supported by this guide alone. No
 owner, wireless, live audio, SD mount, flash, deletion or OS update
 is performed; production GO still requires all operator/physical
 and legal authorization gates.
+
+### Pi4 local WAV operator launcher options
+
+The existing installed `audiohub-music` now provides a read-only
+`--list` of bounded WAV metadata with filenames hidden by default;
+`--minutes 1..30` to choose a bounded session before PLAY;
+and strictly allowlisted `--level quiet|soft|normal` (0.05/0.10/0.20
+per owned pw-cat stream, no louder-than-default boost), propagated
+through guided selection, navigation and repeat. The chosen
+level is reviewed before exact PLAY, never changes PipeWire global
+levels or active mixer/other sources, and is never persisted.
+`--show-titles` is separate local explicit opt-in. Native chroot
+smoke exercises installed list mode and rejects out-of-range flags.
+No physical Edifier/loudness measurement, 2BT+LAN, or production GO.

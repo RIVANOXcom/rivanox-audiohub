@@ -510,3 +510,53 @@ old SD and never mounts, alters or formats either card. Transfer
 excludes identities, Bluetooth, Wi-Fi, music license grants and EQ.
 For combined sound preset + WAV verification before and after an
 SD change, see [the private SD update guide](PRESET-TRANSFER.md).
+
+## Easier Pi4 operator music launcher: list, time limit and quieter playback
+
+The **existing installed** Pi4 command now supports optional bounded
+parameters without changing the underlying private music player or
+starting any new service:
+
+    audiohub-music --list
+    audiohub-music /home/audiohub/PrivateMusic --list
+    audiohub-music --minutes 10 --level quiet
+    audiohub-music /home/audiohub/PrivateMusic --minutes 5 --level soft
+    audiohub-music --show-titles --list
+
+**Read-only library check:** `--list` displays the same bounded anonymous
+local track numbers, WAV duration, channels and sample rate as the
+existing picker, but **never** opens PipeWire, plays sound, writes
+playlists or requires an interactive prompt. This helps the operator
+confirm that WAVs are readable on a freshly installed test SD before
+physical audio testing. It refuses an empty or unsafe library, rather
+than giving a misleading green result. Filenames stay hidden unless
+`--show-titles` is separately specified; this explicit choice displays
+sanitized titles on the local screen and should not be used in a shared
+terminal transcript.
+
+**Bounded session:** `--minutes N` selects an integer from 1 through
+30 (default remains 15). It controls both the allowed library selection
+duration and the original wall-clock session deadline. It does not
+allow infinite autoplay, increase the maximum 8-track selection or
+bypass the existing exact **PLAY** terminal confirmation.
+
+**Private stream level:** `--level quiet|soft|normal` chooses an
+allowlisted per-owned-player `pw-cat --volume` gain: quiet=0.05,
+soft=0.10, normal=0.20 (default unchanged). Lower-than-normal levels
+can be selected **before** the separate PLAY confirmation; the
+operator reviews the choice with the selected track count and session
+time, and the same choice persists on skip, replay and repeat for
+this single terminal session only. No arbitrary numeric values above
+normal are accepted. These are relative digital stream gains, **NOT
+calibrated physical sound pressure**, so keep the amplifier/speaker
+hardware at a safe low volume for first testing. They never modify
+the global PipeWire gain, other mixer inputs, EQ, mute, owner pairing,
+Bluetooth/Wi-Fi, default output, device ACLs or persisted settings.
+
+The launcher accepts at most one private absolute WAV folder,
+one `--minutes` and one `--level`, with no `--play` shortcut,
+automatic scheduled music, network listener or elevated rights. The
+same unprivileged Pi console and explicit **PLAY** requirement remain.
+Stop with `q` + Enter or Ctrl+C; no changes to undo. Test status
+remains UNVERIFIED_ALPHA_TEST_ONLY until actual Pi4 speaker/hardware
+acceptance.

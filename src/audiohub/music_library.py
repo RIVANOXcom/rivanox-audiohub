@@ -221,7 +221,7 @@ def _terminal_line():
 
 
 def guided_session(folder, *, max_minutes=15, show_titles=False,
-                   read_line=None, out=None, runner=None):
+                   read_line=None, out=None, runner=None, level="normal"):
     """One-command guided local picker with bounded revision and PLAY gate.
 
     ALL selects a small album; SHUFFLE prepares a short anonymous queue;
@@ -229,6 +229,8 @@ def guided_session(folder, *, max_minutes=15, show_titles=False,
     operator reviews the numbered order and enters exact uppercase PLAY.
     """
     import sys
+    # No unbounded pw-cat volume flag may be passed by the launcher or CLI.
+    local_music.stream_gain(level)
     if not sys.stdin.isatty() or not sys.stdout.isatty():
         raise PermissionError("Guided music requires a local operator terminal")
     if hasattr(os, "geteuid") and os.geteuid() == 0:
@@ -271,7 +273,8 @@ def guided_session(folder, *, max_minutes=15, show_titles=False,
             + " (private filenames hidden).")
         out("Selected " + str(details["files"]) + " WAV track(s), total "
             + str(details["total_duration_ms"] // 1000)
-            + " s. Verify a low physical speaker volume.")
+            + " s. Stream level " + level.upper() +
+            " (not calibrated speaker loudness). Verify a low physical speaker volume.")
         out("Type exact uppercase PLAY then Enter to play; CHANGE to reselect."
             " Anything else cancels; no automatic playback:")
         answer = read_line()
@@ -286,4 +289,6 @@ def guided_session(folder, *, max_minutes=15, show_titles=False,
             out("Music session cancelled. No playback started.")
             return False
         out("Explicit PLAY confirmed. To stop, press q + Enter or Ctrl+C.")
-        return runner(selected, max_minutes=max_minutes)
+        if level == "normal":
+            return runner(selected, max_minutes=max_minutes)
+        return runner(selected, max_minutes=max_minutes, level=level)

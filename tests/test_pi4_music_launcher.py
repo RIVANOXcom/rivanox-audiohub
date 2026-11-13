@@ -26,7 +26,7 @@ class MusicLauncherTests(unittest.TestCase):
         self.assertIn("set -eu", text)
         self.assertIn("PYTHONPATH=/opt/audiohub/src", text)
         self.assertIn("exec /usr/bin/python3 -m audiohub.local_music", text)
-        self.assertIn('--guided --library "$folder" --minutes 15', text)
+        self.assertIn('--guided --library "$folder" --minutes "$minutes" --level "$level"', text)
         self.assertNotIn("eval ", text)
         self.assertNotIn("sudo ", text)
         self.assertNotIn("systemctl ", text)
@@ -51,7 +51,7 @@ class MusicLauncherTests(unittest.TestCase):
             with self.subTest(args=args):
                 result = self.shell(*args)
                 self.assertEqual(result.returncode, 2)
-                self.assertIn("one absolute private WAV folder", result.stderr)
+                self.assertTrue(result.stderr.strip())
                 self.assertNotIn("Playing track", result.stdout)
 
     def test_relative_or_option_like_folder_is_rejected(self):
@@ -59,8 +59,48 @@ class MusicLauncherTests(unittest.TestCase):
             with self.subTest(folder=folder):
                 result = self.shell(folder)
                 self.assertEqual(result.returncode, 2)
-                self.assertIn("absolute WAV folder", result.stderr)
+                self.assertIn("Invalid option or relative folder", result.stderr)
                 self.assertNotIn("Playing track", result.stdout)
+
+    def test_help_shows_quiet_levels_time_and_readonly_list(self):
+        text = self.shell("--help").stdout
+        for name in ("--level quiet|soft|normal", "--minutes 1..30",
+                     "--list", "--show-titles", "0.05", "0.10",
+                     "0.20", "PLAY", "not calibrated speaker loudness"):
+            with self.subTest(name=name):
+                self.assertIn(name, text)
+
+    def test_launcher_refuses_unsafe_levels_minutes_and_duplicate_flags(self):
+        bad = [
+            ("--level", "loud"), ("--level", "0.95"),
+            ("--level", "--play"), ("--level", "quiet", "--level", "soft"),
+            ("--minutes", "0"), ("--minutes", "31"), ("--minutes", "10.0"),
+            ("--minutes", "+2"), ("--minutes", "00001"),
+            ("--minutes", "999999999999999999999999999"),
+            ("--minutes", "10", "--minutes", "5"),
+            ("--minutes", "--play"), ("--minutes",),
+            ("--show-titles", "--show-titles"), ("--list", "--list"),
+            ("/tmp/one", "/tmp/two"),
+            ("--play", "/tmp"), ("--guided", "/tmp"),
+            ("--library", "/tmp"), ("--help", "--play")
+        ]
+        for args in bad:
+            with self.subTest(args=args):
+                result = self.shell(*args)
+                self.assertEqual(result.returncode, 2, (args, result.stderr))
+                self.assertTrue(result.stderr.strip())
+                self.assertNotIn("Playing track", result.stdout)
+
+    def test_launcher_argument_contract_has_no_autoplay_or_global_mixer_changes(self):
+        text = LAUNCHER.read_text(encoding="utf-8")
+        self.assertIn("if [ \"$list_only\" -eq 1 ]; then", text)
+        self.assertIn('--library "$folder" --show-titles', text)
+        self.assertIn('--guided --library "$folder" --minutes "$minutes" --level "$level"', text)
+        for token in ("--play", "pw-cat", "pw-metadata", "pw-link",
+                      "systemctl restart", "sudo", "eval ", "curl ", "wget "):
+            with self.subTest(token=token):
+                self.assertNotIn(token, text)
+        self.assertIn("PLAY is a separate explicit TTY input", text)
 
     def test_builder_installs_real_command_and_prepares_private_folder(self):
         script = STAGE.read_text(encoding="utf-8")

@@ -269,6 +269,46 @@ class LocalMusicLibraryTests(unittest.TestCase):
         with mock.patch("sys.stdin", io.StringIO("PLAY\r\n")):
             self.assertEqual(music_library._terminal_line(), "PLAY")
 
+    def test_guided_quiet_level_is_reviewed_and_requires_exact_play(self):
+        with mock.patch("sys.stdin", mock.Mock(isatty=lambda: True)), \
+             mock.patch("sys.stdout", mock.Mock(isatty=lambda: True)), \
+             mock.patch.object(os, "geteuid", return_value=1000):
+            choices = iter(["1", "PLAY"])
+            sessions = []
+            output = []
+            def runner(paths, **kwargs):
+                sessions.append((paths, kwargs))
+                return True
+            self.assertTrue(music_library.guided_session(
+                self.root, max_minutes=4, level="quiet",
+                read_line=lambda: next(choices),
+                out=output.append, runner=runner))
+            self.assertEqual(sessions, [([self.a],
+                                         {"max_minutes": 4, "level": "quiet"})])
+            shown = "\n".join(output)
+            self.assertIn("QUIET", shown)
+            self.assertIn("not calibrated speaker loudness", shown)
+            self.assertNotIn(self.a.name, shown)
+            self.assertNotIn(str(self.root), shown)
+            denied = []
+            choices = iter(["1", "play"])
+            self.assertFalse(music_library.guided_session(
+                self.root, max_minutes=4, level="soft",
+                read_line=lambda: next(choices),
+                out=lambda _: None, runner=lambda *a, **kw: denied.append(True)))
+            self.assertEqual(denied, [])
+
+    def test_cli_guided_opt_in_quiet_level_and_no_autoplay(self):
+        with mock.patch("sys.stdin", mock.Mock(isatty=lambda: True)), \
+             mock.patch("sys.stdout", mock.Mock(isatty=lambda: True)), \
+             mock.patch.object(music_library, "guided_session",
+                               return_value=True) as guided:
+            self.assertEqual(local_music.main([
+                "--library", str(self.root), "--guided",
+                "--minutes", "7", "--level", "quiet"]), 0)
+            guided.assert_called_once_with(
+                str(self.root), max_minutes=7, show_titles=False, level="quiet")
+
     def test_cli_guided_needs_only_library_and_never_implicit_play(self):
         with mock.patch("sys.stdin", mock.Mock(isatty=lambda: True)), \
              mock.patch("sys.stdout", mock.Mock(isatty=lambda: True)), \

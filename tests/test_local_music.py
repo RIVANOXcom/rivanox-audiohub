@@ -117,6 +117,53 @@ class LocalMusicTests(unittest.TestCase):
         self.assertNotIn("one.wav", text)
         self.assertNotIn(str(self.root), text)
 
+    def test_quieter_gain_is_allowlisted_and_reaches_only_pw_cat(self):
+        self.assertEqual(local_music.stream_gain("quiet"), "0.05")
+        self.assertEqual(local_music.stream_gain("soft"), "0.10")
+        self.assertEqual(local_music.stream_gain("normal"), "0.20")
+        with mock.patch.object(local_music.os, "geteuid", return_value=1000):
+            self.assertTrue(local_music.play_playlist(
+                [self.wav], max_minutes=1, level="quiet",
+                spawn=self.spawn, capture=self.capture, notify=lambda _: None))
+            self.assertTrue(local_music.play_playlist(
+                [self.wav], max_minutes=1, level="soft",
+                spawn=self.spawn, capture=self.capture, notify=lambda _: None))
+        spawns = [event[1] for event in self.events if event[0] == "spawn"]
+        self.assertEqual([arg for cmd in spawns for arg in cmd
+                          if arg.startswith("--volume=")],
+                         ["--volume=0.05", "--volume=0.10"])
+        self.assertEqual(self.players[0].stdin.saved, self.samples)
+        self.assertEqual(self.players[1].stdin.saved, self.samples)
+
+    def test_invalid_stream_gain_denied_before_pipewire_or_spawn(self):
+        for unsafe in ("1.0", "0.80", "--target=default", "", "LOUD",
+                       None, 0.1, True, "quiet\n"):
+            with self.subTest(level=unsafe):
+                with self.assertRaises(ValueError):
+                    local_music.play_playlist(
+                        [self.wav], max_minutes=1, level=unsafe,
+                        spawn=self.spawn, capture=self.capture,
+                        notify=lambda _: None)
+        self.assertEqual(self.events, [])
+        for unsafe_gain in ("1.0", "0.21", 0.1, None):
+            with self.subTest(gain=unsafe_gain), self.assertRaises(ValueError):
+                local_music._play_one(
+                    self.wav, local_music._open_wav(self.wav),
+                    deadline=local_music.time.monotonic()+30,
+                    spawn=self.spawn, gain=unsafe_gain)
+        self.assertEqual(self.events, [])
+
+    def test_cli_opt_in_quieter_level_retains_preview_and_play_gate(self):
+        with mock.patch.object(local_music, "play_playlist") as play, \
+             mock.patch("builtins.print"):
+            self.assertEqual(local_music.main(
+                ["--level", "quiet", str(self.wav)]), 0)
+            play.assert_not_called()
+            self.assertEqual(local_music.main(
+                ["--level", "quiet", "--play", str(self.wav)]), 0)
+            play.assert_called_once_with([str(self.wav)],
+                                         max_minutes=15, level="quiet")
+
     def test_two_track_playlist_played_in_order(self):
         second = self.root / "two.wav"
         self.make_wav(second, b"\x05\x06\x07\x08" * 50)

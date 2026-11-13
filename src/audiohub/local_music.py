@@ -24,6 +24,15 @@ MAX_FILES = 8
 MAX_WAV_BYTES = 64 * 1024 * 1024
 MAX_SECONDS = 30 * 60
 STREAM_VOLUME = "0.20"  # Conservative starting point; NOT calibrated SPL.
+# Only allow softer-than-default stream levels, never louder/uncalibrated boosts.
+PLAYBACK_LEVELS = {"quiet": "0.05", "soft": "0.10", "normal": STREAM_VOLUME}
+
+
+def stream_gain(level):
+    """Use an allowlisted pw-cat stream gain, not user-controlled numeric flags."""
+    if type(level) is not str or level not in PLAYBACK_LEVELS:
+        raise ValueError("Choose quiet, soft, or normal local playback level")
+    return PLAYBACK_LEVELS[level]
 FRAMES_PER_CHUNK = 2048
 
 
@@ -95,7 +104,11 @@ def music_sink_available(*, capture=bounded_command_output):
     return TARGET in discovery.virtual_sinks(nodes)
 
 
-def _play_one(path, metadata, *, deadline, spawn, stop=None, on_player=None):
+def _play_one(path, metadata, *, deadline, spawn, stop=None, on_player=None,
+              gain=STREAM_VOLUME):
+    # Only values from the fixed safe stream-gain allowlist may reach pw-cat.
+    if gain not in PLAYBACK_LEVELS.values() or type(gain) is not str:
+        raise ValueError("Unsafe local stream gain")
     # Reopen and inspect at playback time: never rely solely on a stale preview.
     if _open_wav(path) != metadata:
         raise ValueError("Audio file changed since the local preview")
@@ -122,7 +135,7 @@ def _play_one(path, metadata, *, deadline, spawn, stop=None, on_player=None):
                 "pw-cat", "--playback", "--raw", "--target=" + TARGET,
                 "--rate=" + str(metadata["rate"]),
                 "--channels=" + str(metadata["channels"]),
-                "--format=s16", "--volume=" + STREAM_VOLUME, "-"
+                "--format=s16", "--volume=" + gain, "-"
             ]
             child = spawn(command, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
                           stderr=subprocess.DEVNULL, shell=False,
@@ -177,8 +190,10 @@ def _play_one(path, metadata, *, deadline, spawn, stop=None, on_player=None):
 
 
 def play_playlist(paths, *, max_minutes=15, spawn=subprocess.Popen, capture=bounded_command_output,
-                  stop=None, notify=print, session_deadline=None, on_player=None):
+                  stop=None, notify=print, session_deadline=None, on_player=None,
+                  level="normal"):
     """One explicit local playback session, never a persistent service."""
+    gain = stream_gain(level)
     report = inspect_playlist(paths, max_minutes=max_minutes)
     if hasattr(os, "geteuid") and os.geteuid() == 0:
         raise PermissionError("Run as the unprivileged audiohub PipeWire user, never root")
@@ -194,8 +209,12 @@ def play_playlist(paths, *, max_minutes=15, spawn=subprocess.Popen, capture=boun
             raise TimeoutError("Local playlist session deadline reached")
         notify("Playing track " + str(i) + "/" + str(report["files"])
                + " privately through music input; Ctrl+C stops.")
-        _play_one(path, metadata, deadline=deadline, spawn=spawn, stop=stop,
-                  on_player=on_player)
+        if level == "normal":
+            _play_one(path, metadata, deadline=deadline, spawn=spawn, stop=stop,
+                      on_player=on_player)
+        else:
+            _play_one(path, metadata, deadline=deadline, spawn=spawn, stop=stop,
+                      on_player=on_player, gain=gain)
     notify("Local playback finished. Audible sound was NOT automatically verified.")
     return True
 
@@ -211,6 +230,9 @@ def main(argv=None):
                         help="Choose 1–8 numbered library tracks (no autoplay)")
     parser.add_argument("--show-titles", action="store_true",
                         help="EXPLICITLY print sanitized track names on the local console")
+    parser.add_argument("--level", choices=("quiet", "soft", "normal"),
+                        default="normal",
+                        help="Private stream gain; quiet and soft are below the normal 0.20 cap")
     parser.add_argument("--minutes", type=int, default=15,
                         help="Maximum explicit session (1–30 minutes, default 15)")
     parser.add_argument("--play", action="store_true",
@@ -226,10 +248,11 @@ def main(argv=None):
                     "Guided mode accepts only --library and optional --show-titles"
                 )
             from . import music_library
-            music_library.guided_session(
-                args.library, max_minutes=args.minutes,
-                show_titles=args.show_titles
-            )
+            options = {"max_minutes": args.minutes,
+                       "show_titles": args.show_titles}
+            if args.level != "normal":
+                options["level"] = args.level
+            music_library.guided_session(args.library, **options)
             return 0
         if args.interactive and not args.play:
             raise ValueError("--interactive requires explicit --play")
@@ -261,9 +284,17 @@ def main(argv=None):
                 return 0
             if args.interactive:
                 from . import music_session
-                music_session.run_session(paths, max_minutes=args.minutes)
+                if args.level == "normal":
+                    music_session.run_session(paths, max_minutes=args.minutes)
+                else:
+                    music_session.run_session(paths, max_minutes=args.minutes,
+                                              level=args.level)
             else:
-                play_playlist(paths, max_minutes=args.minutes)
+                if args.level == "normal":
+                    play_playlist(paths, max_minutes=args.minutes)
+                else:
+                    play_playlist(paths, max_minutes=args.minutes,
+                                  level=args.level)
             return 0
         if args.tracks is not None or args.show_titles:
             raise ValueError("Numbered tracks and local titles require --library")
@@ -275,9 +306,17 @@ def main(argv=None):
             return 0
         if args.interactive:
             from . import music_session
-            music_session.run_session(args.wav, max_minutes=args.minutes)
+            if args.level == "normal":
+                music_session.run_session(args.wav, max_minutes=args.minutes)
+            else:
+                music_session.run_session(args.wav, max_minutes=args.minutes,
+                                          level=args.level)
         else:
-            play_playlist(args.wav, max_minutes=args.minutes)
+            if args.level == "normal":
+                play_playlist(args.wav, max_minutes=args.minutes)
+            else:
+                play_playlist(args.wav, max_minutes=args.minutes,
+                              level=args.level)
         return 0
     except KeyboardInterrupt:
         print("Local music playback stopped. No route or setting changed.")
