@@ -8,6 +8,10 @@ A separate installed `audiohub-music --speaker-check` verifies only
 the existing private PipeWire music input and playback tool, so the
 operator is no longer incorrectly blocked by an intentionally empty
 WAV library before trying the original built-in first-sound sample.
+The full or targeted `--speaker-guide` now automatically runs that
+same non-playing check once **before** asking for the first PLAY; it
+refuses every speaker test if the private sink or player is absent,
+with useful local guidance and no automatic fallback.
 It provides specific local recovery steps and never plays sound or
 opens WAV files. An affirmative software readiness indication is
 **not** physical Pi4/Edifier speaker verification or permission to
