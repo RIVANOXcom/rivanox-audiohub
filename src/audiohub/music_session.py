@@ -19,8 +19,17 @@ from . import local_music
 
 POLL_SECONDS = 0.15
 QUIT_JOIN_SECONDS = 3.0
-COMMAND_HELP = ("Enter: [u] pause/resume, [s] status, [l] queue, [n] next, "
-                "[p] previous, [r] replay, [1-8] jump, [q] quit, [h] help.")
+COMMAND_HELP = ("Enter: [u] pause/resume, [m] repeat off/track/all, [s] status, "
+                "[l] queue, [n] next, [p] previous, [r] replay, "
+                "[1-8] jump, [q] quit, [h] help.")
+
+
+def next_repeat_mode(mode):
+    """Cycle local replay policy without persistence or changing the player."""
+    choices = ("off", "track", "all")
+    if type(mode) is not str or mode not in choices:
+        raise ValueError("Invalid local repeat mode")
+    return choices[(choices.index(mode) + 1) % len(choices)]
 
 
 def read_terminal_command(timeout=POLL_SECONDS, *, stream=None):
@@ -42,12 +51,14 @@ def read_terminal_command(timeout=POLL_SECONDS, *, stream=None):
     if len(line) > 16:
         return "?"
     value = line.strip().lower()
-    return value if value in ("u", "s", "l", "n", "p", "r", "q", "h",
+    return value if value in ("u", "m", "s", "l", "n", "p", "r", "q", "h",
                               "1", "2", "3", "4", "5", "6", "7", "8") else "?"
 
 
 def status_message(position, count, started_at, deadline, *, clock=time.monotonic,
-                   paused=False):
+                   paused=False, repeat_mode="off"):
+    if repeat_mode not in ("off", "track", "all"):
+        raise ValueError("Unknown local repeat mode")
     now = clock()
     elapsed = max(0, int(now - started_at))
     remaining = max(0, math.ceil(deadline - now))
@@ -55,15 +66,18 @@ def status_message(position, count, started_at, deadline, *, clock=time.monotoni
             + " | elapsed " + str(elapsed) + " s"
             + " | session remaining " + str(remaining) + " s"
             + (" | PAUSED (owned player only)" if paused else "")
+            + (" | repeating " + repeat_mode if repeat_mode != "off" else "")
             + " | local only; audio not physically verified.")
 
 
-def queue_message(report, position):
+def queue_message(report, position, *, repeat_mode="off"):
     """Anonymous user-facing snapshot of the selected local music queue.
 
     The displayed durations come only from prechecked WAV headers, not
     from hardware playback, and never include filenames or identities.
     """
+    if repeat_mode not in ("off", "track", "all"):
+        raise ValueError("Unknown local repeat mode")
     if (not isinstance(report, dict) or
             type(report.get("files")) is not int or
             type(position) is not int or
@@ -82,7 +96,8 @@ def queue_message(report, position):
                       f"{minutes:02d}:{rest:02d}")
     return ("Selected WAV queue: track " + str(position) + "/" +
             str(report["files"]) + "; durations (NOT live progress): " +
-            ", ".join(chunks) + "; * = selected. No private titles.")
+            ", ".join(chunks) + "; * = selected. No private titles."
+            + (" Repeat: " + repeat_mode + "." if repeat_mode != "off" else ""))
 
 
 def run_session(paths, *, max_minutes=15, read_command=read_terminal_command,
@@ -107,6 +122,7 @@ def run_session(paths, *, max_minutes=15, read_command=read_terminal_command,
     deadline = start + max_minutes * 60
     out("Interactive music session started locally. " + COMMAND_HELP)
     position = 1
+    repeat_mode = "off"  # volatile, this session only; never saved
     while position <= report["files"]:
         path = paths[position - 1]
         if clock() >= deadline:
@@ -148,7 +164,8 @@ def run_session(paths, *, max_minutes=15, read_command=read_terminal_command,
         thread = threading.Thread(target=worker, name="audiohub-local-music",
                                   daemon=True)
         thread.start()
-        out(status_message(position, report["files"], start, deadline, clock=clock))
+        out(status_message(position, report["files"], start, deadline,
+                           clock=clock, repeat_mode=repeat_mode))
 
         def stop_owned_player():
             cancelled.set()
@@ -196,7 +213,8 @@ def run_session(paths, *, max_minutes=15, read_command=read_terminal_command,
                     with lock:
                         is_paused = paused[0]
                     out(status_message(position, report["files"], start,
-                                       deadline, clock=clock, paused=is_paused))
+                                       deadline, clock=clock, paused=is_paused,
+                                       repeat_mode=repeat_mode))
                 elif command == "u":
                     result = toggle_pause()
                     if result is None:
@@ -207,8 +225,13 @@ def run_session(paths, *, max_minutes=15, read_command=read_terminal_command,
                             "Owned local music player RESUMED; no settings changed.")
                 elif command == "h":
                     out(COMMAND_HELP)
+                elif command == "m":
+                    repeat_mode = next_repeat_mode(repeat_mode)
+                    out("Local repeat mode: " + repeat_mode.upper()
+                        + "; limited by the original session deadline.")
                 elif command == "l":
-                    out(queue_message(report, position))
+                    out(queue_message(report, position,
+                                      repeat_mode=repeat_mode))
                 elif command in ("n", "p", "r", "q"):
                     requested = command
                     break
@@ -258,7 +281,13 @@ def run_session(paths, *, max_minutes=15, read_command=read_terminal_command,
             out("Jumping to selected queue track " + str(position) + ". No filename.")
             continue
         out("Track " + str(position) + "/" + str(report["files"]) + " finished.")
+        if repeat_mode == "track":
+            out("Repeating current selected track until mode or deadline changes.")
+            continue
         position += 1
+        if position > report["files"] and repeat_mode == "all" and clock() < deadline:
+            position = 1
+            out("Repeating selected queue; no settings or private names saved.")
 
     out("Local music session ended. Sound and hardware are NOT automatically verified.")
     return True
