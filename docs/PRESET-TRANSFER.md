@@ -302,3 +302,66 @@ speaker hardware, SD durability, 2-BT-plus-LAN or production readiness.
 A failed step leaves the original SD untouched; retain it and the
 external backup for physical rollback. Never use this as authorization
 to flash an existing SD or modify machine permissions.
+
+## Guided first backup FROM an old SD without transfer software
+
+For a manually initiated test update, the new Pi4 image can **first**
+save both supported data sets from an already operator-mounted,
+**read-only** old SD in a single verified sequence. On the *new*
+Pi4 SD, as its existing unprivileged audiohub user, run:
+
+    audiohub-presets-transfer backup-guided /absolute/private/archive /absolute/old-SD/home/audiohub/PrivateMusic /absolute/old-SD/home/audiohub/.config/audiohub
+
+Order matters: **private archive first**, old SD music directory second,
+old SD private AudioHub config directory third. All must already exist;
+the archive needs private mode 0700, the old SD source folders must be
+owned by the same audiohub UID with mode 0700 or read-only mode 0500.
+No command mounts, flashes, formats, changes permissions, or executes
+files from the old SD. Keep the original card untouched.
+
+The guide performs a **combined read-only preflight before any write**:
+it detects supported old-SD WAVs, verifies any same-name files already
+inside the private archive by SHA256, and validates the saved EQ
+plus inactive volume-profile catalog. If a colliding WAV differs or
+an existing private preset JSON snapshot no longer matches the old
+SD, the guide refuses **before copying anything**. It never replaces
+a prior archive file, even if the operator entered COPY.
+
+After a safe review, it performs two individually approved stages:
+
+1. **COPY**: copies only missing, supported WAV files into the archive,
+   with the existing bounded, exclusive 0600 write and SHA256-verified
+   resume algorithm. Byte-identical existing files are skipped.
+2. **SAVE**: exclusively creates audiohub-presets.json containing only
+   validated three-band EQ and inactive custom volume profiles.
+   Existing identical archives are skipped, without regenerating them.
+
+A blank/neutral old-SD EQ and **zero custom profiles** are a legitimate
+state: the guided command can still save a nonsecret neutral snapshot,
+so the final dual-data check can finish. The original standalone
+`export-old` intentionally continues to require actual customized
+presets, to avoid changing its previous behavior.
+
+On cancel, the guide stops immediately. WAV files already verified in
+the private archive remain there; a later intentional invocation
+compares them again and resumes **without overwrite**. No auto-rollback,
+no file delete, no overwrite and no pretending an incomplete archive
+is complete. Before claiming completion it runs existing
+`check-backup` to compare the original WAV set and both saved preset
+data sets to the external archive **read-only**. You may repeat the
+same guide to recheck an already fully matching backup without new
+files or confirmation prompts.
+
+The operation does **not** transfer authentication, BT/Wi-Fi pairing,
+owner credentials, certificates, device IDs, source routing, active
+volumes or mutes, or any OS settings. It does not prove actual Pi4
+audio hardware, SD media reliability or legal/public release readiness.
+
+For an old SD with **no supported WAV files**, the combined guide
+refuses a misleading "complete" result; the separate existing
+`export-old` path still covers personalized EQ/profile data.
+Once the complete source archive is verified, continue with the
+already documented new-SD `restore-guided ARCHIVE` under its separate
+COPY / MERGE / APPLY-EQ confirmations, and retain the original SD for
+physical rollback. Do not run either guide on a production SD without
+explicit separate operator authorization.
