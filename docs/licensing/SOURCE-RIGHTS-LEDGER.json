@@ -53,6 +53,13 @@
       "model_c_eligible": false
     },
     {
+      "path": "image/stage-audiohub/01-install/files/bin/audiohub-music",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
       "path": "image/stage-audiohub/01-install/files/systemd/audiohub-bluetooth.service",
       "origin_status": "pending-human-review",
       "rightsholder_verified": false,
@@ -565,6 +572,13 @@
     },
     {
       "path": "tests/test_pairing_static.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "tests/test_pi4_music_launcher.py",
       "origin_status": "pending-human-review",
       "rightsholder_verified": false,
       "third_party_origin_checked": false,
