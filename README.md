@@ -548,3 +548,15 @@ safely so the full check can succeed. Nothing mounts, flashes, or
 modifies the original SD. Use the already supported
 `audiohub-presets-transfer restore-guided ARCHIVE` *only after*
 backups are checked. See [SD transfer guide](docs/PRESET-TRANSFER.md).
+
+**Music test UX on Pi4 (local only):** The existing
+`audiohub-music` launcher now accepts `--list` for a non-playing
+anonymous private WAV inventory, `--minutes N` for a strict 1–30
+minute playback limit and `--level quiet|soft|normal` for per-owned
+player stream gains 0.05/0.10/0.20 (default remains normal 0.20).
+The operator reviews the selected level and duration **before**
+entering exact `PLAY`. Optional `--show-titles` explicitly reveals
+sanitized filenames only on that terminal. The mode does not adjust
+global volume, EQ, BT pairing, USB or network sources, does not
+autoplay and does not claim calibrated loudness or tested Edifier
+audio. See [local player operator guide](docs/LOCAL-MUSIC-PLAYBACK.md).
