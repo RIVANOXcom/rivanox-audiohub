@@ -87,8 +87,8 @@ class LocalMusicTests(unittest.TestCase):
         self.assertLessEqual(max(abs(sample) for sample in
                                  struct.unpack("<" + "h" * (frames * 2), pcm)),
                              655)
-        self.assertLessEqual(0, min(struct.unpack("<" + "h" * (frames * 2),
-                                                  pcm)))
+        self.assertGreaterEqual(min(struct.unpack("<" + "h" * (frames * 2),
+                                                     pcm)), -655)
         def lr(frame):
             return struct.unpack_from("<hh", pcm, frame * 4)
         self.assertEqual(lr(0), (0, 0))
