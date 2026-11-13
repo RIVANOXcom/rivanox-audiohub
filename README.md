@@ -570,3 +570,15 @@ successfully only when all three are present, and never plays music,
 changes the global mixer or starts services. **Hardware sound remains
 UNVERIFIED** until a separately authorized low-volume Pi4/Edifier
 PLAY trial. See [the operator music guide](docs/LOCAL-MUSIC-PLAYBACK.md).
+
+**Per-session stereo channel selection for Pi4 WAVs:**
+The existing music operator command supports
+`audiohub-music --minutes 5 --level quiet --channel left`
+(or right, default both). LEFT or RIGHT silences only the opposite
+stereo 16-bit PCM samples **in memory**, preserving the original
+selected samples and WAV files; no gain boost or global mixer/routing
+change occurs. Mono WAVs are refused for one-sided playback. The
+operator reviews the mode and still must explicitly type PLAY on
+the local terminal. Actual Pi4/Edifier stereo requires a separate
+authorized, physically observed test; source isolation is not
+hardware certification. See [music runbook](docs/LOCAL-MUSIC-PLAYBACK.md).
