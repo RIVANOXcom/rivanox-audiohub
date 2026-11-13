@@ -459,24 +459,188 @@ def verify(external, *, settings_path=SETTINGS,
     return True
 
 
+def _music_destination_plan(external, music_dir):
+    """Read-only SHA checks for bounded source WAVs against the new music folder.
+
+    The archive is the source. Existing destinations must match by content and
+    safety constraints, never just filename. Missing WAVs may be copied later
+    using the existing exclusive --resume command; none are written here.
+    """
+    source_fd = music_transfer._private_dir(external)
+    try:
+        target_fd = music_transfer._private_dir(music_dir)
+        try:
+            first, second = os.fstat(source_fd), os.fstat(target_fd)
+            if (first.st_dev, first.st_ino) == (second.st_dev, second.st_ino):
+                raise ValueError("Private archive and new music directory must differ")
+            files, size = music_transfer._source_list(external, source_fd)
+            if not files:
+                raise ValueError("Archive has no supported WAVs; no complete check possible")
+            matches = 0
+            for item in files:
+                match = music_transfer._matching_destination(
+                    source_fd, target_fd, item)
+                if match is not None:
+                    matches += 1
+            again, size_after = music_transfer._source_list(external, source_fd)
+            if files != again or size != size_after:
+                raise OSError("Private WAV archive changed during preview")
+            return {
+                "wav_total": len(files), "wav_bytes": size,
+                "wav_matched": matches, "wav_missing": len(files) - matches,
+                "wav_copy_needed": matches < len(files),
+            }
+        finally:
+            os.close(target_fd)
+    finally:
+        os.close(source_fd)
+
+
+def plan_new_sd(external, *, settings_path=SETTINGS,
+                profile_path=mixer_control.PROFILE_PATH,
+                music_dir=music_transfer.DEFAULT_MUSIC_DIR,
+                out=print, require_terminal=True):
+    """Explain the safe next manual restore actions; never copy or modify.
+
+    A destination collision whose bytes differ is a hard error, not a
+    permission to overwrite. This is a snapshot for planning, NOT a
+    durability guarantee or substitute for post-copy hash verification.
+    """
+    _guard(require_terminal=require_terminal)
+    music = _music_destination_plan(external, music_dir)
+    data, _ = _load(external)
+    saved = mixer_control.list_volume_profiles(path=profile_path)["profiles"]
+    if data["profiles"]:
+        profiles = _profile_merge_delta(data["profiles"], saved)
+    else:
+        profiles = {
+            "existing": len(saved), "archived": 0, "identical": 0,
+            "conflicts": 0, "new": 0, "resulting": len(saved),
+            "limit": mixer_control.MAX_CUSTOM_PROFILES,
+            "can_merge": True,
+        }
+    state, _ = mixer_control._preview_snapshot(path=settings_path)
+    eq_changes = sum(
+        state[slot][band] != data["eq"][slot][band]
+        for slot in CHANNELS for band in EQ_BANDS
+    )
+    eq_overwrite = eq_changes > 0 and any(
+        state[slot][band] != 0 for slot in CHANNELS for band in EQ_BANDS
+    )
+    plan = {
+        **music,
+        "profile_existing": profiles["existing"],
+        "profile_archived": profiles["archived"],
+        "profile_identical": profiles["identical"],
+        "profile_missing": profiles["new"],
+        "profile_conflicts": profiles["conflicts"],
+        "profile_limit_exceeded": profiles["resulting"] > profiles["limit"],
+        "eq_bands_different": eq_changes,
+        "eq_non_neutral_conflict": eq_overwrite,
+        "ready_for_final_readonly_check": (
+            not music["wav_copy_needed"]
+            and profiles["conflicts"] == 0
+            and profiles["new"] == 0
+            and not profiles["resulting"] > profiles["limit"]
+            and eq_changes == 0
+        ),
+        "no_files_changed": True, "owner_identity_transferred": False,
+        "hardware_playback_verified": False,
+    }
+    out("New SD read-only plan: " + str(music["wav_total"]) +
+        " archived WAVs, " + str(music["wav_matched"]) + " identical, " +
+        str(music["wav_missing"]) + " missing; " +
+        str(profiles["new"]) + " inactive profiles missing, " +
+        str(profiles["identical"]) + " identical, " +
+        str(profiles["conflicts"]) + " conflicting; " +
+        str(eq_changes) + " EQ band differences.")
+    if music["wav_copy_needed"]:
+        out("NEXT (separate local COPY confirmation): "
+            "audiohub-music-transfer restore PRIVATE_FOLDER --resume")
+    if profiles["conflicts"] or profiles["resulting"] > profiles["limit"]:
+        out("BLOCKED: differing profile names or limit; do not overwrite local profiles.")
+    elif profiles["new"]:
+        out("NEXT (separate MERGE confirmation): "
+            "audiohub-presets-transfer merge-profiles PRIVATE_FOLDER")
+    if eq_overwrite:
+        out("BLOCKED: existing non-neutral EQ conflicts; do not overwrite automatically.")
+    elif eq_changes:
+        out("NEXT (separate APPLY-EQ confirmation): "
+            "audiohub-presets-transfer restore-eq PRIVATE_FOLDER")
+    out("FINAL (read-only): audiohub-presets-transfer check-new PRIVATE_FOLDER")
+    out("No music, EQ, volumes, mutes, identities or files changed; "
+        "no physical sound or SD flash verified.")
+    return plan
+
+
+def check_backup(external, old_music, old_config, *, out=print,
+                 require_terminal=True):
+    """Read-only source-to-archive proof before manual SD replacement.
+
+    Caller must provide already-mounted private source paths. Old SD is
+    never mounted, edited or accessed with elevated privileges here.
+    """
+    _guard(require_terminal=require_terminal)
+    old_config = Path(old_config)
+    if (not old_config.is_absolute() or ".." in old_config.parts
+            or len(str(old_config)) > 1024):
+        raise ValueError("Old SD config must be an absolute private directory")
+    data, archive_hash = _load(external)
+    original, _ = _source_snapshot(
+        old_config / "settings.json", old_config / "volume-profiles.json")
+    if data != original:
+        raise ValueError("EQ or inactive profiles differ from old SD backup")
+    music_transfer.transfer("backup", external, music_dir=old_music,
+                            verify=True, out=lambda _message: None,
+                            require_terminal=False)
+    out("Original SD to private backup: all supported WAV bytes and saved "
+        "EQ/inactive profiles match, preset SHA256 " + archive_hash + ".")
+    out("Read-only check, no flash, no owner/BT trust transfer, no hardware proof.")
+    return True
+
+
+def check_new(external, *, settings_path=SETTINGS,
+              profile_path=mixer_control.PROFILE_PATH,
+              music_dir=music_transfer.DEFAULT_MUSIC_DIR,
+              out=print, require_terminal=True):
+    """Read-only archive-to-new-SD verification of BOTH supported data sets."""
+    _guard(require_terminal=require_terminal)
+    music_transfer.transfer("restore", external, music_dir=music_dir,
+                            verify=True, out=lambda _message: None,
+                            require_terminal=False)
+    verify_merged(external, settings_path=settings_path,
+                  profile_path=profile_path, out=lambda _message: None,
+                  require_terminal=False)
+    out("New SD data check passed: all archived supported WAVs have identical "
+        "private copies, all archived inactive profiles and saved EQ bands match.")
+    out("This proves requested stored data only, NOT live PipeWire, "
+        "audible hardware, owner onboarding, or OS/SD update safety.")
+    return True
+
+
 def main(argv=None):
     args = list(sys.argv[1:] if argv is None else argv)
     if args in (["--help"], ["-h"]):
         print("Offline Pi4 non-secret audio preset transfer, no owner migration.")
-        print("Usage: audiohub-presets-transfer export|inspect|plan-profiles|restore-profiles|merge-profiles|restore-eq|verify|verify-merged ABSOLUTE_PRIVATE_FOLDER")
+        print("Usage: audiohub-presets-transfer export|inspect|plan-profiles|restore-profiles|merge-profiles|restore-eq|verify|verify-merged|plan-new|check-new ABSOLUTE_PRIVATE_FOLDER")
+        print("       audiohub-presets-transfer check-backup PRIVATE_BACKUP OLD_MUSIC_DIR OLD_CONFIG_DIR")
         print("       audiohub-presets-transfer export-old OLD_SD_PRIVATE_CONFIG_DIR ABSOLUTE_PRIVATE_FOLDER")
         print("Export SAVE; strict restore RESTORE; conflict-free profile merge MERGE.")
         print("Saved EQ APPLY-EQ to neutral EQ only; verify-merged permits extra local profiles.")
         print("Never imports keys, Bluetooth trust, Wi-Fi, IDs, live volume/mutes or OS.")
         return 0
     old_sd_mode = len(args) == 3 and args[0] == "export-old"
-    if not (old_sd_mode or (len(args) == 2 and args[0] in (
+    backup_check_mode = len(args) == 4 and args[0] == "check-backup"
+    if not (old_sd_mode or backup_check_mode or (len(args) == 2 and args[0] in (
             "export", "inspect", "plan-profiles", "restore-profiles",
-            "merge-profiles", "restore-eq", "verify", "verify-merged"))):
+            "merge-profiles", "restore-eq", "verify", "verify-merged",
+            "plan-new", "check-new"))):
         print("Choose an explicit preset action and an absolute private folder.")
         return 2
     try:
-        if old_sd_mode:
+        if backup_check_mode:
+            result = check_backup(args[1], args[2], args[3])
+        elif old_sd_mode:
             old_dir = Path(args[1])
             if (not old_dir.is_absolute() or ".." in old_dir.parts or
                     len(str(old_dir)) > 1024):
@@ -490,7 +654,8 @@ def main(argv=None):
                          "restore-profiles": restore_profiles,
                          "merge-profiles": merge_profiles,
                          "restore-eq": restore_eq,
-                         "verify": verify, "verify-merged": verify_merged}[args[0]]
+                         "verify": verify, "verify-merged": verify_merged,
+                         "plan-new": plan_new_sd, "check-new": check_new}[args[0]]
             result = operation(args[1])
         return 0 if result is not False else 1
     except (OSError, ValueError, TypeError, UnicodeError,
