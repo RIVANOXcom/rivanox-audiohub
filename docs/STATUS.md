@@ -205,11 +205,11 @@ SD flashing remain outside the tool and owner-authorized only.
 
 ### Guided SD archive restoration on a manually booted replacement Pi4
 
-The installed \`audiohub-presets-transfer restore-guided PRIVATE_ARCHIVE\`
+The installed `audiohub-presets-transfer restore-guided PRIVATE_ARCHIVE`
 provides an end-to-end operator-facing workflow after offline WAV and
 nonsecret preset backups. It reuses the existing combined read-only
-\`plan-new\`, WAV SHA256-validated non-overwriting \`--resume\`, protected
-profile \`MERGE\`, neutral-only EQ \`APPLY-EQ\` and final \`check-new\`.
+`plan-new`, WAV SHA256-validated non-overwriting `--resume`, protected
+profile `MERGE`, neutral-only EQ `APPLY-EQ` and final `check-new`.
 Conflicting WAV names, profile values/capacity or non-neutral saved EQ
 are blocked before writes; three distinct explicit local consents remain
 required only for stages that actually change data. Cancellation stops
