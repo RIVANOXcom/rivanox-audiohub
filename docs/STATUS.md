@@ -134,3 +134,15 @@ credentials or automatic music migration occurs. Failed operations
 may leave completed new copies; manual inspection/rollback is required.
 The operator retains the prior SD and independent external storage.
 Physical Pi4/Edifier audio and official release gates remain NO-GO.
+
+### Resumable offline WAV migration and read-only confirmation
+
+An unverified operator alpha adds explicit --resume on the existing
+manual WAV backup/restore commands. It hashes existing same-name WAVs
+and skips only identical single-link private copies. Missing WAVs require
+human COPY; unsafe/conflicting WAVs refuse without overwriting or
+automatically removing data. New verify-backup and verify-restore
+commands check every supported source WAV against its destination
+without any writes. This makes an interrupted multi-file migration
+retryable, but it is not a full SD, owner, credential, configuration
+or OS updater. Real Pi4 audio and public release remain NO-GO.
