@@ -505,3 +505,12 @@ and adds only new ones; matching profiles are skipped, conflicting
 values refuse without overwrite. `verify-merged PATH` checks saved
 EQ and every archived profile while allowing extra local profiles.
 See [the private update guide](docs/PRESET-TRANSFER.md).
+
+**Offline SD-update readiness:** `audiohub-presets-transfer check-backup
+PRIVATE_ARCHIVE OLD_MUSIC OLD_CONFIG` validates a manually retained
+WAV+EQ/profile archive against already authorized read-only old-SD
+paths. `plan-new PRIVATE_ARCHIVE` shows missing/identical WAVs and
+EQ/profile migration steps without changes; `check-new PRIVATE_ARCHIVE`
+performs a combined read-only source-set verification on the new SD.
+Separate `COPY`, `MERGE` and `APPLY-EQ` confirmations remain mandatory
+for actual restoration. See [SD update guide](docs/PRESET-TRANSFER.md).
