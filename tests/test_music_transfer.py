@@ -32,6 +32,8 @@ class MusicTransferTests(unittest.TestCase):
             track.setsampwidth(2)
             track.setframerate(48000)
             track.writeframes(b"\x00\x01\x00\x02" * 250)
+        # Existing resume targets must already be genuinely owner-private.
+        self.wav.chmod(0o600)
         self.output = []
 
     def run_transfer(self, operation, *, allow=True, external=None, music=None,
@@ -223,7 +225,9 @@ class MusicTransferTests(unittest.TestCase):
             self.run_transfer("backup", resume=True)
         self.assertFalse((self.external / second.name).exists())
         self.assertEqual(conflict.read_bytes()[-1:], b"\xff")
-        with self.assertRaises(ValueError):
+        # Verify may encounter the other missing WAV before the conflict;
+        # either failure must remain read-only and fail closed.
+        with self.assertRaises((ValueError, FileNotFoundError)):
             self.run_transfer("backup", verify=True)
 
     def test_resume_rejects_symlink_hardlink_and_public_target(self):
