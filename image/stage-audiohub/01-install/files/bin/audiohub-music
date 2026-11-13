@@ -20,6 +20,7 @@ usage() {
     '--speaker-test creates a brief original 2.1s LEFT/RIGHT/BOTH signal in RAM. No WAV required.' \
     'Optional left, right or both replays that channel 3 times with short silence gaps.' \
     '--speaker-guide asks for separate PLAY at each side and LOCAL physical observations.' \
+    'If unsure/wrong, RETRY same side once with fresh PLAY, or STOP; no auto-next.' \
     'Requires separate PLAY at a local terminal; very low signal and quiet stream only.' \
     '--show-titles explicitly reveals sanitized private titles on this terminal.' \
     'The playback wizard shows an anonymous list; select numbers, ALL or SHUFFLE.' \
