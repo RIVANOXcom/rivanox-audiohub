@@ -56,5 +56,17 @@ old_preset_status="$?"
 set -e
 test "$old_preset_status" -eq 2
 case "$old_preset_output" in *"Private preset operation safely refused"*) ;; *) exit 1 ;; esac
+# Confirm the installed merger/preview reach the Python argument handler.
+# Running non-interactively must refuse without creating files or applying EQ.
+set +e
+merge_preview_output="$(runuser -u audiohub -- /usr/local/bin/audiohub-presets-transfer plan-profiles /home/audiohub/PrivateMusic 2>&1)"
+merge_preview_status="$?"
+merge_apply_output="$(runuser -u audiohub -- /usr/local/bin/audiohub-presets-transfer merge-profiles /home/audiohub/PrivateMusic 2>&1)"
+merge_apply_status="$?"
+set -e
+test "$merge_preview_status" -eq 2
+test "$merge_apply_status" -eq 2
+case "$merge_preview_output" in *"Private preset operation safely refused"*) ;; *) exit 1 ;; esac
+case "$merge_apply_output" in *"Private preset operation safely refused"*) ;; *) exit 1 ;; esac
 PYTHONPATH=/opt/audiohub/src runuser -u audiohub -- python3 -m audiohub.eq_setup
 CHROOT
