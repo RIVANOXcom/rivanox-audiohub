@@ -334,21 +334,43 @@ def main(argv=None):
         print("       audiohub-music-transfer restore /absolute/private/external-folder [--resume]")
         print("       audiohub-music-transfer verify-backup /absolute/private/external-folder")
         print("       audiohub-music-transfer verify-restore /absolute/private/external-folder")
+        print("       audiohub-music-transfer backup-old ABSOLUTE_OLD_SD_MUSIC_DIR ABSOLUTE_PRIVATE_ARCHIVE [--resume]")
+        print("       audiohub-music-transfer verify-backup-old ABSOLUTE_OLD_SD_MUSIC_DIR ABSOLUTE_PRIVATE_ARCHIVE")
         print("Source and target directories must exist, be owned by you and private 0700.")
         print("Only up to 40 playable WAVs / 512 MiB, no other file types, no overwrites.")
         print("Default copy refuses collisions. --resume skips only identical safe WAVs.")
+        print("backup-old reads a separately mounted read-only old SD; it never mounts or edits it.")
+        print("The old SD does not need an installed AudioHub transfer utility.")
         print("verify-backup/verify-restore read and compare, never write or request COPY.")
         print("New copies require exact COPY at a trusted local unprivileged terminal.")
         print("Keep your old SD, external media and independent backup intact.")
         return 0
-    if (len(args) not in (2, 3) or
-            args[0] not in ("backup", "restore", "verify-backup", "verify-restore") or
-            (len(args) == 3 and
-             (args[2] != "--resume" or args[0].startswith("verify-")))):
-        print("Choose backup, restore, verify-backup or verify-restore and one absolute folder.")
-        print("Optional --resume only on backup/restore. Use --help.")
+    old_backup = (len(args) in (3, 4) and args[0] == "backup-old"
+                  and (len(args) == 3 or args[3] == "--resume"))
+    old_verify = (len(args) == 3 and args[0] == "verify-backup-old")
+    standard = (
+        len(args) in (2, 3)
+        and args[0] in ("backup", "restore", "verify-backup", "verify-restore")
+        and (len(args) == 2 or
+             (args[2] == "--resume" and
+              args[0] in ("backup", "restore")))
+    )
+    if not (standard or old_backup or old_verify):
+        print("Choose a supported WAV copy or read-only verification action.")
+        print("backup-old takes OLD_MUSIC_DIR and PRIVATE_ARCHIVE, optional --resume.")
+        print("verify-backup-old takes OLD_MUSIC_DIR and PRIVATE_ARCHIVE (no --resume).")
         return 2
     try:
+        if old_backup or old_verify:
+            # The old SD need not contain this launcher or any executable:
+            # the *new* SD performs all access through the same bounded,
+            # no-symlink, private directory-descriptor transfer engine.
+            # The first explicit path is always READ ONLY; the archive is
+            # written exclusively only for backup-old with exact COPY.
+            return 0 if transfer(
+                "backup", args[2], music_dir=args[1],
+                resume=len(args) == 4, verify=old_verify
+            ) else 1
         is_verify = args[0].startswith("verify-")
         direction = args[0].removeprefix("verify-")
         return 0 if transfer(direction, args[1],
