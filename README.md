@@ -396,3 +396,19 @@ private music directory. The existing Python CLI remains supported.
 This requires a locally authorized Pi4 terminal; it is **not**
 headless smartphone onboarding or proof of working Edifier audio.
 See [safe test, update and SD rollback](docs/LOCAL-MUSIC-PLAYBACK.md).
+
+### Repeat a local music selection without restarting the Pi4 player
+
+During an explicitly confirmed `audiohub-music` session, press **`m`
+and Enter** to cycle three *session-only* repeat modes: **OFF**
+(play the queue once), **TRACK** (repeat the selected WAV after its
+natural finish), and **ALL** (restart the selected queue after its last
+track). Status (`s`) and queue (`l`) show the selected repeat mode,
+without filenames. `n` still skips to the next track even in TRACK
+mode, `p` moves back, and `q` or Ctrl+C stops the session.
+
+The original 15-minute launcher deadline (or the explicitly configured
+1–30-minute advanced session limit) **never resets when repeating or
+pausing**. No additional service, device route, internet access or
+saved playlist is created; repeat is OFF in the next session. This is
+an unverified Pi4 operator feature requiring the human `PLAY` gate.
