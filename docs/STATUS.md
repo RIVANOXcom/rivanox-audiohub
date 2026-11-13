@@ -177,3 +177,15 @@ profiles and exceeding the eight-profile limit fail closed.
 Default `restore-profiles` remains strict non-overwriting;
 `verify-merged` permits extra local profile records without claiming
 an exact image mirror, live EQ staging or real speaker verification.
+
+### Combined read-only SD migration readiness
+
+An operator-only integrated check now compares supported WAV copies
+and saved EQ plus inactive volume profiles as one manual SD upgrade
+workflow. Commands `check-backup ARCHIVE OLD_WAV_DIR OLD_CONFIG_DIR`,
+`plan-new ARCHIVE` and `check-new ARCHIVE` are non-writing; they
+detect missing/conflicting WAVs and preset states without dumping
+personal filenames, identities or changing active sound. Existing
+per-action `COPY`, `MERGE`, `APPLY-EQ` approvals and rollback
+boundaries are unchanged. Native packaging and physical audio
+remain independent, unverified release gates.
