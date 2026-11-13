@@ -248,3 +248,57 @@ Do not continue to the new SD `plan-new`, separately confirmed
 private archive for rollback; none of these commands transfers
 owner identities, wireless trust or system configuration.
 Current alpha remains unverified for actual Pi4 audio hardware.
+
+## One guided restore on the replacement SD: COPY / MERGE / APPLY-EQ
+
+To reduce mistakes when switching SD cards, the new test image includes a
+single **operator-initiated local terminal** entrypoint that reuses the
+existing guarded operations (NOT a new installer or new writer):
+
+    audiohub-presets-transfer restore-guided /absolute/private/archive
+
+Run it **only after** the original SD has been retained, separately
+authorized WAV + preset backups have been made and checked using
+\`check-backup\`, and the replacement SD has been manually flashed and
+booted according to the operator's independent process. The archived
+private directory is pre-existing, same-UID, no symlinks. Neither this
+command nor any transfer command mounts or flashes cards.
+
+The guide first performs the combined **READ-ONLY** \`plan-new\`
+comparison of WAV-bytes, existing inactive volume profiles and EQ bands.
+If any same-name WAV differs, a saved profile name conflicts with a
+different value, the 8-profile maximum would be exceeded, or the local
+saved EQ is already non-neutral and different from the archive, the
+ENTIRE guide refuses **before writing a WAV or profile**. The operator
+must resolve such differences without overwriting old data.
+
+If the reviewed plan is safe, the guide performs up to three *separate*
+operator-confirmed steps:
+
+1. **COPY**: only missing supported WAVs, via the existing non-overwriting
+   \`restore --resume\` algorithm; pre-existing equal WAVs are SHA256
+   verified and skipped. All archived WAVs are hashed again afterward.
+2. **MERGE**: only missing INACTIVE custom volume profiles via the
+   existing locked, atomic, conflict-free merge. Existing values,
+   current levels and mutes remain unchanged.
+3. **APPLY-EQ**: only nine archived saved EQ bands, and only if local
+   saved EQ is neutral; it never stages/restarts PipeWire or changes
+   current audible sound. This has its own confirmation.
+
+A stage that needs no changes skips its consent prompt and performs no
+write. Any refused or cancelled confirmation **stops** the guide; it
+does not proceed to subsequent steps or silently undo already verified
+WAV copies. On a later explicit invocation, previously matching WAVs
+and profiles are skipped. After the last step, the guide invokes
+\`check-new\` for a complete read-only WAV SHA256 and saved EQ/profile
+comparison; no "finished" claim is printed unless both groups match.
+A source preset archive changed mid-operation is refused rather than
+silently accepted.
+
+The guide does not automatically import device ID, owner credentials,
+Bluetooth trust, Wi-Fi, source assignments, audio routes, active volume
+or OS configuration. It also does not verify live PipeWire sound,
+speaker hardware, SD durability, 2-BT-plus-LAN or production readiness.
+A failed step leaves the original SD untouched; retain it and the
+external backup for physical rollback. Never use this as authorization
+to flash an existing SD or modify machine permissions.
