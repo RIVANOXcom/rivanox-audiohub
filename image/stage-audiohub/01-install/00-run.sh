@@ -51,6 +51,16 @@ test "$invalid_time_status" -eq 2
 case "$empty_library_output" in *"Local player unavailable or stopped"*) ;; *) exit 1 ;; esac
 case "$invalid_level_output" in *"Only quiet, soft or normal"*) ;; *) exit 1 ;; esac
 case "$invalid_time_output" in *"Minutes must be a whole number"*) ;; *) exit 1 ;; esac
+
+# Real installed non-playing --check is a multi-prerequisite operator status.
+# The fresh image contains no WAVs, so readiness must refuse with safe guidance.
+# It must never start an audio session, reconfigure PipeWire or expose titles.
+set +e
+empty_check_output="$(runuser -u audiohub -- /usr/local/bin/audiohub-music --check 2>&1)"
+empty_check_status="$?"
+set -e
+test "$empty_check_status" -eq 2
+case "$empty_check_output" in *"WAV library: NEEDS ATTENTION"*"Private PipeWire music input:"*"Local PipeWire playback tool:"*"No playback, global mixer/route change or file write occurred."*) ;; *) exit 1 ;; esac
 # Offline transfer help is a NON-WRITING native ARM64 command smoke.
 runuser -u audiohub -- /usr/local/bin/audiohub-music-transfer --help >/dev/null
 # Exercise the real installed wrapper's TWO and THREE-argument forwarding.

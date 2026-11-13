@@ -78,6 +78,102 @@ class LocalMusicTests(unittest.TestCase):
         self.players.append(proc)
         return proc
 
+    def test_check_music_readiness_three_safe_prerequisites_no_play(self):
+        messages = []
+        with mock.patch.object(local_music.subprocess, "Popen") as spawn:
+            result = local_music.check_music_readiness(
+                self.root, capture=self.capture,
+                which=lambda tool: "/usr/bin/pw-cat" if tool == "pw-cat" else None,
+                out=messages.append)
+        self.assertTrue(result)
+        spawn.assert_not_called()
+        self.assertEqual(self.events[0][0], "capture")
+        self.assertEqual(self.events[0][1], ["pw-dump"])
+        displayed = "\n".join(messages)
+        self.assertIn("WAV library: READY; 1 supported", displayed)
+        self.assertIn("Private PipeWire music input: READY", displayed)
+        self.assertIn("Local PipeWire playback tool: AVAILABLE", displayed)
+        self.assertIn("READY FOR MANUAL PLAY TEST", displayed)
+        self.assertIn("UNVERIFIED", displayed)
+        self.assertIn("No playback, global mixer/route change or file write", displayed)
+        self.assertNotIn(str(self.root), displayed)
+        self.assertNotIn("one.wav", displayed)
+        self.assertEqual(self.players, [])
+
+    def test_check_missing_sink_is_specific_and_never_falls_back(self):
+        messages = []
+        self.assertFalse(local_music.check_music_readiness(
+            self.root, capture=lambda argv, **kw: self.captured_graph("other.sink"),
+            which=lambda _: "/usr/bin/pw-cat", out=messages.append))
+        displayed = "\n".join(messages)
+        self.assertIn("WAV library: READY", displayed)
+        self.assertIn("Private PipeWire music input: NEEDS ATTENTION", displayed)
+        self.assertIn("No default-output fallback", displayed)
+        self.assertIn("Local PipeWire playback tool: AVAILABLE", displayed)
+        self.assertIn("NOT READY FOR MANUAL PLAY TEST", displayed)
+        self.assertNotIn("one.wav", displayed)
+
+    def test_check_missing_tool_or_wav_reports_separate_actionable_status(self):
+        messages = []
+        self.assertFalse(local_music.check_music_readiness(
+            self.root, capture=self.capture, which=lambda _: None,
+            out=messages.append))
+        self.assertIn("Local PipeWire playback tool: NEEDS ATTENTION",
+                      "\n".join(messages))
+        self.assertIn("WAV library: READY", "\n".join(messages))
+        messages = []
+        missing = self.root / "PRIVATE_NO_SUCH_FOLDER"
+        self.assertFalse(local_music.check_music_readiness(
+            missing, capture=self.capture, which=lambda _: "/usr/bin/pw-cat",
+            out=messages.append))
+        displayed = "\n".join(messages)
+        self.assertIn("WAV library: NEEDS ATTENTION", displayed)
+        self.assertIn("Private PipeWire music input: READY", displayed)
+        self.assertIn("Local PipeWire playback tool: AVAILABLE", displayed)
+        self.assertNotIn(str(missing), displayed)
+        self.assertNotIn("PRIVATE_NO_SUCH_FOLDER", displayed)
+
+    def test_check_graph_or_tool_failure_fails_closed_without_private_error(self):
+        messages = []
+        def failed_capture(argv, **kw):
+            raise RuntimeError("PRIVATE_DEVICE_NAME unauthorized")
+        def failed_which(cmd):
+            raise OSError("PRIVATE_PATH /home/audiohub")
+        self.assertFalse(local_music.check_music_readiness(
+            self.root, capture=failed_capture, which=failed_which,
+            out=messages.append))
+        self.assertIn("NOT READY FOR MANUAL PLAY TEST", "\n".join(messages))
+        self.assertNotIn("PRIVATE", "\n".join(messages))
+        self.assertNotIn("/home/audiohub", "\n".join(messages))
+        self.assertEqual(self.players, [])
+
+    def test_check_cli_is_read_only_and_excludes_playback_flags(self):
+        with mock.patch.object(local_music, "check_music_readiness",
+                               return_value=True) as check, \
+             mock.patch.object(local_music, "play_playlist") as play, \
+             mock.patch("builtins.print"):
+            self.assertEqual(local_music.main([
+                "--library", str(self.root), "--check"]), 0)
+            check.assert_called_once_with(str(self.root))
+            play.assert_not_called()
+            check.reset_mock()
+            for argv in (
+                ["--check"], ["--check", "--play", "--library", str(self.root)],
+                ["--check", "--guided", "--library", str(self.root)],
+                ["--check", "--library", str(self.root), "--show-titles"],
+                ["--check", "--library", str(self.root), "--minutes", "5"],
+                ["--check", "--library", str(self.root), "--level", "quiet"],
+                ["--check", "--library", str(self.root), "--tracks", "1"],
+                ["--check", str(self.wav), "--library", str(self.root)],
+            ):
+                with self.subTest(argv=argv):
+                    self.assertEqual(local_music.main(argv), 2)
+                    check.assert_not_called()
+                    play.assert_not_called()
+            check.return_value = False
+            self.assertEqual(local_music.main([
+                "--check", "--library", str(self.root)]), 2)
+
     def test_preview_reads_wav_but_never_opens_pipewire(self):
         with mock.patch.object(local_music.subprocess, "Popen") as popen, \
              mock.patch.object(local_music, "bounded_command_output") as capture:

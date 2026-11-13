@@ -560,3 +560,41 @@ same unprivileged Pi console and explicit **PLAY** requirement remain.
 Stop with `q` + Enter or Ctrl+C; no changes to undo. Test status
 remains UNVERIFIED_ALPHA_TEST_ONLY until actual Pi4 speaker/hardware
 acceptance.
+
+## Non-playing Pi4 music readiness before the first speaker test
+
+On an already authorized spare Pi4 SD, run as the unprivileged local audiohub user:
+
+    audiohub-music --check
+    audiohub-music /home/audiohub/PrivateMusic --check
+
+This **read-only** check independently reports three prerequisites,
+without streaming sound or changing the device.
+
+- WAV library: uses the same bounded private-folder inspection as
+  `--list`; shows only supported WAV counts and redacted corrective
+  guidance if the folder is empty, inaccessible or unsuitable
+- Private music input: a bounded PipeWire graph query checks the exact
+  `audiohub.music` sink; missing input does not trigger any fallback to
+  default hardware, nor a service restart
+- Local playback tool: checks that the ordinary `pw-cat` program exists
+  in the current user's command search path, without executing it
+
+If all three prerequisites appear present, exit status is 0 and the
+message reads **READY FOR MANUAL PLAY TEST**. Missing prerequisites
+cause exit status 2; all three are assessed independently. No private
+WAV titles, paths, device IDs or raw errors are printed. The command
+never plays sound, writes a playlist, opens an HTTP API, changes EQ,
+routes, levels, ownership, Bluetooth/Wi-Fi, or performs SD operations.
+For clarity, `--check` cannot be combined with `--list`,
+`--show-titles`, `--minutes`, `--level` or playback flags.
+
+A passing result is **not** evidence of actual audible USB/Edifier
+sound, speaker SPL, left/right balance, two Bluetooth-plus-LAN mixing,
+24-hour stability or authenticated first-owner setup. It is only a
+point-in-time prerequisite check. The audio graph can change after
+the inspection. After separate operator authorization, keep speaker
+hardware volume low, use `audiohub-music --minutes 5 --level quiet`,
+then explicitly type **PLAY** on the local terminal. Stop with
+`q` + Enter or Ctrl+C. Preserve the original SD and private backups
+for separately operator-approved physical rollback.

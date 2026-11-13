@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import shutil
 from pathlib import Path
 import stat
 import subprocess
@@ -219,11 +220,62 @@ def play_playlist(paths, *, max_minutes=15, spawn=subprocess.Popen, capture=boun
     return True
 
 
+def check_music_readiness(folder, *, capture=bounded_command_output,
+                          which=shutil.which, out=print):
+    """Read-only Pi4 music start prerequisites, NOT a playback/hardware test.
+
+    Each bounded inspection is independent so an operator sees which
+    prerequisite needs attention. Never print filenames, device IDs,
+    subprocess stderr, folder paths, or raw exceptions.
+    """
+    from . import music_library
+    try:
+        tracks, skipped = music_library.discover_library(folder)
+    except (OSError, ValueError, PermissionError, UnicodeError):
+        library_ready = False
+        out("WAV library: NEEDS ATTENTION. Check a private folder of owned "
+            "PCM16 WAVs with audiohub-music --list.")
+    else:
+        library_ready = True
+        out("WAV library: READY; " + str(len(tracks)) +
+            " supported WAV track(s); " + str(skipped) +
+            " unsafe/unsupported WAV(s) skipped. Names remain hidden.")
+
+    try:
+        sink_ready = music_sink_available(capture=capture)
+    except (OSError, ValueError, RuntimeError, TypeError):
+        sink_ready = False
+    out("Private PipeWire music input: " +
+        ("READY" if sink_ready else
+         "NEEDS ATTENTION; inspect the audiohub user PipeWire runtime "
+         "and audiohub.music input. No default-output fallback."))
+
+    try:
+        player_ready = bool(which("pw-cat"))
+    except (OSError, ValueError, RuntimeError, TypeError):
+        player_ready = False
+    out("Local PipeWire playback tool: " +
+        ("AVAILABLE" if player_ready else
+         "NEEDS ATTENTION; verify the installed PipeWire tools, "
+         "without changing user privileges."))
+
+    ready = library_ready and sink_ready and player_ready
+    out("Preflight: " +
+        ("READY FOR MANUAL PLAY TEST" if ready else
+         "NOT READY FOR MANUAL PLAY TEST; correct prerequisites first") +
+        ". No playback, global mixer/route change or file write occurred.")
+    out("Physical speaker sound, safe hardware loudness, multi-source mixing "
+        "and owner authentication remain UNVERIFIED.")
+    return ready
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("wav", nargs="*", help="1–8 absolute local 16-bit PCM WAV files")
     parser.add_argument("--library", metavar="FOLDER",
                         help="Browse a private local WAV folder without playback")
+    parser.add_argument("--check", action="store_true",
+                        help="Read-only WAV, private music sink and player tool readiness; NO sound")
     parser.add_argument("--guided", action="store_true",
                         help="One-command private local album picker; requires exact PLAY confirmation at TTY")
     parser.add_argument("--tracks", metavar="1,3",
@@ -241,6 +293,13 @@ def main(argv=None):
                         help="With --play: use local terminal s=status, n=next, q=stop; Enter required")
     args = parser.parse_args(argv)
     try:
+        if args.check:
+            if (args.library is None or args.wav or args.guided
+                    or args.tracks is not None or args.play or args.interactive
+                    or args.show_titles or args.minutes != 15
+                    or args.level != "normal"):
+                raise ValueError("Read-only --check accepts only --library FOLDER")
+            return 0 if check_music_readiness(args.library) else 2
         if args.guided:
             if (args.library is None or args.wav or args.tracks is not None
                     or args.play or args.interactive):

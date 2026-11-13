@@ -245,3 +245,14 @@ levels or active mixer/other sources, and is never persisted.
 `--show-titles` is separate local explicit opt-in. Native chroot
 smoke exercises installed list mode and rejects out-of-range flags.
 No physical Edifier/loudness measurement, 2BT+LAN, or production GO.
+
+### Read-only Pi4 local-music start prerequisites
+
+The installed `audiohub-music --check` inspects bounded private WAV
+format/count, the exact existing `audiohub.music` PipeWire input,
+and `pw-cat` tool presence independently with safe per-prerequisite
+guidance; 0 only if all are present, otherwise 2. No audio is played
+and no route, volume, EQ, permission, wireless, service or source file
+is modified. Native chroot tests this installed command in a
+deliberately empty library. This is not verification of physical
+Edifier sound, 2BT+LAN or production acceptance.

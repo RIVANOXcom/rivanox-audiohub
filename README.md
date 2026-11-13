@@ -560,3 +560,13 @@ sanitized filenames only on that terminal. The mode does not adjust
 global volume, EQ, BT pairing, USB or network sources, does not
 autoplay and does not claim calibrated loudness or tested Edifier
 audio. See [local player operator guide](docs/LOCAL-MUSIC-PLAYBACK.md).
+
+**Pi4 pre-play readiness (read-only):** The existing installed
+`audiohub-music --check` now checks the bounded private WAV library,
+the exact local `audiohub.music` virtual PipeWire input and the
+installed audio player tool independently. It reports anonymous
+READY/NEEDS ATTENTION prerequisites with actionable hints, exits
+successfully only when all three are present, and never plays music,
+changes the global mixer or starts services. **Hardware sound remains
+UNVERIFIED** until a separately authorized low-volume Pi4/Edifier
+PLAY trial. See [the operator music guide](docs/LOCAL-MUSIC-PLAYBACK.md).
