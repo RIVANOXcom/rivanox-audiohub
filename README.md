@@ -460,3 +460,13 @@ to previously absent WAV filenames in the new SD's private folder.
 If owner UID, permissions or mount points do not match, stop and seek
 an operator-approved manual copy; do **not** modify old SD rights or
 silently bypass these checks. Keep both SDs until playback is verified.
+
+**Resume and verify an interrupted WAV transfer:** The new Pi4 operator
+alpha supports `backup PATH --resume` and `restore PATH --resume`,
+which safely skip only matching private existing WAVs and require
+uppercase COPY for missing files. Different or unsafe existing copies
+refuse, never overwrite. Use `verify-backup PATH` or
+`verify-restore PATH` for a read-only source-set comparison.
+No OS, network, owner trust or other settings are transferred.
+Keep the original SD intact; see [the private WAV transfer guide]
+(docs/LOCAL-MUSIC-PLAYBACK.md) for the manual approval boundary.

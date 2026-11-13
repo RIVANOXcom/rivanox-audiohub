@@ -32,9 +32,12 @@ class MusicTransferTests(unittest.TestCase):
             track.setsampwidth(2)
             track.setframerate(48000)
             track.writeframes(b"\x00\x01\x00\x02" * 250)
+        # Existing resume targets must already be genuinely owner-private.
+        self.wav.chmod(0o600)
         self.output = []
 
-    def run_transfer(self, operation, *, allow=True, external=None, music=None):
+    def run_transfer(self, operation, *, allow=True, external=None, music=None,
+                     resume=False, verify=False):
         with mock.patch.object(music_transfer.os, "geteuid", return_value=1000):
             return music_transfer.transfer(
                 operation,
@@ -42,7 +45,7 @@ class MusicTransferTests(unittest.TestCase):
                 music_dir=str(self.music if music is None else music),
                 confirm=lambda: allow,
                 out=self.output.append,
-                require_terminal=False)
+                require_terminal=False, resume=resume, verify=verify)
 
     def test_private_backup_then_restore_preserves_wav_without_overwrite(self):
         original = self.wav.read_bytes()
@@ -170,6 +173,129 @@ class MusicTransferTests(unittest.TestCase):
                                         music_dir=str(self.music),
                                         confirm=lambda: True)
         self.assertEqual(list(self.external.iterdir()), [])
+
+    def test_resume_skips_verified_files_without_overwriting(self):
+        original = self.wav.read_bytes()
+        self.assertTrue(self.run_transfer("backup"))
+        fingerprint = [s for s in self.output if "fingerprint" in s][-1]
+        st_before = (self.external / self.name).stat()
+        self.output.clear()
+        self.assertTrue(self.run_transfer("backup", resume=True))
+        self.assertEqual((self.external / self.name).read_bytes(), original)
+        self.assertEqual((self.external / self.name).stat().st_ino,
+                         st_before.st_ino)
+        self.assertIn("1 verified existing, 0 new", "\n".join(self.output))
+        self.assertIn("0 new WAV copies", "\n".join(self.output))
+        self.assertIn(fingerprint, self.output)
+
+    def test_resume_interrupted_partial_library_and_verify(self):
+        second = self.music / "private-two.wav"
+        with wave.open(str(second), "wb") as track:
+            track.setnchannels(1)
+            track.setsampwidth(2)
+            track.setframerate(44100)
+            track.writeframes(b"\x00\x02" * 250)
+        original = self.wav.read_bytes()
+        second_original = second.read_bytes()
+        # Simulate one already committed file from an interrupted copy:
+        (self.external / self.name).write_bytes(original)
+        (self.external / self.name).chmod(0o600)
+        self.output.clear()
+        self.assertTrue(self.run_transfer("backup", resume=True))
+        self.assertIn("1 verified existing, 1 new", "\n".join(self.output))
+        self.assertEqual((self.external / self.name).read_bytes(), original)
+        self.assertEqual((self.external / second.name).read_bytes(), second_original)
+        self.output.clear()
+        self.assertTrue(self.run_transfer("backup", verify=True, allow=False))
+        self.assertIn("2 source WAVs match destination", "\n".join(self.output))
+        self.assertNotIn("Type exact uppercase COPY", "\n".join(self.output))
+        self.assertEqual(second.read_bytes(), second_original)
+
+    def test_resume_conflicting_target_aborts_before_any_new_file(self):
+        second = self.music / "private-two.wav"
+        with wave.open(str(second), "wb") as track:
+            track.setnchannels(2)
+            track.setsampwidth(2)
+            track.setframerate(48000)
+            track.writeframes(b"\x00\x03\x00\x04" * 250)
+        conflict = self.external / self.name
+        conflict.write_bytes(self.wav.read_bytes()[:-1] + b"\xff")
+        conflict.chmod(0o600)
+        with self.assertRaises(ValueError):
+            self.run_transfer("backup", resume=True)
+        self.assertFalse((self.external / second.name).exists())
+        self.assertEqual(conflict.read_bytes()[-1:], b"\xff")
+        # Verify may encounter the other missing WAV before the conflict;
+        # either failure must remain read-only and fail closed.
+        with self.assertRaises((ValueError, FileNotFoundError)):
+            self.run_transfer("backup", verify=True)
+
+    def test_resume_rejects_symlink_hardlink_and_public_target(self):
+        dest = self.external / self.name
+        dest.symlink_to(self.wav)
+        with self.assertRaises(OSError):
+            self.run_transfer("backup", resume=True)
+        dest.unlink()  # Fixture cleanup only.
+        dest.write_bytes(self.wav.read_bytes())
+        dest.chmod(0o644)
+        with self.assertRaises(ValueError):
+            self.run_transfer("backup", resume=True)
+        dest.chmod(0o600)
+        link = self.root / "extra-hardlink"
+        os.link(dest, link)
+        with self.assertRaises(ValueError):
+            self.run_transfer("backup", resume=True)
+
+    def test_verify_requires_all_source_files_and_cannot_change_files(self):
+        with self.assertRaises(FileNotFoundError):
+            self.run_transfer("backup", verify=True, allow=True)
+        self.assertEqual(list(self.external.iterdir()), [])
+        self.assertTrue(self.run_transfer("backup"))
+        snapshot = (self.external / self.name).stat()
+        self.output.clear()
+        self.assertTrue(self.run_transfer("backup", verify=True, allow=False))
+        self.assertEqual((self.external / self.name).stat().st_ino, snapshot.st_ino)
+        self.assertEqual((self.external / self.name).stat().st_mtime_ns,
+                         snapshot.st_mtime_ns)
+        # Restore-side verification requires restored data, and is read-only.
+        self.assertTrue(self.run_transfer("restore", verify=True, allow=False))
+        self.assertNotIn("Type exact uppercase COPY", "\n".join(self.output))
+
+    def test_restore_resume_from_read_only_old_sd_source(self):
+        self.assertTrue(self.run_transfer("backup"))
+        self.external.chmod(0o500)
+        self.output.clear()
+        self.assertTrue(self.run_transfer("restore", resume=True))
+        self.assertIn("1 verified existing, 0 new", "\n".join(self.output))
+        self.assertTrue(self.run_transfer("restore", verify=True))
+        self.assertEqual(stat.S_IMODE(self.external.stat().st_mode), 0o500)
+
+    def test_no_empty_library_claims_verified_migration(self):
+        self.wav.unlink()  # Fixture only.
+        with self.assertRaises(ValueError):
+            self.run_transfer("backup", resume=True)
+        with self.assertRaises(ValueError):
+            self.run_transfer("backup", verify=True)
+        self.assertEqual(list(self.external.iterdir()), [])
+
+    def test_resume_guard_refuses_changed_existing_source_before_copies(self):
+        self.assertTrue(self.run_transfer("backup"))
+        self.wav.write_bytes(self.wav.read_bytes()[:-1] + b"\x07")
+        with self.assertRaises(ValueError):
+            self.run_transfer("backup", resume=True)
+        self.assertEqual((self.external / self.name).read_bytes()[-1:],
+                         b"\x02")
+
+    def test_resume_and_verify_cli_parsing(self):
+        with mock.patch.object(music_transfer, "transfer", return_value=True) as fn:
+            self.assertEqual(music_transfer.main(["backup", "/private", "--resume"]), 0)
+            self.assertEqual(fn.call_args.kwargs, {"resume": True, "verify": False})
+            self.assertEqual(music_transfer.main(["verify-restore", "/private"]), 0)
+            self.assertEqual(fn.call_args.kwargs, {"resume": False, "verify": True})
+            self.assertEqual(music_transfer.main(["verify-backup", "/private"]), 0)
+            self.assertEqual(fn.call_args.kwargs, {"resume": False, "verify": True})
+            self.assertEqual(music_transfer.main(
+                ["verify-backup", "/private", "--resume"]), 2)
 
     def test_shell_wrapper_help_and_bad_arguments(self):
         wrapper = (Path(__file__).resolve().parents[1] /
