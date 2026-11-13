@@ -221,7 +221,8 @@ def _terminal_line():
 
 
 def guided_session(folder, *, max_minutes=15, show_titles=False,
-                   read_line=None, out=None, runner=None, level="normal"):
+                   read_line=None, out=None, runner=None, level="normal",
+                   channel="both"):
     """One-command guided local picker with bounded revision and PLAY gate.
 
     ALL selects a small album; SHUFFLE prepares a short anonymous queue;
@@ -231,6 +232,7 @@ def guided_session(folder, *, max_minutes=15, show_titles=False,
     import sys
     # No unbounded pw-cat volume flag may be passed by the launcher or CLI.
     local_music.stream_gain(level)
+    local_music.validate_stereo_channel(channel)
     if not sys.stdin.isatty() or not sys.stdout.isatty():
         raise PermissionError("Guided music requires a local operator terminal")
     if hasattr(os, "geteuid") and os.geteuid() == 0:
@@ -262,6 +264,12 @@ def guided_session(folder, *, max_minutes=15, show_titles=False,
             try:
                 selected, details, numbers = guided_choice(
                     entries, reply, max_minutes=max_minutes)
+                if channel != "both" and any(
+                        track["channels"] != 2 for track in details["tracks"]):
+                    out("LEFT/RIGHT requires stereo WAVs. Select only stereo "
+                        "tracks or start a separate BOTH-channel session.")
+                    selected = None
+                    continue
                 break
             except (ValueError, OSError, TypeError, IndexError):
                 out("Invalid selection or duration. No playback started.")
@@ -274,7 +282,9 @@ def guided_session(folder, *, max_minutes=15, show_titles=False,
         out("Selected " + str(details["files"]) + " WAV track(s), total "
             + str(details["total_duration_ms"] // 1000)
             + " s. Stream level " + level.upper() +
-            " (not calibrated speaker loudness). Verify a low physical speaker volume.")
+            "; channel " + channel.upper() +
+            " (one-sided mode silences only the opposite stereo PCM channel; "
+            "not calibrated speaker loudness). Verify a low physical speaker volume.")
         out("Type exact uppercase PLAY then Enter to play; CHANGE to reselect."
             " Anything else cancels; no automatic playback:")
         answer = read_line()
@@ -289,6 +299,9 @@ def guided_session(folder, *, max_minutes=15, show_titles=False,
             out("Music session cancelled. No playback started.")
             return False
         out("Explicit PLAY confirmed. To stop, press q + Enter or Ctrl+C.")
-        if level == "normal":
-            return runner(selected, max_minutes=max_minutes)
-        return runner(selected, max_minutes=max_minutes, level=level)
+        options = {"max_minutes": max_minutes}
+        if level != "normal":
+            options["level"] = level
+        if channel != "both":
+            options["channel"] = channel
+        return runner(selected, **options)

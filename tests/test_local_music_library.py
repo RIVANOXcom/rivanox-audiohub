@@ -269,6 +269,74 @@ class LocalMusicLibraryTests(unittest.TestCase):
         with mock.patch("sys.stdin", io.StringIO("PLAY\r\n")):
             self.assertEqual(music_library._terminal_line(), "PLAY")
 
+    def test_guided_right_stereo_mode_is_reviewed_before_exact_play(self):
+        with mock.patch("sys.stdin", mock.Mock(isatty=lambda: True)), \
+             mock.patch("sys.stdout", mock.Mock(isatty=lambda: True)), \
+             mock.patch.object(os, "geteuid", return_value=1000):
+            choices = iter(["2,1", "PLAY"])
+            calls, shown = [], []
+            def runner(paths, **kw):
+                calls.append((paths, kw))
+                return True
+            self.assertTrue(music_library.guided_session(
+                self.root, max_minutes=4, level="quiet", channel="right",
+                read_line=lambda: next(choices),
+                out=shown.append, runner=runner))
+            self.assertEqual(calls, [([self.b, self.a], {
+                "max_minutes": 4, "level": "quiet", "channel": "right"})])
+            text = "\n".join(shown)
+            self.assertIn("channel RIGHT", text)
+            self.assertIn("opposite stereo PCM channel", text)
+            self.assertIn("QUIET", text)
+            self.assertIn("Type exact uppercase PLAY", text)
+            self.assertNotIn(self.b.name, text)
+            self.assertNotIn(str(self.root), text)
+
+    def test_mono_selection_in_one_sided_mode_retries_without_playing_mono(self):
+        mono = self.root / "c private-mono.wav"
+        with wave.open(str(mono), "wb") as output:
+            output.setnchannels(1)
+            output.setsampwidth(2)
+            output.setframerate(48000)
+            output.writeframes(b"\x01\x02" * 120)
+        with mock.patch("sys.stdin", mock.Mock(isatty=lambda: True)), \
+             mock.patch("sys.stdout", mock.Mock(isatty=lambda: True)), \
+             mock.patch.object(os, "geteuid", return_value=1000):
+            choices = iter(["3", "1", "PLAY"])
+            calls, shown = [], []
+            self.assertTrue(music_library.guided_session(
+                self.root, max_minutes=4, channel="left",
+                read_line=lambda: next(choices), out=shown.append,
+                runner=lambda paths, **kw: calls.append((paths, kw)) or True))
+            self.assertEqual(calls, [([self.a], {
+                "max_minutes": 4, "channel": "left"})])
+            text = "\n".join(shown)
+            self.assertIn("LEFT/RIGHT requires stereo WAVs", text)
+            self.assertNotIn("c private-mono", text)
+            self.assertNotIn(str(self.root), text)
+
+    def test_guided_channel_mode_wrong_confirmation_never_starts_sound(self):
+        with mock.patch("sys.stdin", mock.Mock(isatty=lambda: True)), \
+             mock.patch("sys.stdout", mock.Mock(isatty=lambda: True)), \
+             mock.patch.object(os, "geteuid", return_value=1000):
+            calls = []
+            self.assertFalse(music_library.guided_session(
+                self.root, channel="left", read_line=iter(["1", "play"]).__next__,
+                out=lambda _: None,
+                runner=lambda *args, **kw: calls.append(True)))
+            self.assertEqual(calls, [])
+
+    def test_guided_cli_forwards_stereo_mode_only_when_explicitly_chosen(self):
+        with mock.patch("sys.stdin", mock.Mock(isatty=lambda: True)), \
+             mock.patch("sys.stdout", mock.Mock(isatty=lambda: True)), \
+             mock.patch.object(music_library, "guided_session",
+                               return_value=True) as guided:
+            self.assertEqual(local_music.main([
+                "--library", str(self.root), "--guided",
+                "--minutes", "5", "--channel", "left"]), 0)
+            guided.assert_called_once_with(
+                str(self.root), max_minutes=5, show_titles=False, channel="left")
+
     def test_guided_quiet_level_is_reviewed_and_requires_exact_play(self):
         with mock.patch("sys.stdin", mock.Mock(isatty=lambda: True)), \
              mock.patch("sys.stdout", mock.Mock(isatty=lambda: True)), \

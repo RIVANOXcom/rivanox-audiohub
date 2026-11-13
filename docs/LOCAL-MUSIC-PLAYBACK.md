@@ -598,3 +598,39 @@ hardware volume low, use `audiohub-music --minutes 5 --level quiet`,
 then explicitly type **PLAY** on the local terminal. Stop with
 `q` + Enter or Ctrl+C. Preserve the original SD and private backups
 for separately operator-approved physical rollback.
+
+## Local left/right stereo isolation in the existing Pi4 music player
+
+On an authorized *spare* Pi4 test SD, with the physical speaker
+volume kept low, the operator can choose:
+
+    audiohub-music --minutes 5 --level quiet --channel left
+    audiohub-music --minutes 5 --level quiet --channel right
+    audiohub-music --minutes 5 --level quiet --channel both
+
+Default is both. LEFT mutes only the RIGHT side of the stereo WAV in
+bounded decoded PCM16 chunks in memory; RIGHT mutes only LEFT.
+The requested sample bytes are preserved exactly, both stream channels
+remain stereo, the original WAV on disk is untouched and there is no
+amplification or PipeWire output rerouting. The selection applies only
+to this local music session, persists through track skip/replay/repeat
+and is never saved. Mono content cannot be played in one-sided mode;
+the picker refuses such selection before PLAY. --check and --list
+remain strictly non-playing and do not accept --channel.
+
+Before any playback, the trusted local Pi4 terminal shows the chosen
+channel and selected tracks, and requires a separate exact uppercase
+PLAY. This does not alter other mixer inputs, global PipeWire levels,
+EQ, mute, wireless/phone owner pairing, device permissions, or services.
+No action mounts/formats/flashes either SD card.
+
+To investigate actual speaker stereo, use an operator-supplied,
+licensed stereo WAV with known left/right content. Separately listen
+at a very low physical amplifier volume for LEFT, RIGHT and BOTH
+after explicit operator authorization; stop using q + Enter or
+Ctrl+C each time. Record what speakers truly produce. No automatic
+hardware PASS is inferred: source-channel isolation is NOT proof of
+the physical Edifier USB output, correct wiring, SPL, multi-source
+Bluetooth/LAN mixing, 24-hour stability or production readiness.
+Keep the original SD and external WAV/setting archive for a separate
+manual physical rollback after operator decision.

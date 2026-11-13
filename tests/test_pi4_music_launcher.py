@@ -141,6 +141,48 @@ class MusicLauncherTests(unittest.TestCase):
         self.assertIn('Local PipeWire playback tool:', stage)
         self.assertIn("No playback, global mixer/route change", stage)
 
+    def test_stereo_help_explains_mono_refusal_and_unboosted_channel(self):
+        text = self.shell("--help").stdout
+        for token in ("--channel both|left|right", "silences only",
+                      "opposite stereo WAV channel", "mono needs both",
+                      "PLAY is required"):
+            with self.subTest(token=token):
+                self.assertIn(token, text)
+
+    def test_stereo_invalid_modes_and_conflicting_nonplaying_flags_fail_closed(self):
+        for args in (
+            ("--channel",), ("--channel", "center"),
+            ("--channel", "LEFT"), ("--channel", "1"),
+            ("--channel", "left", "--channel", "right"),
+            ("--channel", "--play"), ("--channel", "left", "--list"),
+            ("--list", "--channel", "both"),
+            ("--channel", "left", "--check"),
+            ("--check", "--channel", "right"),
+            ("--channel", "both", "--check"),
+        ):
+            with self.subTest(args=args):
+                r = self.shell(*args)
+                self.assertEqual(r.returncode, 2, r.stderr)
+                self.assertNotIn("Playing track", r.stdout)
+                self.assertTrue(r.stderr.strip())
+
+    def test_stereo_mode_passes_only_into_guided_confirmed_player(self):
+        text = LAUNCHER.read_text(encoding="utf-8")
+        self.assertIn("channel=both", text)
+        self.assertIn('both|left|right) channel=$2', text)
+        self.assertIn('--level "$level" --channel "$channel"', text)
+        self.assertIn('if [ "$channel_seen" -ne 0 ]; then', text)
+        self.assertNotIn(" --play", text)
+        self.assertNotIn("pw-cat", text)
+        self.assertNotIn("sudo ", text)
+
+    def test_native_script_checks_installed_invalid_channel_before_audio(self):
+        script = STAGE.read_text(encoding="utf-8")
+        self.assertIn("invalid_channel_output=", script)
+        self.assertIn("/usr/local/bin/audiohub-music --channel center", script)
+        self.assertIn('test "$invalid_channel_status" -eq 2', script)
+        self.assertIn("Only both, left or right stereo", script)
+
     def test_builder_installs_real_command_and_prepares_private_folder(self):
         script = STAGE.read_text(encoding="utf-8")
         self.assertIn('install -m755 files/bin/audiohub-music', script)

@@ -35,6 +35,38 @@ def stream_gain(level):
         raise ValueError("Choose quiet, soft, or normal local playback level")
     return PLAYBACK_LEVELS[level]
 FRAMES_PER_CHUNK = 2048
+STEREO_MODES = ("both", "left", "right")
+
+
+def validate_stereo_channel(channel, report=None):
+    """Select unboosted PCM16 stereo sides; reject mono before PLAY."""
+    if type(channel) is not str or channel not in STEREO_MODES:
+        raise ValueError("Choose both, left or right stereo channels")
+    if (channel != "both" and report is not None and
+            any(track["channels"] != 2 for track in report["tracks"])):
+        raise ValueError("Left/right isolation requires stereo WAV tracks")
+    return channel
+
+
+def isolate_stereo_pcm16(data, channel):
+    """Return unchanged stereo PCM, or silence only the opposite side.
+
+    WAV data is raw interleaved little-endian 16-bit left/right samples.
+    This is applied only to bounded chunks in memory. Never scale samples,
+    change channel count, persist files or touch any other PipeWire source.
+    """
+    validate_stereo_channel(channel)
+    if channel == "both":
+        return data
+    if len(data) % 4:
+        raise ValueError("Stereo PCM block must contain complete frames")
+    result = bytearray(data)
+    # One 16-bit sample per 4-byte stereo frame. Preserve the requested side.
+    start = 2 if channel == "left" else 0
+    result[start::4] = b"\x00" * (len(data) // 4)
+    result[start+1::4] = b"\x00" * (len(data) // 4)
+    return bytes(result)
+
 
 
 def _open_wav(path):
@@ -106,10 +138,11 @@ def music_sink_available(*, capture=bounded_command_output):
 
 
 def _play_one(path, metadata, *, deadline, spawn, stop=None, on_player=None,
-              gain=STREAM_VOLUME):
+              gain=STREAM_VOLUME, channel="both"):
     # Only values from the fixed safe stream-gain allowlist may reach pw-cat.
     if gain not in PLAYBACK_LEVELS.values() or type(gain) is not str:
         raise ValueError("Unsafe local stream gain")
+    validate_stereo_channel(channel, {"tracks": [metadata]})
     # Reopen and inspect at playback time: never rely solely on a stale preview.
     if _open_wav(path) != metadata:
         raise ValueError("Audio file changed since the local preview")
@@ -152,7 +185,7 @@ def _play_one(path, metadata, *, deadline, spawn, stop=None, on_player=None,
                 data = reader.readframes(frames)
                 if len(data) != frames * metadata["channels"] * 2:
                     raise ValueError("WAV data ended early")
-                child.stdin.write(data)
+                child.stdin.write(isolate_stereo_pcm16(data, channel))
                 sent += frames
             child.stdin.close()
             # A 30-minute track cannot finish within the old fixed 10s
@@ -192,10 +225,11 @@ def _play_one(path, metadata, *, deadline, spawn, stop=None, on_player=None,
 
 def play_playlist(paths, *, max_minutes=15, spawn=subprocess.Popen, capture=bounded_command_output,
                   stop=None, notify=print, session_deadline=None, on_player=None,
-                  level="normal"):
+                  level="normal", channel="both"):
     """One explicit local playback session, never a persistent service."""
     gain = stream_gain(level)
     report = inspect_playlist(paths, max_minutes=max_minutes)
+    validate_stereo_channel(channel, report)
     if hasattr(os, "geteuid") and os.geteuid() == 0:
         raise PermissionError("Run as the unprivileged audiohub PipeWire user, never root")
     if not music_sink_available(capture=capture):
@@ -210,12 +244,13 @@ def play_playlist(paths, *, max_minutes=15, spawn=subprocess.Popen, capture=boun
             raise TimeoutError("Local playlist session deadline reached")
         notify("Playing track " + str(i) + "/" + str(report["files"])
                + " privately through music input; Ctrl+C stops.")
-        if level == "normal":
-            _play_one(path, metadata, deadline=deadline, spawn=spawn, stop=stop,
-                      on_player=on_player)
-        else:
-            _play_one(path, metadata, deadline=deadline, spawn=spawn, stop=stop,
-                      on_player=on_player, gain=gain)
+        options = {}
+        if level != "normal":
+            options["gain"] = gain
+        if channel != "both":
+            options["channel"] = channel
+        _play_one(path, metadata, deadline=deadline, spawn=spawn, stop=stop,
+                  on_player=on_player, **options)
     notify("Local playback finished. Audible sound was NOT automatically verified.")
     return True
 
@@ -282,6 +317,8 @@ def main(argv=None):
                         help="Choose 1–8 numbered library tracks (no autoplay)")
     parser.add_argument("--show-titles", action="store_true",
                         help="EXPLICITLY print sanitized track names on the local console")
+    parser.add_argument("--channel", choices=STEREO_MODES, default="both",
+                        help="Stereo playback: both or one unboosted side (mono requires both)")
     parser.add_argument("--level", choices=("quiet", "soft", "normal"),
                         default="normal",
                         help="Private stream gain; quiet and soft are below the normal 0.20 cap")
@@ -297,7 +334,7 @@ def main(argv=None):
             if (args.library is None or args.wav or args.guided
                     or args.tracks is not None or args.play or args.interactive
                     or args.show_titles or args.minutes != 15
-                    or args.level != "normal"):
+                    or args.level != "normal" or args.channel != "both"):
                 raise ValueError("Read-only --check accepts only --library FOLDER")
             return 0 if check_music_readiness(args.library) else 2
         if args.guided:
@@ -311,6 +348,8 @@ def main(argv=None):
                        "show_titles": args.show_titles}
             if args.level != "normal":
                 options["level"] = args.level
+            if args.channel != "both":
+                options["channel"] = args.channel
             music_library.guided_session(args.library, **options)
             return 0
         if args.interactive and not args.play:
@@ -335,47 +374,43 @@ def main(argv=None):
             paths, preview = music_library.selected_paths(
                 items, args.tracks, max_minutes=args.minutes
             )
+            validate_stereo_channel(args.channel, preview)
             print("Selection: " + str(preview["files"]) + " track(s), "
                   + str(preview["total_duration_ms"] // 1000)
                   + " seconds. No network or mixer changes.")
             if not args.play:
                 print("Preview only. Repeat with --play to hear selected local tracks.")
                 return 0
+            options = {"max_minutes": args.minutes}
+            if args.level != "normal":
+                options["level"] = args.level
+            if args.channel != "both":
+                options["channel"] = args.channel
             if args.interactive:
                 from . import music_session
-                if args.level == "normal":
-                    music_session.run_session(paths, max_minutes=args.minutes)
-                else:
-                    music_session.run_session(paths, max_minutes=args.minutes,
-                                              level=args.level)
+                music_session.run_session(paths, **options)
             else:
-                if args.level == "normal":
-                    play_playlist(paths, max_minutes=args.minutes)
-                else:
-                    play_playlist(paths, max_minutes=args.minutes,
-                                  level=args.level)
+                play_playlist(paths, **options)
             return 0
         if args.tracks is not None or args.show_titles:
             raise ValueError("Numbered tracks and local titles require --library")
         preview = inspect_playlist(args.wav, max_minutes=args.minutes)
+        validate_stereo_channel(args.channel, preview)
         print("Local music queue: " + str(preview["files"]) + " track(s); " +
               str(preview["total_duration_ms"] // 1000) + " seconds; no playback yet.")
         if not args.play:
             print("To play locally, repeat with --play. No source, setting or route changed.")
             return 0
+        options = {"max_minutes": args.minutes}
+        if args.level != "normal":
+            options["level"] = args.level
+        if args.channel != "both":
+            options["channel"] = args.channel
         if args.interactive:
             from . import music_session
-            if args.level == "normal":
-                music_session.run_session(args.wav, max_minutes=args.minutes)
-            else:
-                music_session.run_session(args.wav, max_minutes=args.minutes,
-                                          level=args.level)
+            music_session.run_session(args.wav, **options)
         else:
-            if args.level == "normal":
-                play_playlist(args.wav, max_minutes=args.minutes)
-            else:
-                play_playlist(args.wav, max_minutes=args.minutes,
-                              level=args.level)
+            play_playlist(args.wav, **options)
         return 0
     except KeyboardInterrupt:
         print("Local music playback stopped. No route or setting changed.")

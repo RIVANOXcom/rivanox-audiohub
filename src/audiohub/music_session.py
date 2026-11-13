@@ -102,7 +102,7 @@ def queue_message(report, position, *, repeat_mode="off"):
 
 def run_session(paths, *, max_minutes=15, read_command=read_terminal_command,
                 playback=None, clock=time.monotonic, out=print, require_tty=True,
-                level="normal"):
+                level="normal", channel="both"):
     """Play a bounded private local queue with human-controlled navigation.
 
     The worker owns only the pw-cat player it starts. The main thread
@@ -114,6 +114,7 @@ def run_session(paths, *, max_minutes=15, read_command=read_terminal_command,
     # A strict local-only gain cap; validate even when using an injected player.
     local_music.stream_gain(level)
     report = local_music.inspect_playlist(paths, max_minutes=max_minutes)
+    local_music.validate_stereo_channel(channel, report)
     if require_tty and (not sys.stdin.isatty() or not sys.stdout.isatty()):
         raise PermissionError("Interactive music requires a real operator terminal")
     if hasattr(local_music.os, "geteuid") and local_music.os.geteuid() == 0:
@@ -124,7 +125,9 @@ def run_session(paths, *, max_minutes=15, read_command=read_terminal_command,
     start = clock()
     deadline = start + max_minutes * 60
     out("Interactive music session started locally at " + level.upper() +
-        " stream level (not calibrated speaker loudness). " + COMMAND_HELP)
+        " stream level, " + channel.upper() + " stereo channel selection "
+        "(not calibrated speaker loudness or actual hardware verification). "
+        + COMMAND_HELP)
     position = 1
     repeat_mode = "off"  # volatile, this session only; never saved
     while position <= report["files"]:
@@ -156,6 +159,8 @@ def run_session(paths, *, max_minutes=15, read_command=read_terminal_command,
                           "on_player": on_player, "notify": lambda _: None}
                 if level != "normal":
                     kwargs["level"] = level
+                if channel != "both":
+                    kwargs["channel"] = channel
                 playback([path], **kwargs)
             except InterruptedError:
                 if not cancelled.is_set():

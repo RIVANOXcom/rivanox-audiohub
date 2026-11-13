@@ -52,6 +52,15 @@ case "$empty_library_output" in *"Local player unavailable or stopped"*) ;; *) e
 case "$invalid_level_output" in *"Only quiet, soft or normal"*) ;; *) exit 1 ;; esac
 case "$invalid_time_output" in *"Minutes must be a whole number"*) ;; *) exit 1 ;; esac
 
+# Actual installed Pi4 stereo channel option must fail closed for invalid
+# names. This cannot play sound or modify user volume or other sinks.
+set +e
+invalid_channel_output="$(runuser -u audiohub -- /usr/local/bin/audiohub-music --channel center 2>&1)"
+invalid_channel_status="$?"
+set -e
+test "$invalid_channel_status" -eq 2
+case "$invalid_channel_output" in *"Only both, left or right stereo"*) ;; *) exit 1 ;; esac
+
 # Real installed non-playing --check is a multi-prerequisite operator status.
 # The fresh image contains no WAVs, so readiness must refuse with safe guidance.
 # It must never start an audio session, reconfigure PipeWire or expose titles.

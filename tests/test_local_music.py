@@ -260,6 +260,92 @@ class LocalMusicTests(unittest.TestCase):
             play.assert_called_once_with([str(self.wav)],
                                          max_minutes=15, level="quiet")
 
+    def test_stereo_pcm_isolation_silences_only_unselected_side(self):
+        original = b"\x01\x02\x03\x04\x05\x06\x07\x08"
+        self.assertEqual(local_music.isolate_stereo_pcm16(original, "both"),
+                         original)
+        self.assertEqual(local_music.isolate_stereo_pcm16(original, "left"),
+                         b"\x01\x02\x00\x00\x05\x06\x00\x00")
+        self.assertEqual(local_music.isolate_stereo_pcm16(original, "right"),
+                         b"\x00\x00\x03\x04\x00\x00\x07\x08")
+        self.assertEqual(original, b"\x01\x02\x03\x04\x05\x06\x07\x08")
+        for invalid in ("middle", "LEFT", "", 1, False, None):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                local_music.isolate_stereo_pcm16(original, invalid)
+        with self.assertRaises(ValueError):
+            local_music.isolate_stereo_pcm16(b"\x01\x02\x03", "left")
+
+    def test_stereo_left_right_preserve_pcm_frames_gain_and_original_file(self):
+        old_bytes = self.wav.read_bytes()
+        with mock.patch.object(local_music.os, "geteuid", return_value=1000):
+            self.assertTrue(local_music.play_playlist(
+                [self.wav], channel="left", level="quiet",
+                max_minutes=1, spawn=self.spawn, capture=self.capture,
+                notify=lambda _: None))
+            self.assertTrue(local_music.play_playlist(
+                [self.wav], channel="right", level="soft",
+                max_minutes=1, spawn=self.spawn, capture=self.capture,
+                notify=lambda _: None))
+        self.assertEqual(self.wav.read_bytes(), old_bytes)
+        self.assertEqual(self.players[0].stdin.saved,
+                         b"\x01\x02\x00\x00" * 120)
+        self.assertEqual(self.players[1].stdin.saved,
+                         b"\x00\x00\x03\x04" * 120)
+        commands = [v[1] for v in self.events if v[0] == "spawn"]
+        self.assertEqual(len(commands), 2)
+        self.assertIn("--channels=2", commands[0])
+        self.assertIn("--channels=2", commands[1])
+        self.assertIn("--volume=0.05", commands[0])
+        self.assertIn("--volume=0.10", commands[1])
+        for command in commands:
+            self.assertIn("--target=audiohub.music", command)
+            self.assertNotIn("--target=default", command)
+
+    def test_stereo_both_remains_bit_identical_and_is_not_persistent(self):
+        with mock.patch.object(local_music.os, "geteuid", return_value=1000):
+            self.assertTrue(local_music.play_playlist(
+                [self.wav], max_minutes=1, spawn=self.spawn,
+                capture=self.capture, notify=lambda _: None))
+        self.assertEqual(self.players[0].stdin.saved, self.samples)
+        self.assertEqual(local_music.stream_gain("normal"), "0.20")
+        self.assertEqual(local_music.STEREO_MODES, ("both", "left", "right"))
+
+    def test_mono_or_invalid_stereo_choice_refuses_before_audio_spawn(self):
+        mono = self.root / "private-mono.wav"
+        self.make_wav(mono, b"\x01\x02" * 120, channels=1)
+        for selected in ("left", "right"):
+            with self.subTest(channel=selected), self.assertRaises(ValueError):
+                local_music.play_playlist(
+                    [self.wav, mono], max_minutes=1, channel=selected,
+                    spawn=self.spawn, capture=self.capture,
+                    notify=lambda _: None)
+        with self.assertRaises(ValueError):
+            local_music.play_playlist(
+                [self.wav], max_minutes=1, channel="unsafe",
+                spawn=self.spawn, capture=self.capture,
+                notify=lambda _: None)
+        self.assertEqual(self.events, [])
+        self.assertEqual(self.players, [])
+
+    def test_stereo_channel_cli_preview_gate_and_explicit_play(self):
+        with mock.patch.object(local_music, "play_playlist") as play, \
+             mock.patch("builtins.print"):
+            self.assertEqual(local_music.main(
+                ["--channel", "left", str(self.wav)]), 0)
+            play.assert_not_called()
+            self.assertEqual(local_music.main(
+                ["--channel", "left", "--level", "quiet",
+                 "--play", str(self.wav)]), 0)
+            play.assert_called_once_with([str(self.wav)],
+                                         max_minutes=15, level="quiet",
+                                         channel="left")
+        with mock.patch.object(local_music, "check_music_readiness") as check, \
+             mock.patch("builtins.print"):
+            self.assertEqual(local_music.main(
+                ["--check", "--channel", "right",
+                 "--library", str(self.root)]), 2)
+            check.assert_not_called()
+
     def test_two_track_playlist_played_in_order(self):
         second = self.root / "two.wav"
         self.make_wav(second, b"\x05\x06\x07\x08" * 50)
