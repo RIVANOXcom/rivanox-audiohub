@@ -236,6 +236,28 @@ class PresetTransferTests(unittest.TestCase):
         self.assertIn("test -x", audit)
         self.assertIn("audiohub-presets-transfer", audit)
 
+    def test_first_migration_from_readonly_old_sd_uses_only_old_config(self):
+        self.old.chmod(0o500)
+        self.assertTrue(preset_transfer.export_presets(
+            str(self.media), settings_path=self.old_settings,
+            profile_path=self.old_profiles, confirm=lambda: True,
+            out=self.logs.append, require_terminal=False))
+        self.assertTrue((self.media / preset_transfer.FILENAME).exists())
+        self.old.chmod(0o700)
+        with mock.patch.object(preset_transfer, "export_presets",
+                               return_value=True) as exported:
+            self.assertEqual(preset_transfer.main(
+                ["export-old", str(self.old), str(self.media)]), 0)
+            self.assertEqual(exported.call_args.args, (str(self.media),))
+            self.assertEqual(exported.call_args.kwargs["settings_path"],
+                             self.old / "settings.json")
+            self.assertEqual(exported.call_args.kwargs["profile_path"],
+                             self.old / "volume-profiles.json")
+        self.assertEqual(preset_transfer.main(
+            ["export-old", "relative", str(self.media)]), 2)
+        self.assertEqual(preset_transfer.main(
+            ["export-old", str(self.old), "relative"]), 2)
+
     def test_cli_help_is_offline_and_commands_are_explicit(self):
         self.assertEqual(preset_transfer.main(["--help"]), 0)
         self.assertEqual(preset_transfer.main([]), 2)
