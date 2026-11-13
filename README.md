@@ -371,3 +371,28 @@ Then use `u` pause/resume, `q` stop and the existing local controls;
 no remote service, stored playlist, new permission or device route is
 introduced. Details and safe rollback:
 [local music guide](docs/LOCAL-MUSIC-PLAYBACK.md).
+
+### One command to open the Pi4 local music player
+
+The **unverified Pi4 operator image** now installs the `audiohub-music`
+command. At a physically trusted terminal, logged in as the existing
+unprivileged `audiohub` user, put your own licensed PCM16 WAV files into
+the pre-created, user-private `/home/audiohub/PrivateMusic` folder.
+Then type:
+
+```sh
+audiohub-music
+```
+
+This directly opens the existing guided album player. Choose track
+numbers, `ALL` or `SHUFFLE`; review the anonymous order, optionally
+`CHANGE` it and enter **exact uppercase `PLAY`** to start sound.
+Use `u` to pause/resume and `q` or Ctrl+C to stop. No background
+service, automatic playback, internet connection or remote control is
+created. `audiohub-music --help` shows local instructions; optionally
+use `audiohub-music /absolute/private/WavFolder` for a different
+private music directory. The existing Python CLI remains supported.
+
+This requires a locally authorized Pi4 terminal; it is **not**
+headless smartphone onboarding or proof of working Edifier audio.
+See [safe test, update and SD rollback](docs/LOCAL-MUSIC-PLAYBACK.md).

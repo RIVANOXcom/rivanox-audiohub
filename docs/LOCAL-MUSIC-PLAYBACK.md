@@ -291,3 +291,53 @@ working SD). Test preview and cancel first, then controlled PLAY at
 low speaker volume, test pause and quit, and return to old SD if
 necessary. No settings are written by this wizard and neither real
 Edifier sound nor owner authentication is inferred from software tests.
+
+## Installed on-device music command (Pi4 operator alpha)
+
+After separately approving and flashing the **unverified** ARM64 test
+image to a spare SD card, sign in at a physically trusted Pi4 terminal
+as the existing **unprivileged `audiohub` user**. The new image ships an
+empty, private 0700 folder at `/home/audiohub/PrivateMusic` for the
+operator's own legally playable PCM16 WAV files. Import files into this
+folder through an already-authorized local/manual process. No Wi-Fi,
+SSH, phone owner-claim or media synchronization is enabled by this feature.
+
+The short command is now:
+
+```sh
+audiohub-music
+```
+
+For on-device instructions use `audiohub-music --help`. To select an
+alternative *absolute* operator-controlled folder use
+`audiohub-music /absolute/private/music`. Paths are passed to the
+existing bounded local WAV library validation, never evaluated by a
+shell or written to a playlist. Relative paths and additional flags are
+rejected. The original advanced Python CLI and custom `--minutes`
+option remain available for operators needing a nondefault session
+limit; the short launcher uses a **15-minute** limit.
+
+The guided wizard lists a bounded, anonymous set of tracks and accepts
+numbers, `ALL`, or a short random `SHUFFLE`. It lets the operator
+`CHANGE` the numbered order before the exact-uppercase **`PLAY`**
+confirmation. No sound begins just by launching the command. During
+an explicitly started session use `u` to pause/resume, `n` next,
+`p` previous, `r` replay, `l` view queue, `q` quit and Ctrl+C stop.
+The original time limit, fixed private PipeWire music sink and low
+initial stream gain remain unchanged.
+
+**Operator installation and update boundary:** This is a built-in
+command inside a new image, **not** an in-place system updater. For a
+manual operator test, check the outer artifact and inner image SHA256,
+flash a *separate* SD card after explicit authorization, and boot an
+isolated Pi4 with low physical Edifier speaker volume. Your old working
+SD card must be kept intact as rollback. Keep separately provided WAV
+files on media you control and do not assume that switching SD cards
+preserves files stored on the previous card: copy/back up any operator
+media separately before an image update. Never overwrite the working
+SD card or change Bluetooth, Wi-Fi, keys or permissions automatically.
+
+The build itself executes `audiohub-music --help` in the actual ARM64
+chroot under the unprivileged user; the rootfs gate checks the command
+and the private folder in the staged image. Neither check proves actual
+Pi4 boot, audible Edifier stereo, owner onboarding or a production GO.
