@@ -412,3 +412,36 @@ The original 15-minute launcher deadline (or the explicitly configured
 pausing**. No additional service, device route, internet access or
 saved playlist is created; repeat is OFF in the next session. This is
 an unverified Pi4 operator feature requiring the human `PLAY` gate.
+
+### Keep local WAV music across a manual SD replacement (test alpha)
+
+The Pi4 test image now includes `audiohub-music-transfer` for an
+**offline, operator-confirmed, non-overwriting** WAV backup/restore to a
+separately retained storage device. This is not an OS updater or an
+automatic data migration. Prepare and mount private storage yourself
+using your existing authorization; create an **already-existing, owned
+0700 absolute folder** on that storage and keep the device separate
+from the SD image to be replaced.
+
+At an already authenticated, unprivileged **local Pi terminal**:
+
+```sh
+audiohub-music-transfer --help
+audiohub-music-transfer backup /absolute/private/external-folder
+# Review counts/bytes. Type exactly COPY to create new copies.
+# After replacing the TEST SD with a separately verified image:
+audiohub-music-transfer restore /absolute/private/external-folder
+# Review. Type exactly COPY only when the new private music folder is empty.
+```
+
+Only up to **40 supported PCM16 WAVs / 512 MiB** are copied; any unsafe
+or unsupported WAV causes a refusal rather than silent partial backup.
+The source is never deleted, existing destination WAVs are never
+overwritten, copied files have 0600 permissions, and content is verified
+before its final name becomes visible. Nothing is copied until the
+separate `COPY` confirmation. Non-WAV files and system configuration
+are *not* backed up. In a failed multi-file transfer some newly
+completed copies can remain and must be inspected manually. Always
+retain the original SD and an independent backup until a real playback
+test succeeds. No network, sync, mounts or ownership changes are made
+by this utility. See [operator details](docs/LOCAL-MUSIC-PLAYBACK.md).
