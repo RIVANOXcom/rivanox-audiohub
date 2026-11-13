@@ -66,7 +66,7 @@ class MusicTransferTests(unittest.TestCase):
         self.assertNotIn(self.name, "\n".join(self.output))
 
     def test_any_nonexact_operator_confirmation_cancels_without_writes(self):
-        for answer in (False, None, 0, "COPY", True if False else "copy"):
+        for answer in (False, None, 0, "COPY", "copy"):
             with self.subTest(answer=answer):
                 self.output.clear()
                 self.assertFalse(self.run_transfer("backup", allow=answer))
@@ -137,11 +137,12 @@ class MusicTransferTests(unittest.TestCase):
         self.assertEqual(list(self.external.iterdir()), [])
 
     def test_nonroot_and_terminal_guards(self):
-        with self.assertRaises(PermissionError):
-            music_transfer.transfer("backup", str(self.external),
-                                    music_dir=str(self.music),
-                                    confirm=lambda: True,
-                                    require_terminal=False)
+        with mock.patch.object(music_transfer.os, "geteuid", return_value=0):
+            with self.assertRaises(PermissionError):
+                music_transfer.transfer("backup", str(self.external),
+                                        music_dir=str(self.music),
+                                        confirm=lambda: True,
+                                        require_terminal=False)
         with mock.patch.object(music_transfer.os, "geteuid", return_value=1000), \
              mock.patch.object(music_transfer.sys, "stdin",
                                mock.Mock(isatty=lambda: False)):
