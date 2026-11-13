@@ -468,11 +468,11 @@ def play_speaker_test(*, mode="sequence", spawn=subprocess.Popen,
 
 def guided_speaker_check(*, side=None, read_line=None, out=print,
                          play=None, preflight=None):
-    """Operator-guided physical stereo observations with bounded manual retry.
+    """Guided original Pi4 stereo observations with an accurate local recap.
 
-    Every attempt uses the existing private, low-gain player and its fresh
-    exact PLAY TTY gate. Never skip forward after a reported physical fault,
-    auto-repeat a sound, persist observations or certify hardware.
+    Operators see prior observations, retries, and never-tested channels even
+    when a later PLAY/response is cancelled. No report is persisted and no
+    observation is certified as actual physical hardware verification.
     """
     if side is not None and (type(side) is not str or side not in STEREO_MODES):
         raise ValueError("Targeted guide supports only left, right or both")
@@ -480,8 +480,6 @@ def guided_speaker_check(*, side=None, read_line=None, out=print,
             or (hasattr(os, "geteuid") and os.geteuid() == 0)):
         raise PermissionError("Speaker guide requires an unprivileged local TTY")
     modes = ("left", "right", "both") if side is None else (side,)
-    # Do not ask for PLAY or open a player if the private sink/tool is absent.
-    # Reuse the exact same bounded, WAV-free, read-only --speaker-check logic.
     if preflight is None:
         preflight = check_first_sound_readiness
     out("Checking private first-sound prerequisites BEFORE any PLAY.")
@@ -500,6 +498,14 @@ def guided_speaker_check(*, side=None, read_line=None, out=print,
         read_line = lambda: sys.stdin.readline(16)
     if play is None:
         play = play_speaker_test
+
+    def safe_read():
+        # A local Ctrl+C/closed input means cancel, never approval or replay.
+        try:
+            return read_line()
+        except (KeyboardInterrupt, EOFError, StopIteration):
+            return ""
+
     if side is None:
         out("GUIDED STEREO CHECK: LEFT, RIGHT, then BOTH; three separate")
     else:
@@ -511,76 +517,92 @@ def guided_speaker_check(*, side=None, read_line=None, out=print,
     out("If anything sounds wrong, this guide STOPS advancing automatically.")
     out("You may RETRY the same side ONCE with fresh PLAY or STOP safely.")
     out("No observation can certify physical output or a production release.")
-    observations = []
+
     choices = {"CORRECT\n": "CORRECT", "WRONG\n": "WRONG",
                "SILENT\n": "SILENT", "UNSURE\n": "UNSURE",
                "CORRECT\r\n": "CORRECT", "WRONG\r\n": "WRONG",
                "SILENT\r\n": "SILENT", "UNSURE\r\n": "UNSURE"}
     repeat = ("RETRY\n", "RETRY\r\n")
     stop = ("STOP\n", "STOP\r\n")
-    completed = True
+    reached = []
+    history = {}
+
+    def finish(completed):
+        """In-memory, honest partial results on every post-preflight exit."""
+        out("LOCAL OPERATOR OBSERVATIONS (not stored or independently verified):")
+        for mode in modes:
+            if mode not in reached:
+                out(mode.upper() + ": NOT TESTED")
+                continue
+            results = history.get(mode, [])
+            out(mode.upper() + ": " + (results[-1] if results else "NO REPORT"))
+            if len(results) > 1:
+                out(mode.upper() + " reported attempts: " +
+                    " -> ".join(results))
+        if side is not None:
+            out("TARGETED ONLY: other stereo channels were NOT tested;")
+            out("do not infer complete stereo hardware readiness.")
+        if not completed:
+            if side is None:
+                out("NEEDS PHYSICAL REVIEW; remaining channels were NOT tested "
+                    "where explicitly marked above.")
+            else:
+                out("NEEDS PHYSICAL REVIEW; targeted recheck did not pass.")
+                out("No other stereo channels were tested in this run.")
+            out("No default output, automatic gain, or mixer/routing change occurred.")
+            out("Hardware remains UNVERIFIED; no production/release GO.")
+            return False
+        if any(result != "CORRECT" for results in history.values()
+               for result in results):
+            out("RECOVERED OBSERVATION: earlier WRONG/SILENT/UNSURE was reported.")
+            out("A later CORRECT is NOT a clean first-attempt hardware PASS.")
+        out("Expected channels were REPORTED by the operator only.")
+        out("Hardware, safe analog SPL and multi-source mixing remain UNVERIFIED.")
+        out("This is not a certification or production/release GO.")
+        return True
+
     for number, mode in enumerate(modes, 1):
         expected = "both physical speakers" if mode == "both" else (
             "only the " + mode.upper() + " physical speaker")
+        reached.append(mode)
+        history[mode] = []
         for attempt in (1, 2):
             out("STEP " + str(number) + "/" + str(len(modes)) +
-                ", attempt " + str(attempt) +
-                "/2: expect " + expected + ".")
-            if not play(mode=mode, read_line=read_line, out=out):
+                ", attempt " + str(attempt) + "/2: expect " + expected + ".")
+            try:
+                played = play(mode=mode, read_line=safe_read, out=out)
+            except (KeyboardInterrupt, EOFError):
+                played = False
+            if not played:
                 out("Guide cancelled before this playback; no hardware verdict.")
-                return False
+                return finish(False)
             out("What was physically heard for " + mode.upper() +
                 "? Type exact CORRECT, WRONG, SILENT or UNSURE then Enter.")
-            answer = read_line()
+            answer = safe_read()
             if answer not in choices:
                 out("Guide cancelled: unknown observation. No inferred hardware PASS.")
-                return False
+                return finish(False)
             observation = choices[answer]
+            history[mode].append(observation)
             if observation == "CORRECT":
-                observations.append((mode.upper(), observation))
                 break
             out("Unexpected or uncertain speaker observation: STOP progression.")
             out("Check USB/Edifier wiring at safely LOW amplifier volume.")
             out("Do NOT automatically raise volume or change any other input.")
             if attempt == 2:
                 out("Retry limit reached for this side; further playback stopped.")
-                observations.append((mode.upper(), observation))
-                completed = False
-                break
+                return finish(False)
             out("Type exact RETRY + Enter to test this SAME side once more with")
             out("a NEW PLAY confirmation, or exact STOP + Enter to finish.")
-            decision = read_line()
+            decision = safe_read()
             if decision in repeat:
                 continue
-            # Invalid/EOF/STOP cannot silently advance to another channel.
-            observations.append((mode.upper(), observation))
-            completed = False
             if decision in stop:
                 out("Operator chose STOP. No further sound will be played.")
             else:
                 out("Guide cancelled: no valid RETRY/STOP. No further sound.")
-            break
-        if not completed:
-            break
-    out("LOCAL OPERATOR OBSERVATIONS (not stored or independently verified):")
-    for mode, observation in observations:
-        out(mode + ": " + observation)
-    if not completed:
-        if side is None:
-            out("NEEDS PHYSICAL REVIEW; remaining channels were NOT tested.")
-        else:
-            out("NEEDS PHYSICAL REVIEW; targeted recheck did not pass.")
-            out("No other stereo channels were tested in this run.")
-        out("No default output, automatic gain, or mixer/routing change occurred.")
-        out("Hardware remains UNVERIFIED; no production/release GO.")
-        return False
-    out("Expected channels were REPORTED by the operator only.")
-    if side is not None:
-        out("TARGETED ONLY: other stereo channels were NOT tested;")
-        out("do not infer complete stereo hardware readiness.")
-    out("Hardware, safe analog SPL and multi-source mixing remain UNVERIFIED.")
-    out("This is not a certification or production/release GO.")
-    return True
+            return finish(False)
+    return finish(True)
 
 
 def main(argv=None):

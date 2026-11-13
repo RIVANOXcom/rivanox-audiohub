@@ -26,6 +26,7 @@ usage() {
     '--speaker-guide checks all three sides, or ONLY one targeted left/right/both side.' \
     'It asks for separate PLAY per side and LOCAL physical observations.' \
     'If unsure/wrong, RETRY same side once with fresh PLAY, or STOP; no auto-next.' \
+    'After STOP/EOF, report prior observations, attempts and untested sides locally.' \
     'Requires separate PLAY at a local terminal; very low signal and quiet stream only.' \
     '--show-titles explicitly reveals sanitized private titles on this terminal.' \
     'The playback wizard shows an anonymous list; select numbers, ALL or SHUFFLE.' \
