@@ -726,14 +726,22 @@ and requires a **new exact uppercase PLAY and Enter** on the trusted
 local terminal. The previous command's consent never carries forward.
 After each stream, enter **CORRECT**, **WRONG**, **SILENT** or **UNSURE**
 in uppercase plus Enter based only on what was actually heard.
+Only **CORRECT** advances to the next channel. Any WRONG, SILENT or
+UNSURE stops automatic progression and suggests inspecting the physical
+USB/Edifier connections at a safely low amplifier volume. You can
+enter exact **RETRY** to test that same side **once more**; even then
+the playback demands another separate uppercase **PLAY**. Or enter
+exact **STOP** to end the guide without playing further channels.
+After two attempts at an unresolved side, the guide stops automatically.
+Unknown retry responses, end-of-input, Ctrl+C or cancelled PLAY also
+stop; neither feedback nor retries grant automatic playback.
 
-The guide then summarizes the **operator's self-reported observations**
-on screen. They are never saved to SD, uploaded, exposed to a remote
-interface or treated as hardware certification. If any side is reported
-wrong, silent or uncertain, it highlights the need to check physical
-USB/audio connections rather than boosting output or changing source
-routing automatically. Invalid feedback, EOF, Ctrl+C or cancelling PLAY
-ends the guide without advancing through further channels.
+The guide summarizes **only the operator's reported observations**;
+the rest of the channels are explicitly marked untested after an early
+stop. The temporary answers are never saved to SD, uploaded, exposed
+to any remote interface, or treated as hardware certification. Never
+raise physical speaker volume or change other source routing
+automatically to diagnose a silent or reversed side.
 
 There is **no automatic hardware PASS** even if every step is reported
 CORRECT. Output routing, safe analog loudness/SPL, Edifier hardware,
