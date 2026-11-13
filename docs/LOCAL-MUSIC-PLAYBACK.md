@@ -367,3 +367,90 @@ is silent. At low Edifier speaker volume confirm `PLAY`, then `m`
 to select TRACK and ALL, observe actual transitions, use `s` and `l`,
 and stop with `q`. Actual audible behavior and device support remain
 unverified until the operator records them on real Pi4 hardware.
+
+## Manual WAV backup and restoration before a Pi4 SD swap
+
+**This is a specific, opt-in media copy tool, not a system update or
+an automatic or full-device backup.** The operator must already have a
+legitimate unprivileged terminal login. The Pi4 test image installs
+`audiohub-music-transfer`. It does not mount USB storage, create
+users, grant access, change credentials, expose files over Wi-Fi or
+synchronize anything in the background.
+
+Before flashing any new SD, retain the known-good old SD and prepare
+a *different, operator-controlled* storage device, mounted through your
+normal authorized procedure. Create an **already existing private
+directory** on that device, **owned by the same unprivileged operator**
+and restricted to **0700**. Directory components cannot be symlinks.
+Both the on-device `/home/audiohub/PrivateMusic` and backup location
+must be private. Run at the Pi terminal:
+
+```sh
+audiohub-music-transfer --help
+audiohub-music-transfer backup /absolute/private/external-folder
+```
+
+The CLI previews a count and total size without filenames and writes
+nothing until you type **exactly `COPY`** on its separate prompt.
+It handles up to 40 valid PCM16 WAV files and at most 512 MiB. It
+refuses unsafe/unsupported WAVs, symbolic links, hardlinked source
+files, permission problems, insufficient space, collisions and files
+changed during copying. The tool does **not** copy non-WAV items,
+settings, access credentials, Bluetooth pairing data or any other
+files; do not confuse a successful WAV copy with a complete backup.
+
+Successful file copies are published with the original name only
+after contents are checked; each new file is mode 0600. Existing files
+are never replaced, moved, renamed, reset or deleted. Source files
+are left untouched. A power interruption or storage failure may leave
+**some previously completed new destination WAVs** or private temporary
+partials; no multi-file all-or-nothing guarantee is made. Check the
+count, retain the old SD and remove any orphaned operator-owned
+temporary file only through a separately authorized manual process.
+
+After verifying the new image's outer artifact ZIP and compressed SD
+image hashes, separately approving the swap, and successfully booting
+the spare SD, remount the *same* independent music backup and run:
+
+```sh
+audiohub-music-transfer restore /absolute/private/external-folder
+```
+
+Review count and size and type `COPY` to import into the existing
+**empty** `/home/audiohub/PrivateMusic` directory; if names already
+exist the utility refuses to overwrite. Compare the reported private
+order/content fingerprint between backup and restore, verify original
+WAVs still exist on external media, and run `audiohub-music` to test
+actual playback at low physical Edifier volume. If anything fails,
+stop; keep both the original SD and external media for rollback.
+This tool does not replace the secure owner-claim process and cannot
+prove Pi4 speaker sound or grant a production release.
+
+### First migration from PR #258 or older (no transfer CLI on old SD)
+
+The **old** SD image does not contain `audiohub-music-transfer`; the
+`backup` example above works only once a newer image with this
+command is already running. For the first replacement, there is a
+safer source-preserving alternative: keep the previous SD unmodified,
+flash the new *separate* test SD only after approval, boot it, and
+attach the original SD using a separately authorized USB SD reader.
+The operator mounts the old filesystem **read-only** without changing
+credentials, ownership or access modes. Identify the actual absolute
+mount path for the previous `home/audiohub/PrivateMusic` directory.
+If that folder is owner-private and maps to the same unprivileged UID,
+use the **new** image's terminal command:
+
+```sh
+audiohub-music-transfer restore /absolute/old-SD/home/audiohub/PrivateMusic
+```
+
+Review the WAV count and bytes; enter exact uppercase `COPY` only
+when the new private destination contains no same-name WAVs. The
+source filesystem may be read-only (the tool only reads it). The
+import is non-overwriting and will stop on unsafe paths, mismatched
+owner UIDs or unsupported files. It does not mount a disk itself or
+write into the previous SD. If the source cannot be made available
+read-only and privately with ordinary authorized operator access,
+stop; do not automatically remount it writable, change permissions,
+reset credentials or attempt a privileged workaround. Retain both
+SD cards as rollback until real Edifier playback is verified.

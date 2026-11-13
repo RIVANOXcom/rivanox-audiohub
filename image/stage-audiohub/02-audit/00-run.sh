@@ -8,6 +8,11 @@ test -f "${ROOTFS_DIR}/usr/local/bin/audiohub-music"
 test -x "${ROOTFS_DIR}/usr/local/bin/audiohub-music"
 test ! -L "${ROOTFS_DIR}/usr/local/bin/audiohub-music"
 test "$(stat -c '%a' "${ROOTFS_DIR}/usr/local/bin/audiohub-music")" = 755
+# Install/execute the new operator-confirmed WAV backup/restore command.
+test -f "${ROOTFS_DIR}/usr/local/bin/audiohub-music-transfer"
+test -x "${ROOTFS_DIR}/usr/local/bin/audiohub-music-transfer"
+test ! -L "${ROOTFS_DIR}/usr/local/bin/audiohub-music-transfer"
+test "$(stat -c '%a' "${ROOTFS_DIR}/usr/local/bin/audiohub-music-transfer")" = 755
 # Verify the new image ships an empty private folder for user-supplied WAVs.
 test -d "${ROOTFS_DIR}/home/audiohub/PrivateMusic"
 test ! -L "${ROOTFS_DIR}/home/audiohub/PrivateMusic"

@@ -11,6 +11,7 @@ install -d -m755 "${ROOTFS_DIR}/opt/audiohub/src" \
 cp -a files/src/audiohub "${ROOTFS_DIR}/opt/audiohub/src/"
 cp -a files/web/. "${ROOTFS_DIR}/opt/audiohub/web/"
 install -m755 files/bin/audiohub-music "${ROOTFS_DIR}/usr/local/bin/audiohub-music"
+install -m755 files/bin/audiohub-music-transfer "${ROOTFS_DIR}/usr/local/bin/audiohub-music-transfer"
 cp files/systemd/audiohub-bluetooth.service "${ROOTFS_DIR}/etc/systemd/system/"
 cp files/systemd/audiohub-firstboot-diag.service "${ROOTFS_DIR}/etc/systemd/system/"
 cp files/systemd/audiohub-runtime.service "${ROOTFS_DIR}/etc/systemd/user/"
@@ -31,5 +32,7 @@ install -d -o audiohub -g audiohub -m700 /home/audiohub/.config
 install -d -o audiohub -g audiohub -m700 /home/audiohub/PrivateMusic
 # Native chroot smoke: command is installed and callable without PYTHONPATH.
 runuser -u audiohub -- /usr/local/bin/audiohub-music --help >/dev/null
+# Offline transfer help is a NON-WRITING native ARM64 command smoke.
+runuser -u audiohub -- /usr/local/bin/audiohub-music-transfer --help >/dev/null
 PYTHONPATH=/opt/audiohub/src runuser -u audiohub -- python3 -m audiohub.eq_setup
 CHROOT
