@@ -1,0 +1,28 @@
+#!/bin/sh
+# SPDX-License-Identifier: AGPL-3.0-only
+# Private offline audio preset migration; excludes keys, trust and device IDs.
+set -eu
+if [ "$#" -eq 1 ] && { [ "$1" = "--help" ] || [ "$1" = "-h" ]; }; then
+  PYTHONPATH=/opt/audiohub/src
+  export PYTHONPATH
+  exec /usr/bin/python3 -m audiohub.preset_transfer --help
+fi
+if [ "$#" -ne 2 ]; then
+  printf '%s\n' 'Usage: audiohub-presets-transfer export|inspect|restore-profiles|restore-eq|verify ABSOLUTE_FOLDER' >&2
+  exit 2
+fi
+case "$1" in
+  export|inspect|restore-profiles|restore-eq|verify) ;;
+  *) printf '%s\n' 'Unknown private preset action.' >&2; exit 2 ;;
+esac
+case "$2" in
+  /*) ;;
+  *) printf '%s\n' 'Private external directory must be absolute.' >&2; exit 2 ;;
+esac
+if [ "$(/usr/bin/id -u)" -eq 0 ]; then
+  printf '%s\n' 'Private preset transfer requires an unprivileged operator.' >&2
+  exit 2
+fi
+PYTHONPATH=/opt/audiohub/src
+export PYTHONPATH
+exec /usr/bin/python3 -m audiohub.preset_transfer "$@"
