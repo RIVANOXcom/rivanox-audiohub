@@ -120,3 +120,17 @@ never resets, including during pause or repeat. Mode is private
 in-memory session state; nothing is saved and no new service or audio
 route is introduced. Native Pi4/Edifier audible hardware validation,
 rootfs copyright compliance and official release GO remain outstanding.
+
+### Manual operator WAV backup/restore for spare-SD testing
+
+The unverified Pi4 alpha now stages an `audiohub-music-transfer` CLI
+with explicit `backup` and `restore` to an independently retained,
+already mounted and owner-only external directory. A separate uppercase
+`COPY` confirmation guards bounded media copying. The source is
+preserved, existing files are never replaced, destination WAVs are
+owner-only mode 0600 and each copy is checksummed before publication.
+No network, OS update, mount, privilege, deletion of user WAVs,
+credentials or automatic music migration occurs. Failed operations
+may leave completed new copies; manual inspection/rollback is required.
+The operator retains the prior SD and independent external storage.
+Physical Pi4/Edifier audio and official release gates remain NO-GO.
