@@ -1,0 +1,45 @@
+#!/bin/sh
+# SPDX-License-Identifier: AGPL-3.0-only
+# Local, user-invoked Pi4 music launcher. No service, audio or network starts
+# until the existing interactive wizard receives exact uppercase PLAY.
+set -eu
+
+usage() {
+  printf '%s\n' \
+    'AudioHub local music (unverified Pi4 operator alpha)' \
+    'Usage: audiohub-music [ABSOLUTE_PRIVATE_WAV_FOLDER]' \
+    'Default: /home/audiohub/PrivateMusic' \
+    'The private folder needs your own PCM16 WAV files.' \
+    'The wizard shows an anonymous list; select numbers, ALL or SHUFFLE.' \
+    'PLAY is required separately to start sound; CHANGE revises the queue.' \
+    'During playback: u=pause/resume, n=next, q=stop, Ctrl+C=stop.' \
+    'No network, settings or background music service is started.'
+}
+
+if [ "$#" -eq 1 ] && { [ "$1" = "-h" ] || [ "$1" = "--help" ]; }; then
+  usage
+  exit 0
+fi
+if [ "$#" -eq 0 ]; then
+  folder=/home/audiohub/PrivateMusic
+elif [ "$#" -eq 1 ]; then
+  folder=$1
+else
+  printf '%s\n' 'Expected no argument or one absolute private WAV folder; use --help.' >&2
+  exit 2
+fi
+case "$folder" in
+  /*) ;;
+  *) printf '%s\n' 'A private absolute WAV folder is required; use --help.' >&2; exit 2 ;;
+esac
+if [ "$(/usr/bin/id -u)" -eq 0 ]; then
+  printf '%s\n' 'Run as the existing unprivileged Pi operator, not root.' >&2
+  exit 2
+fi
+
+# Preserve the user's PipeWire session environment but pin our own modules.
+# A single quoted argument is passed to Python; no eval or shell expansion.
+PYTHONPATH=/opt/audiohub/src
+export PYTHONPATH
+exec /usr/bin/python3 -m audiohub.local_music \
+  --guided --library "$folder" --minutes 15
