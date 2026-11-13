@@ -7,14 +7,19 @@ if [ "$#" -eq 1 ] && { [ "$1" = "--help" ] || [ "$1" = "-h" ]; }; then
   export PYTHONPATH
   exec /usr/bin/python3 -m audiohub.preset_transfer --help
 fi
-if [ "$#" -ne 2 ] && [ "$#" -ne 3 ]; then
+if [ "$#" -ne 2 ] && [ "$#" -ne 3 ] && [ "$#" -ne 4 ]; then
   printf '%s\n' 'Usage: audiohub-presets-transfer export|inspect|plan-profiles|restore-profiles|merge-profiles|restore-eq|verify|verify-merged ABSOLUTE_FOLDER' >&2
   exit 2
 fi
 case "$1" in
-  export|inspect|plan-profiles|restore-profiles|merge-profiles|restore-eq|verify|verify-merged)
+  export|inspect|plan-profiles|restore-profiles|merge-profiles|restore-eq|verify|verify-merged|plan-new|check-new)
     if [ "$#" -ne 2 ]; then
       printf '%s\n' 'This preset action takes one absolute folder.' >&2; exit 2
+    fi
+    ;;
+  check-backup)
+    if [ "$#" -ne 4 ]; then
+      printf '%s\n' 'check-backup needs private archive, old music and old config directories.' >&2; exit 2
     fi
     ;;
   export-old)
@@ -33,6 +38,12 @@ if [ "$#" -eq 3 ]; then
   case "$3" in
     /*) ;;
     *) printf '%s\n' 'Private archive directory must be absolute.' >&2; exit 2 ;;
+  esac
+fi
+if [ "$#" -eq 4 ]; then
+  case "$4" in
+    /*) ;;
+    *) printf '%s\n' 'Old SD config directory must be absolute.' >&2; exit 2 ;;
   esac
 fi
 if [ "$(/usr/bin/id -u)" -eq 0 ]; then
