@@ -423,11 +423,11 @@ def play_speaker_test(*, mode="sequence", spawn=subprocess.Popen,
 
 
 def guided_speaker_check(*, read_line=None, out=print, play=None):
-    """Three separate operator-consented physical stereo observations.
+    """Operator-guided physical stereo observations with bounded manual retry.
 
-    Each selected channel delegates to the existing low-gain player gate:
-    a NEW exact PLAY is mandatory before every short test. Observations
-    exist only in memory and never certify physical hardware.
+    Every attempt uses the existing private, low-gain player and its fresh
+    exact PLAY TTY gate. Never skip forward after a reported physical fault,
+    auto-repeat a sound, persist observations or certify hardware.
     """
     if (not sys.stdin.isatty() or not sys.stdout.isatty()
             or (hasattr(os, "geteuid") and os.geteuid() == 0)):
@@ -440,33 +440,65 @@ def guided_speaker_check(*, read_line=None, out=print, play=None):
     out("2.1 s original low-gain tests. NO WAV needed and NO settings saved.")
     out("Set the physical amplifier LOW. Each step needs a fresh exact PLAY.")
     out("After each step, report CORRECT, WRONG, SILENT or UNSURE.")
+    out("If anything sounds wrong, this guide STOPS advancing automatically.")
+    out("You may RETRY the same side ONCE with fresh PLAY or STOP safely.")
     out("No observation can certify physical output or a production release.")
     observations = []
     choices = {"CORRECT\n": "CORRECT", "WRONG\n": "WRONG",
                "SILENT\n": "SILENT", "UNSURE\n": "UNSURE",
                "CORRECT\r\n": "CORRECT", "WRONG\r\n": "WRONG",
                "SILENT\r\n": "SILENT", "UNSURE\r\n": "UNSURE"}
+    repeat = ("RETRY\n", "RETRY\r\n")
+    stop = ("STOP\n", "STOP\r\n")
+    completed = True
     for number, mode in enumerate(("left", "right", "both"), 1):
         expected = "both physical speakers" if mode == "both" else (
             "only the " + mode.upper() + " physical speaker")
-        out("STEP " + str(number) + "/3: expect " + expected + ".")
-        if not play(mode=mode, read_line=read_line, out=out):
-            out("Guide cancelled before completing all stages; no hardware verdict.")
-            return False
-        out("What was physically heard for " + mode.upper() +
-            "? Type exact CORRECT, WRONG, SILENT or UNSURE then Enter.")
-        answer = read_line()
-        if answer not in choices:
-            out("Guide cancelled: unknown observation. No inferred hardware PASS.")
-            return False
-        observations.append((mode.upper(), choices[answer]))
+        for attempt in (1, 2):
+            out("STEP " + str(number) + "/3, attempt " + str(attempt) +
+                "/2: expect " + expected + ".")
+            if not play(mode=mode, read_line=read_line, out=out):
+                out("Guide cancelled before this playback; no hardware verdict.")
+                return False
+            out("What was physically heard for " + mode.upper() +
+                "? Type exact CORRECT, WRONG, SILENT or UNSURE then Enter.")
+            answer = read_line()
+            if answer not in choices:
+                out("Guide cancelled: unknown observation. No inferred hardware PASS.")
+                return False
+            observation = choices[answer]
+            if observation == "CORRECT":
+                observations.append((mode.upper(), observation))
+                break
+            out("Unexpected or uncertain speaker observation: STOP progression.")
+            out("Check USB/Edifier wiring at safely LOW amplifier volume.")
+            out("Do NOT automatically raise volume or change any other input.")
+            if attempt == 2:
+                out("Retry limit reached for this side; further playback stopped.")
+                observations.append((mode.upper(), observation))
+                completed = False
+                break
+            out("Type exact RETRY + Enter to test this SAME side once more with")
+            out("a NEW PLAY confirmation, or exact STOP + Enter to finish.")
+            decision = read_line()
+            if decision in repeat:
+                continue
+            # Invalid/EOF/STOP cannot silently advance to another channel.
+            observations.append((mode.upper(), observation))
+            completed = False
+            if decision in stop:
+                out("Operator chose STOP. No further sound will be played.")
+            else:
+                out("Guide cancelled: no valid RETRY/STOP. No further sound.")
+            break
+        if not completed:
+            break
     out("LOCAL OPERATOR OBSERVATIONS (not stored or independently verified):")
     for mode, observation in observations:
         out(mode + ": " + observation)
-    if any(result != "CORRECT" for _, result in observations):
-        out("NEEDS PHYSICAL REVIEW: stop if unexpected. Check USB/audio output")
-        out("and Edifier connections with power/volume safely controlled.")
-        out("Do not auto-raise volume or change other source routing.")
+    if not completed:
+        out("NEEDS PHYSICAL REVIEW; remaining channels were NOT tested.")
+        out("No default output, automatic gain, or mixer/routing change occurred.")
         out("Hardware remains UNVERIFIED; no production/release GO.")
         return False
     out("Expected channels were REPORTED by the operator only.")
