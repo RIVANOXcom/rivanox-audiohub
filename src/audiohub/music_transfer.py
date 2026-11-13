@@ -305,13 +305,11 @@ def transfer(direction, external, *, music_dir=DEFAULT_MUSIC_DIR,
             # as a new file changed after publication. Refuse a false success.
             if resume or verify:
                 for item in plan:
-                    if _matching_destination(source_fd, target_fd, item) != (
-                            matched.get(item[0]) or None):
-                        # For newly copied files, check matching exists but do
-                        # not require their SHA to be stored in matched.
-                        if item[0] in matched:
-                            raise OSError("An existing WAV changed during transfer")
-                # The above check independently validates each WAV's content.
+                    again = _matching_destination(source_fd, target_fd, item)
+                    if again is None or (
+                            item[0] in matched and again != matched[item[0]]):
+                        raise OSError("A WAV disappeared or changed during transfer")
+                # Every new and previously existing copy has been rechecked.
             if verify:
                 out("Verification complete: " + str(len(plan)) +
                     " source WAVs match destination; no files written.")
