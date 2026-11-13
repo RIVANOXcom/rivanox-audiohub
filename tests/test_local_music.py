@@ -78,6 +78,163 @@ class LocalMusicTests(unittest.TestCase):
         self.players.append(proc)
         return proc
 
+    def test_builtin_original_stereo_pcm_is_short_low_and_channel_separated(self):
+        import struct
+        pcm = b"".join(local_music.speaker_test_pcm())
+        frames = len(pcm) // 4
+        self.assertEqual(len(pcm), 3 * (24000 + 9600) * 4)
+        self.assertEqual(local_music.SPEAKER_TEST_SECONDS, 2.1)
+        self.assertLessEqual(max(abs(sample) for sample in
+                                 struct.unpack("<" + "h" * (frames * 2), pcm)),
+                             655)
+        self.assertLessEqual(0, min(struct.unpack("<" + "h" * (frames * 2),
+                                                  pcm)))
+        def lr(frame):
+            return struct.unpack_from("<hh", pcm, frame * 4)
+        self.assertEqual(lr(0), (0, 0))
+        self.assertEqual(lr(24000), (0, 0))
+        self.assertEqual(lr(24000 + 9600), (0, 0))
+        self.assertEqual(lr(2 * (24000 + 9600)), (0, 0))
+        left_at = [lr(i) for i in range(500, 1500)]
+        right_at = [lr(24000 + 9600 + i) for i in range(500, 1500)]
+        both_at = [lr(2 * (24000 + 9600) + i) for i in range(500, 1500)]
+        self.assertTrue(any(l != 0 for l, r in left_at))
+        self.assertTrue(all(r == 0 for l, r in left_at))
+        self.assertTrue(any(r != 0 for l, r in right_at))
+        self.assertTrue(all(l == 0 for l, r in right_at))
+        self.assertTrue(any(l != 0 and r != 0 for l, r in both_at))
+        self.assertTrue(all(l == r for l, r in both_at))
+        self.assertEqual(pcm[24000 * 4:(24000 + 9600) * 4],
+                         bytes(9600 * 4))
+        self.assertEqual(pcm[(24000 + 9600 + 24000) * 4:
+                              (24000 + 9600) * 2 * 4],
+                         bytes(9600 * 4))
+
+    def test_builtin_speaker_diagnostic_requires_exact_play_before_sink(self):
+        with mock.patch.object(local_music.sys, "stdin",
+                               mock.Mock(isatty=lambda: True)), \
+             mock.patch.object(local_music.sys, "stdout",
+                               mock.Mock(isatty=lambda: True)), \
+             mock.patch.object(local_music.os, "geteuid", return_value=1000):
+            for reply in (None, "", "PLAY", "play\n", "PLAY \n",
+                          "PLAY\nwrong", "PLAY\r", "q\n"):
+                with self.subTest(reply=reply):
+                    self.events.clear()
+                    messages = []
+                    self.assertFalse(local_music.play_speaker_test(
+                        spawn=self.spawn, capture=self.capture,
+                        read_line=lambda: reply, out=messages.append))
+                    self.assertEqual(self.events, [])
+                    self.assertIn("No sound or setting changed",
+                                  "\n".join(messages))
+
+    def test_builtin_speaker_test_does_not_run_without_unprivileged_tty(self):
+        with mock.patch.object(local_music.sys, "stdin",
+                               mock.Mock(isatty=lambda: False)), \
+             mock.patch.object(local_music.sys, "stdout",
+                               mock.Mock(isatty=lambda: True)), \
+             mock.patch.object(local_music.os, "geteuid", return_value=1000):
+            with self.assertRaises(PermissionError):
+                local_music.play_speaker_test(
+                    spawn=self.spawn, capture=self.capture,
+                    read_line=lambda: "PLAY\n")
+        with mock.patch.object(local_music.sys, "stdin",
+                               mock.Mock(isatty=lambda: True)), \
+             mock.patch.object(local_music.sys, "stdout",
+                               mock.Mock(isatty=lambda: True)), \
+             mock.patch.object(local_music.os, "geteuid", return_value=0):
+            with self.assertRaises(PermissionError):
+                local_music.play_speaker_test(
+                    spawn=self.spawn, capture=self.capture,
+                    read_line=lambda: "PLAY\n")
+        self.assertEqual(self.events, [])
+
+    def test_builtin_speaker_test_one_owned_target_no_wav_and_no_settings(self):
+        before = self.wav.read_bytes()
+        with mock.patch.object(local_music.sys, "stdin",
+                               mock.Mock(isatty=lambda: True)), \
+             mock.patch.object(local_music.sys, "stdout",
+                               mock.Mock(isatty=lambda: True)), \
+             mock.patch.object(local_music.os, "geteuid", return_value=1000):
+            messages = []
+            self.assertTrue(local_music.play_speaker_test(
+                spawn=self.spawn, capture=self.capture,
+                read_line=lambda: "PLAY\n", out=messages.append))
+        self.assertEqual(self.wav.read_bytes(), before)
+        self.assertEqual(len(self.players), 1)
+        data = self.players[0].stdin.saved
+        self.assertEqual(len(data), 3 * (24000 + 9600) * 4)
+        self.assertTrue(self.players[0].waited)
+        self.assertEqual(self.events[0][1], ["pw-dump"])
+        command = self.events[1][1]
+        self.assertEqual(command, [
+            "pw-cat", "--playback", "--raw", "--target=audiohub.music",
+            "--rate=48000", "--channels=2", "--format=s16",
+            "--volume=0.05", "-"
+        ])
+        self.assertIs(self.events[1][2]["shell"], False)
+        self.assertTrue(self.events[1][2]["start_new_session"])
+        self.assertIn("not", "\n".join(messages).lower())
+        self.assertIn("NOT certified", "\n".join(messages))
+        self.assertNotIn(str(self.wav), "\n".join(messages))
+
+    def test_builtin_speaker_test_missing_private_sink_never_spawns(self):
+        with mock.patch.object(local_music.sys, "stdin",
+                               mock.Mock(isatty=lambda: True)), \
+             mock.patch.object(local_music.sys, "stdout",
+                               mock.Mock(isatty=lambda: True)), \
+             mock.patch.object(local_music.os, "geteuid", return_value=1000):
+            with self.assertRaises(RuntimeError):
+                local_music.play_speaker_test(
+                    spawn=self.spawn,
+                    capture=lambda argv, **kw: self.captured_graph("other.sink"),
+                    read_line=lambda: "PLAY\n", out=lambda _: None)
+        self.assertEqual(self.players, [])
+        self.assertEqual(self.events, [])
+
+    def test_builtin_speaker_test_deadline_stops_only_owned_child(self):
+        clock = iter([0, 0, 9]).__next__
+        with mock.patch.object(local_music.sys, "stdin",
+                               mock.Mock(isatty=lambda: True)), \
+             mock.patch.object(local_music.sys, "stdout",
+                               mock.Mock(isatty=lambda: True)), \
+             mock.patch.object(local_music.os, "geteuid", return_value=1000):
+            with self.assertRaises(TimeoutError):
+                local_music.play_speaker_test(
+                    spawn=self.spawn, capture=self.capture,
+                    read_line=lambda: "PLAY\n", out=lambda _: None,
+                    clock=clock)
+        self.assertEqual(len(self.players), 1)
+        self.assertTrue(self.players[0].terminated)
+        self.assertTrue(self.players[0].stdin.closed)
+
+    def test_builtin_speaker_cli_is_exclusive_and_only_calls_gated_player(self):
+        with mock.patch.object(local_music, "play_speaker_test",
+                               return_value=True) as player, \
+             mock.patch.object(local_music, "play_playlist") as playlist, \
+             mock.patch("builtins.print"):
+            self.assertEqual(local_music.main(["--speaker-test"]), 0)
+            player.assert_called_once_with()
+            playlist.assert_not_called()
+            player.reset_mock()
+            for args in (
+                ["--speaker-test", "--minutes", "1"],
+                ["--speaker-test", "--level", "quiet"],
+                ["--speaker-test", "--channel", "left"],
+                ["--speaker-test", "--library", str(self.root)],
+                ["--speaker-test", str(self.wav)],
+                ["--speaker-test", "--check"],
+                ["--speaker-test", "--play"],
+                ["--speaker-test", "--guided"],
+                ["--speaker-test", "--speaker-test"],
+            ):
+                with self.subTest(args=args):
+                    self.assertEqual(local_music.main(args), 2)
+                    player.assert_not_called()
+                    playlist.assert_not_called()
+            player.return_value = False
+            self.assertEqual(local_music.main(["--speaker-test"]), 2)
+
     def test_check_music_readiness_three_safe_prerequisites_no_play(self):
         messages = []
         with mock.patch.object(local_music.subprocess, "Popen") as spawn:
