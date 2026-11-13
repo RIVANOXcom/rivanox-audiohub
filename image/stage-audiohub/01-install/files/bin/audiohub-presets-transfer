@@ -14,12 +14,12 @@ fi
 case "$1" in
   export|inspect|restore-profiles|restore-eq|verify)
     if [ "$#" -ne 2 ]; then
-      printf '%s\\n' 'This preset action takes one absolute folder.' >&2; exit 2
+      printf '%s\n' 'This preset action takes one absolute folder.' >&2; exit 2
     fi
     ;;
   export-old)
     if [ "$#" -ne 3 ]; then
-      printf '%s\\n' 'export-old needs read-only old config and private archive directories.' >&2; exit 2
+      printf '%s\n' 'export-old needs read-only old config and private archive directories.' >&2; exit 2
     fi
     ;;
 
@@ -32,7 +32,7 @@ esac
 if [ "$#" -eq 3 ]; then
   case "$3" in
     /*) ;;
-    *) printf '%s\\n' 'Private archive directory must be absolute.' >&2; exit 2 ;;
+    *) printf '%s\n' 'Private archive directory must be absolute.' >&2; exit 2 ;;
   esac
 fi
 if [ "$(/usr/bin/id -u)" -eq 0 ]; then
