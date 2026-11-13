@@ -81,6 +81,71 @@ class MusicSessionTests(unittest.TestCase):
                 out=self.out.append, require_tty=False,
             )
 
+    def test_left_channel_stays_selected_through_skip_and_prior_track(self):
+        observed = []
+        def player(paths, *, max_minutes, stop, session_deadline,
+                   on_player, notify, channel, level):
+            observed.append((paths[0], channel, level))
+            child = FakeChild()
+            self.children.append(child)
+            on_player(child)
+            while not stop.wait(0.002):
+                pass
+            raise InterruptedError("test stop")
+        with mock.patch.object(local_music, "music_sink_available",
+                               return_value=True), \
+             mock.patch.object(local_music.os, "geteuid", return_value=1000):
+            commands = iter(["n", "p", "q"])
+            self.assertFalse(music_session.run_session(
+                self.paths, max_minutes=1, read_command=lambda _: next(commands, None),
+                playback=player, out=self.out.append, require_tty=False,
+                channel="left", level="quiet"))
+        self.assertEqual(observed,
+                         [(self.paths[0], "left", "quiet"),
+                          (self.paths[1], "left", "quiet"),
+                          (self.paths[0], "left", "quiet")])
+        self.assertTrue(all(child.terminated for child in self.children))
+        shown = "\n".join(self.out)
+        self.assertIn("LEFT stereo channel selection", shown)
+        self.assertNotIn("secret-title", shown)
+        self.assertNotIn(str(self.dir), shown)
+
+    def test_invalid_channel_and_mono_refuse_before_pipewire_or_player(self):
+        for channel in ("none", "LEFT", 10, None):
+            with self.subTest(channel=channel), \
+                 mock.patch.object(local_music, "music_sink_available") as sink, \
+                 self.assertRaises(ValueError):
+                music_session.run_session(
+                    self.paths, channel=channel, require_tty=False,
+                    out=self.out.append)
+                sink.assert_not_called()
+        mono = self.dir / "private-mono.wav"
+        with wave.open(str(mono), "wb") as audio:
+            audio.setnchannels(1)
+            audio.setsampwidth(2)
+            audio.setframerate(48000)
+            audio.writeframes(b"\x01\x02" * 120)
+        with mock.patch.object(local_music, "music_sink_available") as sink:
+            with self.assertRaises(ValueError):
+                music_session.run_session(
+                    [self.paths[0], mono], channel="right",
+                    require_tty=False, out=self.out.append)
+            sink.assert_not_called()
+        self.assertEqual(self.children, [])
+
+    def test_direct_cli_interactive_right_channel_is_explicit_only(self):
+        with mock.patch.object(local_music.sys, "stdin",
+                               mock.Mock(isatty=lambda: True)), \
+             mock.patch.object(local_music.sys, "stdout",
+                               mock.Mock(isatty=lambda: True)), \
+             mock.patch.object(music_session, "run_session") as session, \
+             mock.patch("builtins.print"):
+            self.assertEqual(local_music.main([
+                "--interactive", "--channel", "right", "--play",
+                str(self.paths[0])]), 0)
+            session.assert_called_once_with(
+                [str(self.paths[0])], max_minutes=15, channel="right")
+
     def test_quieter_level_follows_each_owned_track_and_is_not_persisted(self):
         observed = []
         def player(paths, *, max_minutes, stop, on_player,
