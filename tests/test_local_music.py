@@ -745,7 +745,7 @@ class GuidedSpeakerCheckTests(unittest.TestCase):
         feed = iter(responses)
         def player(*, mode, read_line, out):
             called.append(mode)
-            self.assertEqual(read_line(), "PLAY\n")
+            self.assertIn(read_line(), ("PLAY\n", "PLAY\r\n"))
             return player_ok
         with mock.patch.object(local_music.sys, "stdin", mock.Mock(isatty=lambda: True)), \
              mock.patch.object(local_music.sys, "stdout", mock.Mock(isatty=lambda: True)), \
@@ -765,16 +765,60 @@ class GuidedSpeakerCheckTests(unittest.TestCase):
                        "not a certification"):
             self.assertIn(phrase, report)
 
-    def test_incorrect_physical_reports_are_not_a_hardware_pass(self):
+    def test_silent_first_channel_requires_stop_and_never_advances(self):
         result, called, report = self.run_guide([
-            "PLAY\n", "SILENT\n", "PLAY\n", "WRONG\n",
-            "PLAY\n", "UNSURE\n"])
+            "PLAY\n", "SILENT\n", "STOP\n"])
         self.assertFalse(result)
-        self.assertEqual(called, ["left", "right", "both"])
-        for phrase in ("LEFT: SILENT", "RIGHT: WRONG", "BOTH: UNSURE",
-                       "NEEDS PHYSICAL REVIEW", "no production/release GO"):
+        self.assertEqual(called, ["left"])
+        for phrase in ("LEFT: SILENT", "NEEDS PHYSICAL REVIEW",
+                       "remaining channels were NOT tested",
+                       "no production/release GO", "chose STOP"):
             self.assertIn(phrase, report)
+        self.assertNotIn("RIGHT:", report)
 
+    def test_operator_can_retry_only_same_side_with_new_play(self):
+        result, called, report = self.run_guide([
+            "PLAY\n", "UNSURE\n", "RETRY\n", "PLAY\n", "CORRECT\n",
+            "PLAY\n", "CORRECT\n", "PLAY\n", "CORRECT\n"])
+        self.assertTrue(result)
+        self.assertEqual(called, ["left", "left", "right", "both"])
+        self.assertIn("attempt 2/2", report)
+        self.assertIn("LEFT: CORRECT", report)
+        self.assertIn("BOTH: CORRECT", report)
+        self.assertIn("not a certification", report)
+
+    def test_second_wrong_report_stops_before_next_channel(self):
+        result, called, report = self.run_guide([
+            "PLAY\n", "CORRECT\n", "PLAY\n", "WRONG\n", "RETRY\n",
+            "PLAY\n", "SILENT\n"])
+        self.assertFalse(result)
+        self.assertEqual(called, ["left", "right", "right"])
+        self.assertIn("LEFT: CORRECT", report)
+        self.assertIn("RIGHT: SILENT", report)
+        self.assertIn("Retry limit reached", report)
+        self.assertIn("remaining channels were NOT tested", report)
+        self.assertNotIn("BOTH:", report)
+
+    def test_invalid_retry_or_eof_cannot_advance_or_replay(self):
+        for choice in ("NEXT\n", "retry\n", "", "PLAY\n", "STOP "):
+            with self.subTest(choice=choice):
+                result, called, report = self.run_guide([
+                    "PLAY\n", "WRONG\n", choice])
+                self.assertFalse(result)
+                self.assertEqual(called, ["left"])
+                self.assertIn("no valid RETRY/STOP", report)
+                self.assertIn("LEFT: WRONG", report)
+                self.assertNotIn("RIGHT:", report)
+
+    def test_both_channel_retry_finishes_only_after_new_consent(self):
+        result, called, report = self.run_guide([
+            "PLAY\r\n", "CORRECT\r\n",
+            "PLAY\r\n", "CORRECT\r\n",
+            "PLAY\r\n", "WRONG\r\n", "RETRY\r\n",
+            "PLAY\r\n", "CORRECT\r\n"])
+        self.assertTrue(result)
+        self.assertEqual(called, ["left", "right", "both", "both"])
+        self.assertIn("BOTH: CORRECT", report)
     def test_cancel_and_unrecognized_report_stop_before_other_channels(self):
         for replies, ok in ((["PLAY\n"], False),
                             (["PLAY\n", "maybe\n"], True),
