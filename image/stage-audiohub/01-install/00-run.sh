@@ -68,5 +68,22 @@ test "$merge_preview_status" -eq 2
 test "$merge_apply_status" -eq 2
 case "$merge_preview_output" in *"Private preset operation safely refused"*) ;; *) exit 1 ;; esac
 case "$merge_apply_output" in *"Private preset operation safely refused"*) ;; *) exit 1 ;; esac
+
+# Native bundled read-only SD checks: installed script dispatches two/four args
+# to Python; trusted-TTY guard must reject unattended automatic migration.
+set +e
+sd_plan_output="$(runuser -u audiohub -- /usr/local/bin/audiohub-presets-transfer plan-new /home/audiohub/PrivateMusic 2>&1)"
+sd_plan_status="$?"
+sd_after_output="$(runuser -u audiohub -- /usr/local/bin/audiohub-presets-transfer check-new /home/audiohub/PrivateMusic 2>&1)"
+sd_after_status="$?"
+sd_old_output="$(runuser -u audiohub -- /usr/local/bin/audiohub-presets-transfer check-backup /home/audiohub/PrivateMusic /home/audiohub/PrivateMusic /home/audiohub/.config/audiohub 2>&1)"
+sd_old_status="$?"
+set -e
+test "$sd_plan_status" -eq 2
+test "$sd_after_status" -eq 2
+test "$sd_old_status" -eq 2
+case "$sd_plan_output" in *"Private preset operation safely refused"*) ;; *) exit 1 ;; esac
+case "$sd_after_output" in *"Private preset operation safely refused"*) ;; *) exit 1 ;; esac
+case "$sd_old_output" in *"Private preset operation safely refused"*) ;; *) exit 1 ;; esac
 PYTHONPATH=/opt/audiohub/src runuser -u audiohub -- python3 -m audiohub.eq_setup
 CHROOT
