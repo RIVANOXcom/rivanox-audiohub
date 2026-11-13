@@ -190,7 +190,7 @@ class MusicLauncherTests(unittest.TestCase):
                        "No WAV required", "separate PLAY", "quiet stream"):
             self.assertIn(phrase, output.stdout)
         text = LAUNCHER.read_text(encoding="utf-8")
-        self.assertIn('if [ "$#" -eq 1 ] && [ "$1" = "--speaker-test" ]; then', text)
+        self.assertIn('if [ "$#" -ge 1 ] && [ "$1" = "--speaker-test" ]; then', text)
         self.assertIn('exec /usr/bin/python3 -m audiohub.local_music --speaker-test', text)
         self.assertNotIn("pw-cat", text)
         self.assertNotIn(" --play", text)
@@ -215,6 +215,45 @@ class MusicLauncherTests(unittest.TestCase):
                 self.assertEqual(output.returncode, 2, output.stderr)
                 self.assertTrue(output.stderr.strip())
                 self.assertNotIn("PLAY confirmed", output.stdout)
+
+    def test_repeated_speaker_side_help_and_exclusive_allowlist(self):
+        help_text = self.shell("--help").stdout
+        self.assertIn("--speaker-test [left|right|both]", help_text)
+        self.assertIn("replays that channel 3 times", help_text)
+        source = LAUNCHER.read_text(encoding="utf-8")
+        self.assertIn('left|right|both) ;;', source)
+        self.assertIn('--speaker-test "$2"', source)
+        self.assertIn('if [ "$#" -gt 2 ]; then', source)
+        self.assertNotIn("pw-cat", source)
+        self.assertNotIn(" --play", source)
+        self.assertNotIn("eval ", source)
+        self.assertNotIn("sudo ", source)
+
+    def test_repeated_speaker_rejects_unsupported_side_or_extra_options(self):
+        for args in (
+            ("--speaker-test", "sequence"),
+            ("--speaker-test", "mono"),
+            ("--speaker-test", "LEFT"),
+            ("--speaker-test", "center"),
+            ("--speaker-test", "left", "right"),
+            ("--speaker-test", "left", "--check"),
+            ("--speaker-test", "right", "--minutes", "30"),
+            ("--speaker-test", "both", "--level", "normal"),
+            ("--speaker-test", "left", "--play"),
+            ("--speaker-test", "--channel", "left"),
+        ):
+            with self.subTest(args=args):
+                result = self.shell(*args)
+                self.assertEqual(result.returncode, 2, result.stderr)
+                self.assertTrue(result.stderr.strip())
+                self.assertNotIn("PLAY confirmed", result.stdout)
+
+    def test_native_chroot_repeated_side_reaches_python_tty_gate(self):
+        native = STAGE.read_text(encoding="utf-8")
+        self.assertIn("speaker_side_noninteractive_output=", native)
+        self.assertIn("/usr/local/bin/audiohub-music --speaker-test left", native)
+        self.assertIn('test "$speaker_side_noninteractive_status" -eq 2', native)
+        self.assertIn("Local player unavailable or stopped", native)
 
     def test_native_chroot_refuses_nonterminal_speaker_test_no_audio(self):
         text = STAGE.read_text(encoding="utf-8")
