@@ -955,9 +955,9 @@ class GuidedSpeakerCheckTests(unittest.TestCase):
         self.assertEqual(called, ["left"])
         for phrase in ("LEFT: SILENT", "NEEDS PHYSICAL REVIEW",
                        "remaining channels were NOT tested",
-                       "no production/release GO", "chose STOP"):
+                       "no production/release GO", "chose STOP",
+                       "RIGHT: NOT TESTED", "BOTH: NOT TESTED"):
             self.assertIn(phrase, report)
-        self.assertNotIn("RIGHT:", report)
 
     def test_operator_can_retry_only_same_side_with_new_play(self):
         result, called, report = self.run_guide([
@@ -980,7 +980,8 @@ class GuidedSpeakerCheckTests(unittest.TestCase):
         self.assertIn("RIGHT: SILENT", report)
         self.assertIn("Retry limit reached", report)
         self.assertIn("remaining channels were NOT tested", report)
-        self.assertNotIn("BOTH:", report)
+        self.assertIn("BOTH: NOT TESTED", report)
+        self.assertIn("RIGHT reported attempts: WRONG -> SILENT", report)
 
     def test_invalid_retry_or_eof_cannot_advance_or_replay(self):
         for choice in ("NEXT\n", "retry\n", "", "PLAY\n", "STOP "):
@@ -991,7 +992,8 @@ class GuidedSpeakerCheckTests(unittest.TestCase):
                 self.assertEqual(called, ["left"])
                 self.assertIn("no valid RETRY/STOP", report)
                 self.assertIn("LEFT: WRONG", report)
-                self.assertNotIn("RIGHT:", report)
+                self.assertIn("RIGHT: NOT TESTED", report)
+                self.assertIn("BOTH: NOT TESTED", report)
 
     def test_both_channel_retry_finishes_only_after_new_consent(self):
         result, called, report = self.run_guide([
@@ -1002,6 +1004,75 @@ class GuidedSpeakerCheckTests(unittest.TestCase):
         self.assertTrue(result)
         self.assertEqual(called, ["left", "right", "both", "both"])
         self.assertIn("BOTH: CORRECT", report)
+    def test_recovered_fault_keeps_original_and_new_observation(self):
+        result, called, report = self.run_guide([
+            "PLAY\n", "UNSURE\n", "RETRY\n", "PLAY\n", "CORRECT\n",
+            "PLAY\n", "CORRECT\n", "PLAY\n", "CORRECT\n"])
+        self.assertTrue(result)
+        self.assertEqual(called, ["left", "left", "right", "both"])
+        self.assertIn("LEFT: CORRECT", report)
+        self.assertIn("LEFT reported attempts: UNSURE -> CORRECT", report)
+        self.assertIn("RECOVERED OBSERVATION: earlier WRONG/SILENT/UNSURE", report)
+        self.assertIn("NOT a clean first-attempt hardware PASS", report)
+        self.assertIn("This is not a certification", report)
+
+    def test_invalid_feedback_after_first_side_still_shows_partial_results(self):
+        result, called, report = self.run_guide([
+            "PLAY\n", "CORRECT\n", "PLAY\n", "perhaps\n"])
+        self.assertFalse(result)
+        self.assertEqual(called, ["left", "right"])
+        for line in ("LEFT: CORRECT", "RIGHT: NO REPORT",
+                     "BOTH: NOT TESTED", "NEEDS PHYSICAL REVIEW",
+                     "LOCAL OPERATOR OBSERVATIONS", "UNVERIFIED"):
+            self.assertIn(line, report)
+
+    def test_cancelled_retry_keeps_first_physical_fault(self):
+        played, report = [], []
+        inputs = iter(["PLAY\n", "WRONG\n", "RETRY\n", "PLAY\n"])
+        def player(*, mode, read_line, out):
+            played.append(mode)
+            self.assertEqual(read_line(), "PLAY\n")
+            return len(played) == 1
+        with mock.patch.object(local_music.sys, "stdin", mock.Mock(isatty=lambda: True)), \
+             mock.patch.object(local_music.sys, "stdout", mock.Mock(isatty=lambda: True)), \
+             mock.patch.object(local_music.os, "geteuid", return_value=1000):
+            ok = local_music.guided_speaker_check(
+                preflight=lambda **kw: True, read_line=inputs.__next__,
+                play=player, out=report.append)
+        self.assertFalse(ok)
+        self.assertEqual(played, ["left", "left"])
+        combined = "\n".join(report)
+        self.assertIn("LEFT: WRONG", combined)
+        self.assertIn("RIGHT: NOT TESTED", combined)
+        self.assertIn("BOTH: NOT TESTED", combined)
+        self.assertNotIn("LEFT: CORRECT", combined)
+
+    def test_ctrl_c_and_closed_input_produce_non_certifying_summary(self):
+        for error in (KeyboardInterrupt, EOFError, StopIteration):
+            with self.subTest(error=error):
+                seen, logs = [], []
+                def reader():
+                    if not seen:
+                        seen.append("first")
+                        return "PLAY\n"
+                    raise error()
+                def player(*, mode, read_line, out):
+                    self.assertEqual(read_line(), "PLAY\n")
+                    return True
+                with mock.patch.object(local_music.sys, "stdin", mock.Mock(isatty=lambda: True)), \
+                     mock.patch.object(local_music.sys, "stdout", mock.Mock(isatty=lambda: True)), \
+                     mock.patch.object(local_music.os, "geteuid", return_value=1000):
+                    result = local_music.guided_speaker_check(
+                        preflight=lambda **kw: True, read_line=reader,
+                        play=player, out=logs.append)
+                self.assertFalse(result)
+                combined = "\n".join(logs)
+                self.assertIn("LEFT: NO REPORT", combined)
+                self.assertIn("RIGHT: NOT TESTED", combined)
+                self.assertIn("BOTH: NOT TESTED", combined)
+                self.assertIn("not stored or independently verified", combined)
+                self.assertIn("UNVERIFIED", combined)
+
     def test_targeted_right_only_never_touches_other_sides(self):
         result, called, report = self.run_guide(
             ["PLAY\n", "CORRECT\n"], side="right")
