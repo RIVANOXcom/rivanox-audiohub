@@ -719,7 +719,28 @@ amplifier volume low:
 
     audiohub-music --speaker-guide
 
-The guide runs the existing deterministic 2.1-second original 440 Hz
+If an initial test shows a damaged/right-channel cable and you correct
+it, you can **recheck just that physical side** without repeating the
+other sound tests:
+
+    audiohub-music --speaker-guide right
+    audiohub-music --speaker-guide left
+    audiohub-music --speaker-guide both
+
+These are three **independent examples**, not a script to run all of
+them in a row. The optional lowercase selector means **only** that
+particular physical speaker, or **both physical speakers together**;
+it does NOT authorize any playback automatically. Each targeted
+attempt separately prompts for an exact uppercase PLAY then a physical
+CORRECT/WRONG/SILENT/UNSURE observation; after a fault RETRY is still
+limited to one new fresh-PLAY attempt, otherwise STOP safely exits.
+Only the selected channel is reported and all other channels remain
+UNTESTED. An affirmative targeted self-report does **not** assert
+that full LEFT/RIGHT/BOTH stereo routing or physical hardware works.
+Unknown sides, extra args, non-local TTY, root or cancellation fail
+without sound.
+
+The default guide runs the existing deterministic 2.1-second original 440 Hz
 sample in three **separate** steps: LEFT-only, RIGHT-only, BOTH.
 Each step explains exactly what physical speaker(s) should be heard
 and requires a **new exact uppercase PLAY and Enter** on the trusted

@@ -838,7 +838,7 @@ class LocalMusicTests(unittest.TestCase):
 
 
 class GuidedSpeakerCheckTests(unittest.TestCase):
-    def run_guide(self, responses, *, player_ok=True):
+    def run_guide(self, responses, *, player_ok=True, side=None):
         called, output = [], []
         feed = iter(responses)
         def player(*, mode, read_line, out):
@@ -849,7 +849,7 @@ class GuidedSpeakerCheckTests(unittest.TestCase):
              mock.patch.object(local_music.sys, "stdout", mock.Mock(isatty=lambda: True)), \
              mock.patch.object(local_music.os, "geteuid", return_value=1000):
             result = local_music.guided_speaker_check(
-                read_line=feed.__next__, out=output.append, play=player)
+                side=side, read_line=feed.__next__, out=output.append, play=player)
         return result, called, "\n".join(output)
 
     def test_three_separate_consents_and_clear_non_certifying_summary(self):
@@ -917,6 +917,75 @@ class GuidedSpeakerCheckTests(unittest.TestCase):
         self.assertTrue(result)
         self.assertEqual(called, ["left", "right", "both", "both"])
         self.assertIn("BOTH: CORRECT", report)
+    def test_targeted_right_only_never_touches_other_sides(self):
+        result, called, report = self.run_guide(
+            ["PLAY\n", "CORRECT\n"], side="right")
+        self.assertTrue(result)
+        self.assertEqual(called, ["right"])
+        for phrase in ("TARGETED STEREO RECHECK: RIGHT ONLY",
+                       "STEP 1/1, attempt 1/2", "RIGHT: CORRECT",
+                       "Other stereo channels are NOT tested",
+                       "do not infer complete stereo hardware readiness",
+                       "UNVERIFIED", "not a certification"):
+            self.assertIn(phrase, report)
+        self.assertNotIn("LEFT:", report)
+        self.assertNotIn("BOTH:", report)
+
+    def test_targeted_left_failure_and_one_retry_never_play_right(self):
+        result, called, report = self.run_guide(
+            ["PLAY\n", "WRONG\n", "RETRY\n", "PLAY\n", "SILENT\n"],
+            side="left")
+        self.assertFalse(result)
+        self.assertEqual(called, ["left", "left"])
+        self.assertIn("LEFT: SILENT", report)
+        self.assertIn("targeted recheck did not pass", report)
+        self.assertIn("No other stereo channels were tested", report)
+        self.assertNotIn("RIGHT:", report)
+
+    def test_targeted_both_tests_both_physical_speakers_only(self):
+        result, called, report = self.run_guide(
+            ["PLAY\r\n", "CORRECT\r\n"], side="both")
+        self.assertTrue(result)
+        self.assertEqual(called, ["both"])
+        self.assertIn("expect both physical speakers", report)
+        self.assertIn("BOTH: CORRECT", report)
+        self.assertIn("other stereo channels were NOT tested", report)
+
+    def test_targeted_mode_invalid_values_fail_before_any_player(self):
+        for invalid in ("LEFT", "sequence", "all", "", "right ", None.__class__, 0, True):
+            called = []
+            with self.subTest(invalid=invalid), \
+                 mock.patch.object(local_music.os, "geteuid", return_value=1000), \
+                 mock.patch.object(local_music.sys, "stdin", mock.Mock(isatty=lambda: True)), \
+                 mock.patch.object(local_music.sys, "stdout", mock.Mock(isatty=lambda: True)):
+                with self.assertRaises(ValueError):
+                    local_music.guided_speaker_check(
+                        side=invalid, read_line=lambda: "PLAY\n",
+                        play=lambda **kw: called.append(kw), out=lambda _: None)
+            self.assertEqual(called, [])
+
+    def test_targeted_side_cli_is_single_explicit_safe_option(self):
+        with mock.patch.object(local_music, "guided_speaker_check",
+                               return_value=True) as guide, \
+             mock.patch.object(local_music, "play_speaker_test") as sound, \
+             mock.patch("builtins.print"):
+            for mode in ("left", "right", "both"):
+                with self.subTest(mode=mode):
+                    self.assertEqual(local_music.main(
+                        ["--speaker-guide", mode]), 0)
+                    guide.assert_called_once_with(side=mode)
+                    guide.reset_mock()
+            for args in (["--speaker-guide", "RIGHT"],
+                         ["--speaker-guide", "all"],
+                         ["--speaker-guide", "sequence"],
+                         ["--speaker-guide", "left", "--play"],
+                         ["--speaker-guide", "--speaker-check"],
+                         ["--speaker-guide", "right", "--level", "normal"]):
+                with self.subTest(args=args):
+                    self.assertEqual(local_music.main(args), 2)
+                    guide.assert_not_called()
+            sound.assert_not_called()
+
     def test_cancel_and_unrecognized_report_stop_before_other_channels(self):
         for replies, ok in ((["PLAY\n"], False),
                             (["PLAY\n", "maybe\n"], True),

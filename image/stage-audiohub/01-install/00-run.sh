@@ -89,6 +89,15 @@ set -e
 test "$speaker_guide_noninteractive_status" -eq 2
 case "$speaker_guide_noninteractive_output" in *"Local player unavailable or stopped"*) ;; *) exit 1 ;; esac
 
+# The real installed selective recheck MUST refuse without a physical TTY.
+# Confirm both shell argument forwarding and Python's non-playing gate.
+set +e
+targeted_guide_noninteractive_output="$(runuser -u audiohub -- /usr/local/bin/audiohub-music --speaker-guide right 2>&1)"
+targeted_guide_noninteractive_status="$?"
+set -e
+test "$targeted_guide_noninteractive_status" -eq 2
+case "$targeted_guide_noninteractive_output" in *"Local player unavailable or stopped"*) ;; *) exit 1 ;; esac
+
 # Actual installed first-sound preflight must work with NO WAV files,
 # never start playback, and report readiness independently of the library.
 set +e

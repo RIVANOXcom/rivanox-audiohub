@@ -466,21 +466,28 @@ def play_speaker_test(*, mode="sequence", spawn=subprocess.Popen,
                 child.stdin.close()
 
 
-def guided_speaker_check(*, read_line=None, out=print, play=None):
+def guided_speaker_check(*, side=None, read_line=None, out=print, play=None):
     """Operator-guided physical stereo observations with bounded manual retry.
 
     Every attempt uses the existing private, low-gain player and its fresh
     exact PLAY TTY gate. Never skip forward after a reported physical fault,
     auto-repeat a sound, persist observations or certify hardware.
     """
+    if side is not None and (type(side) is not str or side not in STEREO_MODES):
+        raise ValueError("Targeted guide supports only left, right or both")
     if (not sys.stdin.isatty() or not sys.stdout.isatty()
             or (hasattr(os, "geteuid") and os.geteuid() == 0)):
         raise PermissionError("Speaker guide requires an unprivileged local TTY")
+    modes = ("left", "right", "both") if side is None else (side,)
     if read_line is None:
         read_line = lambda: sys.stdin.readline(16)
     if play is None:
         play = play_speaker_test
-    out("GUIDED STEREO CHECK: LEFT, RIGHT, then BOTH; three separate")
+    if side is None:
+        out("GUIDED STEREO CHECK: LEFT, RIGHT, then BOTH; three separate")
+    else:
+        out("TARGETED STEREO RECHECK: " + side.upper() + " ONLY.")
+        out("Other stereo channels are NOT tested in this targeted run.")
     out("2.1 s original low-gain tests. NO WAV needed and NO settings saved.")
     out("Set the physical amplifier LOW. Each step needs a fresh exact PLAY.")
     out("After each step, report CORRECT, WRONG, SILENT or UNSURE.")
@@ -495,11 +502,12 @@ def guided_speaker_check(*, read_line=None, out=print, play=None):
     repeat = ("RETRY\n", "RETRY\r\n")
     stop = ("STOP\n", "STOP\r\n")
     completed = True
-    for number, mode in enumerate(("left", "right", "both"), 1):
+    for number, mode in enumerate(modes, 1):
         expected = "both physical speakers" if mode == "both" else (
             "only the " + mode.upper() + " physical speaker")
         for attempt in (1, 2):
-            out("STEP " + str(number) + "/3, attempt " + str(attempt) +
+            out("STEP " + str(number) + "/" + str(len(modes)) +
+                ", attempt " + str(attempt) +
                 "/2: expect " + expected + ".")
             if not play(mode=mode, read_line=read_line, out=out):
                 out("Guide cancelled before this playback; no hardware verdict.")
@@ -541,11 +549,18 @@ def guided_speaker_check(*, read_line=None, out=print, play=None):
     for mode, observation in observations:
         out(mode + ": " + observation)
     if not completed:
-        out("NEEDS PHYSICAL REVIEW; remaining channels were NOT tested.")
+        if side is None:
+            out("NEEDS PHYSICAL REVIEW; remaining channels were NOT tested.")
+        else:
+            out("NEEDS PHYSICAL REVIEW; targeted recheck did not pass.")
+            out("No other stereo channels were tested in this run.")
         out("No default output, automatic gain, or mixer/routing change occurred.")
         out("Hardware remains UNVERIFIED; no production/release GO.")
         return False
     out("Expected channels were REPORTED by the operator only.")
+    if side is not None:
+        out("TARGETED ONLY: other stereo channels were NOT tested;")
+        out("do not infer complete stereo hardware readiness.")
     out("Hardware, safe analog SPL and multi-source mixing remain UNVERIFIED.")
     out("This is not a certification or production/release GO.")
     return True
@@ -589,9 +604,12 @@ def main(argv=None):
                 raise ValueError("First sound check accepts no extra arguments")
             return 0 if check_first_sound_readiness() else 2
         if args.speaker_guide:
-            if options != ["--speaker-guide"]:
-                raise ValueError("Speaker guide accepts no extra arguments")
-            return 0 if guided_speaker_check() else 2
+            if options == ["--speaker-guide"]:
+                return 0 if guided_speaker_check() else 2
+            if (len(options) == 2 and options[0] == "--speaker-guide"
+                    and options[1] in STEREO_MODES):
+                return 0 if guided_speaker_check(side=options[1]) else 2
+            raise ValueError("Speaker guide accepts only optional left, right or both")
         if args.speaker_test:
             if options == ["--speaker-test"]:
                 return 0 if play_speaker_test() else 2
