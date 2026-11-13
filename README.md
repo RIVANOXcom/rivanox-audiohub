@@ -445,3 +445,18 @@ completed copies can remain and must be inspected manually. Always
 retain the original SD and an independent backup until a real playback
 test succeeds. No network, sync, mounts or ownership changes are made
 by this utility. See [operator details](docs/LOCAL-MUSIC-PLAYBACK.md).
+
+**First upgrade from PR #258 or older:** Those older images do *not*
+contain `audiohub-music-transfer`. Do not assume you can run the backup
+command on the old installation. Instead preserve the original SD
+untouched, flash the new verified alpha to a **different SD** after
+permission, then connect the old SD using a separately authorized
+USB reader and mount its root filesystem **read-only**. If the old
+`PrivateMusic` directory is still owned by the same unprivileged UID
+and is private, pass its real, absolute mounted path to
+`audiohub-music-transfer restore /absolute/old-SD/PrivateMusic`.
+The tool reads from that folder without modifying it and writes only
+to previously absent WAV filenames in the new SD's private folder.
+If owner UID, permissions or mount points do not match, stop and seek
+an operator-approved manual copy; do **not** modify old SD rights or
+silently bypass these checks. Keep both SDs until playback is verified.
