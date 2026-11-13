@@ -221,10 +221,14 @@ class PresetTransferTests(unittest.TestCase):
         self.assertEqual(subprocess.run(
             ["/bin/sh", "-n", str(script)], capture_output=True).returncode, 0)
         self.assertIn("audiohub.preset_transfer", script.read_text())
+        self.assertIn('exec /usr/bin/python3 -m audiohub.preset_transfer "$@"', script.read_text())
+        self.assertIn("export-old", script.read_text())
         self.assertNotIn("sudo ", script.read_text())
         self.assertNotIn("eval ", script.read_text())
         for args in ([], ["export"], ["bad", "/tmp"],
-                     ["verify", "relative"], ["export", "/tmp", "--wrong"]):
+                     ["verify", "relative"], ["export", "/tmp", "--wrong"],
+                     ["export-old", "relative", "/tmp"],
+                     ["export-old", "/tmp", "relative"]):
             with self.subTest(args=args):
                 self.assertEqual(subprocess.run(
                     ["/bin/sh", str(script), *args],
