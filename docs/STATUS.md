@@ -216,3 +216,18 @@ required only for stages that actually change data. Cancellation stops
 without secretly rolling back verified files. It transfers no owner
 identity/trust/credentials, changes no live audio routing and does not
 mount, flash or approve production.
+
+### Operator-guided first old-SD backup with preserved media
+
+`audiohub-presets-transfer backup-guided ARCHIVE OLD_MUSIC OLD_CONFIG`
+now combines the earlier independent first WAV backup and saved
+preset export from an already separately mounted read-only old SD.
+One read-only preflight blocks existing unequal WAVs or preset
+snapshots before writes. Distinct COPY and SAVE confirmations control
+new files, existing identical WAVs/presets are skipped, cancellation
+retains validated partial progress and final combined `check-backup`
+verifies WAV SHA256 and the saved EQ/profile snapshot. Neutral EQ
+and empty custom profiles are supported by this guide alone. No
+owner, wireless, live audio, SD mount, flash, deletion or OS update
+is performed; production GO still requires all operator/physical
+and legal authorization gates.

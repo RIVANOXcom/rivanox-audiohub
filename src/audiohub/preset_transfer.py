@@ -167,11 +167,12 @@ def _source_snapshot(settings_path, profile_path):
 
 def export_presets(external, *, settings_path=SETTINGS,
                    profile_path=mixer_control.PROFILE_PATH,
-                   confirm=None, out=print, require_terminal=True):
+                   confirm=None, out=print, require_terminal=True,
+                   allow_neutral=False):
     """Export only validated EQ bands and INACTIVE user volume presets."""
     _guard(require_terminal=require_terminal)
     data, version = _source_snapshot(settings_path, profile_path)
-    if (not data["profiles"] and all(
+    if (not allow_neutral and not data["profiles"] and all(
             all(value == 0 for value in data["eq"][slot].values())
             for slot in CHANNELS)):
         raise ValueError("No customized EQ or volume profiles to export")
@@ -618,6 +619,103 @@ def check_new(external, *, settings_path=SETTINGS,
     return True
 
 
+def backup_guided(external, old_music, old_config, *,
+                  out=print, require_terminal=True,
+                  confirm_copy=None, confirm_save=None):
+    """Safe offline first backup from an operator-mounted READ-ONLY old SD.
+
+    Preflight BOTH data sets before the first write, then require independent
+    COPY and SAVE consent when needed. Only the already private external
+    archive may receive new files. Resume interrupted WAV copies by checksum
+    and skip an existing identical saved preset archive. Final combined
+    source-to-archive verification is read-only.
+    """
+    _guard(require_terminal=require_terminal)
+    old_config = Path(old_config)
+    if (not old_config.is_absolute() or ".." in old_config.parts
+            or len(str(old_config)) > 1024):
+        raise ValueError("Old SD config requires an absolute private path")
+    config_settings = old_config / "settings.json"
+    config_profiles = old_config / "volume-profiles.json"
+
+    original, revision = _source_snapshot(config_settings, config_profiles)
+    # The source and archive private directory descriptors, all bounded WAV
+    # source names and *every* existing same-name hash are checked read-only.
+    wav = _music_destination_plan(old_music, external)
+
+    # Do not accept an existing but mismatched preset archive, even if WAV
+    # copies would otherwise be safe. The operator must keep both originals
+    # and resolve conflicts manually, not replace any existing file.
+    archive_fd = music_transfer._private_dir(external)
+    try:
+        try:
+            os.stat(FILENAME, dir_fd=archive_fd, follow_symlinks=False)
+        except FileNotFoundError:
+            archived = False
+        else:
+            archived = True
+    finally:
+        os.close(archive_fd)
+    if archived:
+        previous, _ = _load(external)
+        if previous != original:
+            raise ValueError("Existing preset archive differs from old SD")
+    out("Old SD backup review: " + str(wav["wav_total"]) +
+        " supported WAVs, " + str(wav["wav_matched"]) +
+        " already matching, " + str(wav["wav_missing"]) +
+        " requiring COPY; saved EQ/inactive profile archive " +
+        ("matches" if archived else "needs SAVE") + ".")
+    out("Only a separate private archive is written. Old SD, owner identity, "
+        "Bluetooth, Wi-Fi, routes and live audio are untouched.")
+
+    def check_old_presets():
+        current, current_revision = _source_snapshot(
+            config_settings, config_profiles)
+        if current != original or current_revision != revision:
+            raise OSError("Old SD audio presets changed during backup")
+
+    if wav["wav_copy_needed"]:
+        out("Step 1/2 – COPY only missing supported WAVs from already mounted "
+            "old SD; matching archive WAVs are skipped.")
+        completed = music_transfer.transfer(
+            "backup", external, music_dir=old_music, resume=True,
+            confirm=confirm_copy, out=out, require_terminal=False)
+        if completed is not True:
+            out("Guided backup STOPPED before WAV copy; original SD unchanged.")
+            return False
+    else:
+        out("Step 1/2 – existing WAV archive already matches; no copy needed.")
+    # Never proceed to SAVE while the WAV source set has gaps or conflicts.
+    music_transfer.transfer(
+        "backup", external, music_dir=old_music, verify=True,
+        out=lambda _line: None, require_terminal=False)
+    check_old_presets()
+
+    if not archived:
+        out("Step 2/2 – save only three archived EQ curves and INACTIVE volume "
+            "profiles with distinct SAVE consent. No keys or current levels.")
+        completed = export_presets(
+            external, settings_path=config_settings,
+            profile_path=config_profiles, confirm=confirm_save,
+            out=out, require_terminal=False, allow_neutral=True)
+        if completed is not True:
+            out("Guided backup STOPPED at SAVE; existing verified WAV copies "
+                "remain available for a later explicit resume.")
+            return False
+    else:
+        out("Step 2/2 – private preset archive already identical; no SAVE needed.")
+
+    check_old_presets()
+    out("Final step – READ-ONLY verify old SD WAV hashes and saved presets "
+        "against the complete external private archive.")
+    checked = check_backup(
+        external, old_music, str(old_config),
+        out=out, require_terminal=False)
+    out("Old SD backup verified for supported WAVs, saved EQ and inactive "
+        "profiles. No SD flash, physical sound or owner transfer proved.")
+    return checked
+
+
 def restore_guided(external, *, settings_path=SETTINGS,
                    profile_path=mixer_control.PROFILE_PATH,
                    music_dir=music_transfer.DEFAULT_MUSIC_DIR,
@@ -720,15 +818,17 @@ def main(argv=None):
         print("Offline Pi4 non-secret audio preset transfer, no owner migration.")
         print("Usage: audiohub-presets-transfer export|inspect|plan-profiles|restore-profiles|merge-profiles|restore-eq|verify|verify-merged|plan-new|check-new ABSOLUTE_PRIVATE_FOLDER")
         print("       audiohub-presets-transfer check-backup PRIVATE_BACKUP OLD_MUSIC_DIR OLD_CONFIG_DIR")
+        print("       audiohub-presets-transfer backup-guided PRIVATE_BACKUP OLD_MUSIC_DIR OLD_CONFIG_DIR")
         print("       audiohub-presets-transfer restore-guided ABSOLUTE_PRIVATE_ARCHIVE")
         print("       audiohub-presets-transfer export-old OLD_SD_PRIVATE_CONFIG_DIR ABSOLUTE_PRIVATE_FOLDER")
         print("Export SAVE; strict restore RESTORE; conflict-free profile merge MERGE.")
         print("Saved EQ APPLY-EQ to neutral EQ only; verify-merged permits extra local profiles.")
         print("restore-guided requires separate COPY, MERGE and APPLY-EQ, then read-only verification.")
+        print("backup-guided requires separate COPY and SAVE, then read-only verification.")
         print("Never imports keys, Bluetooth trust, Wi-Fi, IDs, live volume/mutes or OS.")
         return 0
     old_sd_mode = len(args) == 3 and args[0] == "export-old"
-    backup_check_mode = len(args) == 4 and args[0] == "check-backup"
+    backup_check_mode = len(args) == 4 and args[0] in ("check-backup", "backup-guided")
     if not (old_sd_mode or backup_check_mode or (len(args) == 2 and args[0] in (
             "export", "inspect", "plan-profiles", "restore-profiles",
             "merge-profiles", "restore-eq", "verify", "verify-merged",
@@ -737,7 +837,8 @@ def main(argv=None):
         return 2
     try:
         if backup_check_mode:
-            result = check_backup(args[1], args[2], args[3])
+            action = check_backup if args[0] == "check-backup" else backup_guided
+            result = action(args[1], args[2], args[3])
         elif old_sd_mode:
             old_dir = Path(args[1])
             if (not old_dir.is_absolute() or ".." in old_dir.parts or

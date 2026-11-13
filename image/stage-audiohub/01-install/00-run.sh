@@ -113,5 +113,14 @@ guided_restore_status="$?"
 set -e
 test "$guided_restore_status" -eq 2
 case "$guided_restore_output" in *"Private preset operation safely refused"*) ;; *) exit 1 ;; esac
+
+# Installed 4-argument first old-SD backup guide is never unattended:
+# no trusted TTY means the Python guard must fail without touching files.
+set +e
+guided_backup_output="$(runuser -u audiohub -- /usr/local/bin/audiohub-presets-transfer backup-guided /home/audiohub/PrivateMusic /home/audiohub/PrivateMusic /home/audiohub/.config/audiohub 2>&1)"
+guided_backup_status="$?"
+set -e
+test "$guided_backup_status" -eq 2
+case "$guided_backup_output" in *"Private preset operation safely refused"*) ;; *) exit 1 ;; esac
 PYTHONPATH=/opt/audiohub/src runuser -u audiohub -- python3 -m audiohub.eq_setup
 CHROOT

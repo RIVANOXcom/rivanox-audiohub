@@ -230,6 +230,178 @@ class PresetTransferTests(unittest.TestCase):
         self.assertIn('exec /usr/bin/python3 -m audiohub.preset_transfer "$@"',
                       code)
 
+    def make_old_wav_for_backup(self):
+        self.old_music = self.root / "OldReadonlyMusic"
+        self.new_music = self.root / "NewMusic"
+        self.old_music.mkdir(mode=0o700)
+        self.new_music.mkdir(mode=0o700)
+        name = "private-audio.wav"
+        with wave.open(str(self.old_music / name), "wb") as output:
+            output.setnchannels(2)
+            output.setsampwidth(2)
+            output.setframerate(48000)
+            output.writeframes(b"\x00\x01\x00\x02" * 250)
+        (self.old_music / name).chmod(0o600)
+        return name
+
+    def guided_old_backup(self, copy=True, save=True):
+        return preset_transfer.backup_guided(
+            str(self.media), str(self.old_music), str(self.old),
+            confirm_copy=lambda: copy, confirm_save=lambda: save,
+            out=self.logs.append, require_terminal=False)
+
+    def test_guided_old_backup_copy_save_and_full_verify(self):
+        name = self.make_old_wav_for_backup()
+        self.old_music.chmod(0o500)
+        original = (self.old_music / name).read_bytes()
+        old_settings = self.old_settings.read_bytes()
+        old_profiles = self.old_profiles.read_bytes()
+        self.assertTrue(self.guided_old_backup())
+        self.assertEqual((self.media / name).read_bytes(), original)
+        self.assertEqual((self.old_music / name).read_bytes(), original)
+        self.assertEqual(self.old_settings.read_bytes(), old_settings)
+        self.assertEqual(self.old_profiles.read_bytes(), old_profiles)
+        self.assertEqual(stat.S_IMODE(self.old_music.stat().st_mode), 0o500)
+        self.assertEqual(stat.S_IMODE((self.media / name).stat().st_mode), 0o600)
+        self.assertTrue(self.sd_check_backup())
+        logs = "\n".join(self.logs)
+        self.assertIn("Step 1/2", logs)
+        self.assertIn("Step 2/2", logs)
+        self.assertIn("Old SD backup verified", logs)
+        self.assertNotIn(name, logs)
+        self.assertNotIn("private-one", logs)
+        self.assertNotIn(str(self.root), logs)
+
+    def test_guided_old_backup_cancel_copy_makes_no_new_archive_files(self):
+        name = self.make_old_wav_for_backup()
+        before = (self.old_music / name).read_bytes()
+        self.assertFalse(self.guided_old_backup(copy=False))
+        self.assertEqual(list(self.media.iterdir()), [])
+        self.assertEqual((self.old_music / name).read_bytes(), before)
+
+    def test_guided_old_backup_cancel_save_preserves_copy_then_resume(self):
+        name = self.make_old_wav_for_backup()
+        self.assertFalse(self.guided_old_backup(save=False))
+        dest = self.media / name
+        self.assertTrue(dest.exists())
+        inode = dest.stat().st_ino
+        self.assertFalse((self.media / preset_transfer.FILENAME).exists())
+        self.assertTrue(self.guided_old_backup(copy=False, save=True))
+        self.assertEqual(dest.stat().st_ino, inode)
+        self.assertTrue(self.sd_check_backup())
+
+    def test_guided_old_backup_repeat_does_not_regenerate_catalog_or_wavs(self):
+        name = self.make_old_wav_for_backup()
+        self.assertTrue(self.guided_old_backup())
+        paths = [self.media / name, self.media / preset_transfer.FILENAME]
+        identities = [(p.stat().st_ino, p.stat().st_mtime_ns) for p in paths]
+        self.assertTrue(self.guided_old_backup(copy=False, save=False))
+        self.assertEqual(identities, [(p.stat().st_ino, p.stat().st_mtime_ns)
+                                      for p in paths])
+        self.assertTrue(self.sd_check_backup())
+
+    def test_guided_old_backup_existing_conflicting_preset_blocks_before_copy(self):
+        name = self.make_old_wav_for_backup()
+        self.assertTrue(self.export())
+        saved = (self.media / preset_transfer.FILENAME).read_bytes()
+        mixer_control.change({"music": {"bass": -6}},
+                             path=self.old_settings, confirmed=True)
+        with self.assertRaises(ValueError):
+            self.guided_old_backup()
+        self.assertFalse((self.media / name).exists())
+        self.assertEqual((self.media / preset_transfer.FILENAME).read_bytes(), saved)
+
+    def test_guided_old_backup_existing_conflicting_wav_blocks_before_preset(self):
+        name = self.make_old_wav_for_backup()
+        target = self.media / name
+        source = (self.old_music / name).read_bytes()
+        target.write_bytes(source[:-1] + b"\x09")
+        target.chmod(0o600)
+        before = target.read_bytes()
+        with self.assertRaises(ValueError):
+            self.guided_old_backup()
+        self.assertEqual(target.read_bytes(), before)
+        self.assertFalse((self.media / preset_transfer.FILENAME).exists())
+
+    def test_guided_old_backup_skips_existing_same_preset_archive(self):
+        name = self.make_old_wav_for_backup()
+        self.assertTrue(self.export())
+        catalog = self.media / preset_transfer.FILENAME
+        before = (catalog.stat().st_ino, catalog.stat().st_mtime_ns)
+        self.assertTrue(self.guided_old_backup(save=False))
+        self.assertEqual((catalog.stat().st_ino, catalog.stat().st_mtime_ns), before)
+        self.assertTrue((self.media / name).exists())
+        self.assertTrue(self.sd_check_backup())
+
+    def test_guided_old_backup_stores_neutral_empty_preset_for_full_check(self):
+        name = self.make_old_wav_for_backup()
+        self.old_profiles.unlink()  # A test fixture: old SD has no custom profiles.
+        mixer_control.change({
+            "music": {"bass": 0, "mid": 0, "treble": 0},
+            "laptop": {"bass": 0, "mid": 0, "treble": 0}},
+            path=self.old_settings, confirmed=True)
+        with self.assertRaises(ValueError):
+            self.export()  # Standalone export unchanged: reject no customizations.
+        self.assertTrue(self.guided_old_backup())
+        data, _ = preset_transfer._load(str(self.media))
+        self.assertEqual(data["profiles"], {})
+        self.assertTrue(all(band == 0 for values in data["eq"].values()
+                            for band in values.values()))
+        self.assertTrue((self.media / name).exists())
+        self.assertTrue(self.sd_check_backup())
+
+    def test_guided_old_backup_source_changed_after_copy_confirmation_refuses_save(self):
+        name = self.make_old_wav_for_backup()
+        def change_old_before_copy():
+            mixer_control.change({"music": {"bass": 9}},
+                                 path=self.old_settings, confirmed=True)
+            return True
+        with self.assertRaises(OSError):
+            preset_transfer.backup_guided(
+                str(self.media), str(self.old_music), str(self.old),
+                confirm_copy=change_old_before_copy, confirm_save=lambda: True,
+                require_terminal=False, out=self.logs.append)
+        self.assertTrue((self.media / name).exists())
+        self.assertFalse((self.media / preset_transfer.FILENAME).exists())
+
+    def test_guided_old_backup_guard_denies_root_and_non_tty(self):
+        name = self.make_old_wav_for_backup()
+        with mock.patch.object(preset_transfer.os, "geteuid", return_value=0):
+            with self.assertRaises(PermissionError):
+                self.guided_old_backup()
+        with mock.patch.object(preset_transfer.sys.stdin, "isatty",
+                               return_value=False):
+            with self.assertRaises(PermissionError):
+                preset_transfer.backup_guided(
+                    str(self.media), str(self.old_music), str(self.old))
+        self.assertFalse((self.media / name).exists())
+
+    def test_guided_old_backup_cli_and_installed_wrapper_forward_all_three_paths(self):
+        with mock.patch.object(preset_transfer, "backup_guided",
+                               return_value=True) as call:
+            self.assertEqual(preset_transfer.main([
+                "backup-guided", str(self.media), str(self.old_music)
+                if hasattr(self, "old_music") else str(self.old),
+                str(self.old)]), 0)
+            self.assertEqual(call.call_args.args[0], str(self.media))
+            self.assertEqual(call.call_args.args[2], str(self.old))
+        wrapper = (Path(__file__).resolve().parents[1] /
+                   "image/stage-audiohub/01-install/files/bin/audiohub-presets-transfer")
+        self.assertEqual(subprocess.run(
+            ["/bin/sh", "-n", str(wrapper)], capture_output=True).returncode, 0)
+        code = wrapper.read_text()
+        self.assertIn('check-backup|backup-guided)', code)
+        for args in (
+            ["backup-guided"], ["backup-guided", "relative", str(self.old), str(self.old)],
+            ["backup-guided", str(self.media), "relative", str(self.old)],
+            ["backup-guided", str(self.media), str(self.old), "relative"],
+            ["backup-guided", str(self.media), str(self.old)],
+            ["backup-guided", str(self.media), str(self.old), str(self.old), "extra"]):
+            with self.subTest(args=args):
+                self.assertEqual(subprocess.run(
+                    ["/bin/sh", str(wrapper), *args],
+                    capture_output=True, timeout=5).returncode, 2)
+
     def seed_sd_backup(self):
         self.old_music = self.root / "OldMusic"
         self.new_music = self.root / "NewMusic"
