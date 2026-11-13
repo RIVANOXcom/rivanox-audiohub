@@ -498,6 +498,14 @@ def guided_speaker_check(*, side=None, read_line=None, out=print,
         read_line = lambda: sys.stdin.readline(16)
     if play is None:
         play = play_speaker_test
+
+    def safe_read():
+        # A local Ctrl+C/closed input means cancel, never approval or replay.
+        try:
+            return read_line()
+        except (KeyboardInterrupt, EOFError, StopIteration):
+            return ""
+
     if side is None:
         out("GUIDED STEREO CHECK: LEFT, RIGHT, then BOTH; three separate")
     else:
@@ -561,12 +569,16 @@ def guided_speaker_check(*, side=None, read_line=None, out=print,
         for attempt in (1, 2):
             out("STEP " + str(number) + "/" + str(len(modes)) +
                 ", attempt " + str(attempt) + "/2: expect " + expected + ".")
-            if not play(mode=mode, read_line=read_line, out=out):
+            try:
+                played = play(mode=mode, read_line=safe_read, out=out)
+            except (KeyboardInterrupt, EOFError):
+                played = False
+            if not played:
                 out("Guide cancelled before this playback; no hardware verdict.")
                 return finish(False)
             out("What was physically heard for " + mode.upper() +
                 "? Type exact CORRECT, WRONG, SILENT or UNSURE then Enter.")
-            answer = read_line()
+            answer = safe_read()
             if answer not in choices:
                 out("Guide cancelled: unknown observation. No inferred hardware PASS.")
                 return finish(False)
@@ -582,7 +594,7 @@ def guided_speaker_check(*, side=None, read_line=None, out=print,
                 return finish(False)
             out("Type exact RETRY + Enter to test this SAME side once more with")
             out("a NEW PLAY confirmation, or exact STOP + Enter to finish.")
-            decision = read_line()
+            decision = safe_read()
             if decision in repeat:
                 continue
             if decision in stop:
