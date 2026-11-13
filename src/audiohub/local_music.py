@@ -248,10 +248,11 @@ def main(argv=None):
                     "Guided mode accepts only --library and optional --show-titles"
                 )
             from . import music_library
-            music_library.guided_session(
-                args.library, max_minutes=args.minutes,
-                show_titles=args.show_titles, level=args.level
-            )
+            options = {"max_minutes": args.minutes,
+                       "show_titles": args.show_titles}
+            if args.level != "normal":
+                options["level"] = args.level
+            music_library.guided_session(args.library, **options)
             return 0
         if args.interactive and not args.play:
             raise ValueError("--interactive requires explicit --play")
