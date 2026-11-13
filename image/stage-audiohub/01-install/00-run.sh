@@ -34,5 +34,17 @@ install -d -o audiohub -g audiohub -m700 /home/audiohub/PrivateMusic
 runuser -u audiohub -- /usr/local/bin/audiohub-music --help >/dev/null
 # Offline transfer help is a NON-WRITING native ARM64 command smoke.
 runuser -u audiohub -- /usr/local/bin/audiohub-music-transfer --help >/dev/null
+# Exercise the real installed wrapper's TWO and THREE-argument forwarding.
+# Both paths safely refuse before any transfer; no disk/TTY/owner changes.
+set +e
+verify_output="$(runuser -u audiohub -- /usr/local/bin/audiohub-music-transfer verify-backup /home/audiohub/PrivateMusic 2>&1)"
+verify_status="$?"
+resume_output="$(runuser -u audiohub -- /usr/local/bin/audiohub-music-transfer backup /home/audiohub/PrivateMusic --resume 2>&1)"
+resume_status="$?"
+set -e
+test "$verify_status" -eq 2
+test "$resume_status" -eq 2
+case "$verify_output" in *"Safe offline WAV transfer refused"*) ;; *) exit 1 ;; esac
+case "$resume_output" in *"Safe offline WAV transfer refused"*) ;; *) exit 1 ;; esac
 PYTHONPATH=/opt/audiohub/src runuser -u audiohub -- python3 -m audiohub.eq_setup
 CHROOT
