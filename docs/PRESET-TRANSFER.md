@@ -133,3 +133,67 @@ merge without implying data loss. Neither check measures audible sound.
 Retain the archive and original SD until all separately authorized
 hardware tests and operator acceptance are complete. These are
 unverified, operator-only alpha commands; not an in-place OS update.
+
+## One-command read-only SD transfer readiness (both WAV and presets)
+
+The individual WAV and preset commands remain separately confirmed and
+do not mount, flash, format or update either SD. An additional offline
+**read-only** checklist closes the gap between these independent steps:
+
+    audiohub-presets-transfer check-backup /absolute/private/archive /absolute/old-SD/home/audiohub/PrivateMusic /absolute/old-SD/home/audiohub/.config/audiohub
+
+Run this on a new image **only after** the old SD is already mounted
+read-only through a separately authorized operator procedure, and
+the archive has been populated by both music backup and preset export.
+`check-backup` reads the old SD's supported WAV files, saved EQ bands
+and inactive volume profiles and compares them with the archive. It
+refuses missing WAVs, file content differences, unsafe paths or a
+changed EQ/profile snapshot. It does not modify the old SD or backup.
+An old SD without the new CLI cannot perform this check itself.
+
+To review a **replacement/new SD** before restoration:
+
+    audiohub-presets-transfer plan-new /absolute/private/archive
+
+`plan-new` reads and hashes existing WAV destinations to distinguish
+identical copied files from missing files. It reports how many WAVs
+still need copying, archived inactive profiles missing/identical/
+conflicting, and differences between stored three-band EQ values.
+It never lists user track names, profile names, device IDs or paths,
+and it never copies files or writes settings. Different same-name
+WAV bytes, unsupported WAVs, unsafe private paths, bad archive
+schema, conflicting profiles or an existing non-neutral EQ are
+flagged or refused, **never silently overwritten**.
+
+Following the plan, independently run only the relevant already
+available, *separately consented* actions (the destination must exist
+as an operator-private 0700 directory):
+
+    audiohub-music-transfer restore /absolute/private/archive --resume
+    audiohub-presets-transfer merge-profiles /absolute/private/archive
+    audiohub-presets-transfer restore-eq /absolute/private/archive
+
+These require distinct exact `COPY`, `MERGE` and `APPLY-EQ`
+confirmations where changes are needed. Do not treat the plan as
+consent or execute the actions if its corresponding section is
+blocked. An extra local profile is preserved, and `restore-eq`
+still refuses a destination with non-neutral EQ.
+
+After copying and confirming the separately reviewed saves:
+
+    audiohub-presets-transfer check-new /absolute/private/archive
+
+`check-new` verifies **both** the source-set SHA256 identity of
+every supported archived WAV and the archived saved EQ/inactive
+profiles on the replacement SD. Extra local volume profiles
+remain allowed; the check does not require that the SD image be an
+exact filesystem mirror. It is read-only, fail-closed if no WAV
+set exists, and prints a clear pass only when **both** groups match.
+If there is no WAV content, the operator cannot claim the combined
+check passed; use the standalone preset verification instead.
+
+All of these are operator-only checks in an already authorized
+local terminal, with no root or network access. They do **not**
+prove physical sound, persistent hardware state, a completed OS
+update, owner trust or any of the separate production GO criteria.
+Keep original SD and archive intact for rollback.
