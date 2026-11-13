@@ -81,6 +81,26 @@ explicit operator/CEO release authorization.
 
 ## Guided music-folder browser and track selection
 
+**One-command first-use readiness:** The installed native Pi4 command
+`audiohub-music` starts the local guided album picker, but only at the
+trusted local terminal as the unprivileged `audiohub` operator. It now
+checks the existing **private** `audiohub.music` PipeWire input and
+whether the local audio playback tool is installed **before opening the
+WAV folder, asking you to choose tracks or presenting PLAY**. If either
+prerequisite is missing, it prints a concise, privacy-safe diagnosis,
+refuses to start sound and directs you to the silent `--check` or
+`--list` options. The `--list` browser still works without PipeWire;
+you do not have to fix audio just to inspect your private collection.
+
+This preflight checks software availability only; it does **not**
+validate physical Edifier output, safe loudness, owner authentication,
+the contents of WAVs or a real Pi4. The already-confirmed queue must
+still receive its own exact uppercase PLAY. No audio is automatically
+started and no local track titles, paths, device IDs or configuration
+are saved or transmitted by the preflight.
+
+
+
 You no longer need to type every individual WAV filename. On the
 already-authorized **local** Pi4 terminal, open a small, private folder
 of owned/licensed WAV tracks. The folder must be an absolute real
