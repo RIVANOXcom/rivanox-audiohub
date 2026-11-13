@@ -89,9 +89,13 @@ class MusicTransferTests(unittest.TestCase):
         self.assertEqual(list(self.external.iterdir()), [])
 
     def test_external_directory_must_exist_be_private_and_operator_owned(self):
-        for bad in (self.root / "missing", self.root):
-            with self.subTest(bad=bad), self.assertRaises((OSError, PermissionError)):
-                self.run_transfer("backup", external=bad)
+        with self.assertRaises((OSError, PermissionError)):
+            self.run_transfer("backup", external=self.root / "missing")
+        # A private existing parent directory is valid as a directory;
+        # make it actually public to verify the privacy refusal.
+        self.root.chmod(0o755)
+        with self.assertRaises(PermissionError):
+            self.run_transfer("backup", external=self.root)
         self.external.chmod(0o755)
         with self.assertRaises(PermissionError):
             self.run_transfer("backup")
