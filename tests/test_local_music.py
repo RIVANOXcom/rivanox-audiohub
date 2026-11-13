@@ -738,5 +738,88 @@ class LocalMusicTests(unittest.TestCase):
             self.assertNotIn(str(self.wav),str(output.call_args_list))
 
 
+
+class GuidedSpeakerCheckTests(unittest.TestCase):
+    def run_guide(self, responses, *, player_ok=True):
+        called, output = [], []
+        feed = iter(responses)
+        def player(*, mode, read_line, out):
+            called.append(mode)
+            self.assertEqual(read_line(), "PLAY\n")
+            return player_ok
+        with mock.patch.object(local_music.sys, "stdin", mock.Mock(isatty=lambda: True)), \
+             mock.patch.object(local_music.sys, "stdout", mock.Mock(isatty=lambda: True)), \
+             mock.patch.object(local_music.os, "geteuid", return_value=1000):
+            result = local_music.guided_speaker_check(
+                read_line=feed.__next__, out=output.append, play=player)
+        return result, called, "\n".join(output)
+
+    def test_three_separate_consents_and_clear_non_certifying_summary(self):
+        result, called, report = self.run_guide([
+            "PLAY\n", "CORRECT\n", "PLAY\n", "CORRECT\n",
+            "PLAY\n", "CORRECT\n"])
+        self.assertTrue(result)
+        self.assertEqual(called, ["left", "right", "both"])
+        for phrase in ("LEFT: CORRECT", "RIGHT: CORRECT", "BOTH: CORRECT",
+                       "fresh exact PLAY", "REPORTED", "UNVERIFIED",
+                       "not a certification"):
+            self.assertIn(phrase, report)
+
+    def test_incorrect_physical_reports_are_not_a_hardware_pass(self):
+        result, called, report = self.run_guide([
+            "PLAY\n", "SILENT\n", "PLAY\n", "WRONG\n",
+            "PLAY\n", "UNSURE\n"])
+        self.assertFalse(result)
+        self.assertEqual(called, ["left", "right", "both"])
+        for phrase in ("LEFT: SILENT", "RIGHT: WRONG", "BOTH: UNSURE",
+                       "NEEDS PHYSICAL REVIEW", "no production/release GO"):
+            self.assertIn(phrase, report)
+
+    def test_cancel_and_unrecognized_report_stop_before_other_channels(self):
+        for replies, ok in ((["PLAY\n"], False),
+                            (["PLAY\n", "maybe\n"], True),
+                            (["PLAY\n", ""], True)):
+            with self.subTest(replies=replies):
+                result, called, report = self.run_guide(replies, player_ok=ok)
+                self.assertFalse(result)
+                self.assertEqual(called, ["left"])
+                self.assertIn("cancelled", report.lower())
+
+    def test_guide_refuses_root_and_non_tty_before_any_player(self):
+        for tty_in, tty_out, uid in ((False, True, 1000), (True, False, 1000),
+                                      (True, True, 0)):
+            called = []
+            with mock.patch.object(local_music.sys, "stdin", mock.Mock(isatty=lambda: tty_in)), \
+                 mock.patch.object(local_music.sys, "stdout", mock.Mock(isatty=lambda: tty_out)), \
+                 mock.patch.object(local_music.os, "geteuid", return_value=uid):
+                with self.assertRaises(PermissionError):
+                    local_music.guided_speaker_check(
+                        read_line=lambda: "PLAY\n",
+                        play=lambda **kw: called.append(kw), out=lambda _: None)
+            self.assertEqual(called, [])
+
+    def test_guide_cli_is_exclusive_and_uses_only_guide(self):
+        with mock.patch.object(local_music, "guided_speaker_check", return_value=True) as guide, \
+             mock.patch.object(local_music, "play_speaker_test") as sound, \
+             mock.patch("builtins.print"):
+            self.assertEqual(local_music.main(["--speaker-guide"]), 0)
+            guide.assert_called_once_with()
+            sound.assert_not_called()
+            guide.reset_mock()
+            for args in (["--speaker-guide", "--speaker-guide"],
+                         ["--speaker-guide", "--speaker-test"],
+                         ["--speaker-guide", "--play"],
+                         ["--speaker-guide", "--check"],
+                         ["--speaker-guide", "--level", "quiet"],
+                         ["--speaker-guide", "--library", "/tmp/wav"],
+                         ["/tmp/file.wav", "--speaker-guide"]):
+                self.assertEqual(local_music.main(args), 2)
+                guide.assert_not_called()
+                sound.assert_not_called()
+            guide.return_value = False
+            self.assertEqual(local_music.main(["--speaker-guide"]), 2)
+
+
+
 if __name__ == "__main__":
     unittest.main()
