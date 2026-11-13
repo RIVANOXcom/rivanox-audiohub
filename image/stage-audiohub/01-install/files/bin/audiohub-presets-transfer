@@ -8,7 +8,7 @@ if [ "$#" -eq 1 ] && { [ "$1" = "--help" ] || [ "$1" = "-h" ]; }; then
   exec /usr/bin/python3 -m audiohub.preset_transfer --help
 fi
 if [ "$#" -ne 2 ] && [ "$#" -ne 3 ] && [ "$#" -ne 4 ]; then
-  printf '%s\n' 'Usage: audiohub-presets-transfer export|inspect|plan-profiles|restore-profiles|merge-profiles|restore-eq|verify|verify-merged|plan-new|check-new|restore-guided ABSOLUTE_FOLDER' >&2
+  printf '%s\n' 'Usage: audiohub-presets-transfer export|inspect|plan-profiles|restore-profiles|merge-profiles|restore-eq|verify|verify-merged|plan-new|check-new|restore-guided ABSOLUTE_FOLDER; backup-guided ARCHIVE OLD_MUSIC OLD_CONFIG' >&2
   exit 2
 fi
 case "$1" in
@@ -17,9 +17,9 @@ case "$1" in
       printf '%s\n' 'This preset action takes one absolute folder.' >&2; exit 2
     fi
     ;;
-  check-backup)
+  check-backup|backup-guided)
     if [ "$#" -ne 4 ]; then
-      printf '%s\n' 'check-backup needs private archive, old music and old config directories.' >&2; exit 2
+      printf '%s\n' 'check-backup/backup-guided need private archive, old music and old config directories.' >&2; exit 2
     fi
     ;;
   export-old)
