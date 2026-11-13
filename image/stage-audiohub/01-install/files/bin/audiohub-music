@@ -11,7 +11,7 @@ usage() {
     '       audiohub-music [ABSOLUTE_PRIVATE_WAV_FOLDER] --list [--show-titles]' \
     '       audiohub-music [ABSOLUTE_PRIVATE_WAV_FOLDER] --check' \
     '       audiohub-music --speaker-test [left|right|both]' \
-    '       audiohub-music --speaker-guide' \
+    '       audiohub-music --speaker-guide [left|right|both]' \
     '       audiohub-music --speaker-check' \
     'Default: /home/audiohub/PrivateMusic, 15 minutes, normal stream level (0.20).' \
     'quiet=0.05, soft=0.10, normal=0.20; levels are stream gains, not calibrated speaker loudness.' \
@@ -21,7 +21,8 @@ usage() {
     '--speaker-check checks built-in FIRST SOUND without a WAV library and never plays sound.' \
     '--speaker-test creates a brief original 2.1s LEFT/RIGHT/BOTH signal in RAM. No WAV required.' \
     'Optional left, right or both replays that channel 3 times with short silence gaps.' \
-    '--speaker-guide asks for separate PLAY at each side and LOCAL physical observations.' \
+    '--speaker-guide checks all three sides, or ONLY one targeted left/right/both side.' \
+    'It asks for separate PLAY per side and LOCAL physical observations.' \
     'If unsure/wrong, RETRY same side once with fresh PLAY, or STOP; no auto-next.' \
     'Requires separate PLAY at a local terminal; very low signal and quiet stream only.' \
     '--show-titles explicitly reveals sanitized private titles on this terminal.' \
@@ -52,12 +53,18 @@ if [ "$#" -ge 1 ] && [ "$1" = "--speaker-check" ]; then
   exec /usr/bin/python3 -m audiohub.local_music --speaker-check
 fi
 
-# Exclusive no-WAV, operator-feedback guide; never auto-play or accept
-# additional flags/folders. The Python TTY/PLAY gate owns all audio.
+# Exclusive no-WAV operator guide; optionally recheck exactly ONE target.
+# There is no default audio, auto-play, combined flag or folder support.
 if [ "$#" -ge 1 ] && [ "$1" = "--speaker-guide" ]; then
-  if [ "$#" -ne 1 ]; then
-    printf '%s\n' 'Speaker guide accepts no extra arguments.' >&2
+  if [ "$#" -gt 2 ]; then
+    printf '%s\n' 'Speaker guide accepts only optional left, right or both.' >&2
     exit 2
+  fi
+  if [ "$#" -eq 2 ]; then
+    case "$2" in
+      left|right|both) ;;
+      *) printf '%s\n' 'Only left, right or both targeted rechecks are supported.' >&2; exit 2 ;;
+    esac
   fi
   if [ "$(/usr/bin/id -u)" -eq 0 ]; then
     printf '%s\n' 'Run as the existing unprivileged Pi operator, not root.' >&2
@@ -65,6 +72,9 @@ if [ "$#" -ge 1 ] && [ "$1" = "--speaker-guide" ]; then
   fi
   PYTHONPATH=/opt/audiohub/src
   export PYTHONPATH
+  if [ "$#" -eq 2 ]; then
+    exec /usr/bin/python3 -m audiohub.local_music --speaker-guide "$2"
+  fi
   exec /usr/bin/python3 -m audiohub.local_music --speaker-guide
 fi
 
