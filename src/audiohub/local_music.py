@@ -466,7 +466,8 @@ def play_speaker_test(*, mode="sequence", spawn=subprocess.Popen,
                 child.stdin.close()
 
 
-def guided_speaker_check(*, side=None, read_line=None, out=print, play=None):
+def guided_speaker_check(*, side=None, read_line=None, out=print,
+                         play=None, preflight=None):
     """Operator-guided physical stereo observations with bounded manual retry.
 
     Every attempt uses the existing private, low-gain player and its fresh
@@ -479,6 +480,22 @@ def guided_speaker_check(*, side=None, read_line=None, out=print, play=None):
             or (hasattr(os, "geteuid") and os.geteuid() == 0)):
         raise PermissionError("Speaker guide requires an unprivileged local TTY")
     modes = ("left", "right", "both") if side is None else (side,)
+    # Do not ask for PLAY or open a player if the private sink/tool is absent.
+    # Reuse the exact same bounded, WAV-free, read-only --speaker-check logic.
+    if preflight is None:
+        preflight = check_first_sound_readiness
+    out("Checking private first-sound prerequisites BEFORE any PLAY.")
+    try:
+        ready = preflight(out=out)
+    except (OSError, ValueError, RuntimeError, TypeError):
+        ready = False
+    if not ready:
+        out("GUIDE STOPPED BEFORE PLAY: first-sound prerequisites unavailable.")
+        out("Fix the named private input/tool; do NOT use default output,")
+        out("boost analog volume, change global routes or skip operator consent.")
+        out("No audible step was attempted; hardware remains UNVERIFIED.")
+        return False
+    out("Preflight passed for a MANUAL try, not physical sound certification.")
     if read_line is None:
         read_line = lambda: sys.stdin.readline(16)
     if play is None:

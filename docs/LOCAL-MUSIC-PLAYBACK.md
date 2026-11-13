@@ -719,6 +719,19 @@ amplifier volume low:
 
     audiohub-music --speaker-guide
 
+The guide now **automatically performs the same read-only first-sound
+preflight as** `audiohub-music --speaker-check`, before even asking for
+the first PLAY. It checks the exact private PipeWire `audiohub.music`
+input and the local `pw-cat` tool. If either prerequisite is missing,
+the guide explains which one needs attention and **ends without
+prompting for PLAY or starting any sound**, never falling back to the
+system-wide default output. This happens for the full guide and
+targeted channel rechecks alike. No WAV files are inspected, even
+on an empty new SD; successful preflight only means READY FOR MANUAL
+TRY, **not** that real speaker sound was independently verified.
+The standalone `--speaker-check` remains useful when the operator
+wants a completely non-playing check outside a trusted TTY.
+
 If an initial test shows a damaged/right-channel cable and you correct
 it, you can **recheck just that physical side** without repeating the
 other sound tests:

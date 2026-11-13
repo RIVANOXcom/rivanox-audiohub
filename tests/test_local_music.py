@@ -849,8 +849,93 @@ class GuidedSpeakerCheckTests(unittest.TestCase):
              mock.patch.object(local_music.sys, "stdout", mock.Mock(isatty=lambda: True)), \
              mock.patch.object(local_music.os, "geteuid", return_value=1000):
             result = local_music.guided_speaker_check(
-                side=side, read_line=feed.__next__, out=output.append, play=player)
+                side=side, read_line=feed.__next__, out=output.append,
+                play=player, preflight=lambda **kw: True)
         return result, called, "\n".join(output)
+
+    def test_guide_auto_preflight_runs_before_first_consent(self):
+        calls, output = [], []
+        def preflight(*, out):
+            calls.append("preflight")
+            out("Private music input: READY")
+            return True
+        def player(*, mode, read_line, out):
+            calls.append("play-" + mode)
+            self.assertEqual(read_line(), "PLAY\n")
+            return True
+        replies = iter(("PLAY\n", "CORRECT\n",
+                        "PLAY\n", "CORRECT\n",
+                        "PLAY\n", "CORRECT\n"))
+        with mock.patch.object(local_music.sys, "stdin", mock.Mock(isatty=lambda: True)), \
+             mock.patch.object(local_music.sys, "stdout", mock.Mock(isatty=lambda: True)), \
+             mock.patch.object(local_music.os, "geteuid", return_value=1000):
+            result = local_music.guided_speaker_check(
+                preflight=preflight, play=player, read_line=replies.__next__,
+                out=output.append)
+        self.assertTrue(result)
+        self.assertEqual(calls, ["preflight", "play-left",
+                                 "play-right", "play-both"])
+        self.assertIn("BEFORE any PLAY", "\n".join(output))
+        self.assertIn("not physical sound certification", "\n".join(output))
+
+    def test_missing_first_sound_prerequisite_stops_no_player_no_play_prompt(self):
+        for side in (None, "left", "right", "both"):
+            with self.subTest(side=side):
+                called, output = [], []
+                def preflight(*, out):
+                    called.append("preflight")
+                    out("Private PipeWire music input: NEEDS ATTENTION")
+                    return False
+                def reader():
+                    called.append("READ")
+                    raise AssertionError("consent read before ready")
+                with mock.patch.object(local_music.sys, "stdin", mock.Mock(isatty=lambda: True)), \
+                     mock.patch.object(local_music.sys, "stdout", mock.Mock(isatty=lambda: True)), \
+                     mock.patch.object(local_music.os, "geteuid", return_value=1000):
+                    self.assertFalse(local_music.guided_speaker_check(
+                        side=side, preflight=preflight,
+                        play=lambda **kw: called.append("PLAYED"),
+                        read_line=reader, out=output.append))
+                self.assertEqual(called, ["preflight"])
+                report = "\n".join(output)
+                self.assertIn("GUIDE STOPPED BEFORE PLAY", report)
+                self.assertIn("No audible step was attempted", report)
+                self.assertIn("NEEDS ATTENTION", report)
+                self.assertIn("UNVERIFIED", report)
+
+    def test_failed_preflight_redacts_private_exception_and_never_plays(self):
+        for exc in (OSError("PRIVATE_MAC_ABC"), ValueError("PRIVATE_WAV_NAME"),
+                    RuntimeError("PRIVATE_HOME_DIR"), TypeError("PRIVATE_ID")):
+            with self.subTest(exc=type(exc).__name__):
+                called, output = [], []
+                with mock.patch.object(local_music.sys, "stdin", mock.Mock(isatty=lambda: True)), \
+                     mock.patch.object(local_music.sys, "stdout", mock.Mock(isatty=lambda: True)), \
+                     mock.patch.object(local_music.os, "geteuid", return_value=1000):
+                    def fail(**kw):
+                        raise exc
+                    self.assertFalse(local_music.guided_speaker_check(
+                        preflight=fail, out=output.append,
+                        play=lambda **kw: called.append("played"),
+                        read_line=lambda: called.append("read")))
+                self.assertEqual(called, [])
+                self.assertNotIn("PRIVATE_", "\n".join(output))
+                self.assertIn("GUIDE STOPPED BEFORE PLAY", "\n".join(output))
+
+    def test_real_readonly_preflight_reused_and_no_wav_library_needed(self):
+        from audiohub import music_library
+        calls, output = [], []
+        with mock.patch.object(local_music.sys, "stdin", mock.Mock(isatty=lambda: True)), \
+             mock.patch.object(local_music.sys, "stdout", mock.Mock(isatty=lambda: True)), \
+             mock.patch.object(local_music.os, "geteuid", return_value=1000), \
+             mock.patch.object(music_library, "discover_library") as library, \
+             mock.patch.object(local_music, "check_first_sound_readiness",
+                               return_value=False) as preflight:
+            self.assertFalse(local_music.guided_speaker_check(
+                side="left", read_line=lambda: calls.append("read"),
+                play=lambda **kw: calls.append("play"), out=output.append))
+        preflight.assert_called_once_with(out=output.append)
+        library.assert_not_called()
+        self.assertEqual(calls, [])
 
     def test_three_separate_consents_and_clear_non_certifying_summary(self):
         result, called, report = self.run_guide([
