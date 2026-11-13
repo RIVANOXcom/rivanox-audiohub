@@ -535,3 +535,16 @@ a read-only combined WAV/preset verification. It never mounts/flashes
 SD cards, replaces existing WAV/profile values, changes owner/wireless
 trust or claims live speaker sound. The original SD is the rollback.
 See [the manual transfer runbook](docs/PRESET-TRANSFER.md).
+
+**Guided old-SD first backup (operator only):** On a separately
+authorized *new spare Pi4 SD*, with the original SD mounted read-only,
+`audiohub-presets-transfer backup-guided ARCHIVE OLD_WAV_DIR OLD_CONFIG_DIR`
+checks WAV conflicts and saved EQ/profile compatibility **before any
+copy**. It then requires separate **COPY** for missing WAVs and
+**SAVE** for a previously absent safe preset snapshot; automatically
+skips identical files on retry, and ends with combined read-only
+`check-backup`. A neutral EQ with no custom profiles is recorded
+safely so the full check can succeed. Nothing mounts, flashes, or
+modifies the original SD. Use the already supported
+`audiohub-presets-transfer restore-guided ARCHIVE` *only after*
+backups are checked. See [SD transfer guide](docs/PRESET-TRANSFER.md).
