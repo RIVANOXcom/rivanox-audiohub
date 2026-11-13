@@ -266,6 +266,8 @@ class MusicLauncherTests(unittest.TestCase):
         help_text = self.shell("--help").stdout
         self.assertIn("audiohub-music --speaker-guide", help_text)
         self.assertIn("LOCAL physical observations", help_text)
+        self.assertIn("RETRY same side once", help_text)
+        self.assertIn("no auto-next", help_text)
         shell = LAUNCHER.read_text(encoding="utf-8")
         self.assertIn('if [ "$#" -ge 1 ] && [ "$1" = "--speaker-guide" ]; then', shell)
         self.assertIn('exec /usr/bin/python3 -m audiohub.local_music --speaker-guide', shell)
