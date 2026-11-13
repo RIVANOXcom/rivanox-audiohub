@@ -7,11 +7,12 @@ set -eu
 usage() {
   printf '%s\n' \
     'AudioHub local music (unverified Pi4 operator alpha)' \
-    'Usage: audiohub-music [ABSOLUTE_PRIVATE_WAV_FOLDER] [--minutes 1..30] [--level quiet|soft|normal] [--show-titles]' \
+    'Usage: audiohub-music [ABSOLUTE_PRIVATE_WAV_FOLDER] [--minutes 1..30] [--level quiet|soft|normal] [--channel both|left|right] [--show-titles]' \
     '       audiohub-music [ABSOLUTE_PRIVATE_WAV_FOLDER] --list [--show-titles]' \
     '       audiohub-music [ABSOLUTE_PRIVATE_WAV_FOLDER] --check' \
     'Default: /home/audiohub/PrivateMusic, 15 minutes, normal stream level (0.20).' \
     'quiet=0.05, soft=0.10, normal=0.20; levels are stream gains, not calibrated speaker loudness.' \
+    '--channel left/right silences only the opposite stereo WAV channel; mono needs both.' \
     '--list only shows valid WAV track numbers and format; it NEVER plays sound.' \
     '--check independently checks WAVs, private music input and player tool, without sound.' \
     '--show-titles explicitly reveals sanitized private titles on this terminal.' \
@@ -32,6 +33,8 @@ minutes=15
 minutes_seen=0
 level=normal
 level_seen=0
+channel=both
+channel_seen=0
 list_only=0
 check_only=0
 titles=0
@@ -58,6 +61,17 @@ while [ "$#" -gt 0 ]; do
         *) printf '%s\n' 'Only quiet, soft or normal stream gain is supported.' >&2; exit 2 ;;
       esac
       level_seen=1
+      shift 2
+      ;;
+    --channel)
+      if [ "$channel_seen" -ne 0 ] || [ "$#" -lt 2 ]; then
+        printf '%s\n' 'Choose one local stereo channel mode.' >&2; exit 2
+      fi
+      case "$2" in
+        both|left|right) channel=$2 ;;
+        *) printf '%s\n' 'Only both, left or right stereo channels are supported.' >&2; exit 2 ;;
+      esac
+      channel_seen=1
       shift 2
       ;;
     --list)
@@ -105,7 +119,8 @@ PYTHONPATH=/opt/audiohub/src
 export PYTHONPATH
 if [ "$check_only" -eq 1 ]; then
   if [ "$list_only" -ne 0 ] || [ "$titles" -ne 0 ] || \
-     [ "$minutes_seen" -ne 0 ] || [ "$level_seen" -ne 0 ]; then
+     [ "$minutes_seen" -ne 0 ] || [ "$level_seen" -ne 0 ] || \
+     [ "$channel_seen" -ne 0 ]; then
     printf '%s\n' 'Use --check with only one optional absolute private WAV folder.' >&2
     exit 2
   fi
@@ -113,6 +128,10 @@ if [ "$check_only" -eq 1 ]; then
   exec /usr/bin/python3 -m audiohub.local_music --check --library "$folder"
 fi
 if [ "$list_only" -eq 1 ]; then
+  if [ "$channel_seen" -ne 0 ]; then
+    printf '%s\n' '--channel applies only to an explicitly confirmed PLAY session.' >&2
+    exit 2
+  fi
   # Anonymous read-only listing without a TTY or any PipeWire process.
   if [ "$titles" -eq 1 ]; then
     exec /usr/bin/python3 -m audiohub.local_music --library "$folder" --show-titles
@@ -124,7 +143,7 @@ fi
 # within the bounded existing music_library.guided_session confirmation gate.
 if [ "$titles" -eq 1 ]; then
   exec /usr/bin/python3 -m audiohub.local_music \
-    --guided --library "$folder" --minutes "$minutes" --level "$level" --show-titles
+    --guided --library "$folder" --minutes "$minutes" --level "$level" --channel "$channel" --show-titles
 fi
 exec /usr/bin/python3 -m audiohub.local_music \
-  --guided --library "$folder" --minutes "$minutes" --level "$level"
+  --guided --library "$folder" --minutes "$minutes" --level "$level" --channel "$channel"
