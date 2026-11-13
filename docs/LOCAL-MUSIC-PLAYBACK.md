@@ -490,3 +490,23 @@ EQ settings, other personal files, operating system or device permissions.
 Keep the old SD and independent media intact; a failed copy can retain
 earlier completed new files. Operator SD swap and physical Edifier
 hardware acceptance are separately approved, not performed by the tool.
+
+## Save music when the original SD has no transfer command
+
+When upgrading from an old Pi4 SD that predates the WAV transfer
+utility, start the separately approved **new test SD** and attach
+the **original SD read-only**. After the operator independently
+mounts the old SD and confirms same UID/private directories, the
+new image's existing installed WAV launcher supports:
+
+    audiohub-music-transfer backup-old /absolute/old-SD/home/audiohub/PrivateMusic /absolute/private/archive
+    audiohub-music-transfer verify-backup-old /absolute/old-SD/home/audiohub/PrivateMusic /absolute/private/archive
+
+The former requires `COPY` before exclusive new verified files; the
+latter is read-only. Interrupted copies use `backup-old OLD_MUSIC
+ARCHIVE --resume` with SHA256 comparison and no overwrite. The
+unprivileged command does not need any code or executable on the
+old SD and never mounts, alters or formats either card. Transfer
+excludes identities, Bluetooth, Wi-Fi, music license grants and EQ.
+For combined sound preset + WAV verification before and after an
+SD change, see [the private SD update guide](PRESET-TRANSFER.md).
