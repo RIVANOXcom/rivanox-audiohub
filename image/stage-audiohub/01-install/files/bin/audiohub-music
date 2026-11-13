@@ -1,7 +1,7 @@
 #!/bin/sh
 # SPDX-License-Identifier: AGPL-3.0-only
 # Operator-only Pi4 local music. No autoplay; only the existing PLAY wizard
-# launches an owned pw-cat process in the existing audiohub.music input.
+# starts an owned local player in the existing audiohub.music input.
 set -eu
 
 usage() {
