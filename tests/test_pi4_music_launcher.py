@@ -291,6 +291,7 @@ class MusicLauncherTests(unittest.TestCase):
     def test_guided_speaker_command_is_exclusive_and_safe_in_launcher(self):
         help_text = self.shell("--help").stdout
         self.assertIn("audiohub-music --speaker-guide [left|right|both]", help_text)
+        self.assertIn("album wizard checks private input/player FIRST", help_text)
         self.assertIn("targeted left/right/both side", help_text)
         self.assertIn("FIRST checks private sink and playback tool", help_text)
         self.assertIn("refuses all PLAY unless both", help_text)
