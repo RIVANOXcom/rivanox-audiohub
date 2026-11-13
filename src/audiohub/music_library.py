@@ -283,8 +283,8 @@ def guided_session(folder, *, max_minutes=15, show_titles=False,
             + str(details["total_duration_ms"] // 1000)
             + " s. Stream level " + level.upper() +
             "; channel " + channel.upper() +
-            " (one-sided mode silences only the opposite stereo PCM channel). "
-            "Not calibrated speaker loudness. Verify a low physical speaker volume.")
+            " (one-sided mode silences only the opposite stereo PCM channel; "
+            "not calibrated speaker loudness). Verify a low physical speaker volume.")
         out("Type exact uppercase PLAY then Enter to play; CHANGE to reselect."
             " Anything else cancels; no automatic playback:")
         answer = read_line()
