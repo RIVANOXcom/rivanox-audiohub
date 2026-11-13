@@ -126,6 +126,19 @@ def _copy_exclusive(source_fd, target_fd, item):
                 copied += len(block)
             if os.read(input_fd, 1):
                 raise OSError("Source file grew while copying")
+            # Re-read the bounded source after the copy: refuse if an operator
+            # edited its bytes concurrently while retaining size and inode.
+            os.lseek(input_fd, 0, os.SEEK_SET)
+            source_digest = hashlib.sha256()
+            check_size = 0
+            while check_size < size:
+                check = os.read(input_fd, min(CHUNK_SIZE, size - check_size))
+                if not check:
+                    raise OSError("Source file changed while copying")
+                source_digest.update(check)
+                check_size += len(check)
+            if source_digest.digest() != digest.digest():
+                raise OSError("Source WAV changed while copying")
             os.fsync(output_fd)
         finally:
             os.close(output_fd)
