@@ -292,7 +292,7 @@ class MusicLauncherTests(unittest.TestCase):
         help_text = self.shell("--help").stdout
         self.assertIn("audiohub-music --speaker-guide [left|right|both]", help_text)
         self.assertIn("targeted left/right/both side", help_text)
-        self.assertIn("FIRST checks private sink and pw-cat", help_text)
+        self.assertIn("FIRST checks private sink and playback tool", help_text)
         self.assertIn("refuses all PLAY unless both", help_text)
         self.assertIn("LOCAL physical observations", help_text)
         self.assertIn("RETRY same side once", help_text)
