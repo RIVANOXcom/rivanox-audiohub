@@ -71,6 +71,164 @@ class PresetTransferTests(unittest.TestCase):
             profile_path=self.new_profiles, out=self.logs.append,
             require_terminal=False)
 
+    def plan_merge(self):
+        return preset_transfer.plan_profiles(
+            str(self.media), profile_path=self.new_profiles,
+            out=self.logs.append, require_terminal=False)
+
+    def merge(self, allow=True):
+        return preset_transfer.merge_profiles(
+            str(self.media), profile_path=self.new_profiles,
+            confirm=lambda: allow, out=self.logs.append, require_terminal=False)
+
+    def verify_merge(self):
+        return preset_transfer.verify_merged(
+            str(self.media), settings_path=self.new_settings,
+            profile_path=self.new_profiles, out=self.logs.append,
+            require_terminal=False)
+
+    def test_profile_merge_preserves_existing_catalog_and_active_volume(self):
+        self.assertTrue(self.export())
+        mixer_control.save_volume_profile(
+            "new-local", 9, 15, 20, 25, path=self.new_profiles, confirmed=True)
+        existing = mixer_control.list_volume_profiles(path=self.new_profiles)["profiles"]
+        self.assertEqual(self.plan_merge()["new"], 1)
+        self.assertFalse(self.new_settings.exists())
+        self.assertTrue(self.merge())
+        result = mixer_control.list_volume_profiles(path=self.new_profiles)["profiles"]
+        self.assertEqual(result["new-local"], existing["new-local"])
+        self.assertEqual(result["private-one"]["master"], 20)
+        self.assertFalse(self.new_settings.exists())
+        self.assertTrue(self.import_eq())
+        self.assertTrue(self.verify_merge())
+        with self.assertRaises(ValueError):
+            self.verify()  # The old exact-mode refuses extra local profiles.
+        self.assertEqual(mixer_control.show(path=self.new_settings)["master"], 70)
+        self.assertNotIn("new-local", "\n".join(self.logs))
+        self.assertNotIn("private-one", "\n".join(self.logs))
+
+    def test_merge_works_into_missing_catalog_and_is_repeatable_without_writes(self):
+        self.assertTrue(self.export())
+        self.assertEqual(self.plan_merge()["new"], 1)
+        self.assertFalse(self.new.exists())
+        self.assertTrue(self.merge())
+        before = self.new_profiles.read_bytes()
+        inode = self.new_profiles.stat().st_ino
+        self.assertTrue(self.merge(allow=False))
+        self.assertEqual(self.new_profiles.read_bytes(), before)
+        self.assertEqual(self.new_profiles.stat().st_ino, inode)
+        self.assertEqual(self.plan_merge()["identical"], 1)
+
+    def test_merge_matching_existing_profile_skips_without_replacing_file(self):
+        self.assertTrue(self.export())
+        mixer_control.save_volume_profile(
+            "private-one", 20, 38, 31, 23,
+            path=self.new_profiles, confirmed=True)
+        before = self.new_profiles.read_bytes()
+        inode = self.new_profiles.stat().st_ino
+        self.assertTrue(self.plan_merge()["can_merge"])
+        self.assertTrue(self.merge())
+        self.assertEqual(self.new_profiles.read_bytes(), before)
+        self.assertEqual(self.new_profiles.stat().st_ino, inode)
+
+    def test_merge_conflicting_profile_never_replaces_existing_value(self):
+        self.assertTrue(self.export())
+        mixer_control.save_volume_profile(
+            "private-one", 90, 38, 31, 23,
+            path=self.new_profiles, confirmed=True)
+        previous = self.new_profiles.read_bytes()
+        plan = self.plan_merge()
+        self.assertEqual(plan["conflicts"], 1)
+        self.assertFalse(plan["can_merge"])
+        with self.assertRaises(ValueError):
+            self.merge()
+        self.assertEqual(self.new_profiles.read_bytes(), previous)
+        self.assertNotIn("private-one", "\n".join(self.logs))
+
+    def test_merge_refuses_limit_overflow_before_any_write(self):
+        self.assertTrue(self.export())
+        for index in range(mixer_control.MAX_CUSTOM_PROFILES):
+            mixer_control.save_volume_profile(
+                "new-" + str(index), 10, 20, 30, 40,
+                path=self.new_profiles, confirmed=True)
+        before = self.new_profiles.read_bytes()
+        plan = self.plan_merge()
+        self.assertEqual(plan["resulting"], mixer_control.MAX_CUSTOM_PROFILES + 1)
+        self.assertFalse(plan["can_merge"])
+        with self.assertRaises(ValueError):
+            self.merge()
+        self.assertEqual(self.new_profiles.read_bytes(), before)
+
+    def test_cancel_merge_makes_no_new_catalog_or_active_request(self):
+        self.assertTrue(self.export())
+        self.assertFalse(self.merge(allow=False))
+        self.assertFalse(self.new.exists())
+        self.assertEqual(list(self.media.iterdir()),
+                         [self.media / preset_transfer.FILENAME])
+
+    def test_merge_rejects_modified_archive_after_preview_and_confirmation(self):
+        self.assertTrue(self.export())
+        source_file = self.media / preset_transfer.FILENAME
+        original = source_file.read_bytes()
+        def mutate():
+            source_file.write_bytes(original + b" ")
+            source_file.chmod(0o600)
+            return True
+        with self.assertRaises(OSError):
+            preset_transfer.merge_profiles(
+                str(self.media), profile_path=self.new_profiles,
+                confirm=mutate, out=self.logs.append, require_terminal=False)
+        self.assertFalse(self.new.exists())
+
+    def test_verify_merge_refuses_missing_archive_profiles_or_different_eq(self):
+        self.assertTrue(self.export())
+        self.assertTrue(self.merge())
+        with self.assertRaises(ValueError):
+            self.verify_merge()  # EQ not yet restored.
+        self.assertTrue(self.import_eq())
+        self.assertTrue(self.verify_merge())
+        mixer_control.change({"music": {"bass": 0}},
+                             path=self.new_settings, confirmed=True)
+        with self.assertRaises(ValueError):
+            self.verify_merge()
+
+    def test_merge_rejects_root_and_non_tty_before_filesystem_work(self):
+        self.assertTrue(self.export())
+        with mock.patch.object(preset_transfer.os, "geteuid", return_value=0):
+            with self.assertRaises(PermissionError):
+                self.plan_merge()
+            with self.assertRaises(PermissionError):
+                self.merge()
+        with mock.patch.object(preset_transfer.sys.stdin, "isatty", return_value=False):
+            with self.assertRaises(PermissionError):
+                preset_transfer.merge_profiles(
+                    str(self.media), profile_path=self.new_profiles)
+        self.assertFalse(self.new.exists())
+
+    def test_new_cli_dispatch_and_installed_launcher_uses_real_verbs(self):
+        with mock.patch.object(preset_transfer, "plan_profiles",
+                               return_value={"can_merge": True}) as fn:
+            self.assertEqual(preset_transfer.main(
+                ["plan-profiles", str(self.media)]), 0)
+            self.assertEqual(fn.call_args.args, (str(self.media),))
+        with mock.patch.object(preset_transfer, "merge_profiles",
+                               return_value=True) as fn:
+            self.assertEqual(preset_transfer.main(
+                ["merge-profiles", str(self.media)]), 0)
+            self.assertEqual(fn.call_args.args, (str(self.media),))
+        with mock.patch.object(preset_transfer, "verify_merged",
+                               return_value=True) as fn:
+            self.assertEqual(preset_transfer.main(
+                ["verify-merged", str(self.media)]), 0)
+            self.assertEqual(fn.call_args.args, (str(self.media),))
+        wrapper = (Path(__file__).resolve().parents[1] /
+                   "image/stage-audiohub/01-install/files/bin/audiohub-presets-transfer")
+        code = wrapper.read_text()
+        for action in ("plan-profiles", "merge-profiles", "verify-merged"):
+            self.assertIn(action, code)
+        self.assertIn('exec /usr/bin/python3 -m audiohub.preset_transfer "$@"',
+                      code)
+
     def test_export_restore_verify_preserves_active_volume_and_never_moves_owner_data(self):
         saved_settings = self.old_settings.read_bytes()
         saved_profiles = self.old_profiles.read_bytes()

@@ -495,3 +495,13 @@ stage/restart or physical audio verification happens automatically.
 to the already-tested Python implementation, rather than rejecting
 those arguments at the shell entrypoint. A native chroot smoke verifies
 these installed nonplaying entrypoints.
+
+**Safe profile migration onto an already configured Pi4:**
+`audiohub-presets-transfer plan-profiles PATH` previews conflicts,
+matching entries, missing entries and the eight-profile limit without
+showing private names or writing anything. With explicit `MERGE`,
+`merge-profiles PATH` preserves all existing custom volume profiles
+and adds only new ones; matching profiles are skipped, conflicting
+values refuse without overwrite. `verify-merged PATH` checks saved
+EQ and every archived profile while allowing extra local profiles.
+See [the private update guide](docs/PRESET-TRANSFER.md).

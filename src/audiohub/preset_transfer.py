@@ -274,6 +274,146 @@ def restore_profiles(external, *, profile_path=mixer_control.PROFILE_PATH,
         os.close(dirfd)
 
 
+def _profile_merge_delta(incoming, existing):
+    """Determine a non-destructive union; do not expose private profile names."""
+    if type(incoming) is not dict or type(existing) is not dict:
+        raise ValueError("Private profile catalogs must be objects")
+    if not incoming:
+        raise ValueError("Archive has no custom volume profiles to merge")
+    identical = sum(name in existing and existing[name] == levels
+                    for name, levels in incoming.items())
+    conflicts = sum(name in existing and existing[name] != levels
+                    for name, levels in incoming.items())
+    added = sum(name not in existing for name in incoming)
+    count = len(existing) + added
+    return {
+        "existing": len(existing), "archived": len(incoming),
+        "identical": identical, "conflicts": conflicts, "new": added,
+        "resulting": count, "limit": mixer_control.MAX_CUSTOM_PROFILES,
+        "can_merge": conflicts == 0 and count <= mixer_control.MAX_CUSTOM_PROFILES,
+    }
+
+
+def _merge_preflight(external, profile_path):
+    """Preview private archive and validated target catalog without writes."""
+    path = Path(profile_path)
+    if path.name != "volume-profiles.json":
+        raise ValueError("Invalid local volume profile catalog path")
+    data, digest = _load(external)
+    existing = mixer_control.list_volume_profiles(path=path)["profiles"]
+    return data, digest, _profile_merge_delta(data["profiles"], existing)
+
+
+def plan_profiles(external, *, profile_path=mixer_control.PROFILE_PATH,
+                  out=print, require_terminal=True):
+    """Read-only non-sensitive profile merge preview, no lock or file creation."""
+    _guard(require_terminal=require_terminal)
+    _, digest, plan = _merge_preflight(external, profile_path)
+    out("Private profile merge preview: " + str(plan["existing"]) +
+        " existing, " + str(plan["archived"]) + " archived, " +
+        str(plan["identical"]) + " identical, " +
+        str(plan["new"]) + " new, " + str(plan["conflicts"]) +
+        " conflicting; resulting " + str(plan["resulting"]) +
+        "/" + str(plan["limit"]) + ".")
+    out("Result: " + ("safe to merge" if plan["can_merge"]
+                      else "MERGE REFUSED: resolve conflicting names or capacity manually") +
+        "; archive SHA256 " + digest + ". Read-only; no audio changes.")
+    return plan
+
+
+def merge_profiles(external, *, profile_path=mixer_control.PROFILE_PATH,
+                   confirm=None, out=print, require_terminal=True):
+    """Add only missing INACTIVE profiles; preserve every existing name/value.
+
+    Does not replace any pre-existing profile value, even when archive and
+    target share a name. Under the existing private mixer-writer lock, the
+    entire candidate catalog is validated again after explicit confirmation.
+    """
+    _guard(require_terminal=require_terminal)
+    profile_path = Path(profile_path)
+    data, digest, plan = _merge_preflight(external, profile_path)
+    if not plan["can_merge"]:
+        raise ValueError("Merge blocked: conflicting profile or eight-profile limit")
+    if not plan["new"]:
+        out("All archived volume profiles already match; nothing written.")
+        return True
+    out("Private profile merge preview: " + str(plan["identical"]) +
+        " identical and " + str(plan["new"]) + " missing; existing " +
+        str(plan["existing"]) + " unchanged, result " +
+        str(plan["resulting"]) + "/" + str(plan["limit"]) + ".")
+    out("Only inactive saved profiles will be added; live volumes, EQ and mutes stay unchanged.")
+    if not _confirm("MERGE", confirm):
+        out("Profile merge cancelled; no new profiles saved.")
+        return False
+    after, after_digest = _load(external)
+    if digest != after_digest or data != after:
+        raise OSError("Source profile archive changed after confirmation")
+    dirfd = _private_parent_fd(profile_path, create=True)
+    lockfd = None
+    try:
+        lockfd = os.open(mixer_control.LOCK_NAME, os.O_RDWR | os.O_CREAT
+                         | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600, dir_fd=dirfd)
+        meta = os.fstat(lockfd)
+        if (not stat.S_ISREG(meta.st_mode) or meta.st_uid != os.geteuid()
+                or meta.st_nlink != 1 or meta.st_mode & 0o077):
+            raise PermissionError("Unsafe private profile writer lock")
+        fcntl.flock(lockfd, fcntl.LOCK_EX)
+        catalog, revision = mixer_control._profile_catalog_with_revision(
+            profile_path, dirfd)
+        latest = _profile_merge_delta(data["profiles"], catalog["profiles"])
+        if not latest["can_merge"]:
+            raise ValueError("Local profiles changed or conflict; merge cancelled")
+        if not latest["new"]:
+            out("All saved profiles now match; nothing written.")
+            return True
+        merged = dict(catalog["profiles"])
+        for name, levels in data["profiles"].items():
+            if name not in merged:
+                merged[name] = levels
+        value = {"version": 1, "profiles": dict(sorted(merged.items()))}
+        # A competing editor, even one not honoring our writer lock, must
+        # not silently invalidate the catalog version seen in this review.
+        if mixer_control._profile_catalog_with_revision(
+                profile_path, dirfd)[1] != revision:
+            raise OSError("Local private profiles changed during merge")
+        if mixer_control._state_identity(profile_path, dirfd) is None:
+            raw = (json.dumps(value, sort_keys=True, separators=(",", ":")) +
+                   "\n").encode("ascii")
+            _publish_exclusive(dirfd, profile_path.name, raw)
+        else:
+            from .runtime import atomic_json
+            atomic_json(profile_path, value)
+        out("Merged " + str(latest["new"]) +
+            " inactive profiles; all earlier names/values preserved." +
+            " No live volume, mute or EQ changes.")
+        return True
+    finally:
+        if lockfd is not None:
+            os.close(lockfd)
+        os.close(dirfd)
+
+
+def verify_merged(external, *, settings_path=SETTINGS,
+                  profile_path=mixer_control.PROFILE_PATH, out=print,
+                  require_terminal=True):
+    """Read-only: every archived profile and EQ band matches; extras allowed."""
+    _guard(require_terminal=require_terminal)
+    data, digest = _load(external)
+    state, _ = mixer_control._preview_snapshot(path=settings_path)
+    saved = mixer_control.list_volume_profiles(path=profile_path)["profiles"]
+    if (any(saved.get(name) != values
+            for name, values in data["profiles"].items())
+            or any(state[slot][band] != data["eq"][slot][band]
+                   for slot in CHANNELS for band in EQ_BANDS)):
+        raise ValueError("An archived profile or EQ band is missing or differs")
+    out("All " + str(len(data["profiles"])) +
+        " archived inactive profiles and nine EQ bands match; " +
+        str(len(saved) - len(data["profiles"])) +
+        " additional local profiles preserved. SHA256 " + digest +
+        ". Read-only; no physical audio verified.")
+    return True
+
+
 def restore_eq(external, *, settings_path=SETTINGS, confirm=None, out=print,
                require_terminal=True):
     """Save only EQ bands to initially neutral settings; never restart PipeWire."""
@@ -323,14 +463,16 @@ def main(argv=None):
     args = list(sys.argv[1:] if argv is None else argv)
     if args in (["--help"], ["-h"]):
         print("Offline Pi4 non-secret audio preset transfer, no owner migration.")
-        print("Usage: audiohub-presets-transfer export|inspect|restore-profiles|restore-eq|verify ABSOLUTE_PRIVATE_FOLDER")
+        print("Usage: audiohub-presets-transfer export|inspect|plan-profiles|restore-profiles|merge-profiles|restore-eq|verify|verify-merged ABSOLUTE_PRIVATE_FOLDER")
         print("       audiohub-presets-transfer export-old OLD_SD_PRIVATE_CONFIG_DIR ABSOLUTE_PRIVATE_FOLDER")
-        print("Export SAVE; inactive profiles RESTORE; saved EQ APPLY-EQ to neutral EQ only.")
+        print("Export SAVE; strict restore RESTORE; conflict-free profile merge MERGE.")
+        print("Saved EQ APPLY-EQ to neutral EQ only; verify-merged permits extra local profiles.")
         print("Never imports keys, Bluetooth trust, Wi-Fi, IDs, live volume/mutes or OS.")
         return 0
     old_sd_mode = len(args) == 3 and args[0] == "export-old"
     if not (old_sd_mode or (len(args) == 2 and args[0] in (
-            "export", "inspect", "restore-profiles", "restore-eq", "verify"))):
+            "export", "inspect", "plan-profiles", "restore-profiles",
+            "merge-profiles", "restore-eq", "verify", "verify-merged"))):
         print("Choose an explicit preset action and an absolute private folder.")
         return 2
     try:
@@ -344,8 +486,11 @@ def main(argv=None):
                 profile_path=old_dir / "volume-profiles.json")
         else:
             operation = {"export": export_presets, "inspect": inspect,
-                         "restore-profiles": restore_profiles, "restore-eq": restore_eq,
-                         "verify": verify}[args[0]]
+                         "plan-profiles": plan_profiles,
+                         "restore-profiles": restore_profiles,
+                         "merge-profiles": merge_profiles,
+                         "restore-eq": restore_eq,
+                         "verify": verify, "verify-merged": verify_merged}[args[0]]
             result = operation(args[1])
         return 0 if result is not False else 1
     except (OSError, ValueError, TypeError, UnicodeError,

@@ -87,3 +87,49 @@ transfer authentication, pairing or secrets. Production release
 remains NO-GO pending physical Pi4/Edifier stereo, 2 BT + LAN and
 24-hour tests, secure ownership, legal review, durable source/image
 storage and explicit owner/CEO acceptance.
+
+## Preserve profiles already configured on the replacement SD
+
+The original `restore-profiles` remains **strict**: it refuses any
+existing local profile catalog. This protects a freshly configured
+replacement SD, but can block a migration when it already contains
+user-created profiles. Use the separately reviewed **merge** path:
+
+    audiohub-presets-transfer plan-profiles /absolute/external/private-folder
+    audiohub-presets-transfer merge-profiles /absolute/external/private-folder
+
+`plan-profiles` is **read-only** and displays counts (never personal
+profile names): current profiles, archived profiles, identical names
+with equal values, missing profiles, conflicting names with **different**
+values, and the resulting count versus the existing eight-profile
+maximum. If any name conflicts with a different value or the union
+exceeds the limit, the plan refuses; do not delete or rename files
+automatically to bypass it. Keep both source and destination intact
+and resolve the naming/capacity decision separately with the owner.
+
+`merge-profiles` refuses the same conflicts before asking anything.
+It skips matching profiles, then requires exact uppercase **MERGE**
+to add only missing inactive profiles in an atomic private catalog
+update under the existing mixer writer lock. All pre-existing
+profile names and values remain unchanged. No current mixer level,
+mute, EQ, source route, access credential, device binding or music
+is applied, exported or overwritten. Running the operation again
+when all saved profiles match creates **no new catalog generation**.
+If the archive or catalog changes during confirmation, the operation
+refuses safely rather than applying an old preview.
+
+After separately restoring saved EQ from neutral state with the
+existing `restore-eq` consent, compare the merged state:
+
+    audiohub-presets-transfer verify-merged /absolute/external/private-folder
+
+`verify-merged` is read-only. It requires **every archived** profile
+to match its local name and values, plus all nine saved EQ bands;
+**extra locally created profiles are allowed and retained**. The
+older `verify` is intentionally stricter and requires exact equality
+of the whole catalog, so `verify` can refuse a successful non-destructive
+merge without implying data loss. Neither check measures audible sound.
+
+Retain the archive and original SD until all separately authorized
+hardware tests and operator acceptance are complete. These are
+unverified, operator-only alpha commands; not an in-place OS update.

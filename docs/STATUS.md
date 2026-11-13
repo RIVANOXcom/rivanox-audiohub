@@ -164,3 +164,16 @@ are neutral with explicit approval and revision guard, and verify
 saved EQ/profile parity. No secrets, identities, radio trust, routes,
 live volume/mutes, network, automatic PipeWire restarts or OS updates.
 Native Pi4 hardware sound and official release remain unverified.
+
+### Conflict-free inactive volume profile migration
+
+The offline operator-only private preset utility now offers a
+read-only `plan-profiles` preview, human-confirmed `merge-profiles`
+and read-only `verify-merged`. This removes the previous unusable
+migration case where the replacement SD already had an existing
+catalog: matches are skipped and absent profiles are added without
+changing prior names/values or any live audio. Differing same-name
+profiles and exceeding the eight-profile limit fail closed.
+Default `restore-profiles` remains strict non-overwriting;
+`verify-merged` permits extra local profile records without claiming
+an exact image mirror, live EQ staging or real speaker verification.
