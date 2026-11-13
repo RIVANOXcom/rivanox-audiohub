@@ -2,6 +2,19 @@
 
 **Status:** Alpha / pre-release. No verified ready-to-flash Pi 4 image has been published. Native ARM64 test-only SD images have been built and uploaded to GitHub Actions (latest prior-to-renaming run 42057278883; 159 tests, 48 rootfs checks). **No real Pi4/Edifier playback, ownership security or product-ready Release has been verified.**
 
+## Guided first physical stereo observation (unverified alpha)
+
+The installed Pi4 `audiohub-music --speaker-guide` now guides a local
+unprivileged operator through LEFT, RIGHT, BOTH independent original
+short stereo tests without a WAV file. Each stage needs fresh uppercase
+PLAY consent and a physical CORRECT/WRONG/SILENT/UNSURE observation.
+The anonymous observations are displayed only on that local terminal
+and are not persisted or promoted to hardware certification. If any
+speaker fails, the guide suggests physical USB/Edifier inspection
+rather than changing global audio routes or volume. Actual hardware
+and production release remain NO-GO; see
+[local stereo operator guide](LOCAL-MUSIC-PLAYBACK.md).
+
 ## Manually controlled offline local music source
 
 A new unprivileged Pi4 command plays validated user-provided PCM WAV

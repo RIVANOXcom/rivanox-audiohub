@@ -262,6 +262,34 @@ class MusicLauncherTests(unittest.TestCase):
         self.assertIn('test "$speaker_noninteractive_status" -eq 2', text)
         self.assertIn("Local player unavailable or stopped", text)
 
+    def test_guided_speaker_command_is_exclusive_and_safe_in_launcher(self):
+        help_text = self.shell("--help").stdout
+        self.assertIn("audiohub-music --speaker-guide", help_text)
+        self.assertIn("LOCAL physical observations", help_text)
+        shell = LAUNCHER.read_text(encoding="utf-8")
+        self.assertIn('if [ "$#" -ge 1 ] && [ "$1" = "--speaker-guide" ]; then', shell)
+        self.assertIn('exec /usr/bin/python3 -m audiohub.local_music --speaker-guide', shell)
+        for args in (("--speaker-guide", "--speaker-guide"),
+                     ("--speaker-guide", "--speaker-test"),
+                     ("--speaker-guide", "--level", "quiet"),
+                     ("--speaker-guide", "--check"),
+                     ("--speaker-guide", "/home/audiohub/PrivateMusic"),
+                     ("/home/audiohub/PrivateMusic", "--speaker-guide")):
+            with self.subTest(args=args):
+                result = self.shell(*args)
+                self.assertEqual(result.returncode, 2, result.stderr)
+                self.assertNotIn("Playing track", result.stdout)
+        self.assertNotIn("pw-cat", shell)
+        self.assertNotIn("sudo ", shell)
+        self.assertNotIn("eval ", shell)
+
+    def test_native_chroot_guided_speaker_never_starts_without_tty(self):
+        native = STAGE.read_text(encoding="utf-8")
+        self.assertIn("speaker_guide_noninteractive_output=", native)
+        self.assertIn("/usr/local/bin/audiohub-music --speaker-guide", native)
+        self.assertIn('test "$speaker_guide_noninteractive_status" -eq 2', native)
+        self.assertIn("Local player unavailable or stopped", native)
+
     def test_builder_installs_real_command_and_prepares_private_folder(self):
         script = STAGE.read_text(encoding="utf-8")
         self.assertIn('install -m755 files/bin/audiohub-music', script)

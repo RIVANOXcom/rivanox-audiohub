@@ -11,6 +11,7 @@ usage() {
     '       audiohub-music [ABSOLUTE_PRIVATE_WAV_FOLDER] --list [--show-titles]' \
     '       audiohub-music [ABSOLUTE_PRIVATE_WAV_FOLDER] --check' \
     '       audiohub-music --speaker-test [left|right|both]' \
+    '       audiohub-music --speaker-guide' \
     'Default: /home/audiohub/PrivateMusic, 15 minutes, normal stream level (0.20).' \
     'quiet=0.05, soft=0.10, normal=0.20; levels are stream gains, not calibrated speaker loudness.' \
     '--channel left/right silences only the opposite stereo WAV channel; mono needs both.' \
@@ -18,6 +19,7 @@ usage() {
     '--check independently checks WAVs, private music input and player tool, without sound.' \
     '--speaker-test creates a brief original 2.1s LEFT/RIGHT/BOTH signal in RAM. No WAV required.' \
     'Optional left, right or both replays that channel 3 times with short silence gaps.' \
+    '--speaker-guide asks for separate PLAY at each side and LOCAL physical observations.' \
     'Requires separate PLAY at a local terminal; very low signal and quiet stream only.' \
     '--show-titles explicitly reveals sanitized private titles on this terminal.' \
     'The playback wizard shows an anonymous list; select numbers, ALL or SHUFFLE.' \
@@ -29,6 +31,22 @@ usage() {
 if [ "$#" -eq 1 ] && { [ "$1" = "-h" ] || [ "$1" = "--help" ]; }; then
   usage
   exit 0
+fi
+
+# Exclusive no-WAV, operator-feedback guide; never auto-play or accept
+# additional flags/folders. The Python TTY/PLAY gate owns all audio.
+if [ "$#" -ge 1 ] && [ "$1" = "--speaker-guide" ]; then
+  if [ "$#" -ne 1 ]; then
+    printf '%s\n' 'Speaker guide accepts no extra arguments.' >&2
+    exit 2
+  fi
+  if [ "$(/usr/bin/id -u)" -eq 0 ]; then
+    printf '%s\n' 'Run as the existing unprivileged Pi operator, not root.' >&2
+    exit 2
+  fi
+  PYTHONPATH=/opt/audiohub/src
+  export PYTHONPATH
+  exec /usr/bin/python3 -m audiohub.local_music --speaker-guide
 fi
 
 # Separate exclusive sound test: there is never implicit playback, no WAV,

@@ -80,6 +80,15 @@ set -e
 test "$speaker_side_noninteractive_status" -eq 2
 case "$speaker_side_noninteractive_output" in *"Local player unavailable or stopped"*) ;; *) exit 1 ;; esac
 
+# The installed guided speaker check must also refuse native unattended
+# chroot execution before any sink inspection or audible player subprocess.
+set +e
+speaker_guide_noninteractive_output="$(runuser -u audiohub -- /usr/local/bin/audiohub-music --speaker-guide 2>&1)"
+speaker_guide_noninteractive_status="$?"
+set -e
+test "$speaker_guide_noninteractive_status" -eq 2
+case "$speaker_guide_noninteractive_output" in *"Local player unavailable or stopped"*) ;; *) exit 1 ;; esac
+
 # Real installed non-playing --check is a multi-prerequisite operator status.
 # The fresh image contains no WAVs, so readiness must refuse with safe guidance.
 # It must never start an audio session, reconfigure PipeWire or expose titles.

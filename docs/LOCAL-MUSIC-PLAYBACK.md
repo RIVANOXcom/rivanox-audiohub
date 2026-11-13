@@ -710,3 +710,41 @@ certifies the analog output, two-Bluetooth-plus-LAN mixing,
 24-hour stability, Wi-Fi owner pairing or production. The original
 SD is retained for separate manual rollback; no SD operation or
 persistent test result is triggered by this command.
+
+## Guided first stereo observations, without any WAV file
+
+On a separately authorized **spare Pi4 test SD**, use the existing
+unprivileged local console (not root) and keep the physical Edifier
+amplifier volume low:
+
+    audiohub-music --speaker-guide
+
+The guide runs the existing deterministic 2.1-second original 440 Hz
+sample in three **separate** steps: LEFT-only, RIGHT-only, BOTH.
+Each step explains exactly what physical speaker(s) should be heard
+and requires a **new exact uppercase PLAY and Enter** on the trusted
+local terminal. The previous command's consent never carries forward.
+After each stream, enter **CORRECT**, **WRONG**, **SILENT** or **UNSURE**
+in uppercase plus Enter based only on what was actually heard.
+
+The guide then summarizes the **operator's self-reported observations**
+on screen. They are never saved to SD, uploaded, exposed to a remote
+interface or treated as hardware certification. If any side is reported
+wrong, silent or uncertain, it highlights the need to check physical
+USB/audio connections rather than boosting output or changing source
+routing automatically. Invalid feedback, EOF, Ctrl+C or cancelling PLAY
+ends the guide without advancing through further channels.
+
+There is **no automatic hardware PASS** even if every step is reported
+CORRECT. Output routing, safe analog loudness/SPL, Edifier hardware,
+simultaneous two-Bluetooth-plus-LAN mixing, owner pairing and 24-hour
+stability remain unverified. The guide only uses the existing private
+`audiohub.music` sink, fixed low PCM peak and 0.05 quiet per-player
+gain, no default-sound fallback, and the existing bounded process
+cleanup; it writes no WAV, configuration, logs, pairing, network state
+or other source settings. No music library, internet or licensed
+media file is needed.
+
+The command is exclusive: extra flags, folders or WAVs are rejected.
+To cancel, do not enter PLAY; existing manual rollback is reinserting
+the untouched original SD **only after separate operator approval**.

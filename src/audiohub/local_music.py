@@ -422,11 +422,66 @@ def play_speaker_test(*, mode="sequence", spawn=subprocess.Popen,
                 child.stdin.close()
 
 
+def guided_speaker_check(*, read_line=None, out=print, play=None):
+    """Three separate operator-consented physical stereo observations.
+
+    Each selected channel delegates to the existing low-gain player gate:
+    a NEW exact PLAY is mandatory before every short test. Observations
+    exist only in memory and never certify physical hardware.
+    """
+    if (not sys.stdin.isatty() or not sys.stdout.isatty()
+            or (hasattr(os, "geteuid") and os.geteuid() == 0)):
+        raise PermissionError("Speaker guide requires an unprivileged local TTY")
+    if read_line is None:
+        read_line = lambda: sys.stdin.readline(16)
+    if play is None:
+        play = play_speaker_test
+    out("GUIDED STEREO CHECK: LEFT, RIGHT, then BOTH; three separate")
+    out("2.1 s original low-gain tests. NO WAV needed and NO settings saved.")
+    out("Set the physical amplifier LOW. Each step needs a fresh exact PLAY.")
+    out("After each step, report CORRECT, WRONG, SILENT or UNSURE.")
+    out("No observation can certify physical output or a production release.")
+    observations = []
+    choices = {"CORRECT\n": "CORRECT", "WRONG\n": "WRONG",
+               "SILENT\n": "SILENT", "UNSURE\n": "UNSURE",
+               "CORRECT\r\n": "CORRECT", "WRONG\r\n": "WRONG",
+               "SILENT\r\n": "SILENT", "UNSURE\r\n": "UNSURE"}
+    for number, mode in enumerate(("left", "right", "both"), 1):
+        expected = "both physical speakers" if mode == "both" else (
+            "only the " + mode.upper() + " physical speaker")
+        out("STEP " + str(number) + "/3: expect " + expected + ".")
+        if not play(mode=mode, read_line=read_line, out=out):
+            out("Guide cancelled before completing all stages; no hardware verdict.")
+            return False
+        out("What was physically heard for " + mode.upper() +
+            "? Type exact CORRECT, WRONG, SILENT or UNSURE then Enter.")
+        answer = read_line()
+        if answer not in choices:
+            out("Guide cancelled: unknown observation. No inferred hardware PASS.")
+            return False
+        observations.append((mode.upper(), choices[answer]))
+    out("LOCAL OPERATOR OBSERVATIONS (not stored or independently verified):")
+    for mode, observation in observations:
+        out(mode + ": " + observation)
+    if any(result != "CORRECT" for _, result in observations):
+        out("NEEDS PHYSICAL REVIEW: stop if unexpected. Check USB/audio output")
+        out("and Edifier connections with power/volume safely controlled.")
+        out("Do not auto-raise volume or change other source routing.")
+        out("Hardware remains UNVERIFIED; no production/release GO.")
+        return False
+    out("Expected channels were REPORTED by the operator only.")
+    out("Hardware, safe analog SPL and multi-source mixing remain UNVERIFIED.")
+    out("This is not a certification or production/release GO.")
+    return True
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("wav", nargs="*", help="1–8 absolute local 16-bit PCM WAV files")
     parser.add_argument("--library", metavar="FOLDER",
                         help="Browse a private local WAV folder without playback")
+    parser.add_argument("--speaker-guide", action="store_true",
+                        help="Three-stage speaker observation; fresh PLAY for each stage")
     parser.add_argument("--speaker-test", action="store_true",
                         help="Local 2.1s stereo pattern or repeated left/right/both; needs TTY PLAY")
     parser.add_argument("--check", action="store_true",
@@ -451,6 +506,10 @@ def main(argv=None):
     options = list(sys.argv[1:] if argv is None else argv)
     args = parser.parse_args(options)
     try:
+        if args.speaker_guide:
+            if options != ["--speaker-guide"]:
+                raise ValueError("Speaker guide accepts no extra arguments")
+            return 0 if guided_speaker_check() else 2
         if args.speaker_test:
             if options == ["--speaker-test"]:
                 return 0 if play_speaker_test() else 2
