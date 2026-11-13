@@ -770,10 +770,20 @@ After two attempts at an unresolved side, the guide stops automatically.
 Unknown retry responses, end-of-input, Ctrl+C or cancelled PLAY also
 stop; neither feedback nor retries grant automatic playback.
 
-The guide summarizes **only the operator's reported observations**;
-the rest of the channels are explicitly marked untested after an early
-stop. The temporary answers are never saved to SD, uploaded, exposed
-to any remote interface, or treated as hardware certification. Never
+The guide summarizes **only the operator's reported observations**.
+If playback or feedback is cancelled with STOP, EOF, Ctrl+C or an
+unknown answer, the local terminal **still prints the observations
+already supplied**, marks a reached-but-unanswered channel
+**NO REPORT**, and marks remaining channels **NOT TESTED**. Do not
+confuse these statuses. When a WRONG/SILENT/UNSURE answer is followed
+by an explicit RETRY and later CORRECT, the summary retains the full
+sequence (e.g. `RIGHT reported attempts: SILENT -> CORRECT`).
+Such a recovery is not presented as a clean first-attempt hardware
+success. No audio is replayed merely to generate the summary.
+
+All feedback remains temporary and terminal-local, never saved to
+SD, uploaded, exposed to any remote interface, or treated as
+independent hardware certification. Never
 raise physical speaker volume or change other source routing
 automatically to diagnose a silent or reversed side.
 
