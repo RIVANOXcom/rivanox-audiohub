@@ -634,3 +634,47 @@ the physical Edifier USB output, correct wiring, SPL, multi-source
 Bluetooth/LAN mixing, 24-hour stability or production readiness.
 Keep the original SD and external WAV/setting archive for a separate
 manual physical rollback after operator decision.
+
+## First sound without importing any WAV: original built-in stereo sample
+
+The installed Pi4 operator can run the following command **without**
+first copying, downloading or restoring any private music files:
+
+    audiohub-music --speaker-test
+
+This produces a new original, deterministic **2.1-second** sound
+sample entirely in bounded RAM chunks: 0.5 seconds at 440 Hz in LEFT,
+0.2 seconds silence; then RIGHT and BOTH, each followed by the same
+silence. The signal is PCM16 stereo 48 kHz with a short fade-in/out.
+The peak is capped at 655/32767 (about 2% digital PCM full-scale), and
+the existing privately owned playback subprocess is forced to the
+already-supported quiet stream gain of **0.05** and the exact
+audiohub.music PipeWire target. This is intentionally a short, modest
+digital diagnostic, NOT calibrated sound pressure or a guarantee of
+hearing-safe analog loudness. Set the **physical** speaker/amplifier
+volume low before considering a test.
+
+The command is **exclusive**: no directory, WAV, --minutes, --level,
+--channel, --check, --list, --play, service or network option can be
+combined with it. It requires the existing non-root local Pi4 terminal
+on both input and output, then prints the fixed pattern and safety
+warning. Nothing is sent to PipeWire until a human separately types
+the exact uppercase `PLAY` and Enter. Any other input, lost TTY,
+missing private sink, blocked child or reached 8-second deadline
+refuses or stops safely. It never starts a background service or
+changes the global mixer, EQ, mutes, other source gains, Bluetooth,
+Wi-Fi, owner credentials, output routing or files.
+
+This feature removes the need to supply a licensed WAV merely to
+attempt the **first physical speaker test**. Unlike the WAV library
+preflight, the built-in test can work with an empty PrivateMusic folder.
+It does not bypass hardware setup. With operator authorization, boot a
+separate spare Pi4 SD, keep the original SD untouched, confirm that
+the output amplifier is low, and listen to the 3 ordered segments.
+If the first segment is inaudible, do not assume a software or hardware
+PASS. Record whether LEFT, RIGHT and BOTH actually emerge from the
+expected physical speakers and stop immediately if unexpected. Only
+the operator can validate stereo/Edifier output, SPL, USB routing,
+2BT+LAN mixing or 24-hour stability. Rollback is manual reinsertion
+of the original SD after operator decision. This is an
+UNVERIFIED_ALPHA_TEST_ONLY feature, not a production release.
