@@ -47,6 +47,24 @@ test "$verify_status" -eq 2
 test "$resume_status" -eq 2
 case "$verify_output" in *"Safe offline WAV transfer refused"*) ;; *) exit 1 ;; esac
 case "$resume_output" in *"Safe offline WAV transfer refused"*) ;; *) exit 1 ;; esac
+
+# Old SD lacking an installed launcher: these 3/4-arg commands run using
+# the NEW image's installed Python utility. Non-TTY refusal guarantees
+# no unattended source edits, mounts, WAV copies or external archive writes.
+set +e
+old_wav_backup_output="$(runuser -u audiohub -- /usr/local/bin/audiohub-music-transfer backup-old /home/audiohub/PrivateMusic /home/audiohub/PrivateMusic 2>&1)"
+old_wav_backup_status="$?"
+old_wav_resume_output="$(runuser -u audiohub -- /usr/local/bin/audiohub-music-transfer backup-old /home/audiohub/PrivateMusic /home/audiohub/PrivateMusic --resume 2>&1)"
+old_wav_resume_status="$?"
+old_wav_verify_output="$(runuser -u audiohub -- /usr/local/bin/audiohub-music-transfer verify-backup-old /home/audiohub/PrivateMusic /home/audiohub/PrivateMusic 2>&1)"
+old_wav_verify_status="$?"
+set -e
+test "$old_wav_backup_status" -eq 2
+test "$old_wav_resume_status" -eq 2
+test "$old_wav_verify_status" -eq 2
+case "$old_wav_backup_output" in *"Safe offline WAV transfer refused"*) ;; *) exit 1 ;; esac
+case "$old_wav_resume_output" in *"Safe offline WAV transfer refused"*) ;; *) exit 1 ;; esac
+case "$old_wav_verify_output" in *"Safe offline WAV transfer refused"*) ;; *) exit 1 ;; esac
 runuser -u audiohub -- /usr/local/bin/audiohub-presets-transfer --help >/dev/null
 # Native three-argument first-SD migration smoke: require Python's safe
 # non-TTY refusal, not a shell-wrapper usage error; never open/mount old SD.
