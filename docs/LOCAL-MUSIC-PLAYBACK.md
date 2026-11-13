@@ -341,3 +341,29 @@ The build itself executes `audiohub-music --help` in the actual ARM64
 chroot under the unprivileged user; the rootfs gate checks the command
 and the private folder in the staged image. Neither check proves actual
 Pi4 boot, audible Edifier stereo, owner onboarding or a production GO.
+
+## Live repeat controls for an active local music session
+
+After a private WAV selection is reviewed and the operator enters the
+**exact uppercase `PLAY`** confirmation, press `m` plus Enter to cycle:
+
+- **OFF** — normal one-pass album playback (default for every new run).
+- **TRACK** — repeat only the currently selected track on natural completion.
+- **ALL** — play the selected queue again from track one after the last track.
+
+Press `m` repeatedly to return to OFF. `s` (status) and `l` (queue)
+show the active repeat mode without private titles or file paths.
+Manual `n` advances to the next track even in TRACK mode; `p`,
+`r`, numbered jump, `u` pause/resume and `q` or Ctrl+C stop remain.
+**Repeat never resets or extends the original session time limit**;
+repeating stops automatically when that deadline is reached, including
+when a track is paused. The operator need not change any mixer, network
+or credentials. This is volatile terminal-only state: no new service,
+local file write, playlist persistence or automatic playback at boot.
+
+For a safe physical test: first use `audiohub-music --help`, select
+licensed owner WAV files and verify that cancellation before `PLAY`
+is silent. At low Edifier speaker volume confirm `PLAY`, then `m`
+to select TRACK and ALL, observe actual transitions, use `s` and `l`,
+and stop with `q`. Actual audible behavior and device support remain
+unverified until the operator records them on real Pi4 hardware.

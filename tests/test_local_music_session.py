@@ -405,5 +405,148 @@ class MusicSessionTests(unittest.TestCase):
             2, 4, 100, 180, clock=lambda: 150))
 
 
+    def test_repeat_mode_cycles_only_defined_local_values(self):
+        self.assertEqual(music_session.next_repeat_mode("off"), "track")
+        self.assertEqual(music_session.next_repeat_mode("track"), "all")
+        self.assertEqual(music_session.next_repeat_mode("all"), "off")
+        for bad in ("ALL", "", "none", 0, True, None):
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                music_session.next_repeat_mode(bad)
+
+    def test_repeat_mode_key_decodes_without_echoing_private_commands(self):
+        with mock.patch.object(music_session.select, "select",
+                               return_value=([1], [], [])):
+            self.assertEqual(music_session.read_terminal_command(
+                stream=io.StringIO("M\n")), "m")
+            self.assertEqual(music_session.read_terminal_command(
+                stream=io.StringIO("secret-access-token\n")), "?")
+
+    def test_live_repeat_mode_is_visible_but_never_persisted_or_discloses_paths(self):
+        self.assertFalse(self.run_with(["m", "s", "l", "m", "s",
+                                        "m", "s", "q"]))
+        text = "\n".join(self.out)
+        self.assertIn("Local repeat mode: TRACK", text)
+        self.assertIn("Local repeat mode: ALL", text)
+        self.assertIn("Local repeat mode: OFF", text)
+        self.assertIn("repeating track", text)
+        self.assertIn("repeating all", text)
+        self.assertNotIn(str(self.dir), text)
+        self.assertNotIn("secret-title", text)
+        self.assertTrue(all(child.terminated for child in self.children))
+        self.out.clear()
+        self.assertFalse(self.run_with(["s", "q"]))
+        self.assertNotIn("repeating all", "\n".join(self.out))
+        self.assertNotIn("repeating track", "\n".join(self.out))
+
+    def test_repeat_modes_remain_in_bounded_status_and_private_queue(self):
+        report = local_music.inspect_playlist(self.paths, max_minutes=1)
+        text = music_session.queue_message(report, 1, repeat_mode="all")
+        self.assertIn("Repeat: all", text)
+        self.assertNotIn("secret-title", text)
+        self.assertIn("repeating track", music_session.status_message(
+            1, 2, 0, 60, clock=lambda: 30, repeat_mode="track"))
+        for bad in ("random", 12, None):
+            with self.subTest(bad=bad):
+                self.assertRaises(ValueError, music_session.queue_message,
+                                  report, 1, repeat_mode=bad)
+                self.assertRaises(ValueError, music_session.status_message,
+                                  1, 2, 0, 60, repeat_mode=bad)
+
+    def test_repeat_track_restarts_after_natural_completion_and_quit_stops(self):
+        first = threading.Event()
+        release = threading.Event()
+        played = []
+        children = []
+        def playback(paths, *, max_minutes, stop, session_deadline,
+                     on_player, notify):
+            played.append(paths[0])
+            if len(played) == 1:
+                first.set()
+                if not release.wait(2):
+                    raise RuntimeError("Test timed out before repeat command")
+                return True
+            child = FakeChild()
+            children.append(child)
+            on_player(child)
+            while not stop.wait(.001):
+                pass
+            raise InterruptedError("test stop")
+        reads = [0]
+        def read(_timeout):
+            self.assertTrue(first.wait(2))
+            reads[0] += 1
+            if reads[0] == 1:
+                return "m"  # repeat current
+            if reads[0] == 2:
+                release.set()
+                return None
+            if len(played) < 2:
+                return None
+            return "q"
+        with mock.patch.object(local_music, "music_sink_available", return_value=True), \
+             mock.patch.object(local_music.os, "geteuid", return_value=1000):
+            self.assertFalse(music_session.run_session(
+                self.paths, max_minutes=1, read_command=read,
+                playback=playback, out=self.out.append, require_tty=False))
+        self.assertEqual(played, [self.paths[0], self.paths[0]])
+        self.assertTrue(children[0].terminated)
+        self.assertIn("Repeating current selected track", "\n".join(self.out))
+
+    def test_repeat_all_wraps_after_last_track_but_never_skips_quit(self):
+        first = threading.Event()
+        release = threading.Event()
+        played = []
+        children = []
+        def playback(paths, *, max_minutes, stop, session_deadline,
+                     on_player, notify):
+            played.append(paths[0])
+            if len(played) == 1:
+                first.set()
+                if not release.wait(2):
+                    raise RuntimeError("Test timed out before repeat command")
+                return True
+            if len(played) == 2:
+                return True
+            child = FakeChild()
+            children.append(child)
+            on_player(child)
+            while not stop.wait(.001):
+                pass
+            raise InterruptedError("test stop")
+        reads = [0]
+        def read(_timeout):
+            self.assertTrue(first.wait(2))
+            reads[0] += 1
+            if reads[0] in (1, 2):
+                return "m"  # off -> track -> all
+            if reads[0] == 3:
+                release.set()
+                return None
+            if len(played) < 3:
+                return None
+            return "q"
+        with mock.patch.object(local_music, "music_sink_available", return_value=True), \
+             mock.patch.object(local_music.os, "geteuid", return_value=1000):
+            self.assertFalse(music_session.run_session(
+                self.paths, max_minutes=1, read_command=read,
+                playback=playback, out=self.out.append, require_tty=False))
+        self.assertEqual(played, [self.paths[0], self.paths[1], self.paths[0]])
+        self.assertTrue(children[0].terminated)
+        self.assertIn("Repeating selected queue", "\n".join(self.out))
+        self.assertNotIn(str(self.dir), "\n".join(self.out))
+
+    def test_repeat_does_not_remove_session_deadline(self):
+        mode = music_session.next_repeat_mode("track")
+        self.assertEqual(mode, "all")
+        # The existing wall-clock deadline remains visible even when paused
+        # or repeat is selected, and does not reset on a repeat.
+        out = music_session.status_message(
+            1, 2, 100.0, 130.0, clock=lambda: 129.1,
+            paused=True, repeat_mode=mode)
+        self.assertIn("session remaining 1 s", out)
+        self.assertIn("repeating all", out)
+        self.assertIn("PAUSED", out)
+
+
 if __name__ == "__main__":
     unittest.main()

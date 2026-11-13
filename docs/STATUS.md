@@ -108,3 +108,15 @@ does not add a network controller or guarantee headless phone setup.
 No in-place updater or automatic data migration is introduced; spare
 SD and separately retained operator music are required for rollback.
 Real hardware audio, rights and public release gates remain NO-GO.
+
+### Volatile interactive repeat controls for Pi4 music
+
+The unverified local music wizard now supports the `m` keyboard
+command during explicitly started playback. It cycles OFF → TRACK →
+ALL → OFF (repeat selected track, repeat reviewed queue or stop
+repeating), reflects the mode in anonymous status and queue output,
+and honors manual next/previous/quit. The original wall-clock deadline
+never resets, including during pause or repeat. Mode is private
+in-memory session state; nothing is saved and no new service or audio
+route is introduced. Native Pi4/Edifier audible hardware validation,
+rootfs copyright compliance and official release GO remain outstanding.
