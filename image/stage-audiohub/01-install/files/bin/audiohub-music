@@ -38,7 +38,7 @@ if [ "$(/usr/bin/id -u)" -eq 0 ]; then
 fi
 
 # Preserve the user's PipeWire session environment but pin our own modules.
-# A single quoted argument is passed to Python; no eval or shell expansion.
+# A single quoted argument reaches Python; the shell does not interpret it.
 PYTHONPATH=/opt/audiohub/src
 export PYTHONPATH
 exec /usr/bin/python3 -m audiohub.local_music \
