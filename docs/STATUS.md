@@ -26,7 +26,12 @@ PLAY consent and a physical CORRECT/WRONG/SILENT/UNSURE observation.
 Operators can now use explicit `audiohub-music --speaker-guide right`,
 `... left` or `... both` to recheck **only one** corrected channel
 without replaying unrelated channels; each has fresh PLAY and local
-feedback, and the summary marks all other channels untested.
+feedback. The terminal summary is now complete even after STOP,
+EOF, Ctrl+C or unknown feedback: prior observations remain visible,
+unanswered channels show NO REPORT, untouched channels show NOT TESTED,
+and recovery after a previously wrong/silent/uncertain attempt prints
+the chronological sequence without claiming a clean hardware PASS.
+Nothing is persisted or uploaded.
 An unexpected WRONG, SILENT or UNSURE answer now stops automatic
 progression. The operator can explicitly RETRY only the same channel
 once with a new PLAY consent, or STOP. After two attempts the guide
