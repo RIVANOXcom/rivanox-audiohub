@@ -13,6 +13,11 @@ test -f "${ROOTFS_DIR}/usr/local/bin/audiohub-music-transfer"
 test -x "${ROOTFS_DIR}/usr/local/bin/audiohub-music-transfer"
 test ! -L "${ROOTFS_DIR}/usr/local/bin/audiohub-music-transfer"
 test "$(stat -c '%a' "${ROOTFS_DIR}/usr/local/bin/audiohub-music-transfer")" = 755
+# The preset CLI must be present as an actual executable, not a symlink.
+test -f "${ROOTFS_DIR}/usr/local/bin/audiohub-presets-transfer"
+test -x "${ROOTFS_DIR}/usr/local/bin/audiohub-presets-transfer"
+test ! -L "${ROOTFS_DIR}/usr/local/bin/audiohub-presets-transfer"
+test "$(stat -c '%a' "${ROOTFS_DIR}/usr/local/bin/audiohub-presets-transfer")" = 755
 # Verify the new image ships an empty private folder for user-supplied WAVs.
 test -d "${ROOTFS_DIR}/home/audiohub/PrivateMusic"
 test ! -L "${ROOTFS_DIR}/home/audiohub/PrivateMusic"

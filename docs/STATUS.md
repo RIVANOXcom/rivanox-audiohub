@@ -146,3 +146,21 @@ commands check every supported source WAV against its destination
 without any writes. This makes an interrupted multi-file migration
 retryable, but it is not a full SD, owner, credential, configuration
 or OS updater. Real Pi4 audio and public release remain NO-GO.
+
+### Native Pi4 WAV launcher integration and portable audio presets
+
+The experimental image installation fixes a real PR260 delivery gap:
+previous installed `audiohub-music-transfer` shell wrapper rejected
+the Python-supported `--resume` and `verify-*` commands. The installed
+wrapper now forwards valid argument forms, with an actual nonplaying
+native ARM64 chroot entrypoint smoke.
+
+An independent unmerged draft adds `audiohub-presets-transfer`: export
+three saved EQ curves and up to eight **inactive** custom volume profiles
+to exclusive private offline media, inspect without modification,
+first-export from a read-only old SD on a newer image, restore a missing
+profile catalog only, separately restore saved EQ only if new settings
+are neutral with explicit approval and revision guard, and verify
+saved EQ/profile parity. No secrets, identities, radio trust, routes,
+live volume/mutes, network, automatic PipeWire restarts or OS updates.
+Native Pi4 hardware sound and official release remain unverified.

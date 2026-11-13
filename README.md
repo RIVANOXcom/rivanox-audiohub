@@ -470,3 +470,28 @@ refuse, never overwrite. Use `verify-backup PATH` or
 No OS, network, owner trust or other settings are transferred.
 Keep the original SD intact; see [the private WAV transfer guide]
 (docs/LOCAL-MUSIC-PLAYBACK.md) for the manual approval boundary.
+
+### Preserve private EQ and inactive volume presets on a replacement Pi4 SD
+
+The native **unverified test image** now installs `audiohub-presets-transfer`
+for an offline, operator-confirmed settings migration alongside WAV media.
+Export exactly three validated EQ curves and up to eight inactive saved
+volume profiles to an owner-private externally retained JSON archive. On
+a newly installed SD, inspect and separately restore inactive profiles
+without changing volume/mute, then optionally restore only saved EQ from
+neutral settings with a separate `APPLY-EQ` confirmation. A strict
+`verify` compares saved EQ and profile catalog without writing.
+
+For **first migration from an old SD without this command**, the *new*
+image supports `export-old OLD_SD_PRIVATE_CONFIG_DIR PRIVATE_ARCHIVE_DIR`
+on an already approved, read-only mounted original SD. No owner identity,
+network keys, Bluetooth trust, source routes, live levels/mutes, OS
+configuration or other files are migrated. See
+[operator instructions](docs/PRESET-TRANSFER.md). No live PipeWire EQ
+stage/restart or physical audio verification happens automatically.
+
+**Pi4 WAV launcher fix:** installed `audiohub-music-transfer` now forwards
+`backup/restore PATH --resume` and `verify-backup/verify-restore PATH`
+to the already-tested Python implementation, rather than rejecting
+those arguments at the shell entrypoint. A native chroot smoke verifies
+these installed nonplaying entrypoints.
