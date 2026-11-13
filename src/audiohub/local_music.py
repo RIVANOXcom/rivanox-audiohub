@@ -442,10 +442,10 @@ def guided_speaker_check(*, read_line=None, out=print, play=None):
     out("After each step, report CORRECT, WRONG, SILENT or UNSURE.")
     out("No observation can certify physical output or a production release.")
     observations = []
-    choices = {"CORRECT\\n": "CORRECT", "WRONG\\n": "WRONG",
-               "SILENT\\n": "SILENT", "UNSURE\\n": "UNSURE",
-               "CORRECT\\r\\n": "CORRECT", "WRONG\\r\\n": "WRONG",
-               "SILENT\\r\\n": "SILENT", "UNSURE\\r\\n": "UNSURE"}
+    choices = {"CORRECT\n": "CORRECT", "WRONG\n": "WRONG",
+               "SILENT\n": "SILENT", "UNSURE\n": "UNSURE",
+               "CORRECT\r\n": "CORRECT", "WRONG\r\n": "WRONG",
+               "SILENT\r\n": "SILENT", "UNSURE\r\n": "UNSURE"}
     for number, mode in enumerate(("left", "right", "both"), 1):
         expected = "both physical speakers" if mode == "both" else (
             "only the " + mode.upper() + " physical speaker")
