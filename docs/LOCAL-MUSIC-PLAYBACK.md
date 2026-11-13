@@ -425,3 +425,32 @@ actual playback at low physical Edifier volume. If anything fails,
 stop; keep both the original SD and external media for rollback.
 This tool does not replace the secure owner-claim process and cannot
 prove Pi4 speaker sound or grant a production release.
+
+### First migration from PR #258 or older (no transfer CLI on old SD)
+
+The **old** SD image does not contain `audiohub-music-transfer`; the
+`backup` example above works only once a newer image with this
+command is already running. For the first replacement, there is a
+safer source-preserving alternative: keep the previous SD unmodified,
+flash the new *separate* test SD only after approval, boot it, and
+attach the original SD using a separately authorized USB SD reader.
+The operator mounts the old filesystem **read-only** without changing
+credentials, ownership or access modes. Identify the actual absolute
+mount path for the previous `home/audiohub/PrivateMusic` directory.
+If that folder is owner-private and maps to the same unprivileged UID,
+use the **new** image's terminal command:
+
+```sh
+audiohub-music-transfer restore /absolute/old-SD/home/audiohub/PrivateMusic
+```
+
+Review the WAV count and bytes; enter exact uppercase `COPY` only
+when the new private destination contains no same-name WAVs. The
+source filesystem may be read-only (the tool only reads it). The
+import is non-overwriting and will stop on unsafe paths, mismatched
+owner UIDs or unsupported files. It does not mount a disk itself or
+write into the previous SD. If the source cannot be made available
+read-only and privately with ordinary authorized operator access,
+stop; do not automatically remount it writable, change permissions,
+reset credentials or attempt a privileged workaround. Retain both
+SD cards as rollback until real Edifier playback is verified.
