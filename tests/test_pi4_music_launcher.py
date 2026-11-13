@@ -322,6 +322,13 @@ class MusicLauncherTests(unittest.TestCase):
         self.assertNotIn("sudo ", shell)
         self.assertNotIn("eval ", shell)
 
+    def test_native_default_guided_album_refuses_nonterminal_without_audio(self):
+        native = STAGE.read_text(encoding="utf-8")
+        self.assertIn("album_guide_noninteractive_output=", native)
+        self.assertIn("runuser -u audiohub -- /usr/local/bin/audiohub-music 2>&1", native)
+        self.assertIn('test "$album_guide_noninteractive_status" -eq 2', native)
+        self.assertIn("Local player unavailable or stopped", native)
+
     def test_native_chroot_guided_speaker_never_starts_without_tty(self):
         native = STAGE.read_text(encoding="utf-8")
         self.assertIn("speaker_guide_noninteractive_output=", native)
