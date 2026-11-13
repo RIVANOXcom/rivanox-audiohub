@@ -47,5 +47,6 @@ test "$verify_status" -eq 2
 test "$resume_status" -eq 2
 case "$verify_output" in *"Safe offline WAV transfer refused"*) ;; *) exit 1 ;; esac
 case "$resume_output" in *"Safe offline WAV transfer refused"*) ;; *) exit 1 ;; esac
+runuser -u audiohub -- /usr/local/bin/audiohub-presets-transfer --help >/dev/null
 PYTHONPATH=/opt/audiohub/src runuser -u audiohub -- python3 -m audiohub.eq_setup
 CHROOT
