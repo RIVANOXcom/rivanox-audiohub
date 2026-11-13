@@ -103,5 +103,15 @@ test "$sd_old_status" -eq 2
 case "$sd_plan_output" in *"Private preset operation safely refused"*) ;; *) exit 1 ;; esac
 case "$sd_after_output" in *"Private preset operation safely refused"*) ;; *) exit 1 ;; esac
 case "$sd_old_output" in *"Private preset operation safely refused"*) ;; *) exit 1 ;; esac
+
+# Native installed guided migration is a reviewed INTERACTIVE operation.
+# Non-TTY chroot execution must refuse inside its Python guard before
+# creating archives, copying WAVs, changing mixer or asking for consent.
+set +e
+guided_restore_output="$(runuser -u audiohub -- /usr/local/bin/audiohub-presets-transfer restore-guided /home/audiohub/PrivateMusic 2>&1)"
+guided_restore_status="$?"
+set -e
+test "$guided_restore_status" -eq 2
+case "$guided_restore_output" in *"Private preset operation safely refused"*) ;; *) exit 1 ;; esac
 PYTHONPATH=/opt/audiohub/src runuser -u audiohub -- python3 -m audiohub.eq_setup
 CHROOT
