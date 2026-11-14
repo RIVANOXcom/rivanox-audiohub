@@ -79,6 +79,36 @@ source-rights and nine rootfs copyright notice reviews, secure
 phone ownership onboarding, long-term package archival, and
 explicit operator/CEO release authorization.
 
+## First boot with an empty private WAV folder
+
+The Pi4 alpha test image intentionally ships with **zero music tracks** in
+`/home/audiohub/PrivateMusic`. This is a **normal protected first-use
+state**, not a failed installation or missing audio hardware. Running
+`audiohub-music --list` on that new folder returns successfully with
+"0 valid WAV track(s)" and a clear, filename-free guide to next steps.
+It does not invoke PipeWire, prompt for PLAY, create a WAV or change
+settings. An empty folder does not mean the Edifier speaker works.
+
+To investigate first sound **without any WAV**, run
+`audiohub-music --speaker-check` for a fully silent prerequisite check.
+At a trusted Pi4 console, after separate authorization and setting the
+physical amplifier LOW, `audiohub-music --speaker-guide` lets the
+operator perform fresh consented PLAY/observation on the original short
+test sample. Neither is an automatic audio installer or a hardware PASS.
+
+To add owned/licensed WAV tracks, read the existing
+`audiohub-music-transfer --help` offline transfer instructions and
+use only the authorized private 0700 storage path. Importing music is
+**never automatic**; the original SD card and independent backups
+must remain intact during any operator-authorized manual migration.
+Once tracks are available, repeat `audiohub-music --list`, then
+`audiohub-music` to select a bounded queue with its own exact PLAY.
+With an empty folder the guided player now prints the same
+first-use guidance and exits before prompting for a track or PLAY;
+explicit numeric selection or playback from zero tracks still fails.
+The separate `--check` correctly remains NOT READY for local WAV
+playback until actual safe tracks exist.
+
 ## Guided music-folder browser and track selection
 
 **One-command first-use readiness:** The installed native Pi4 command
