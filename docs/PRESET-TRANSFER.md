@@ -187,10 +187,16 @@ After copying and confirming the separately reviewed saves:
 every supported archived WAV and the archived saved EQ/inactive
 profiles on the replacement SD. Extra local volume profiles
 remain allowed; the check does not require that the SD image be an
-exact filesystem mirror. It is read-only, fail-closed if no WAV
-set exists, and prints a clear pass only when **both** groups match.
-If there is no WAV content, the operator cannot claim the combined
-check passed; use the standalone preset verification instead.
+exact filesystem mirror. It is read-only and fails closed for missing, unsafe, or different WAVs.
+**An intentionally empty original WAV library is now supported** for a
+combined preset-only SD migration **only if BOTH separately validated
+private music folders are empty of supported and unsafe WAV entries**.
+The combined check then verifies this exact zero-track condition as
+well as the saved EQ/inactive profiles, explicitly stating no WAV
+bytes were copied and no hardware playback was proven. This is not
+permission to discard any real music, overwrite a nonempty new SD
+music folder, or treat a generic WAV-only backup as complete. The
+standalone WAV-only verification still refuses an empty source.
 
 All of these are operator-only checks in an already authorized
 local terminal, with no root or network access. They do **not**
