@@ -146,7 +146,7 @@ def display_library(items, *, show_titles=False, guided=False):
             "audiohub-music-transfer --help. No automatic import occurs.",
             "Then retry audiohub-music --list or audiohub-music.",
         ])
-        return "\\n".join(lines)
+        return "\n".join(lines)
     for n, (path, info) in enumerate(items, 1):
         seconds = (info["duration_ms"] + 999) // 1000
         minutes, rest = divmod(seconds, 60)
