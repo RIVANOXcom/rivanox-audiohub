@@ -124,6 +124,97 @@ class LocalMusicLibraryTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Too many"):
             music_library.discover_library(empty)
 
+    def test_empty_first_boot_folder_is_normal_in_readonly_view_only(self):
+        empty = self.root.parent / "FreshPrivateMusic"
+        empty.mkdir(mode=0o700)
+        with self.assertRaisesRegex(ValueError, "No supported local WAV"):
+            music_library.discover_library(empty)
+        records, skipped = music_library.discover_library(
+            empty, allow_empty=True)
+        self.assertEqual((records, skipped), ([], 0))
+        display = music_library.display_library(records)
+        for phrase in ("Local music library: 0 valid WAV",
+                       "EMPTY PRIVATE WAV LIBRARY",
+                       "audiohub-music --speaker-check",
+                       "audiohub-music --speaker-guide",
+                       "audiohub-music-transfer --help",
+                       "No automatic import occurs",
+                       "No playback started"):
+            self.assertIn(phrase, display)
+        self.assertNotIn(str(empty), display)
+        self.assertNotIn(str(self.root), display)
+        self.assertEqual(len(display.splitlines()), 8)
+        for invalid in (None, "yes", 1):
+            with self.subTest(invalid=invalid):
+                with self.assertRaises(ValueError):
+                    music_library.discover_library(empty, allow_empty=invalid)
+
+    def test_empty_library_cli_list_is_success_but_play_selection_is_denied(self):
+        empty = self.root.parent / "FreshEmpty"
+        empty.mkdir(mode=0o700)
+        with mock.patch.object(local_music, "play_playlist") as player, \
+             mock.patch.object(local_music, "music_sink_available") as graph, \
+             mock.patch("builtins.print") as output:
+            self.assertEqual(local_music.main([
+                "--library", str(empty)]), 0)
+            self.assertEqual(local_music.main([
+                "--library", str(empty), "--show-titles"]), 0)
+            self.assertEqual(local_music.main([
+                "--library", str(empty), "--tracks", "1"]), 2)
+            self.assertEqual(local_music.main([
+                "--library", str(empty), "--tracks", "1", "--play"]), 2)
+            self.assertEqual(local_music.main([
+                "--library", str(empty), "--play"]), 2)
+        graph.assert_not_called()
+        player.assert_not_called()
+        rendered = "\n".join(" ".join(map(str, a.args))
+                             for a in output.call_args_list)
+        self.assertIn("EMPTY PRIVATE WAV LIBRARY", rendered)
+        self.assertIn("audiohub-music --speaker-check", rendered)
+        self.assertNotIn(str(empty), rendered)
+
+    def test_guided_first_use_empty_library_aborts_without_play_or_tty_read(self):
+        empty = self.root.parent / "FreshDefault"
+        empty.mkdir(mode=0o700)
+        outputs, attempted = [], []
+        with mock.patch("sys.stdin", mock.Mock(isatty=lambda: True)), \
+             mock.patch("sys.stdout", mock.Mock(isatty=lambda: True)), \
+             mock.patch.object(os, "geteuid", return_value=1000), \
+             mock.patch.object(local_music, "play_playlist") as player:
+            result = music_library.guided_session(
+                empty, preflight=lambda **kw: True,
+                read_line=lambda: attempted.append("read"),
+                out=outputs.append,
+                runner=lambda *a, **kw: attempted.append("run"))
+        self.assertFalse(result)
+        self.assertEqual(attempted, [])
+        player.assert_not_called()
+        message = "\n".join(outputs)
+        self.assertIn("EMPTY PRIVATE WAV LIBRARY", message)
+        self.assertIn("ALBUM SETUP INCOMPLETE", message)
+        self.assertIn("no audio started", message)
+        self.assertNotIn(str(empty), message)
+        self.assertNotIn("Type exact uppercase PLAY then Enter", message)
+
+    def test_unsafe_empty_directory_remains_rejected_with_no_media(self):
+        empty = self.root.parent / "FreshUnsafe"
+        empty.mkdir(mode=0o777)
+        empty.chmod(0o777)
+        shortcut = self.root.parent / "FreshLink"
+        shortcut.symlink_to(empty, target_is_directory=True)
+        for folder in (empty, shortcut, Path("relative/folder")):
+            with self.subTest(folder=str(folder)):
+                with self.assertRaises((ValueError, PermissionError, OSError)):
+                    music_library.discover_library(folder, allow_empty=True)
+        bad_wav = self.root.parent / "UnsafeOnly"
+        bad_wav.mkdir(mode=0o700)
+        (bad_wav / "private-content.wav").write_text("not PCM")
+        records, skipped = music_library.discover_library(
+            bad_wav, allow_empty=True)
+        self.assertEqual(records, [])
+        self.assertEqual(skipped, 1)
+        self.assertNotIn("private-content", music_library.display_library(records))
+
     def test_large_wav_library_requires_selection_not_bulk_play(self):
         for index in range(42):
             self.make_wav(self.root / ("Extra-%02d.wav" % index), 60)
