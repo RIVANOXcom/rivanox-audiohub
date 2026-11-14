@@ -940,6 +940,7 @@ def main(argv=None):
         print("Offline Pi4 non-secret audio preset transfer, no owner migration.")
         print("Usage: audiohub-presets-transfer export|inspect|plan-profiles|restore-profiles|merge-profiles|restore-eq|verify|verify-merged|plan-new|check-new ABSOLUTE_PRIVATE_FOLDER")
         print("       audiohub-presets-transfer check-backup PRIVATE_BACKUP OLD_MUSIC_DIR OLD_CONFIG_DIR")
+        print("       audiohub-presets-transfer plan-backup PRIVATE_BACKUP OLD_MUSIC_DIR OLD_CONFIG_DIR")
         print("       audiohub-presets-transfer backup-guided PRIVATE_BACKUP OLD_MUSIC_DIR OLD_CONFIG_DIR")
         print("       audiohub-presets-transfer restore-guided ABSOLUTE_PRIVATE_ARCHIVE")
         print("       audiohub-presets-transfer export-old OLD_SD_PRIVATE_CONFIG_DIR ABSOLUTE_PRIVATE_FOLDER")
@@ -947,12 +948,14 @@ def main(argv=None):
         print("Saved EQ APPLY-EQ to neutral EQ only; verify-merged permits extra local profiles.")
         print("restore-guided requires separate COPY, MERGE and APPLY-EQ, then read-only verification.")
         print("backup-guided requires separate COPY and SAVE, then read-only verification.")
+        print("plan-backup is READ-ONLY before changing SD: safe WAV/preset inventory, no COPY.")
         print("If BOTH protected music folders are empty, the combined SD migration")
         print("can preserve EQ and inactive profiles without WAV copying; no audio verified.")
         print("Never imports keys, Bluetooth trust, Wi-Fi, IDs, live volume/mutes or OS.")
         return 0
     old_sd_mode = len(args) == 3 and args[0] == "export-old"
-    backup_check_mode = len(args) == 4 and args[0] in ("check-backup", "backup-guided")
+    backup_check_mode = len(args) == 4 and args[0] in (
+        "check-backup", "backup-guided", "plan-backup")
     if not (old_sd_mode or backup_check_mode or (len(args) == 2 and args[0] in (
             "export", "inspect", "plan-profiles", "restore-profiles",
             "merge-profiles", "restore-eq", "verify", "verify-merged",
@@ -961,7 +964,11 @@ def main(argv=None):
         return 2
     try:
         if backup_check_mode:
-            action = check_backup if args[0] == "check-backup" else backup_guided
+            action = {
+                "check-backup": check_backup,
+                "backup-guided": backup_guided,
+                "plan-backup": plan_old_sd_backup,
+            }[args[0]]
             result = action(args[1], args[2], args[3])
         elif old_sd_mode:
             old_dir = Path(args[1])
