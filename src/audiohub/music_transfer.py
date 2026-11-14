@@ -55,7 +55,8 @@ def _source_list(path, fd, *, allow_empty=False):
     # still refuses to certify an empty source.
     if type(allow_empty) is not bool:
         raise ValueError("Invalid empty music-source policy")
-    items, skipped = music_library.discover_library(path, allow_empty=allow_empty)
+    items, skipped = (music_library.discover_library(path, allow_empty=True)
+                      if allow_empty else music_library.discover_library(path))
     if skipped:
         raise ValueError("Unsupported or unsafe WAV entries; check source first")
     plan = []
