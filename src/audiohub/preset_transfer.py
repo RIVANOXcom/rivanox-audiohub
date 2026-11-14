@@ -879,6 +879,8 @@ def main(argv=None):
         print("Saved EQ APPLY-EQ to neutral EQ only; verify-merged permits extra local profiles.")
         print("restore-guided requires separate COPY, MERGE and APPLY-EQ, then read-only verification.")
         print("backup-guided requires separate COPY and SAVE, then read-only verification.")
+        print("If BOTH protected music folders are empty, the combined SD migration")
+        print("can preserve EQ and inactive profiles without WAV copying; no audio verified.")
         print("Never imports keys, Bluetooth trust, Wi-Fi, IDs, live volume/mutes or OS.")
         return 0
     old_sd_mode = len(args) == 3 and args[0] == "export-old"
