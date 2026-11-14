@@ -45,7 +45,7 @@ def _private_directory(path):
         raise
 
 
-def discover_library(path):
+def discover_library(path, *, allow_empty=False):
     """Return at most 40 valid numbered WAV entries, no recursion or writes.
 
     A directory with over 256 entries is refused rather than partially
@@ -53,6 +53,8 @@ def discover_library(path):
     the full library. Invalid/linked WAVs are ignored and counted, not
     printed with their private names.
     """
+    if type(allow_empty) is not bool:
+        raise ValueError("Invalid read-only empty-library option")
     fd, folder = _private_directory(path)
     items = []
     excluded = 0
@@ -82,7 +84,7 @@ def discover_library(path):
     finally:
         os.close(fd)
     items.sort(key=lambda record: (record[0].name.casefold(), record[0].name))
-    if not items:
+    if not items and not allow_empty:
         raise ValueError("No supported local WAV tracks in folder")
     return items, excluded
 
@@ -132,6 +134,19 @@ def display_library(items, *, show_titles=False, guided=False):
         raise ValueError("Invalid library display option")
     lines = ["Local music library: " + str(len(items))
              + " valid WAV track(s). No playback started."]
+    if not items:
+        lines.extend([
+            "EMPTY PRIVATE WAV LIBRARY: this is normal on a new Pi4 test image.",
+            "Nothing was selected or played; no file or audio setting changed.",
+            "First check sound WITHOUT music: audiohub-music --speaker-check "
+            "(silent, no WAV needed).",
+            "On an authorized local terminal only, audiohub-music "
+            "--speaker-guide uses fresh PLAY before each short test.",
+            "To supply your own/licensed WAV files offline, see "
+            "audiohub-music-transfer --help. No automatic import occurs.",
+            "Then retry audiohub-music --list or audiohub-music.",
+        ])
+        return "\n".join(lines)
     for n, (path, info) in enumerate(items, 1):
         seconds = (info["duration_ms"] + 999) // 1000
         minutes, rest = divmod(seconds, 60)
@@ -296,10 +311,14 @@ def guided_session(folder, *, max_minutes=15, show_titles=False,
             "The hardware remains UNVERIFIED.")
         return False
 
-    entries, skipped = discover_library(folder)
+    entries, skipped = discover_library(folder, allow_empty=True)
     out(display_library(entries, show_titles=show_titles, guided=True))
     if skipped:
         out(str(skipped) + " unsafe or unsupported WAV entries skipped.")
+    if not entries:
+        out("ALBUM SETUP INCOMPLETE: no supported WAV tracks were available. "
+            "No PLAY request and no audio started.")
+        return False
     out("GUIDED LOCAL MODE: Nothing is playing. No playlist is stored.")
     changes = 0
     while True:

@@ -17,6 +17,7 @@ usage() {
     'quiet=0.05, soft=0.10, normal=0.20; levels are stream gains, not calibrated speaker loudness.' \
     '--channel left/right silences only the opposite stereo WAV channel; mono needs both.' \
     '--list only shows valid WAV track numbers and format; it NEVER plays sound.' \
+    'On a fresh SD, --list shows zero WAV tracks with safe first-sound/offline-import steps.' \
     '--check independently checks WAVs, private music input and player tool, without sound.' \
     '--speaker-check checks built-in FIRST SOUND without a WAV library and never plays sound.' \
     '--speaker-test creates a brief original 2.1s LEFT/RIGHT/BOTH signal in RAM. No WAV required.' \

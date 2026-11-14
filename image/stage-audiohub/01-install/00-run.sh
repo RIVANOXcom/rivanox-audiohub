@@ -34,9 +34,9 @@ install -d -o audiohub -g audiohub -m700 /home/audiohub/PrivateMusic
 # Native chroot smoke: command is installed and callable without PYTHONPATH.
 runuser -u audiohub -- /usr/local/bin/audiohub-music --help >/dev/null
 
-# Real installed local music launcher: bounded operator arguments and
-# non-playing anonymous file-list mode. Empty native image music folder
-# intentionally refuses instead of starting PipeWire or leaking titles.
+# Real installed music launcher: bounded operator args, non-playing list.
+# An intentionally empty first-boot WAV folder now gives useful local
+# onboarding rather than a false playback/system failure.
 set +e
 empty_library_output="$(runuser -u audiohub -- /usr/local/bin/audiohub-music /home/audiohub/PrivateMusic --list 2>&1)"
 empty_library_status="$?"
@@ -45,10 +45,10 @@ invalid_level_status="$?"
 invalid_time_output="$(runuser -u audiohub -- /usr/local/bin/audiohub-music --minutes 31 2>&1)"
 invalid_time_status="$?"
 set -e
-test "$empty_library_status" -eq 2
+test "$empty_library_status" -eq 0
 test "$invalid_level_status" -eq 2
 test "$invalid_time_status" -eq 2
-case "$empty_library_output" in *"Local player unavailable or stopped"*) ;; *) exit 1 ;; esac
+case "$empty_library_output" in *"0 valid WAV track(s)"*"No playback started."*"EMPTY PRIVATE WAV LIBRARY"*"audiohub-music --speaker-check"*"audiohub-music-transfer --help"*) ;; *) exit 1 ;; esac
 case "$invalid_level_output" in *"Only quiet, soft or normal"*) ;; *) exit 1 ;; esac
 case "$invalid_time_output" in *"Minutes must be a whole number"*) ;; *) exit 1 ;; esac
 

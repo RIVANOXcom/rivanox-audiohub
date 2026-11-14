@@ -158,6 +158,15 @@ class MusicLauncherTests(unittest.TestCase):
         self.assertIn("no WAV files needed.", native)
         self.assertIn("Read-only only: NO sound", native)
 
+    def test_native_image_empty_private_wav_folder_shows_safe_first_boot(self):
+        native = STAGE.read_text(encoding="utf-8")
+        self.assertIn("empty_library_output=", native)
+        self.assertIn("/usr/local/bin/audiohub-music /home/audiohub/PrivateMusic --list", native)
+        self.assertIn('test "$empty_library_status" -eq 0', native)
+        self.assertIn("EMPTY PRIVATE WAV LIBRARY", native)
+        self.assertIn("audiohub-music --speaker-check", native)
+        self.assertIn("audiohub-music-transfer --help", native)
+
     def test_native_chroot_smokes_installed_nonplaying_readiness(self):
         stage = STAGE.read_text(encoding="utf-8")
         self.assertIn("empty_check_output=", stage)

@@ -2,6 +2,21 @@
 
 **Status:** Alpha / pre-release. No verified ready-to-flash Pi 4 image has been published. Native ARM64 test-only SD images have been built and uploaded to GitHub Actions (latest prior-to-renaming run 42057278883; 159 tests, 48 rootfs checks). **No real Pi4/Edifier playback, ownership security or product-ready Release has been verified.**
 
+## Empty first-boot private WAV library onboarding (unverified alpha)
+
+A new Pi4 alpha test SD deliberately has no licensed music. The
+installed `audiohub-music --list` now treats the valid protected
+but **empty** directory as a normal, successful, strictly nonplaying
+first-use inventory with zero tracks and actionable anonymous steps
+for silent `--speaker-check`, separately consented `--speaker-guide`,
+existing offline `audiohub-music-transfer --help` and later track
+listing. The default interactive album guide exits safely with
+instructions before any selection or PLAY when no supported WAVs
+exist; explicit track selection/play still refuses an empty queue.
+Existing library integrity checks and standalone `--check`
+remain strict, so no false music readiness is declared. No new
+network interface, auto-import, WAV bundle or default-output fallback.
+
 ## First-use guided private WAV album readiness (unverified alpha)
 
 The installed native Pi4 default `audiohub-music` guided album picker
