@@ -529,7 +529,7 @@ def _verify_wavs_or_proven_empty(source, target):
                 source, source_fd, allow_empty=True)
             if source_files:
                 return music_transfer.transfer(
-                    "restore", target, music_dir=source, verify=True,
+                    "backup", target, music_dir=source, verify=True,
                     out=lambda _message: None, require_terminal=False)
             target_files, _ = music_transfer._source_list(
                 target, target_fd, allow_empty=True)
