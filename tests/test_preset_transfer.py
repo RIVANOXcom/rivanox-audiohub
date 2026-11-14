@@ -650,7 +650,7 @@ class PresetTransferTests(unittest.TestCase):
         self.assertEqual(subprocess.run(
             ["/bin/sh", "-n", str(wrapper)], capture_output=True).returncode, 0)
         code = wrapper.read_text()
-        self.assertIn('check-backup|backup-guided)', code)
+        self.assertIn('check-backup|backup-guided|plan-backup)', code)
         for args in (
             ["backup-guided"], ["backup-guided", "relative", str(self.old), str(self.old)],
             ["backup-guided", str(self.media), "relative", str(self.old)],
