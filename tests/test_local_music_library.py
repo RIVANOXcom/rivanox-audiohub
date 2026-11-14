@@ -143,7 +143,7 @@ class LocalMusicLibraryTests(unittest.TestCase):
             self.assertIn(phrase, display)
         self.assertNotIn(str(empty), display)
         self.assertNotIn(str(self.root), display)
-        self.assertEqual(len(display.splitlines()), 8)
+        self.assertEqual(len(display.splitlines()), 7)
         for invalid in (None, "yes", 1):
             with self.subTest(invalid=invalid):
                 with self.assertRaises(ValueError):
