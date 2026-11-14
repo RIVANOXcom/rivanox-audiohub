@@ -371,8 +371,10 @@ supported/unsafe WAV entries, then skips COPY entirely and still
 requires a separate exact SAVE if a preset archive needs creating.
 The final read-only check compares zero-WAV inventories and real
 saved preset bytes, **never claims WAVs were copied**. If the archive
-contains any supported or invalid WAV, or either directory is
-insecure, the entire operation stops before SAVE. The normal
+contains any supported, invalid or **hidden private WAV** (including
+dot-prefixed .wav files that the usual library listing intentionally
+hides), or either directory is insecure, the entire operation stops
+before SAVE; the old SD content is never silently omitted. The normal
 `audiohub-music-transfer verify-backup-old` command intentionally
 continues to reject zero WAVs. On the new SD, `restore-guided`
 similarly skips COPY only when the new private music folder also
