@@ -688,7 +688,11 @@ def main(argv=None):
             # The library is a local, read-only selection interface. It never
             # runs a player unless BOTH --tracks and --play are explicit.
             from . import music_library
-            items, skipped = music_library.discover_library(args.library)
+            # A new Pi4 image intentionally ships with zero personal WAVs.
+            # Allow read-only browsing of that legitimate empty state only;
+            # selecting or requesting playback still requires real WAV tracks.
+            items, skipped = music_library.discover_library(
+                args.library, allow_empty=(args.tracks is None and not args.play))
             print(music_library.display_library(items,
                                                  show_titles=args.show_titles))
             if skipped:
