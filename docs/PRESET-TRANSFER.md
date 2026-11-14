@@ -187,10 +187,16 @@ After copying and confirming the separately reviewed saves:
 every supported archived WAV and the archived saved EQ/inactive
 profiles on the replacement SD. Extra local volume profiles
 remain allowed; the check does not require that the SD image be an
-exact filesystem mirror. It is read-only, fail-closed if no WAV
-set exists, and prints a clear pass only when **both** groups match.
-If there is no WAV content, the operator cannot claim the combined
-check passed; use the standalone preset verification instead.
+exact filesystem mirror. It is read-only and fails closed for missing, unsafe, or different WAVs.
+**An intentionally empty original WAV library is now supported** for a
+combined preset-only SD migration **only if BOTH separately validated
+private music folders are empty of supported and unsafe WAV entries**.
+The combined check then verifies this exact zero-track condition as
+well as the saved EQ/inactive profiles, explicitly stating no WAV
+bytes were copied and no hardware playback was proven. This is not
+permission to discard any real music, overwrite a nonempty new SD
+music folder, or treat a generic WAV-only backup as complete. The
+standalone WAV-only verification still refuses an empty source.
 
 All of these are operator-only checks in an already authorized
 local terminal, with no root or network access. They do **not**
@@ -357,9 +363,24 @@ owner credentials, certificates, device IDs, source routing, active
 volumes or mutes, or any OS settings. It does not prove actual Pi4
 audio hardware, SD media reliability or legal/public release readiness.
 
-For an old SD with **no supported WAV files**, the combined guide
-refuses a misleading "complete" result; the separate existing
-`export-old` path still covers personalized EQ/profile data.
+For an old SD with **no supported WAV files**, the combined guide can
+now transfer the **saved EQ and inactive profiles only**, instead of
+blocking this valid common first-boot state. It first confirms that
+both the old music folder and external private archive contain zero
+supported/unsafe WAV entries, then skips COPY entirely and still
+requires a separate exact SAVE if a preset archive needs creating.
+The final read-only check compares zero-WAV inventories and real
+saved preset bytes, **never claims WAVs were copied**. If the archive
+contains any supported, invalid or **hidden private WAV** (including
+dot-prefixed .wav files that the usual library listing intentionally
+hides), or either directory is insecure, the entire operation stops
+before SAVE; the old SD content is never silently omitted. The normal
+`audiohub-music-transfer verify-backup-old` command intentionally
+continues to reject zero WAVs. On the new SD, `restore-guided`
+similarly skips COPY only when the new private music folder also
+contains no WAVs, preserves existing live levels and pairing, and
+asks separately for MERGE/APPLY-EQ as needed. Keep your old SD and
+private archive unchanged until a real operator verifies the result.
 Once the complete source archive is verified, continue with the
 already documented new-SD `restore-guided ARCHIVE` under its separate
 COPY / MERGE / APPLY-EQ confirmations, and retain the original SD for

@@ -2,6 +2,20 @@
 
 **Status:** Alpha / pre-release. No verified ready-to-flash Pi 4 image has been published. Native ARM64 test-only SD images have been built and uploaded to GitHub Actions (latest prior-to-renaming run 42057278883; 159 tests, 48 rootfs checks). **No real Pi4/Edifier playback, ownership security or product-ready Release has been verified.**
 
+## First-SD EQ-only migration with an empty private WAV collection (unverified alpha)
+
+The existing **combined** offline operator `audiohub-presets-transfer
+backup-guided` and `restore-guided` now preserve saved EQ bands and
+inactive volume profiles even if the validated old Pi4 music directory
+is genuinely empty. Both separate private WAV directories must be
+safely opened and checked empty on each read-only phase; any mismatched,
+unsafe or unexpected WAV blocks the combined guide. No false WAV copy,
+auto-import, live mixer update, pairing trust or device ownership
+transfer is claimed. Standard WAV-only backup/verification remains
+strictly nonempty. Separate SAVE, MERGE, APPLY-EQ confirmations and
+post-transfer verification retain the original SD rollback boundary.
+See [private transfer guide](PRESET-TRANSFER.md).
+
 ## Empty first-boot private WAV library onboarding (unverified alpha)
 
 A new Pi4 alpha test SD deliberately has no licensed music. The

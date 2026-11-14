@@ -474,23 +474,74 @@ def _music_destination_plan(external, music_dir):
             first, second = os.fstat(source_fd), os.fstat(target_fd)
             if (first.st_dev, first.st_ino) == (second.st_dev, second.st_ino):
                 raise ValueError("Private archive and new music directory must differ")
-            files, size = music_transfer._source_list(external, source_fd)
+            # A legitimately empty old Pi4 music folder must not block
+            # migration of saved EQ and inactive profiles. Never mistake
+            # unexpected destination WAVs for a clean empty-data migration.
+            files, size = music_transfer._source_list(
+                external, source_fd, allow_empty=True)
             if not files:
-                raise ValueError("Archive has no supported WAVs; no complete check possible")
+                target_files, _ = music_transfer._source_list(
+                    music_dir, target_fd, allow_empty=True)
+                if target_files:
+                    raise ValueError("Empty WAV archive conflicts with nonempty local music")
             matches = 0
             for item in files:
                 match = music_transfer._matching_destination(
                     source_fd, target_fd, item)
                 if match is not None:
                     matches += 1
-            again, size_after = music_transfer._source_list(external, source_fd)
+            again, size_after = music_transfer._source_list(
+                external, source_fd, allow_empty=True)
             if files != again or size != size_after:
                 raise OSError("Private WAV archive changed during preview")
+            if not files:
+                current_target, _ = music_transfer._source_list(
+                    music_dir, target_fd, allow_empty=True)
+                if current_target:
+                    raise OSError("New music folder changed during empty archive preview")
             return {
                 "wav_total": len(files), "wav_bytes": size,
                 "wav_matched": matches, "wav_missing": len(files) - matches,
                 "wav_copy_needed": matches < len(files),
             }
+        finally:
+            os.close(target_fd)
+    finally:
+        os.close(source_fd)
+
+
+def _verify_wavs_or_proven_empty(source, target):
+    """Read-only verification scoped ONLY to full preset+WAV SD migration.
+
+    Regular WAV transfer verify stays strict and requires real WAV data.
+    Empty is accepted only when *both* distinct private directories are
+    safely validated and visibly contain zero supported/unsafe WAV entries.
+    A zero-file result never asserts a file was copied or audio verified.
+    """
+    source_fd = music_transfer._private_dir(source)
+    try:
+        target_fd = music_transfer._private_dir(target)
+        try:
+            a, b = os.fstat(source_fd), os.fstat(target_fd)
+            if (a.st_dev, a.st_ino) == (b.st_dev, b.st_ino):
+                raise ValueError("Old and new private WAV directories must differ")
+            source_files, _ = music_transfer._source_list(
+                source, source_fd, allow_empty=True)
+            if source_files:
+                return music_transfer.transfer(
+                    "backup", target, music_dir=source, verify=True,
+                    out=lambda _message: None, require_terminal=False)
+            target_files, _ = music_transfer._source_list(
+                target, target_fd, allow_empty=True)
+            if target_files:
+                raise ValueError("Expected empty WAV target contains music")
+            source_again, _ = music_transfer._source_list(
+                source, source_fd, allow_empty=True)
+            target_again, _ = music_transfer._source_list(
+                target, target_fd, allow_empty=True)
+            if source_again or target_again:
+                raise OSError("Empty WAV inventory changed during SD check")
+            return True
         finally:
             os.close(target_fd)
     finally:
@@ -548,6 +599,10 @@ def plan_new_sd(external, *, settings_path=SETTINGS,
         "no_files_changed": True, "owner_identity_transferred": False,
         "hardware_playback_verified": False,
     }
+    if music["wav_total"] == 0:
+        out("Both protected music folders contain zero supported WAVs. "
+            "Only saved EQ/inactive profile data can be migrated; "
+            "no WAV transfer or musical sound verified.")
     out("New SD read-only plan: " + str(music["wav_total"]) +
         " archived WAVs, " + str(music["wav_matched"]) + " identical, " +
         str(music["wav_missing"]) + " missing; " +
@@ -591,9 +646,7 @@ def check_backup(external, old_music, old_config, *, out=print,
         old_config / "settings.json", old_config / "volume-profiles.json")
     if data != original:
         raise ValueError("EQ or inactive profiles differ from old SD backup")
-    music_transfer.transfer("backup", external, music_dir=old_music,
-                            verify=True, out=lambda _message: None,
-                            require_terminal=False)
+    _verify_wavs_or_proven_empty(old_music, external)
     out("Original SD to private backup: all supported WAV bytes and saved "
         "EQ/inactive profiles match, preset SHA256 " + archive_hash + ".")
     out("Read-only check, no flash, no owner/BT trust transfer, no hardware proof.")
@@ -606,9 +659,7 @@ def check_new(external, *, settings_path=SETTINGS,
               out=print, require_terminal=True):
     """Read-only archive-to-new-SD verification of BOTH supported data sets."""
     _guard(require_terminal=require_terminal)
-    music_transfer.transfer("restore", external, music_dir=music_dir,
-                            verify=True, out=lambda _message: None,
-                            require_terminal=False)
+    _verify_wavs_or_proven_empty(external, music_dir)
     verify_merged(external, settings_path=settings_path,
                   profile_path=profile_path, out=lambda _message: None,
                   require_terminal=False)
@@ -660,6 +711,9 @@ def backup_guided(external, old_music, old_config, *,
         previous, _ = _load(external)
         if previous != original:
             raise ValueError("Existing preset archive differs from old SD")
+    if wav["wav_total"] == 0:
+        out("Empty old-SD music and archive confirmed read-only; "
+            "saved EQ/profiles still require separate SAVE consent.")
     out("Old SD backup review: " + str(wav["wav_total"]) +
         " supported WAVs, " + str(wav["wav_matched"]) +
         " already matching, " + str(wav["wav_missing"]) +
@@ -685,10 +739,10 @@ def backup_guided(external, old_music, old_config, *,
             return False
     else:
         out("Step 1/2 – existing WAV archive already matches; no copy needed.")
-    # Never proceed to SAVE while the WAV source set has gaps or conflicts.
-    music_transfer.transfer(
-        "backup", external, music_dir=old_music, verify=True,
-        out=lambda _line: None, require_terminal=False)
+    # Never proceed to SAVE while WAV data has gaps or conflicts. A
+    # genuinely empty protected old-SD music folder may still preserve EQ
+    # and inactive profiles; no meaningless WAV file copy is claimed.
+    _verify_wavs_or_proven_empty(old_music, external)
     check_old_presets()
 
     if not archived:
@@ -825,6 +879,8 @@ def main(argv=None):
         print("Saved EQ APPLY-EQ to neutral EQ only; verify-merged permits extra local profiles.")
         print("restore-guided requires separate COPY, MERGE and APPLY-EQ, then read-only verification.")
         print("backup-guided requires separate COPY and SAVE, then read-only verification.")
+        print("If BOTH protected music folders are empty, the combined SD migration")
+        print("can preserve EQ and inactive profiles without WAV copying; no audio verified.")
         print("Never imports keys, Bluetooth trust, Wi-Fi, IDs, live volume/mutes or OS.")
         return 0
     old_sd_mode = len(args) == 3 and args[0] == "export-old"

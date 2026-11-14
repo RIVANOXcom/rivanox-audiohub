@@ -250,6 +250,137 @@ class PresetTransferTests(unittest.TestCase):
             confirm_copy=lambda: copy, confirm_save=lambda: save,
             out=self.logs.append, require_terminal=False)
 
+    def make_empty_sd_music_pair(self):
+        self.old_music = self.root / "OldMusicEmpty"
+        self.new_music = self.root / "NewMusicEmpty"
+        self.old_music.mkdir(mode=0o700)
+        self.new_music.mkdir(mode=0o700)
+
+    def test_empty_old_music_presets_only_guided_sd_swap_is_fully_usable(self):
+        self.make_empty_sd_music_pair()
+        old_settings = self.old_settings.read_bytes()
+        old_profiles = self.old_profiles.read_bytes()
+        self.assertFalse(self.guided_old_backup(
+            copy=lambda: (_ for _ in ()).throw(AssertionError("NO COPY")),
+            save=False))
+        self.assertFalse((self.media / preset_transfer.FILENAME).exists())
+        self.assertTrue(self.guided_old_backup(copy=False, save=True))
+        self.assertTrue(self.sd_check_backup())
+        self.assertEqual(list(self.old_music.iterdir()), [])
+        self.assertEqual(self.old_settings.read_bytes(), old_settings)
+        self.assertEqual(self.old_profiles.read_bytes(), old_profiles)
+        with self.assertRaises(ValueError):
+            music_transfer.transfer("backup", str(self.media),
+                                    music_dir=str(self.old_music),
+                                    verify=True, require_terminal=False)
+        plan = self.sd_plan()
+        self.assertEqual(plan["wav_total"], 0)
+        self.assertEqual(plan["wav_matched"], 0)
+        self.assertEqual(plan["wav_missing"], 0)
+        self.assertFalse(plan["wav_copy_needed"])
+        self.assertEqual(plan["profile_missing"], 1)
+        self.assertTrue(self.guided(copy=False, profiles=True, eq=True))
+        self.assertTrue(self.sd_check_new())
+        self.assertEqual(list(self.new_music.iterdir()), [])
+        self.assertEqual(
+            mixer_control.list_volume_profiles(path=self.new_profiles)
+            ["profiles"]["private-one"]["master"], 20)
+        self.assertEqual(mixer_control.show(path=self.new_settings)["master"], 70)
+        self.assertFalse(mixer_control.show(path=self.new_settings)["laptop"]["mute"])
+        report = "\n".join(self.logs)
+        self.assertIn("Empty old-SD music and archive confirmed", report)
+        self.assertIn("zero supported WAVs", report)
+        self.assertIn("Guided stored-data migration verified", report)
+        self.assertNotIn("private-one", report)
+        self.assertNotIn(str(self.root), report)
+
+    def test_empty_music_presets_only_guided_restore_resume_is_idempotent(self):
+        self.make_empty_sd_music_pair()
+        self.assertTrue(self.guided_old_backup())
+        self.assertTrue(self.guided())
+        saved = [self.media / preset_transfer.FILENAME,
+                 self.new_settings, self.new_profiles]
+        original = [(f.stat().st_ino, f.stat().st_mtime_ns, f.read_bytes())
+                    for f in saved if f.exists()]
+        self.assertTrue(self.guided(copy=False, profiles=False, eq=False))
+        self.assertEqual(
+            [(f.stat().st_ino, f.stat().st_mtime_ns, f.read_bytes())
+             for f in saved if f.exists()], original)
+        self.assertTrue(self.sd_check_new())
+
+    def test_empty_source_nonempty_destination_refuses_without_preset_writes(self):
+        self.make_empty_sd_music_pair()
+        self.assertTrue(self.guided_old_backup())
+        track = self.new_music / "existing-private.wav"
+        with wave.open(str(track), "wb") as audio:
+            audio.setnchannels(2)
+            audio.setsampwidth(2)
+            audio.setframerate(48000)
+            audio.writeframes(b"\x00\x01\x00\x02" * 120)
+        before = track.read_bytes()
+        with self.assertRaisesRegex(ValueError, "Empty WAV archive conflicts"):
+            self.sd_plan()
+        with self.assertRaises(ValueError):
+            self.guided()
+        self.assertEqual(track.read_bytes(), before)
+        self.assertFalse(self.new_settings.exists())
+        self.assertFalse(self.new_profiles.exists())
+        self.assertTrue((self.media / preset_transfer.FILENAME).exists())
+
+    def test_empty_source_unsafe_wav_refuses_before_preset_archive_created(self):
+        self.make_empty_sd_music_pair()
+        unsafe = self.old_music / "broken-private.wav"
+        unsafe.write_text("not a real WAV")
+        with self.assertRaises(ValueError):
+            self.guided_old_backup()
+        self.assertFalse((self.media / preset_transfer.FILENAME).exists())
+        self.assertEqual(unsafe.read_text(), "not a real WAV")
+
+    def test_hidden_wav_in_old_or_archive_or_new_never_looks_empty(self):
+        for where in ("old", "archive", "new"):
+            with self.subTest(where=where):
+                # The combined transfer must not omit an intentionally hidden
+                # or private WAV, even though normal music browsing hides it.
+                self.make_empty_sd_music_pair() if not hasattr(self, "old_music") else None
+                if where == "old":
+                    path = self.old_music / ".private-hidden.wav"
+                elif where == "archive":
+                    path = self.media / ".private-hidden.wav"
+                else:
+                    path = self.new_music / ".private-hidden.wav"
+                path.write_bytes(b"private not exported")
+                try:
+                    if where == "old":
+                        with self.assertRaisesRegex(ValueError, "Hidden private WAV"):
+                            self.guided_old_backup()
+                        self.assertFalse((self.media / preset_transfer.FILENAME).exists())
+                    else:
+                        if where == "new" and not (self.media / preset_transfer.FILENAME).exists():
+                            self.assertTrue(self.guided_old_backup())
+                        if where == "archive":
+                            with self.assertRaisesRegex(ValueError, "Hidden private WAV"):
+                                self.guided_old_backup()
+                        else:
+                            with self.assertRaisesRegex(ValueError, "Hidden private WAV"):
+                                self.sd_plan()
+                    self.assertEqual(path.read_bytes(), b"private not exported")
+                finally:
+                    path.unlink()
+
+    def test_empty_music_sd_check_refuses_added_wav_after_success(self):
+        self.make_empty_sd_music_pair()
+        self.assertTrue(self.guided_old_backup())
+        self.assertTrue(self.guided())
+        new_track = self.new_music / "later.wav"
+        with wave.open(str(new_track), "wb") as audio:
+            audio.setnchannels(2)
+            audio.setsampwidth(2)
+            audio.setframerate(48000)
+            audio.writeframes(b"\x00\x01\x00\x02" * 120)
+        with self.assertRaisesRegex(ValueError, "Expected empty WAV target"):
+            self.sd_check_new()
+        self.assertTrue(new_track.exists())
+
     def test_guided_old_backup_copy_save_and_full_verify(self):
         name = self.make_old_wav_for_backup()
         self.old_music.chmod(0o500)
@@ -962,6 +1093,10 @@ class PresetTransferTests(unittest.TestCase):
             ["export-old", str(self.old), "relative"]), 2)
 
     def test_cli_help_is_offline_and_commands_are_explicit(self):
+        with mock.patch("builtins.print") as output:
+            self.assertEqual(preset_transfer.main(["--help"]), 0)
+        self.assertIn("If BOTH protected music folders are empty",
+                      " ".join(str(x) for x in output.call_args_list))
         self.assertEqual(preset_transfer.main(["--help"]), 0)
         self.assertEqual(preset_transfer.main([]), 2)
         self.assertEqual(preset_transfer.main(["verify", "relative", "bad"]), 2)
