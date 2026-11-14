@@ -381,6 +381,135 @@ class PresetTransferTests(unittest.TestCase):
             self.sd_check_new()
         self.assertTrue(new_track.exists())
 
+    def plan_old_backup(self):
+        return preset_transfer.plan_old_sd_backup(
+            str(self.media), str(self.old_music), str(self.old),
+            out=self.logs.append, require_terminal=False)
+
+    def test_readonly_backup_plan_before_any_save_or_copy(self):
+        name = self.make_old_wav_for_backup()
+        old_bytes = (self.old_music / name).read_bytes()
+        settings = self.old_settings.read_bytes()
+        profiles = self.old_profiles.read_bytes()
+        plan = self.plan_old_backup()
+        self.assertEqual(plan["wav_total"], 1)
+        self.assertEqual(plan["wav_matched"], 0)
+        self.assertEqual(plan["wav_missing"], 1)
+        self.assertTrue(plan["wav_copy_needed"])
+        self.assertFalse(plan["presets_archived"])
+        self.assertTrue(plan["presets_need_save"])
+        self.assertEqual(plan["saved_profile_count"], 1)
+        self.assertGreater(plan["saved_eq_band_count"], 0)
+        self.assertFalse(plan["ready_for_readonly_check"])
+        self.assertTrue(plan["no_files_changed"])
+        self.assertEqual(list(self.media.iterdir()), [])
+        self.assertEqual((self.old_music / name).read_bytes(), old_bytes)
+        self.assertEqual(self.old_settings.read_bytes(), settings)
+        self.assertEqual(self.old_profiles.read_bytes(), profiles)
+        rendered = "\n".join(self.logs)
+        self.assertIn("READ-ONLY OLD SD BACKUP PLAN", rendered)
+        self.assertIn("backup-guided PRIVATE_ARCHIVE OLD_MUSIC OLD_CONFIG", rendered)
+        self.assertIn("No private", rendered)
+        self.assertNotIn(name, rendered)
+        self.assertNotIn("private-one", rendered)
+        self.assertNotIn(str(self.root), rendered)
+
+    def test_readonly_backup_plan_recognizes_existing_verified_archive(self):
+        name = self.make_old_wav_for_backup()
+        self.assertTrue(self.guided_old_backup())
+        copies = [self.media / name, self.media / preset_transfer.FILENAME]
+        before = [(p.stat().st_ino, p.stat().st_mtime_ns, p.read_bytes())
+                  for p in copies]
+        plan = self.plan_old_backup()
+        self.assertEqual(plan["wav_matched"], 1)
+        self.assertEqual(plan["wav_missing"], 0)
+        self.assertTrue(plan["presets_archived"])
+        self.assertFalse(plan["presets_need_save"])
+        self.assertTrue(plan["ready_for_readonly_check"])
+        self.assertEqual(
+            before, [(p.stat().st_ino, p.stat().st_mtime_ns, p.read_bytes())
+                     for p in copies])
+        self.assertIn("check-backup PRIVATE_ARCHIVE OLD_MUSIC OLD_CONFIG",
+                      "\n".join(self.logs))
+
+    def test_readonly_backup_plan_zero_wav_with_real_saved_profiles(self):
+        self.make_empty_sd_music_pair()
+        plan = self.plan_old_backup()
+        self.assertEqual(plan["wav_total"], 0)
+        self.assertFalse(plan["wav_copy_needed"])
+        self.assertTrue(plan["presets_need_save"])
+        self.assertEqual(plan["saved_profile_count"], 1)
+        self.assertEqual(list(self.media.iterdir()), [])
+        self.assertIn("Both protected WAV folders are EMPTY",
+                      "\n".join(self.logs))
+        self.assertTrue(self.guided_old_backup())
+        second = self.plan_old_backup()
+        self.assertTrue(second["ready_for_readonly_check"])
+        self.assertTrue(self.sd_check_backup())
+        self.assertEqual(list(self.old_music.iterdir()), [])
+
+    def test_readonly_backup_plan_detects_conflicts_without_writes(self):
+        name = self.make_old_wav_for_backup()
+        archive = self.media / name
+        archive.write_bytes(b"unsafe incompatible file")
+        archive.chmod(0o600)
+        before = archive.read_bytes()
+        with self.assertRaises((ValueError, OSError)):
+            self.plan_old_backup()
+        self.assertEqual(archive.read_bytes(), before)
+        self.assertFalse((self.media / preset_transfer.FILENAME).exists())
+        archive.unlink()
+        self.assertTrue(self.export())
+        original = (self.media / preset_transfer.FILENAME).read_bytes()
+        mixer_control.change({"music": {"bass": -6}},
+                             path=self.old_settings, confirmed=True)
+        with self.assertRaises(ValueError):
+            self.plan_old_backup()
+        self.assertEqual((self.media / preset_transfer.FILENAME).read_bytes(),
+                         original)
+
+    def test_readonly_backup_plan_hidden_wav_and_untrusted_terminal_refuse(self):
+        self.make_empty_sd_music_pair()
+        secret = self.old_music / ".hidden-private.wav"
+        secret.write_bytes(b"never claim this SD is empty")
+        with self.assertRaisesRegex(ValueError, "Hidden private WAV"):
+            self.plan_old_backup()
+        self.assertEqual(list(self.media.iterdir()), [])
+        secret.unlink()
+        with mock.patch.object(preset_transfer.os, "geteuid", return_value=0):
+            with self.assertRaises(PermissionError):
+                self.plan_old_backup()
+        with mock.patch.object(preset_transfer.sys.stdin, "isatty",
+                               return_value=False):
+            with self.assertRaises(PermissionError):
+                preset_transfer.plan_old_sd_backup(
+                    str(self.media), str(self.old_music), str(self.old))
+
+    def test_readonly_backup_plan_cli_and_native_launcher_dispatch(self):
+        with mock.patch.object(preset_transfer, "plan_old_sd_backup",
+                               return_value={"no_files_changed": True}) as fn:
+            self.assertEqual(preset_transfer.main([
+                "plan-backup", str(self.media), str(self.old),
+                str(self.old)]), 0)
+            self.assertEqual(fn.call_args.args,
+                             (str(self.media), str(self.old), str(self.old)))
+        import subprocess
+        wrapper = (Path(__file__).resolve().parents[1] /
+                   "image/stage-audiohub/01-install/files/bin/audiohub-presets-transfer")
+        self.assertEqual(subprocess.run(
+            ["/bin/sh", "-n", str(wrapper), str(wrapper)],
+            capture_output=True).returncode, 0)
+        self.assertIn('check-backup|backup-guided|plan-backup)',
+                      wrapper.read_text())
+        for args in (["plan-backup"], ["plan-backup", "relative", str(self.old), str(self.old)],
+                     ["plan-backup", str(self.media), "relative", str(self.old)],
+                     ["plan-backup", str(self.media), str(self.old), "relative"],
+                     ["plan-backup", str(self.media), str(self.old)]):
+            with self.subTest(args=args):
+                self.assertEqual(subprocess.run(
+                    ["/bin/sh", str(wrapper), *args],
+                    capture_output=True, timeout=5).returncode, 2)
+
     def test_guided_old_backup_copy_save_and_full_verify(self):
         name = self.make_old_wav_for_backup()
         self.old_music.chmod(0o500)
@@ -521,7 +650,7 @@ class PresetTransferTests(unittest.TestCase):
         self.assertEqual(subprocess.run(
             ["/bin/sh", "-n", str(wrapper)], capture_output=True).returncode, 0)
         code = wrapper.read_text()
-        self.assertIn('check-backup|backup-guided)', code)
+        self.assertIn('check-backup|backup-guided|plan-backup)', code)
         for args in (
             ["backup-guided"], ["backup-guided", "relative", str(self.old), str(self.old)],
             ["backup-guided", str(self.media), "relative", str(self.old)],
