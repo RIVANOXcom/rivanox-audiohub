@@ -309,6 +309,35 @@ A failed step leaves the original SD untouched; retain it and the
 external backup for physical rollback. Never use this as authorization
 to flash an existing SD or modify machine permissions.
 
+## Preview the old-SD backup safely BEFORE choosing COPY or SAVE
+
+A new read-only local operator command reviews the old Pi4 SD and the
+separate private backup **without creating any file or asking for consent**:
+
+    audiohub-presets-transfer plan-backup /absolute/private/archive /absolute/old-SD/home/audiohub/PrivateMusic /absolute/old-SD/home/audiohub/.config/audiohub
+
+Use it on the separately authorized replacement test Pi4 after the
+original SD has been mounted **read-only** by the operator. All three
+private directories must already exist, be owner-only and match the
+unprivileged audiohub UID; symbolic links, unsafe or hidden WAVs,
+different same-name WAV bytes, or conflicting preset archive data are
+refused, rather than silently omitted. No ownership/BT/Wi-Fi secrets
+or music file names are disclosed. The read-only preview reports
+bounded WAV counts, SHA256-matched versus missing tracks, number of
+saved inactive profiles and altered EQ bands, and whether the preset
+archive already matches or needs a separate SAVE.
+
+The guide identifies exactly which existing action to use next:
+`backup-guided PRIVATE_ARCHIVE OLD_MUSIC OLD_CONFIG` (with the usual
+**separate COPY and SAVE** if needed) or, if all backup files already
+match, read-only `check-backup PRIVATE_ARCHIVE OLD_MUSIC OLD_CONFIG`.
+It correctly recognizes an old SD with **zero WAVs** and actual saved
+EQ/profile data; it never treats a planning preview as a durable
+backup. After the confirmed transfer, complete `check-backup` before
+manual SD replacement. Keep original media and independent backup
+unchanged; a status report is not evidence of physical sound,
+identity transfer or safe automatic flashing.
+
 ## Guided first backup FROM an old SD without transfer software
 
 For a manually initiated test update, the new Pi4 image can **first**
