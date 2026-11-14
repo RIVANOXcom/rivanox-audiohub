@@ -2,6 +2,21 @@
 
 **Status:** Alpha / pre-release. No verified ready-to-flash Pi 4 image has been published. Native ARM64 test-only SD images have been built and uploaded to GitHub Actions (latest prior-to-renaming run 42057278883; 159 tests, 48 rootfs checks). **No real Pi4/Edifier playback, ownership security or product-ready Release has been verified.**
 
+## First-use SD backup preview BEFORE changing cards (unverified alpha)
+
+An operator can now run installed `audiohub-presets-transfer
+plan-backup PRIVATE_ARCHIVE OLD_MUSIC OLD_CONFIG` to review an already
+read-only mounted old Pi4 SD and existing private archive **without
+any writes or COPY/SAVE prompt**. The private report includes supported
+WAV count and SHA256 match/missing counts, saved EQ band changes and
+inactive profile counts, whether the archive requires separate SAVE,
+and the correct existing `backup-guided` or `check-backup` next
+action. Legitimately empty WAV collections are supported only in
+combined preset migration; unexpected hidden/unsafe/colliding media
+or mismatched preset archives fail closed. This is a pre-transfer
+review, not a successful backup, owner-data migration, hardware pass
+or SD flash. See [safe offline SD guide](PRESET-TRANSFER.md).
+
 ## First-SD EQ-only migration with an empty private WAV collection (unverified alpha)
 
 The existing **combined** offline operator `audiohub-presets-transfer
