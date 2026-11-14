@@ -48,7 +48,7 @@ set -e
 test "$empty_library_status" -eq 0
 test "$invalid_level_status" -eq 2
 test "$invalid_time_status" -eq 2
-case "$empty_library_output" in *"0 valid WAV track(s)"*"EMPTY PRIVATE WAV LIBRARY"*"audiohub-music --speaker-check"*"audiohub-music-transfer --help"*"No playback started."*) ;; *) exit 1 ;; esac
+case "$empty_library_output" in *"0 valid WAV track(s)"*"No playback started."*"EMPTY PRIVATE WAV LIBRARY"*"audiohub-music --speaker-check"*"audiohub-music-transfer --help"*) ;; *) exit 1 ;; esac
 case "$invalid_level_output" in *"Only quiet, soft or normal"*) ;; *) exit 1 ;; esac
 case "$invalid_time_output" in *"Minutes must be a whole number"*) ;; *) exit 1 ;; esac
 
