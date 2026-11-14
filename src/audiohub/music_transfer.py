@@ -55,6 +55,13 @@ def _source_list(path, fd, *, allow_empty=False):
     # still refuses to certify an empty source.
     if type(allow_empty) is not bool:
         raise ValueError("Invalid empty music-source policy")
+    if allow_empty:
+        # An ignored hidden .wav is still real private user content. Never
+        # certify an old SD as empty while silently omitting that data.
+        with os.scandir(fd) as entries:
+            for entry in entries:
+                if entry.name.startswith(".") and entry.name.lower().endswith(".wav"):
+                    raise ValueError("Hidden private WAV prevents complete SD migration")
     items, skipped = (music_library.discover_library(path, allow_empty=True)
                       if allow_empty else music_library.discover_library(path))
     if skipped:
