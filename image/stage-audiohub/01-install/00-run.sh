@@ -206,6 +206,15 @@ set -e
 test "$guided_restore_status" -eq 2
 case "$guided_restore_output" in *"Private preset operation safely refused"*) ;; *) exit 1 ;; esac
 
+# New installed 4-argument read-only old-SD backup planner likewise
+# refuses native unattended operation before opening any private media.
+set +e
+plan_backup_output="$(runuser -u audiohub -- /usr/local/bin/audiohub-presets-transfer plan-backup /home/audiohub/PrivateMusic /home/audiohub/PrivateMusic /home/audiohub/.config/audiohub 2>&1)"
+plan_backup_status="$?"
+set -e
+test "$plan_backup_status" -eq 2
+case "$plan_backup_output" in *"Private preset operation safely refused"*) ;; *) exit 1 ;; esac
+
 # Installed 4-argument first old-SD backup guide is never unattended:
 # no trusted TTY means the Python guard must fail without touching files.
 set +e
