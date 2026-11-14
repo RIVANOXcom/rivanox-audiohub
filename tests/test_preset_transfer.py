@@ -336,6 +336,37 @@ class PresetTransferTests(unittest.TestCase):
         self.assertFalse((self.media / preset_transfer.FILENAME).exists())
         self.assertEqual(unsafe.read_text(), "not a real WAV")
 
+    def test_hidden_wav_in_old_or_archive_or_new_never_looks_empty(self):
+        for where in ("old", "archive", "new"):
+            with self.subTest(where=where):
+                # The combined transfer must not omit an intentionally hidden
+                # or private WAV, even though normal music browsing hides it.
+                self.make_empty_sd_music_pair() if not hasattr(self, "old_music") else None
+                if where == "old":
+                    path = self.old_music / ".private-hidden.wav"
+                elif where == "archive":
+                    path = self.media / ".private-hidden.wav"
+                else:
+                    path = self.new_music / ".private-hidden.wav"
+                path.write_bytes(b"private not exported")
+                try:
+                    if where == "old":
+                        with self.assertRaisesRegex(ValueError, "Hidden private WAV"):
+                            self.guided_old_backup()
+                        self.assertFalse((self.media / preset_transfer.FILENAME).exists())
+                    else:
+                        if where == "new" and not (self.media / preset_transfer.FILENAME).exists():
+                            self.assertTrue(self.guided_old_backup())
+                        if where == "archive":
+                            with self.assertRaisesRegex(ValueError, "Hidden private WAV"):
+                                self.guided_old_backup()
+                        else:
+                            with self.assertRaisesRegex(ValueError, "Hidden private WAV"):
+                                self.sd_plan()
+                    self.assertEqual(path.read_bytes(), b"private not exported")
+                finally:
+                    path.unlink()
+
     def test_empty_music_sd_check_refuses_added_wav_after_success(self):
         self.make_empty_sd_music_pair()
         self.assertTrue(self.guided_old_backup())
