@@ -363,9 +363,22 @@ owner credentials, certificates, device IDs, source routing, active
 volumes or mutes, or any OS settings. It does not prove actual Pi4
 audio hardware, SD media reliability or legal/public release readiness.
 
-For an old SD with **no supported WAV files**, the combined guide
-refuses a misleading "complete" result; the separate existing
-`export-old` path still covers personalized EQ/profile data.
+For an old SD with **no supported WAV files**, the combined guide can
+now transfer the **saved EQ and inactive profiles only**, instead of
+blocking this valid common first-boot state. It first confirms that
+both the old music folder and external private archive contain zero
+supported/unsafe WAV entries, then skips COPY entirely and still
+requires a separate exact SAVE if a preset archive needs creating.
+The final read-only check compares zero-WAV inventories and real
+saved preset bytes, **never claims WAVs were copied**. If the archive
+contains any supported or invalid WAV, or either directory is
+insecure, the entire operation stops before SAVE. The normal
+`audiohub-music-transfer verify-backup-old` command intentionally
+continues to reject zero WAVs. On the new SD, `restore-guided`
+similarly skips COPY only when the new private music folder also
+contains no WAVs, preserves existing live levels and pairing, and
+asks separately for MERGE/APPLY-EQ as needed. Keep your old SD and
+private archive unchanged until a real operator verifies the result.
 Once the complete source archive is verified, continue with the
 already documented new-SD `restore-guided ARCHIVE` under its separate
 COPY / MERGE / APPLY-EQ confirmations, and retain the original SD for
