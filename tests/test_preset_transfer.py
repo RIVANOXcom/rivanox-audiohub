@@ -1062,6 +1062,10 @@ class PresetTransferTests(unittest.TestCase):
             ["export-old", str(self.old), "relative"]), 2)
 
     def test_cli_help_is_offline_and_commands_are_explicit(self):
+        with mock.patch("builtins.print") as output:
+            self.assertEqual(preset_transfer.main(["--help"]), 0)
+        self.assertIn("If BOTH protected music folders are empty",
+                      " ".join(str(x) for x in output.call_args_list))
         self.assertEqual(preset_transfer.main(["--help"]), 0)
         self.assertEqual(preset_transfer.main([]), 2)
         self.assertEqual(preset_transfer.main(["verify", "relative", "bad"]), 2)
