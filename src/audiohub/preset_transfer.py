@@ -670,6 +670,74 @@ def check_new(external, *, settings_path=SETTINGS,
     return True
 
 
+def plan_old_sd_backup(external, old_music, old_config, *,
+                       out=print, require_terminal=True):
+    """Read-only BEFORE-CHANGE review of mounted old SD and private archive.
+
+    Uses the same source-set hashing, no-symlink/private-directory checks
+    and strict preset snapshot comparison as the combined backup guide.
+    Does not prompt for COPY/SAVE, create directories, mount SDs or write
+    anything. The old SD must already have been mounted READ-ONLY
+    independently by a separately authorized operator.
+    """
+    _guard(require_terminal=require_terminal)
+    folder = Path(old_config)
+    if (not folder.is_absolute() or ".." in folder.parts or
+            len(str(folder)) > 1024):
+        raise ValueError("Old SD config requires an absolute private path")
+    original, _ = _source_snapshot(
+        folder / "settings.json", folder / "volume-profiles.json")
+    wav = _music_destination_plan(old_music, external)
+    archive_fd = music_transfer._private_dir(external)
+    try:
+        try:
+            os.stat(FILENAME, dir_fd=archive_fd, follow_symlinks=False)
+        except FileNotFoundError:
+            archived = False
+        else:
+            archived = True
+    finally:
+        os.close(archive_fd)
+    if archived:
+        existing, _ = _load(external)
+        if existing != original:
+            raise ValueError("Saved backup differs from old SD audio presets")
+    plan = {
+        **wav,
+        "presets_archived": archived,
+        "presets_need_save": not archived,
+        "saved_profile_count": len(original["profiles"]),
+        "saved_eq_band_count": sum(
+            original["eq"][slot][band] != 0
+            for slot in CHANNELS for band in EQ_BANDS),
+        "ready_for_readonly_check": archived and not wav["wav_copy_needed"],
+        "no_files_changed": True,
+        "owner_identity_transferred": False,
+        "hardware_verified": False,
+    }
+    out("READ-ONLY OLD SD BACKUP PLAN: " + str(wav["wav_total"]) +
+        " supported private WAV tracks, " + str(wav["wav_matched"]) +
+        " existing SHA256 matches, " + str(wav["wav_missing"]) +
+        " new copies needed.")
+    out("Saved EQ bands with changes: " + str(plan["saved_eq_band_count"]) +
+        "; inactive profile count: " + str(plan["saved_profile_count"]) +
+        "; preset archive: " + ("already matches" if archived else "needs SAVE") + ".")
+    if wav["wav_total"] == 0:
+        out("Both protected WAV folders are EMPTY; only validated saved "
+            "EQ/inactive profiles can be archived. No audio was copied.")
+    if plan["ready_for_readonly_check"]:
+        out("NEXT: audiohub-presets-transfer check-backup "
+            "PRIVATE_ARCHIVE OLD_MUSIC OLD_CONFIG (read-only).")
+    else:
+        out("NEXT: audiohub-presets-transfer backup-guided "
+            "PRIVATE_ARCHIVE OLD_MUSIC OLD_CONFIG (separate COPY/SAVE consent).")
+    out("Nothing copied, written, mounted, flashed or played. No private "
+        "names, owner keys, device IDs or credentials disclosed.")
+    out("This is a planning snapshot, NOT a durable backup or hardware GO. "
+        "Keep original SD and independent private backups unchanged.")
+    return plan
+
+
 def backup_guided(external, old_music, old_config, *,
                   out=print, require_terminal=True,
                   confirm_copy=None, confirm_save=None):
