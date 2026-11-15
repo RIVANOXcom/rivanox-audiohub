@@ -443,6 +443,107 @@ class MusicSessionTests(unittest.TestCase):
                 playback=self.waiting_playback, out=self.out.append,
                 require_tty=False)
 
+    def test_private_track_eta_formats_header_time_and_never_titles(self):
+        normal = music_session.track_progress_message(65000, 12.8)
+        self.assertIn("00:12 elapsed / 01:05 header duration", normal)
+        self.assertIn("approximately 00:53 remaining", normal)
+        self.assertIn("not measured PCM position or sound", normal)
+        self.assertNotIn("secret-title", normal)
+        self.assertNotIn(str(self.dir), normal)
+        self.assertIn("01:05 elapsed", music_session.track_progress_message(
+            65000, 300, paused=True))
+        self.assertIn("approximately 00:00 remaining (PAUSED)",
+                      music_session.track_progress_message(
+                          65000, 300, paused=True))
+        for bad_ms, bad_elapsed, paused in (
+                (0, 0, False), (-1, 0, False),
+                (65000, -1, False), (65000, float("nan"), False),
+                (65000, float("inf"), False),
+                (True, 0, False), (65000, True, False),
+                (65000, 0, "true")):
+            with self.subTest(v=(bad_ms, bad_elapsed, paused)):
+                with self.assertRaises(ValueError):
+                    music_session.track_progress_message(
+                        bad_ms, bad_elapsed, paused=paused)
+
+    def test_live_track_eta_excludes_paused_time_but_session_limit_runs(self):
+        ticks = {"now": 100.0}
+        def clock():
+            return ticks["now"]
+        child_ready = threading.Event()
+        child = FakeChild()
+        queue = local_music.inspect_playlist(self.paths, max_minutes=4)
+        queue["tracks"][0]["duration_ms"] = 65000
+        events = iter((("s", 112.0), ("u", 115.0),
+                       ("s", 145.0), ("u", 151.0),
+                       ("s", 160.0), ("q", 161.0)))
+        def playback(_paths, *, max_minutes, stop, on_player,
+                     session_deadline, notify):
+            on_player(child)
+            child_ready.set()
+            while not stop.wait(0.001):
+                pass
+            raise InterruptedError("operator STOP")
+        def read(_seconds):
+            self.assertTrue(child_ready.wait(2))
+            command, now = next(events)
+            ticks["now"] = now
+            return command
+        with mock.patch.object(local_music, "music_sink_available",
+                               return_value=True), \
+             mock.patch.object(local_music.os, "geteuid", return_value=1000), \
+             mock.patch.object(local_music, "inspect_playlist",
+                               return_value=queue):
+            result = music_session.run_session(
+                self.paths, max_minutes=4, read_command=read,
+                playback=playback, clock=clock, out=self.out.append,
+                require_tty=False)
+        self.assertFalse(result)
+        output = "\n".join(self.out)
+        self.assertIn("Estimated WAV track: 00:12 elapsed", output)
+        self.assertIn("approximately 00:53 remaining", output)
+        self.assertIn("Estimated WAV track: 00:15 elapsed", output)
+        self.assertIn("approximately 00:50 remaining (PAUSED)", output)
+        self.assertIn("Estimated WAV track: 00:24 elapsed", output)
+        self.assertIn("approximately 00:41 remaining", output)
+        self.assertIn("session remaining 140 s", output)
+        self.assertIn("PAUSED (owned player only)", output)
+        self.assertTrue(child.terminated)
+        self.assertEqual(child.sent_signals,
+                         [signal.SIGSTOP, signal.SIGCONT])
+        self.assertNotIn(str(self.dir), output)
+        self.assertNotIn("secret-title", output)
+
+    def test_track_eta_omits_false_progress_before_player_observed(self):
+        track_created = threading.Event()
+        permit_create = threading.Event()
+        def playback(_paths, *, max_minutes, stop, on_player,
+                     session_deadline, notify):
+            track_created.set()
+            if permit_create.wait(0.1):
+                on_player(FakeChild())
+            while not stop.wait(0.001):
+                pass
+            raise InterruptedError("operator stop")
+        commands = iter(("s", "q"))
+        def read(_seconds):
+            self.assertTrue(track_created.wait(2))
+            reply = next(commands)
+            if reply == "q":
+                permit_create.set()
+            return reply
+        with mock.patch.object(local_music, "music_sink_available",
+                               return_value=True), \
+             mock.patch.object(local_music.os, "geteuid", return_value=1000):
+            self.assertFalse(music_session.run_session(
+                self.paths, read_command=read, playback=playback,
+                out=self.out.append, require_tty=False))
+        message = "\n".join(self.out)
+        self.assertIn("Track estimate pending until our local player starts",
+                      message)
+        self.assertNotIn("Estimated WAV track:", message)
+        self.assertNotIn("secret-title", message)
+
     def test_pause_and_resume_signal_only_owned_child(self):
         self.assertFalse(self.run_paused(["u", "s", "u", "q"]))
         self.assertEqual(self.played, [self.paths[0]])
