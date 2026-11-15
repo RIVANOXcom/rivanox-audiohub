@@ -25,6 +25,10 @@ CHUNK_SIZE = 64 * 1024
 COPY_BUFFER = 8
 
 
+class UnmigratedAudioError(ValueError):
+    """Full SD migration cannot claim ownership of other media formats."""
+
+
 def _private_dir(path):
     """Open every path component without following symlinks; require 0700."""
     if type(path) is not str or not path.startswith("/") or "\x00" in path:
@@ -69,7 +73,7 @@ def _source_list(path, fd, *, allow_empty=False):
                     raise ValueError("Too many private music entries for complete SD review")
                 name = entry.name.lower()
                 if name.endswith(tuple(music_library.OTHER_AUDIO_SUFFIXES)):
-                    raise ValueError(
+                    raise UnmigratedAudioError(
                         "Unmigrated non-WAV audio found: keep original SD intact "
                         "and arrange a separate authorized backup before SD swap")
                 if entry.name.startswith(".") and name.endswith(".wav"):
