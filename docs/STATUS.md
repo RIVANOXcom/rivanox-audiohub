@@ -2,6 +2,22 @@
 
 **Status:** Alpha / pre-release. No verified ready-to-flash Pi 4 image has been published. Native ARM64 test-only SD images have been built and uploaded to GitHub Actions (latest prior-to-renaming run 42057278883; 159 tests, 48 rootfs checks). **No real Pi4/Edifier playback, ownership security or product-ready Release has been verified.**
 
+## Schedule an existing private WAV as next without cutting current (unverified alpha)
+
+Within the already operator-authorized local Pi4 WAV playback session,
+the new `k1`–`k8` commands queue **one of the previously selected
+anonymous WAV tracks** to start after the current owned player finishes
+naturally, with no interruption or restart. `k0` cancels it. `s`
+status and `l` queue show only the track number, never filenames.
+This one-shot next override takes precedence over the ordinary order
+or repeat mode once. A later `e` clears queued next; selecting a
+queued-next song after `e` visibly disarms end-after-current. Manual
+`n`/`p`/`r`/number jumps clear the deferred selection, while
+immediate `q`, original deadline or real playback error prevent any
+subsequent new WAV. No new media file, timer, queue storage, gain,
+system mixer change, network, owner/BT/WiFi operation or additional
+player is introduced. See [local playback guide](LOCAL-MUSIC-PLAYBACK.md).
+
 ## Safe failure reporting and no unintended next WAV after player loss (unverified alpha)
 
 An unexpectedly failed local `pw-cat`/private PipeWire playback now
