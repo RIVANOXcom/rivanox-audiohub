@@ -431,5 +431,41 @@ class MusicLauncherTests(unittest.TestCase):
         self.assertIn("NO SUPPORTED WAV TRACKS", stage)
 
 
+    def test_first_use_operator_flow_is_exclusive_no_autoplay_and_native_tty_gated(self):
+        help_text = self.shell("--help").stdout
+        self.assertIn("audiohub-music [ABSOLUTE_PRIVATE_WAV_FOLDER] --first-use", help_text)
+        self.assertIn("exact SPEAKER, MUSIC or QUIT", help_text)
+        source = LAUNCHER.read_text(encoding="utf-8")
+        self.assertIn("first_use_only=0", source)
+        self.assertIn('if [ "$first_use_only" -eq 1 ]; then', source)
+        self.assertIn(
+            'exec /usr/bin/python3 -m audiohub.local_music --first-use --library "$folder"',
+            source)
+        self.assertNotIn("pw-cat", source)
+        self.assertNotIn(" --play", source)
+        for args in (
+                ("--first-use", "--first-use"),
+                ("--first-use", "--check"),
+                ("--first-use", "--list"),
+                ("--first-use", "--library-health"),
+                ("--first-use", "--show-titles"),
+                ("--first-use", "--level", "normal"),
+                ("--first-use", "--minutes", "15"),
+                ("--first-use", "--channel", "both"),
+                ("--first-use", "--play"),
+                ("--first-use", "relative"),
+                ("--first-use", "/private/a", "/private/b"),
+                ("/private/a", "--first-use", "--speaker-guide"),
+        ):
+            with self.subTest(args=args):
+                outcome = self.shell(*args)
+                self.assertEqual(outcome.returncode, 2, (args, outcome.stderr))
+                self.assertNotIn("PLAY confirmed", outcome.stdout)
+        stage = STAGE.read_text(encoding="utf-8")
+        self.assertIn("first_use_noninteractive_output=", stage)
+        self.assertIn("/usr/local/bin/audiohub-music --first-use 2>&1", stage)
+        self.assertIn('test "$first_use_noninteractive_status" -eq 2', stage)
+
+
 if __name__ == "__main__":
     unittest.main()

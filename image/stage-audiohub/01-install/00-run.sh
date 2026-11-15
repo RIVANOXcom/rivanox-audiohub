@@ -112,6 +112,15 @@ set -e
 test "$speaker_guide_noninteractive_status" -eq 2
 case "$speaker_guide_noninteractive_output" in *"Local player unavailable or stopped"*) ;; *) exit 1 ;; esac
 
+# The installed combined first-use route MUST refuse an unattended native
+# build/boot context before reading private media or trying any sound.
+set +e
+first_use_noninteractive_output="$(runuser -u audiohub -- /usr/local/bin/audiohub-music --first-use 2>&1)"
+first_use_noninteractive_status="$?"
+set -e
+test "$first_use_noninteractive_status" -eq 2
+case "$first_use_noninteractive_output" in *"Local player unavailable or stopped"*) ;; *) exit 1 ;; esac
+
 # The real installed selective recheck MUST refuse without a physical TTY.
 # Confirm both shell argument forwarding and Python's non-playing gate.
 set +e
