@@ -2,6 +2,21 @@
 
 **Status:** Alpha / pre-release. No verified ready-to-flash Pi 4 image has been published. Native ARM64 test-only SD images have been built and uploaded to GitHub Actions (latest prior-to-renaming run 42057278883; 159 tests, 48 rootfs checks). **No real Pi4/Edifier playback, ownership security or product-ready Release has been verified.**
 
+## Pause-aware local music track time estimates (unverified alpha)
+
+During an explicitly approved unprivileged local WAV playback
+session, the existing `s` command now displays a **second anonymous
+per-track timing line**. Header-derived WAV duration and monotonic
+time since this program observed its own playback child show an
+approximate `MM:SS` elapsed/remaining for the selected track.
+Time paused with `u` is excluded from the track estimate, while the
+existing overall session deadline continues. If no player has
+started, progress is explicitly unavailable. Skip/previous/replay/
+repeat reset timing naturally for the new owned track. This is
+no PCM position, hardware sound proof, extra player, network API,
+filename disclosure or persistent session file. See
+[operator playback instructions](LOCAL-MUSIC-PLAYBACK.md).
+
 ## First-use SD backup preview BEFORE changing cards (unverified alpha)
 
 An operator can now run installed `audiohub-presets-transfer
