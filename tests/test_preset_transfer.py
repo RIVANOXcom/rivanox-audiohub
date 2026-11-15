@@ -419,7 +419,14 @@ class PresetTransferTests(unittest.TestCase):
         private = self.old_music / "my-private-artist.FLAC"
         private.write_bytes(b"never_copy_this_media")
         private.chmod(0o600)
-        with mock.patch("builtins.print") as printed:
+        # The installed CLI deliberately requires a trusted local TTY.
+        # Give this synthetic operator-command fixture that explicit
+        # simulated context; otherwise it must refuse before file scanning.
+        with mock.patch.object(preset_transfer.sys, "stdin",
+                               mock.Mock(isatty=lambda: True)), \
+             mock.patch.object(preset_transfer.sys, "stdout",
+                               mock.Mock(isatty=lambda: True)), \
+             mock.patch("builtins.print") as printed:
             code = preset_transfer.main([
                 "plan-backup", str(self.media), str(self.old_music),
                 str(self.old)])
