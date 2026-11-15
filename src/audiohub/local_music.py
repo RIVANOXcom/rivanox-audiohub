@@ -297,7 +297,7 @@ def check_music_readiness(folder, *, capture=bounded_command_output,
          "(audibility UNVERIFIED)." if sink_ready else
          "NEEDS ATTENTION; inspect the audiohub user PipeWire runtime, "
          "audiohub.music input and unambiguous USB speaker output. "
-         "No HDMI/default-output fallback."))
+         "No default-output fallback; HDMI is not a substitute."))
 
     try:
         player_ready = bool(which("pw-cat"))
