@@ -605,11 +605,90 @@ def guided_speaker_check(*, side=None, read_line=None, out=print,
     return finish(True)
 
 
+
+def guided_first_use(folder, *, read_line=None, out=print,
+                     preflight=None, speaker=None, album=None):
+    """One trusted local first-use route: silent checks, then one explicit action.
+
+    No unsolicited playback. SPEAKER invokes the existing separate PLAY per
+    side; MUSIC invokes the existing selection + separate PLAY. The wizard
+    itself never writes, logs, changes settings or exposes private filenames.
+    """
+    # Check the physical local operator context BEFORE touching a WAV folder,
+    # PipeWire, a player process or any user-supplied pathname.
+    if (not sys.stdin.isatty() or not sys.stdout.isatty()
+            or (hasattr(os, "geteuid") and os.geteuid() == 0)):
+        raise PermissionError("First-use guide requires an unprivileged local TTY")
+    from . import music_library
+    if read_line is None:
+        read_line = music_library._terminal_line
+    if preflight is None:
+        preflight = check_first_sound_readiness
+    if speaker is None:
+        speaker = guided_speaker_check
+    if album is None:
+        album = music_library.guided_session
+
+    out("AUDIOHUB FIRST USE: offline local steps, not a hardware certification.")
+    out("STEP 1/2: silent private speaker prerequisites and WAV import health.")
+    try:
+        speaker_ready = bool(preflight(out=out))
+    except (OSError, ValueError, RuntimeError, TypeError, PermissionError):
+        speaker_ready = False
+        out("Private speaker preflight: NOT READY; no audio will start.")
+    counts = None
+    try:
+        counts = music_library.inspect_library_health(folder)
+        out(music_library.display_library_health(counts))
+    except (OSError, ValueError, UnicodeError, PermissionError):
+        out("Private music folder: NEEDS ATTENTION. Check a safe absolute "
+            "unprivileged folder with audiohub-music --library-health.")
+    playable = (counts is not None and
+                0 < counts["supported_wav"] <= music_library.MAX_DISPLAYED)
+    out("STEP 2/2: choose ONE action. Neither option starts audio immediately.")
+    out("SPEAKER = original low-stream-gain LEFT/RIGHT/BOTH guide with "
+        "a NEW exact PLAY for EACH attempted side.")
+    out("MUSIC = private numbered WAV picker, QUIET stream 0.05, "
+        "5-minute maximum and separate selection + exact PLAY.")
+    out("QUIT = exit without audio. No automatic next action.")
+    out("First-use speaker: " + ("MANUAL TRY AVAILABLE" if speaker_ready
+                                 else "UNAVAILABLE; fix private input/tool first") +
+        "; private WAV picker: " + ("AVAILABLE" if playable else
+                                    "UNAVAILABLE; check library health first") + ".")
+    out("Set the physical amplifier LOW before any separately consented "
+        "sound. No Pi4/Edifier loudness, ownership or release GO is implied.")
+    out("Enter exact SPEAKER, MUSIC or QUIT then Enter:")
+    choice = read_line()
+    if choice == "QUIT":
+        out("First-use guide closed. No sound or settings changed.")
+        return True
+    if choice == "SPEAKER":
+        if not speaker_ready:
+            out("Speaker guide unavailable. No player launched or route changed.")
+            return False
+        out("Opening existing speaker guide; it will require fresh PLAY "
+            "separately for each channel. No auto-start.")
+        return bool(speaker(out=out))
+    if choice == "MUSIC":
+        if not (speaker_ready and playable):
+            out("Music session unavailable: prerequisites or library need "
+                "attention. No player launched or fallback output.")
+            return False
+        out("Opening the existing private album wizard. Nothing plays until "
+            "a separate exact PLAY after track review.")
+        return bool(album(folder, max_minutes=5, show_titles=False,
+                          level="quiet", channel="both", out=out))
+    out("Unknown or missing choice: first-use cancelled. No sound started.")
+    return False
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("wav", nargs="*", help="1–8 absolute local 16-bit PCM WAV files")
     parser.add_argument("--library", metavar="FOLDER",
                         help="Browse a private local WAV folder without playback")
+    parser.add_argument("--first-use", action="store_true",
+                        help="Trusted local first-use wizard; quiet checks then explicit choice")
     parser.add_argument("--library-health", action="store_true",
                         help="Silent private-WAV compatibility and import diagnostics, no names")
     parser.add_argument("--speaker-check", action="store_true",
@@ -658,6 +737,10 @@ def main(argv=None):
                     and options[1] in STEREO_MODES):
                 return 0 if play_speaker_test(mode=options[1]) else 2
             raise ValueError("Speaker test accepts only optional left, right or both")
+        if args.first_use:
+            if args.library is None or options != ["--first-use", "--library", args.library]:
+                raise ValueError("First-use guide accepts only --library FOLDER")
+            return 0 if guided_first_use(args.library) else 2
         if args.library_health:
             if (args.library is None or args.wav or args.guided or args.check
                     or args.tracks is not None or args.play or args.interactive

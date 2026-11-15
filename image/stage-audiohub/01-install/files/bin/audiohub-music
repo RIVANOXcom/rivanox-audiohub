@@ -11,6 +11,7 @@ usage() {
     '       audiohub-music [ABSOLUTE_PRIVATE_WAV_FOLDER] --list [--show-titles]' \
     '       audiohub-music [ABSOLUTE_PRIVATE_WAV_FOLDER] --check' \
     '       audiohub-music [ABSOLUTE_PRIVATE_WAV_FOLDER] --library-health' \
+    '       audiohub-music [ABSOLUTE_PRIVATE_WAV_FOLDER] --first-use' \
     '       audiohub-music --speaker-test [left|right|both]' \
     '       audiohub-music --speaker-guide [left|right|both]' \
     '       audiohub-music --speaker-check' \
@@ -22,6 +23,8 @@ usage() {
     '--check independently checks WAVs, private music input and player tool, without sound.' \
     '--library-health silently counts supported, unsupported, unsafe and missing-format media;' \
     'gives offline correction hints with NO filenames, sound, network, imports or file writes.' \
+    '--first-use offers one quiet local guided route from silent checks to speaker or owned WAV.' \
+    'Choose exact SPEAKER, MUSIC or QUIT; no audio until separate fresh PLAY in existing guides.' \
     '--speaker-check checks built-in FIRST SOUND without a WAV library and never plays sound.' \
     '--speaker-test creates a brief original 2.1s LEFT/RIGHT/BOTH signal in RAM. No WAV required.' \
     'Optional left, right or both replays that channel 3 times with short silence gaps.' \
@@ -132,6 +135,7 @@ channel_seen=0
 list_only=0
 check_only=0
 health_only=0
+first_use_only=0
 titles=0
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -183,6 +187,13 @@ while [ "$#" -gt 0 ]; do
       check_only=1
       shift
       ;;
+    --first-use)
+      if [ "$first_use_only" -ne 0 ]; then
+        printf '%s\n' 'Duplicate --first-use is not supported.' >&2; exit 2
+      fi
+      first_use_only=1
+      shift
+      ;;
     --library-health)
       if [ "$health_only" -ne 0 ]; then
         printf '%s\n' 'Duplicate --library-health is not supported.' >&2; exit 2
@@ -219,6 +230,18 @@ fi
 
 PYTHONPATH=/opt/audiohub/src
 export PYTHONPATH
+if [ "$first_use_only" -eq 1 ]; then
+  if [ "$health_only" -ne 0 ] || [ "$list_only" -ne 0 ] || \
+     [ "$check_only" -ne 0 ] || [ "$titles" -ne 0 ] || \
+     [ "$minutes_seen" -ne 0 ] || [ "$level_seen" -ne 0 ] || \
+     [ "$channel_seen" -ne 0 ]; then
+    printf '%s\n' 'Use --first-use with only one optional absolute private WAV folder.' >&2
+    exit 2
+  fi
+  # Local TTY and second explicit PLAY are enforced by existing Python guides.
+  # No sound is launched here; never escalates privileges or changes routes.
+  exec /usr/bin/python3 -m audiohub.local_music --first-use --library "$folder"
+fi
 if [ "$health_only" -eq 1 ]; then
   if [ "$list_only" -ne 0 ] || [ "$check_only" -ne 0 ] || [ "$titles" -ne 0 ] || \
      [ "$minutes_seen" -ne 0 ] || [ "$level_seen" -ne 0 ] || \

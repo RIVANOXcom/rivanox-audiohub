@@ -12,6 +12,44 @@ raw stdin playback, explicitly targeted to the existing
 \`audiohub.music\` virtual stereo mixer input. It does NOT automatically
 select the default sound card or bypass the private mixer/EQ routing.
 
+## First-use guided path: one quiet local operator command
+
+The **unverified internal Pi4 test image** offers a single local route for
+the first use of a spare SD, without mixing up the separate WAV, speaker and
+playback commands. As the existing unprivileged Pi operator on a **trusted
+physical terminal** (not as root, not via unattended jobs), run:
+
+```sh
+audiohub-music --first-use
+# Optional separately approved private music folder:
+audiohub-music /absolute/private/music-folder --first-use
+```
+
+The first step checks the already configured private PipeWire music input and
+local player tool, then silently and anonymously diagnoses the WAV folder
+(maximum 256 entries, no media-name display). An empty new SD is normal.
+**No audio starts during these checks.** The second step accepts exactly
+one typed choice: **SPEAKER** opens the existing left/right/both original
+low-gain speaker observation guide, **MUSIC** opens the existing owned-WAV
+numbered selection wizard, or **QUIT** exits. Unknown input and EOF cancel,
+and the unavailable speaker path or an empty/unsafe/>40-track library disables
+the affected action. The speaker choice still needs **a fresh explicit PLAY
+for each side**; MUSIC still needs selection review and a separate **PLAY**.
+For a first music session the wizard fixes **QUIET stream gain 0.05**,
+**maximum five minutes**, both channels and no title display; these are not
+calibrated speaker-volume limits. Set the Edifier amplifier physically LOW
+before consenting to any sound.
+
+This route does not install audio or ownership services, configure Wi-Fi,
+pair Bluetooth, import or convert music, change routing/global mixer/EQ or
+write playback history. It does not automatically start a second action.
+If a prerequisite fails, correct it independently using --speaker-check or
+--library-health. Never reroute to the default sink or raise privileges to
+bypass the guard. Actual Pi4/Edifier audible channels and safe SPL,
+two-Bluetooth-plus-LAN operation, owner authentication and public release
+remain **UNVERIFIED**. A manual spare-SD install and rollback require
+separate operator permission.
+
 ## Diagnose music import or incompatible WAVs without playing sound
 
 On a fresh or manually populated private folder, the installed Pi4 test

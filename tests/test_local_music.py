@@ -1188,5 +1188,129 @@ class GuidedSpeakerCheckTests(unittest.TestCase):
 
 
 
+
+
+class GuidedFirstUseTests(unittest.TestCase):
+    """One quiet offline onboarding flow delegates to existing PLAY gates."""
+
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.folder = Path(temp.name) / "PrivateMusic"
+        self.folder.mkdir(mode=0o700)
+        self.messages = []
+        self.called = []
+
+    def run_wizard(self, reply, *, ready=True):
+        def preflight(*, out):
+            self.called.append("preflight")
+            out("Private music input preflight checked silently.")
+            return ready
+
+        def speaker(*, out):
+            self.called.append("speaker")
+            return True
+
+        def album(folder, **kw):
+            self.called.append(("album", folder, kw))
+            return True
+
+        with mock.patch.object(local_music, "sys") as console, \
+             mock.patch.object(local_music.os, "geteuid", return_value=1000):
+            console.stdin.isatty.return_value = True
+            console.stdout.isatty.return_value = True
+            return local_music.guided_first_use(
+                str(self.folder), read_line=lambda: reply,
+                out=self.messages.append, preflight=preflight,
+                speaker=speaker, album=album)
+
+    def add_wav(self):
+        with wave.open(str(self.folder / "private-song.wav"), "wb") as track:
+            track.setnchannels(2)
+            track.setsampwidth(2)
+            track.setframerate(48000)
+            track.writeframes(b"\x00\x01\x00\x01" * 100)
+
+    def test_empty_new_sd_allows_separately_confirmed_speaker_not_music(self):
+        self.assertTrue(self.run_wizard("SPEAKER"))
+        self.assertEqual(self.called, ["preflight", "speaker"])
+        report = "\n".join(self.messages)
+        self.assertIn("NO SUPPORTED WAV TRACKS", report)
+        self.assertIn("NEW exact PLAY", report)
+        self.assertNotIn("private-song", report)
+        self.called.clear()
+        self.messages.clear()
+        self.assertFalse(self.run_wizard("MUSIC"))
+        self.assertEqual(self.called, ["preflight"])
+        self.assertIn("No player launched", "\n".join(self.messages))
+
+    def test_supported_wav_opens_existing_bounded_quiet_manual_picker(self):
+        self.add_wav()
+        self.assertTrue(self.run_wizard("MUSIC"))
+        self.assertEqual(self.called[0], "preflight")
+        self.assertEqual(self.called[1][0], "album")
+        self.assertEqual(self.called[1][1], str(self.folder))
+        self.assertEqual(self.called[1][2]["max_minutes"], 5)
+        self.assertEqual(self.called[1][2]["level"], "quiet")
+        self.assertEqual(self.called[1][2]["channel"], "both")
+        self.assertFalse(self.called[1][2]["show_titles"])
+        self.assertNotIn("private-song", "\n".join(self.messages))
+        self.assertIn("separate exact PLAY", "\n".join(self.messages))
+
+    def test_missing_private_sink_disables_both_audio_paths(self):
+        self.add_wav()
+        for choice in ("SPEAKER", "MUSIC"):
+            with self.subTest(choice=choice):
+                self.called.clear()
+                self.assertFalse(self.run_wizard(choice, ready=False))
+                self.assertEqual(self.called, ["preflight"])
+
+    def test_quit_and_bad_input_are_noop_not_second_confirmations(self):
+        self.add_wav()
+        self.assertTrue(self.run_wizard("QUIT"))
+        self.assertEqual(self.called, ["preflight"])
+        self.called.clear()
+        self.assertFalse(self.run_wizard("PLAY"))
+        self.assertEqual(self.called, ["preflight"])
+        self.assertIn("No sound started", "\n".join(self.messages))
+
+    def test_unsafe_private_folder_never_leaks_and_disables_music(self):
+        self.add_wav()
+        self.folder.chmod(0o777)
+        try:
+            self.assertFalse(self.run_wizard("MUSIC"))
+            self.assertEqual(self.called, ["preflight"])
+            self.assertNotIn(str(self.folder), "\n".join(self.messages))
+            self.assertNotIn("private-song", "\n".join(self.messages))
+        finally:
+            self.folder.chmod(0o700)
+
+    def test_non_tty_and_root_refuse_before_private_folder_access(self):
+        from audiohub import music_library
+        for tty, uid in ((False, 1000), (True, 0)):
+            with self.subTest(tty=tty, uid=uid), \
+                 mock.patch.object(local_music, "sys") as console, \
+                 mock.patch.object(local_music.os, "geteuid", return_value=uid), \
+                 mock.patch.object(music_library, "inspect_library_health",
+                                   side_effect=AssertionError("Opened media")):
+                console.stdin.isatty.return_value = tty
+                console.stdout.isatty.return_value = tty
+                with self.assertRaises(PermissionError):
+                    local_music.guided_first_use(str(self.folder))
+
+    def test_direct_python_cli_only_accepts_canonical_first_use_invocation(self):
+        with mock.patch.object(local_music, "guided_first_use", return_value=True) as fn:
+            self.assertEqual(local_music.main(
+                ["--first-use", "--library", str(self.folder)]), 0)
+            fn.assert_called_once_with(str(self.folder))
+            for argv in (["--first-use"],
+                         ["--first-use", "--library", str(self.folder), "--play"],
+                         ["--first-use", "--library", str(self.folder), "--minutes", "15"],
+                         ["--first-use", "--library", str(self.folder), "--show-titles"],
+                         ["--first-use", "--library", str(self.folder), "--check"]):
+                with self.subTest(argv=argv):
+                    self.assertEqual(local_music.main(argv), 2)
+            fn.assert_called_once()
+
 if __name__ == "__main__":
     unittest.main()
