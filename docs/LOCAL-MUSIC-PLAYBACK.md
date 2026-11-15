@@ -253,7 +253,13 @@ to replace the pending plan with track 3; then `a2` and `a1` to
 play **3 → 2 → 1** after the current WAV ends naturally. Repeated numbers
 are allowed, but no more than **eight** pending choices. `l` and `s`
 show only anonymous numbered order (no filenames); `z` undoes the last
-pending choice, while `k0` clears the entire plan. Invalid/out-of-range
+pending choice, while `k0` clears the entire plan. If you delete, move,
+replace, append or clear a choice by mistake, press `b` **before the
+current WAV finishes** to restore the previous pending selection (and
+previous end-after-track/plan setting). `b` is deliberately one-step,
+never revives choices once a new WAV begins or after explicit `e`/`g`
+stop-policy changes; it never cuts, restarts or launches the player.
+Invalid/out-of-range
 or ninth additions do nothing. `e` entered later clears all choices;
 `aN` after `e` explicitly disarms ending. Direct jump, next, previous,
 replay, immediate quit, session deadline or actual player error still
