@@ -383,9 +383,11 @@ def guided_playback_readiness(*, capture=local_music.bounded_command_output,
     except (OSError, ValueError, RuntimeError, TypeError):
         sink = False
     out("Private music input: " +
-        ("READY" if sink else
-         "NEEDS ATTENTION; inspect unprivileged audiohub PipeWire runtime "
-         "and audiohub.music. Never route to the default output."))
+        ("READY; one selectable USB speaker output also found "
+         "(audibility UNVERIFIED)." if sink else
+         "NEEDS ATTENTION; inspect unprivileged audiohub PipeWire runtime, "
+         "audiohub.music and the unambiguous USB speaker output. "
+         "Never route to HDMI or the default output."))
     try:
         player = bool(which("pw-cat"))
     except (OSError, ValueError, RuntimeError, TypeError):

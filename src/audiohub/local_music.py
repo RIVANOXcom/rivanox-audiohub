@@ -132,11 +132,19 @@ def inspect_playlist(paths, *, max_minutes=15):
 
 
 def music_sink_available(*, capture=bounded_command_output):
+    """Check the actual private-to-USB playback prerequisites in one snapshot.
+
+    A virtual music sink alone does not make audible USB playback possible.
+    All real player entrypoints recheck this just before spawning pw-cat, so
+    unplugging the speaker after a guided preflight cannot start a misleading
+    audio session. Neither query nor output prints private device identities.
+    """
     result = capture(["pw-dump"], timeout=5, max_bytes=discovery.MAX_PIPEWIRE_GRAPH_BYTES)
     if result is None or result.returncode != 0:
         return False
     nodes = discovery.pipewire_nodes(result.stdout)
-    return TARGET in discovery.virtual_sinks(nodes)
+    return (TARGET in discovery.virtual_sinks(nodes)
+            and discovery.choose_usb_output(nodes) is not None)
 
 
 def _play_one(path, metadata, *, deadline, spawn, stop=None, on_player=None,
@@ -244,6 +252,8 @@ def play_playlist(paths, *, max_minutes=15, spawn=subprocess.Popen, capture=boun
     for i, (path, metadata) in enumerate(zip(paths, report["tracks"]), 1):
         if time.monotonic() >= deadline:
             raise TimeoutError("Local playlist session deadline reached")
+        if i > 1 and not music_sink_available(capture=capture):
+            raise RuntimeError("Private music-to-USB playback path disconnected; no fallback")
         notify("Playing track " + str(i) + "/" + str(report["files"])
                + " privately through music input; Ctrl+C stops.")
         options = {}
@@ -283,9 +293,11 @@ def check_music_readiness(folder, *, capture=bounded_command_output,
     except (OSError, ValueError, RuntimeError, TypeError):
         sink_ready = False
     out("Private PipeWire music input: " +
-        ("READY" if sink_ready else
-         "NEEDS ATTENTION; inspect the audiohub user PipeWire runtime "
-         "and audiohub.music input. No default-output fallback."))
+        ("READY; one selectable USB speaker output also found "
+         "(audibility UNVERIFIED)." if sink_ready else
+         "NEEDS ATTENTION; inspect the audiohub user PipeWire runtime, "
+         "audiohub.music input and unambiguous USB speaker output. "
+         "No default-output fallback; HDMI is not a substitute."))
 
     try:
         player_ready = bool(which("pw-cat"))

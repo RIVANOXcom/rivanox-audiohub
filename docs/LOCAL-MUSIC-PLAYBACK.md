@@ -99,6 +99,17 @@ sound, playback readiness, physical Edifier level, hardware GO or
 safe phone/Wi-Fi ownership. Next run `audiohub-music --list` for an
 anonymous numbered preview, or the separately approved
 `audiohub-music --speaker-check` for silent first-sound prerequisites.
+Beyond the first-use precheck, **every actual local speaker signal and WAV PLAY**
+rechecks a current bounded PipeWire graph for both the private
+`audiohub.music` sink and an unambiguous selectable physical USB speaker
+output. This is also enforced for direct WAV playback and each subsequent
+track of a manual playlist; if the USB output disappears after a prior
+readiness report, the next owned player is refused rather than silently
+playing into an unattached virtual sink or falling back to HDMI/default.
+Already running hardware audio cannot be independently guaranteed by this
+snapshot and real Pi4/Edifier unplug/replug, loudness and sound need a
+separately authorized operator test. No device identifiers are printed.
+
 Actual audio still requires the existing operator-reviewed queue
 and distinct exact `PLAY` confirmation; there is no autoplay.
 
