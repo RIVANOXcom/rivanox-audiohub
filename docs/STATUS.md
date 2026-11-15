@@ -2,6 +2,22 @@
 
 **Status:** Alpha / pre-release. No verified ready-to-flash Pi 4 image has been published. Native ARM64 test-only SD images have been built and uploaded to GitHub Actions (latest prior-to-renaming run 42057278883; 159 tests, 48 rootfs checks). **No real Pi4/Edifier playback, ownership security or product-ready Release has been verified.**
 
+## End naturally after all explicitly queued WAVs (unverified alpha)
+
+A trusted unprivileged Pi4 operator may now press `g` **after**
+planning one or more upcoming WAVs to play the current song and each
+planned song naturally, then STOP before the ordinary automatic
+sequence or repeat begins. `g` toggles; attempting to arm on an
+empty future queue refuses without altering playback. The mode is
+visible in anonymous status and queue views. New `aN` appended during
+the last planned song extends the end; a later `e` supersedes with
+end-after-current. Explicit clear-all, removing the final upcoming
+choice, or direct navigation cancels the plan's stop policy; `q`,
+session deadline and any actual player failure take priority. Only
+volatile local bounded numbers are affected; no extra player,
+automatic initial PLAY, route/gain/SD/network or security changes.
+Hardware audio unverified; internal operator TEST only.
+
 ## Edit and prioritize private pending queue slots (unverified alpha)
 
 Within a trusted, explicitly consented local WAV session, the

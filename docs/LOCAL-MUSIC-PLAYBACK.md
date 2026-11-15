@@ -223,6 +223,7 @@ During playback, type a command and press **Enter**:
 | `r` + Enter | Restart the current selected track from its beginning |
 | `1`–`8` + Enter | Jump directly to an existing numbered track in the selected queue (invalid positions do not interrupt playback) |
 | `e` + Enter | Toggle **end after this track**: let the currently playing owned WAV finish naturally, then stop without playing another, even if repeat is active |
+| `g` + Enter | With at least one upcoming queued track, toggle **finish current + all queued tracks, then stop naturally** before normal order/repeat; no cutting |
 | `q` + Enter | **Stop immediately**; terminate only the current owned player and exit |
 | `h` + Enter | Repeat the short help text |
 | Ctrl+C | Emergency local interruption; owned child stopped in cleanup |
@@ -273,6 +274,25 @@ and restricted to the original 1–8 selected licensed WAV tracks.
 Immediate navigation/quit, `e`, timeout and real player failure
 still take precedence. `kN`/`aN` refer to selected **WAV numbers**,
 whereas `dN`/`fN` refer to **pending slot positions**.
+
+**Finish your complete planned music selection without unintended
+repeat:** After queuing upcoming WAVs with `kN`/`aN`, press `g` to arm
+*end after pending plan*. The currently playing WAV and every explicitly
+queued WAV finish in order. AudioHub then stops **before the ordinary
+sequential/repeat policy resumes**, even in repeat-track or repeat-all.
+Press `g` again to cancel; the selection remains in place. This
+requires at least one upcoming queued track when arming; a `g` on an
+empty plan safely refuses and leaves current music unchanged. If you
+append another WAV while the last planned WAV is playing, the new choice
+extends the planned end. Pressing `e` instead overrides the plan and
+stops after the current WAV. Explicit `k0`, removal of the final
+upcoming choice with `z`/`dN`, or immediate `n`/`p`/`r`/numbered
+navigation cancels the plan's stop policy with a visible message.
+The original session time limit, immediate quit and actual player
+failure always take precedence, without starting another WAV.
+The `s`/`l` views disclose only `END AFTER PENDING PLAN`, not
+private names or output-device identifiers. No new timer, saved
+settings, background playback or network interface are introduced.
 
 **If the private local playback tool fails unexpectedly**, AudioHub now
 refuses the next/previous/replay/jump even if that key was entered at

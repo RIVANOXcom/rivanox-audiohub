@@ -1559,5 +1559,214 @@ class MusicSessionTests(unittest.TestCase):
         self.assertNotIn("Playing queued NEXT track", log)
 
 
+    def test_finish_after_deferred_plan_naturally_stops_before_repeat(self):
+        for modes in ([], ["m"], ["m", "m"]):
+            with self.subTest(modes=modes):
+                self.out.clear()
+                played = []
+                first = threading.Event()
+                release = threading.Event()
+                commands = iter([*modes, "k2", "a1", "g", "s", "l", "release"])
+
+                def playback(paths, *, max_minutes, stop, on_player,
+                             session_deadline, notify):
+                    played.append(paths[0])
+                    if len(played) == 1:
+                        first.set()
+                        self.assertTrue(release.wait(2))
+                        self.assertFalse(stop.is_set())
+                    return True
+
+                def read(_timeout):
+                    self.assertTrue(first.wait(2))
+                    cmd = next(commands, None)
+                    if cmd == "release":
+                        release.set()
+                        return None
+                    return cmd
+
+                with mock.patch.object(local_music, "music_sink_available",
+                                       return_value=True), \
+                     mock.patch.object(local_music.os, "geteuid",
+                                       return_value=1000):
+                    self.assertTrue(music_session.run_session(
+                        self.paths, max_minutes=1, playback=playback,
+                        read_command=read, out=self.out.append,
+                        require_tty=False))
+                self.assertEqual(played, [self.paths[0], self.paths[1], self.paths[0]])
+                out = "\n".join(self.out)
+                self.assertIn("END AFTER PENDING PLAN ARMED", out)
+                self.assertIn("End-after-pending-plan completed", out)
+                self.assertNotIn("Repeating current selected track", out)
+                self.assertNotIn("Repeating selected queue", out)
+                self.assertNotIn("secret-title", out)
+                self.assertNotIn(str(self.dir), out)
+
+    def test_finish_after_deferred_plan_requires_real_pending_choice(self):
+        self.assertFalse(self.run_with(["g", "s", "l", "q"]))
+        self.assertEqual(self.played, [self.paths[0]])
+        out = "\n".join(self.out)
+        self.assertIn("Cannot arm end-after-pending-plan", out)
+        self.assertNotIn("END AFTER PENDING PLAN", out)
+        self.assertTrue(self.children[0].terminated)
+
+    def test_finish_after_plan_cancels_when_queued_last_removed_or_toggle(self):
+        scenarios = [
+            (["k2", "g", "g", "s", "q"], "cancelled; normal"),
+            (["k2", "g", "k0", "s", "q"], "cancelled by clear-all"),
+            (["k2", "g", "z", "s", "q"], "last queued choice removed"),
+            (["k2", "g", "d1", "s", "q"], "last queued choice removed"),
+        ]
+        for commands, expected in scenarios:
+            with self.subTest(commands=commands):
+                self.out.clear()
+                self.played.clear()
+                self.children.clear()
+                self.assertFalse(self.run_with(commands))
+                self.assertEqual(self.played, [self.paths[0]])
+                self.assertIn(expected, "\n".join(self.out))
+                status = [item for item in self.out
+                          if item.startswith("Music track")][-1]
+                self.assertNotIn("END AFTER PENDING PLAN", status)
+                self.assertTrue(self.children[0].terminated)
+
+    def test_finish_after_plan_end_current_is_stronger_and_last_intent_wins(self):
+        self.assertFalse(self.run_with(["k2", "a1", "g", "e", "s", "q"]))
+        log = "\n".join(self.out)
+        self.assertIn("End-after-pending-plan cancelled: end after CURRENT", log)
+        self.assertIn("END AFTER THIS TRACK", log)
+        self.assertNotIn("END AFTER PENDING PLAN |", log)
+        self.out.clear()
+        self.played.clear()
+        self.children.clear()
+        self.assertFalse(self.run_with(["e", "k2", "g", "s", "q"]))
+        log = "\n".join(self.out)
+        self.assertIn("End-after-this-track cancelled", log)
+        self.assertIn("END AFTER PENDING PLAN", log)
+        self.assertTrue(all(child.terminated for child in self.children))
+
+    def test_finish_after_plan_extends_when_new_track_queued_on_last_song(self):
+        # While the original last queued WAV is playing, a new append must
+        # extend the plan rather than stopping prematurely or losing the append.
+        played = []
+        first = threading.Event()
+        release_first = threading.Event()
+        last_started = threading.Event()
+        release_last = threading.Event()
+        actions = iter(["k2", "g", "release_first"])
+        changed = [False]
+        unblocked = [False]
+
+        def playback(paths, *, max_minutes, stop, on_player,
+                     session_deadline, notify):
+            played.append(paths[0])
+            if len(played) == 1:
+                first.set()
+                self.assertTrue(release_first.wait(2))
+                self.assertFalse(stop.is_set())
+            elif len(played) == 2:
+                last_started.set()
+                self.assertTrue(release_last.wait(2))
+                self.assertFalse(stop.is_set())
+            return True
+
+        def read(_timeout):
+            self.assertTrue(first.wait(2))
+            step = next(actions, None)
+            if step == "release_first":
+                release_first.set()
+                return None
+            if step is not None:
+                return step
+            if last_started.is_set() and not changed[0]:
+                changed[0] = True
+                return "a1"
+            if last_started.is_set() and not unblocked[0]:
+                unblocked[0] = True
+                release_last.set()
+            time.sleep(0.001)
+            return None
+
+        with mock.patch.object(local_music, "music_sink_available", return_value=True), \
+             mock.patch.object(local_music.os, "geteuid", return_value=1000):
+            self.assertTrue(music_session.run_session(
+                self.paths, max_minutes=1, playback=playback,
+                read_command=read, out=self.out.append, require_tty=False))
+        self.assertEqual(played, [self.paths[0], self.paths[1], self.paths[0]])
+        log = "\n".join(self.out)
+        self.assertIn("Appended deferred track 1", log)
+        self.assertIn("End-after-pending-plan completed", log)
+        self.assertNotIn(str(self.dir), log)
+
+    def test_finish_after_plan_navigation_and_actual_failure_override_it(self):
+        self.assertFalse(self.run_with(["k2", "g", "n", "q"]))
+        self.assertEqual(self.played, [self.paths[0], self.paths[1]])
+        self.assertIn("cancelled by immediate navigation", "\n".join(self.out))
+        self.out.clear()
+        first = threading.Event()
+        release = threading.Event()
+        played = []
+        steps = iter(["a2", "g", "release"])
+
+        def failed_player(paths, *, max_minutes, stop, on_player,
+                          session_deadline, notify):
+            played.append(paths[0])
+            first.set()
+            self.assertTrue(release.wait(2))
+            raise RuntimeError("do-not-leak /private/music.wav")
+
+        def read(_timeout):
+            self.assertTrue(first.wait(2))
+            cmd = next(steps, None)
+            if cmd == "release":
+                release.set()
+                return None
+            return cmd
+
+        with mock.patch.object(local_music, "music_sink_available", return_value=True), \
+             mock.patch.object(local_music.os, "geteuid", return_value=1000):
+            with self.assertRaisesRegex(RuntimeError, "player failed"):
+                music_session.run_session(
+                    self.paths, max_minutes=1, playback=failed_player,
+                    read_command=read, out=self.out.append, require_tty=False)
+        self.assertEqual(played, [self.paths[0]])
+        log = "\n".join(self.out)
+        self.assertIn("LOCAL PLAYBACK FAILED", log)
+        self.assertNotIn("End-after-pending-plan completed", log)
+        self.assertNotIn("do-not-leak", log)
+
+    def test_finish_after_plan_is_local_bounded_anonymous_command(self):
+        with mock.patch.object(music_session.select, "select",
+                               return_value=([1], [], [])):
+            for raw in ("g\n", "G\n"):
+                self.assertEqual(music_session.read_terminal_command(
+                    stream=io.StringIO(raw)), "g")
+            for raw in ("gg\n", "g1\n", "gprivate.wav\n"):
+                self.assertEqual(music_session.read_terminal_command(
+                    stream=io.StringIO(raw)), "?")
+        report = local_music.inspect_playlist(self.paths, max_minutes=1)
+        status = music_session.status_message(
+            1, 2, 0, 60, clock=lambda: 1, queued_next=2,
+            end_after_plan=True)
+        queue = music_session.queue_message(
+            report, 1, queued_next=2, end_after_plan=True)
+        self.assertIn("END AFTER PENDING PLAN", status)
+        self.assertIn("END AFTER PENDING PLAN", queue)
+        self.assertNotIn(str(self.dir), status + queue)
+        self.assertNotIn("secret-title", status + queue)
+        for wrong in (None, "true", 1, 0, (), []):
+            with self.subTest(wrong=wrong):
+                with self.assertRaises(ValueError):
+                    music_session.status_message(
+                        1, 2, 0, 60, clock=lambda: 1,
+                        end_after_plan=wrong)
+                with self.assertRaises(ValueError):
+                    music_session.queue_message(
+                        report, 1, end_after_plan=wrong)
+        with self.assertRaises(ValueError):
+            music_session.status_message(
+                1, 2, 0, 60, clock=lambda: 1,
+                end_after_track=True, end_after_plan=True)
+
 if __name__ == "__main__":
     unittest.main()
