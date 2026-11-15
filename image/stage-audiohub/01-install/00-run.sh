@@ -137,7 +137,7 @@ first_sound_check_output="$(runuser -u audiohub -- /usr/local/bin/audiohub-music
 first_sound_check_status="$?"
 set -e
 case "$first_sound_check_status" in 0|2) ;; *) exit 1 ;; esac
-case "$first_sound_check_output" in *"FIRST SOUND CHECK:"*"no WAV files needed."*"Private PipeWire music input:"*"Local PipeWire playback tool:"*"Read-only only: NO sound"*"UNVERIFIED"*) ;; *) exit 1 ;; esac
+case "$first_sound_check_output" in *"FIRST SOUND CHECK:"*"no WAV files needed."*"Private PipeWire music input:"*"Physical USB speaker output:"*"Local PipeWire playback tool:"*"Read-only only: NO sound"*"UNVERIFIED"*) ;; *) exit 1 ;; esac
 
 # Real installed non-playing --check is a multi-prerequisite operator status.
 # The fresh image contains no WAVs, so readiness must refuse with safe guidance.

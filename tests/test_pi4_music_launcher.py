@@ -135,7 +135,9 @@ class MusicLauncherTests(unittest.TestCase):
     def test_first_sound_preflight_help_and_native_chroot(self):
         help_text = self.shell("--help").stdout
         self.assertIn("audiohub-music --speaker-check", help_text)
-        self.assertIn("FIRST SOUND without a WAV library", help_text)
+        self.assertIn("checks private music input, selectable physical USB speaker", help_text)
+        self.assertIn("missing or ambiguous USB output REFUSES readiness", help_text)
+        self.assertIn("No WAV library or sound needed", help_text)
         launcher = LAUNCHER.read_text(encoding="utf-8")
         self.assertIn('if [ "$#" -ge 1 ] && [ "$1" = "--speaker-check" ]; then', launcher)
         self.assertIn('exec /usr/bin/python3 -m audiohub.local_music --speaker-check', launcher)
@@ -157,6 +159,7 @@ class MusicLauncherTests(unittest.TestCase):
         self.assertIn("/usr/local/bin/audiohub-music --speaker-check", native)
         self.assertIn("no WAV files needed.", native)
         self.assertIn("Read-only only: NO sound", native)
+        self.assertIn("Physical USB speaker output:", native)
 
     def test_native_image_empty_private_wav_folder_shows_safe_first_boot(self):
         native = STAGE.read_text(encoding="utf-8")
