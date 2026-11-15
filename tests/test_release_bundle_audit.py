@@ -207,8 +207,12 @@ class ReleaseBundlePreflightTests(unittest.TestCase):
         self.addCleanup(tmp.cleanup)
         path = Path(tmp.name) / "downloaded-operator.zip"
         with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-            for member in (self.image, self.checksum_path, self.meta_path,
-                           self.dist / "ROOTFS-PACKAGES.json"):
+            viewer = self.dist / "AUDIOHUB-OFFLINE-REPORT-VIEWER.html"
+            members = (self.image, self.checksum_path, self.meta_path,
+                       self.dist / "ROOTFS-PACKAGES.json")
+            if viewer.is_file():
+                members += (viewer,)
+            for member in members:
                 if member == self.image and image_type is not None:
                     info = zipfile.ZipInfo(member.name)
                     info.create_system = 3
@@ -240,6 +244,58 @@ class ReleaseBundlePreflightTests(unittest.TestCase):
         self.assertEqual(result["verified_zip_entries"], 4)
         self.assertEqual(result["image_sha256"], self.meta["image_sha256"])
         self.assertEqual(path.read_bytes(), original)
+
+    def add_real_viewer(self):
+        viewer = self.dist / "AUDIOHUB-OFFLINE-REPORT-VIEWER.html"
+        viewer.write_bytes((ROOT / "web/boot-report-viewer.html").read_bytes())
+        self.meta["offline_viewer"] = {
+            "file": viewer.name, "bytes": viewer.stat().st_size,
+            "sha256": hashlib.sha256(viewer.read_bytes()).hexdigest(),
+        }
+        self.meta_path.write_text(json.dumps(self.meta))
+        return viewer
+
+    def test_five_file_operator_zip_includes_verified_offline_viewer(self):
+        viewer = self.add_real_viewer()
+        self.assertIn("Content-Security-Policy", viewer.read_text())
+        self.assertEqual(self.audit()["bundle_integrity"], "passed")
+        path, digest = self.make_operator_zip()
+        result = inspect_zip(path, expected_zip_sha256=digest,
+                             expected_source_sha=self.SHA)
+        self.assertEqual(result["verified_zip_entries"], 5)
+        self.assertFalse(result["public_release_ready"])
+        self.assertEqual(result["download_zip_sha256"], digest)
+
+    def test_viewer_tampering_and_missing_provenance_are_blocked(self):
+        viewer = self.add_real_viewer()
+        viewer.write_bytes(viewer.read_bytes() + b"modified")
+        with self.assertRaisesRegex(ValueError, "viewer checksum"):
+            self.audit()
+        self.add_real_viewer()
+        self.meta.pop("offline_viewer")
+        self.meta_path.write_text(json.dumps(self.meta))
+        with self.assertRaisesRegex(ValueError, "viewer provenance"):
+            self.audit()
+
+    def test_missing_viewer_with_provenance_cannot_pass(self):
+        viewer = self.add_real_viewer()
+        viewer.unlink()
+        with self.assertRaisesRegex(ValueError, "viewer missing"):
+            self.audit()
+
+    def test_duplicate_viewer_zip_member_fails_even_with_matching_outer_hash(self):
+        self.add_real_viewer()
+        path, digest = self.make_operator_zip()
+        with zipfile.ZipFile(path, "a") as zf:
+            import warnings
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", UserWarning)
+                zf.writestr("AUDIOHUB-OFFLINE-REPORT-VIEWER.html", b"duplicate")
+        changed = hashlib.sha256(path.read_bytes()).hexdigest()
+        self.assertNotEqual(changed, digest)
+        with self.assertRaisesRegex(ValueError, "four or five"):
+            inspect_zip(path, expected_zip_sha256=changed,
+                        expected_source_sha=self.SHA)
 
     def test_zip_requires_both_explicit_exact_expected_hashes(self):
         path, digest = self.make_operator_zip()
@@ -275,13 +331,13 @@ class ReleaseBundlePreflightTests(unittest.TestCase):
                       "/absolute", "unexpected-credentials.txt"):
             with self.subTest(extra=extra):
                 path, digest = self.make_operator_zip(extra=extra)
-                with self.assertRaisesRegex(ValueError, "exactly four"):
+                with self.assertRaisesRegex(ValueError, "Unsafe|four or five"):
                     inspect_zip(path, expected_zip_sha256=digest,
                                 expected_source_sha=self.SHA)
 
     def test_zip_rejects_duplicate_member_names_without_extraction(self):
         path, digest = self.make_operator_zip(duplicate=True)
-        with self.assertRaisesRegex(ValueError, "exactly four"):
+        with self.assertRaisesRegex(ValueError, "Unsafe|four or five"):
             inspect_zip(path, expected_zip_sha256=digest,
                         expected_source_sha=self.SHA)
 
