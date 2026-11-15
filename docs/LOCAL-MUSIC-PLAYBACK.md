@@ -1098,14 +1098,14 @@ private WAV library is ready for music playback, `--speaker-check`
 intentionally does **not inspect the library at all**. An empty
 `/home/audiohub/PrivateMusic` does not count as a first-sound failure.
 
-The check reads two bounded local prerequisites independently:
-the exact private `audiohub.music` PipeWire sink and whether the
+The check reads ONE bounded local PipeWire graph to report the virtual
+`audiohub.music` input, one unambiguous physical USB output, and a
+**direct exclusive music EQ output-to-USB link**, alongside whether the
 unprivileged operator can locate `pw-cat`. Each missing prerequisite
-receives an actionable, non-identifying explanation. A green
-**READY FOR MANUAL TRY** means only that these two prerequisites appear
-present: it does NOT play a sound or prove the USB output, left/right
-routing, physical SPL, speaker wiring, multi-source mixing, first-owner
-security or production suitability. The graph may change after the
+receives actionable anonymous feedback. **READY FOR MANUAL TRY** means
+only that the observed software route is available; it does NOT play
+sound or prove audible left/right output, actual speaker wiring, physical
+SPL, live multi-source mixing, first-owner security or production readiness. The graph may change after the
 check. Failure returns exit status 2; readiness returns 0.
 
 Only after explicit permission for an isolated spare-SD hardware test
