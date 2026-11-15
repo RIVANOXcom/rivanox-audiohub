@@ -506,7 +506,7 @@ class MusicSessionTests(unittest.TestCase):
         self.assertIn("approximately 00:50 remaining (PAUSED)", output)
         self.assertIn("Estimated WAV track: 00:24 elapsed", output)
         self.assertIn("approximately 00:41 remaining", output)
-        self.assertIn("session remaining 140 s", output)
+        self.assertIn("session remaining 180 s", output)
         self.assertIn("PAUSED (owned player only)", output)
         self.assertTrue(child.terminated)
         self.assertEqual(child.sent_signals,
