@@ -52,7 +52,9 @@ This route does not install audio or ownership services, configure Wi-Fi,
 pair Bluetooth, import or convert music, change routing/global mixer/EQ or
 write playback history. It does not automatically start a second action.
 If a prerequisite fails, correct it independently using --speaker-check or
---library-health. Never reroute to the default sink or raise privileges to
+--library-health. The standalone `--speaker-check` and the existing
+`--speaker-guide` also refuse a missing/ambiguous USB output before
+offering any manual sound tests. Never reroute to the default sink or raise privileges to
 bypass the guard. Actual Pi4/Edifier audible channels and safe SPL,
 two-Bluetooth-plus-LAN operation, owner authentication and public release
 remain **UNVERIFIED**. A manual spare-SD install and rollback require
