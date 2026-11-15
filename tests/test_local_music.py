@@ -74,6 +74,12 @@ class LocalMusicTests(unittest.TestCase):
             "info":{"props":{"media.class":"Audio/Sink",
                              "node.name":"alsa_output.usb-EDIFIER_R600USB",
                              "node.description":"Edifier USB Speaker"}}
+        }, {
+            "type":"PipeWire:Interface:Node","id":19,
+            "info":{"props":{"node.name":"audiohub.music.output"}}
+        }, {
+            "type":"PipeWire:Interface:Link","id":20,
+            "info":{"output-node-id":19,"input-node-id":18}
         }])
         return mock.Mock(returncode=0, stdout=raw)
 
