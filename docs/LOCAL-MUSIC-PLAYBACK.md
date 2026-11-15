@@ -216,7 +216,8 @@ During playback, type a command and press **Enter**:
 | `p` + Enter | Stop the current player and go to the previous selected track; on track 1, restart track 1 |
 | `r` + Enter | Restart the current selected track from its beginning |
 | `1`–`8` + Enter | Jump directly to an existing numbered track in the selected queue (invalid positions do not interrupt playback) |
-| `q` + Enter | Stop the current owned player and exit the session |
+| `e` + Enter | Toggle **end after this track**: let the currently playing owned WAV finish naturally, then stop without playing another, even if repeat is active |
+| `q` + Enter | **Stop immediately**; terminate only the current owned player and exit |
 | `h` + Enter | Repeat the short help text |
 | Ctrl+C | Emergency local interruption; owned child stopped in cleanup |
 
