@@ -463,5 +463,137 @@ class DiagnosticTests(unittest.TestCase):
         self.assertNotIn("ExecStart=/bin/sh", service)
 
 
+    def _write_identity(self, *, filename="build-identity.json", **changes):
+        folder = self.root / "identity"
+        folder.mkdir(mode=0o755, exist_ok=True)
+        folder.chmod(0o755)
+        path = folder / filename
+        data = {
+            "schema": diag.IMAGE_IDENTITY_SCHEMA,
+            "source_sha": "a" * 40,
+            "pi_gen_sha": "c851f00178c64b87a86c06c2be216bd89d62e55b",
+            "ci_run_id": 43724201295,
+            "hardware_verified": False,
+            "release_approved": False,
+        }
+        data.update(changes)
+        path.write_text(json.dumps(data), encoding="ascii")
+        path.chmod(0o644)
+        return path
+
+    def test_image_identity_is_exact_and_never_a_hardware_go(self):
+        image = self._write_identity()
+        value = diag.read_image_identity(image, owner_id=self.uid)
+        self.assertEqual(value, {
+            "status": "embedded_unverified_alpha",
+            "source_sha": "a" * 40,
+            "pi_gen_sha": "c851f00178c64b87a86c06c2be216bd89d62e55b",
+            "ci_run_id": 43724201295,
+        })
+        self.assertNotIn("hardware_accepted", value)
+        self.assertNotIn(str(self.root), json.dumps(value))
+        self.assertIsNone(diag.read_image_identity(image, owner_id=self.uid + 1))
+
+    def test_image_identity_offline_report_matches_booted_sd_metadata(self):
+        image = self._write_identity()
+        clock = Clock()
+        self.assertTrue(diag.run_probe(
+            sleep=clock.sleep, now=clock.now, mono=clock.mono,
+            output_dir=self.output, runtime_path=self.runtime,
+            user_id=self.uid, controller_path=self.root / "missing-controller",
+            require_mount=False, image_identity_path=image,
+            image_identity_owner_id=self.uid,
+        ))
+        report = json.loads((self.output / diag.OUTPUT_NAME).read_text())
+        self.assertEqual(report["image_identity"]["source_sha"], "a" * 40)
+        self.assertEqual(report["image_identity"]["ci_run_id"], 43724201295)
+        self.assertEqual(report["image_identity"]["status"],
+                         "embedded_unverified_alpha")
+        self.assertFalse(report["hardware_accepted"])
+        self.assertFalse(report["owner_authenticated"])
+        self.assertFalse(report["phone_wifi_provisioned"])
+        self.assertEqual(len(report["snapshots"]), len(diag.CHECKPOINT_DELAYS))
+        self.assertLessEqual(
+            (self.output / diag.OUTPUT_NAME).stat().st_size,
+            diag.MAX_REPORT_BYTES)
+
+    def test_image_identity_missing_or_unsafe_reports_unavailable_not_guessed(self):
+        image = self.root / "absent-identity.json"
+        clock = Clock()
+        self.assertIsNone(diag.read_image_identity(image, owner_id=self.uid))
+        self.assertTrue(diag.run_probe(
+            sleep=clock.sleep, now=clock.now, mono=clock.mono,
+            output_dir=self.output, runtime_path=self.runtime,
+            user_id=self.uid, controller_path=self.root / "missing-controller",
+            require_mount=False, image_identity_path=image,
+            image_identity_owner_id=self.uid,
+        ))
+        record = json.loads((self.output / diag.OUTPUT_NAME).read_text())
+        self.assertEqual(record["image_identity"], {"status": "unavailable"})
+        self.assertFalse(record["hardware_accepted"])
+
+    def test_image_identity_refuses_symlink_hardlink_and_unsafe_permissions(self):
+        path = self._write_identity()
+        link = path.parent / "linked.json"
+        link.symlink_to(path)
+        self.assertIsNone(diag.read_image_identity(link, owner_id=self.uid))
+        hardlink = path.parent / "hardlinked.json"
+        os.link(path, hardlink)
+        self.assertIsNone(diag.read_image_identity(path, owner_id=self.uid))
+        hardlink.unlink()
+        path.chmod(0o666)
+        self.assertIsNone(diag.read_image_identity(path, owner_id=self.uid))
+        path.chmod(0o644)
+        path.parent.chmod(0o777)
+        self.assertIsNone(diag.read_image_identity(path, owner_id=self.uid))
+        path.parent.chmod(0o755)
+        self.assertIsNotNone(diag.read_image_identity(path, owner_id=self.uid))
+        self.assertIsNone(diag.read_image_identity(
+            Path("relative.json"), owner_id=self.uid))
+        self.assertIsNone(diag.read_image_identity(
+            self.root / ".." / "secret.json", owner_id=self.uid))
+
+    def test_image_identity_rejects_untrusted_or_false_provenance(self):
+        bad = [
+            {"source_sha": "NOT_A_SHA"},
+            {"pi_gen_sha": "c" * 39},
+            {"source_sha": True},
+            {"ci_run_id": "43724201295"},
+            {"ci_run_id": -1},
+            {"ci_run_id": True},
+            {"ci_run_id": 10**20},
+            {"release_approved": True},
+            {"hardware_verified": True},
+            {"schema": "wrong"},
+            {"extra_secret": "WIFI-SECRET"},
+        ]
+        for fields in bad:
+            with self.subTest(fields=fields):
+                path = self._write_identity(**fields)
+                self.assertIsNone(diag.read_image_identity(
+                    path, owner_id=self.uid))
+        path = self._write_identity()
+        path.write_text('{"schema":"x","schema":"y"}')
+        self.assertIsNone(diag.read_image_identity(path, owner_id=self.uid))
+        path.write_bytes(b"x" * (diag.MAX_IMAGE_IDENTITY_BYTES + 1))
+        self.assertIsNone(diag.read_image_identity(path, owner_id=self.uid))
+        path = self._write_identity(ci_run_id=None)
+        valid = diag.read_image_identity(path, owner_id=self.uid)
+        self.assertIsNone(valid["ci_run_id"])
+
+    def test_image_identity_is_generated_and_installed_only_in_native_builder(self):
+        build = (ROOT / "build-image.sh").read_text()
+        install = (ROOT / "image/stage-audiohub/01-install/00-run.sh").read_text()
+        audit = (ROOT / "image/stage-audiohub/02-audit/00-run.sh").read_text()
+        self.assertIn('SOURCE_SHA="$(git -C "$ROOT" rev-parse HEAD)"', build)
+        self.assertIn('GITHUB_SHA', build)
+        self.assertIn('git -C "$ROOT" diff --quiet HEAD', build)
+        self.assertIn('build-identity.json', build)
+        self.assertIn('files/build-identity.json', install)
+        self.assertIn('/etc/audiohub/build-identity.json', install)
+        self.assertIn('stat.S_ISREG(meta.st_mode)', audit)
+        self.assertIn('value["release_approved"] is False', audit)
+        self.assertNotIn('socket.socket', (ROOT / "src/audiohub/firstboot_diag.py").read_text())
+
 if __name__ == "__main__":
     unittest.main()
