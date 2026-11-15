@@ -21,7 +21,8 @@ POLL_SECONDS = 0.15
 QUIT_JOIN_SECONDS = 3.0
 MAX_DEFERRED_TRACKS = 8  # volatile only, no new player or disk storage
 COMMAND_HELP = ("Enter: [u] pause/resume, [m] repeat off/track/all, [s] status, "
-                "[l] queue, [e] end after current track (toggle), "
+                "[l] queue, [e] end after current (toggle), "
+                "[g] finish after queued plan (toggle), "
                 "[k1-k8] replace NEXT, [a1-a8] append (max 8), "
                 "[z] undo last pending, [k0] clear pending, "
                 "[d1-d8] delete pending SLOT, [f1-f8] move SLOT to NEXT, "
@@ -56,7 +57,7 @@ def read_terminal_command(timeout=POLL_SECONDS, *, stream=None):
     if len(line) > 16:
         return "?"
     value = line.strip().lower()
-    allowed = ("u", "m", "s", "l", "e", "n", "p", "r", "q", "h", "z",
+    allowed = ("u", "m", "s", "l", "e", "g", "n", "p", "r", "q", "h", "z",
                "1", "2", "3", "4", "5", "6", "7", "8",
                "k0", "k1", "k2", "k3", "k4", "k5", "k6", "k7", "k8",
                "a1", "a2", "a3", "a4", "a5", "a6", "a7", "a8",
@@ -82,8 +83,10 @@ def _validate_deferred_tracks(count, queued_next, queued_after):
 
 def status_message(position, count, started_at, deadline, *, clock=time.monotonic,
                    paused=False, repeat_mode="off", end_after_track=False,
-                   queued_next=None, queued_after=()):
-    if repeat_mode not in ("off", "track", "all") or type(end_after_track) is not bool:
+                   queued_next=None, queued_after=(), end_after_plan=False):
+    if (repeat_mode not in ("off", "track", "all") or
+            type(end_after_track) is not bool or type(end_after_plan) is not bool or
+            (end_after_track and end_after_plan)):
         raise ValueError("Unknown local repeat/end mode")
     slots = _validate_deferred_tracks(count, queued_next, queued_after)
     now = clock()
@@ -95,6 +98,7 @@ def status_message(position, count, started_at, deadline, *, clock=time.monotoni
             + (" | PAUSED (owned player only)" if paused else "")
             + (" | repeating " + repeat_mode if repeat_mode != "off" else "")
             + (" | END AFTER THIS TRACK" if end_after_track else "")
+            + (" | END AFTER PENDING PLAN" if end_after_plan else "")
             + (" | QUEUED NEXT TRACK " + str(queued_next)
                if queued_next is not None else "")
             + (" | FOLLOWING TRACKS " + ", ".join(map(str, queued_after))
@@ -133,13 +137,16 @@ def track_progress_message(duration_ms, elapsed_seconds, *, paused=False):
 
 
 def queue_message(report, position, *, repeat_mode="off",
-                  end_after_track=False, queued_next=None, queued_after=()):
+                  end_after_track=False, queued_next=None, queued_after=(),
+                  end_after_plan=False):
     """Anonymous user-facing snapshot of the selected local music queue.
 
     The displayed durations come only from prechecked WAV headers, not
     from hardware playback, and never include filenames or identities.
     """
-    if repeat_mode not in ("off", "track", "all") or type(end_after_track) is not bool:
+    if (repeat_mode not in ("off", "track", "all") or
+            type(end_after_track) is not bool or type(end_after_plan) is not bool or
+            (end_after_track and end_after_plan)):
         raise ValueError("Unknown local repeat/end mode")
     if (not isinstance(report, dict) or
             type(report.get("files")) is not int or
@@ -163,6 +170,7 @@ def queue_message(report, position, *, repeat_mode="off",
             ", ".join(chunks) + "; * = selected. No private titles."
             + (" Repeat: " + repeat_mode + "." if repeat_mode != "off" else "")
             + (" End after current track ARMED." if end_after_track else "")
+            + (" END AFTER PENDING PLAN ARMED." if end_after_plan else "")
             + (" Queued NEXT: track " + str(queued_next) + "."
                if queued_next is not None else "")
             + (" Following: " + ", ".join("track " + str(n)
@@ -204,6 +212,7 @@ def run_session(paths, *, max_minutes=15, read_command=read_terminal_command,
     position = 1
     repeat_mode = "off"  # volatile, this session only; never saved
     end_after_track = False  # one current-track natural ending; never persists
+    end_after_plan = False  # stop naturally after planned queue; never persists
     queued_next = None  # first anonymous deferred choice; no saved files
     queued_after = []  # at most 7 more choices, only during this session
     while position <= report["files"]:
@@ -267,7 +276,8 @@ def run_session(paths, *, max_minutes=15, read_command=read_terminal_command,
                            clock=clock, repeat_mode=repeat_mode,
                            end_after_track=end_after_track,
                            queued_next=queued_next,
-                           queued_after=queued_after))
+                           queued_after=queued_after,
+                           end_after_plan=end_after_plan))
 
         def stop_owned_player():
             cancelled.set()
@@ -338,7 +348,8 @@ def run_session(paths, *, max_minutes=15, read_command=read_terminal_command,
                                        repeat_mode=repeat_mode,
                                        end_after_track=end_after_track,
                                        queued_next=queued_next,
-                                       queued_after=queued_after))
+                                       queued_after=queued_after,
+                                       end_after_plan=end_after_plan))
                     if exited:
                         out("Owned music player has exited; track estimate "
                             "unavailable until playback completion is checked. "
@@ -363,6 +374,10 @@ def run_session(paths, *, max_minutes=15, read_command=read_terminal_command,
                     out(COMMAND_HELP)
                 elif command == "e":
                     end_after_track = not end_after_track
+                    if end_after_track and end_after_plan:
+                        end_after_plan = False
+                        out("End-after-pending-plan cancelled: end after "
+                            "CURRENT track now takes priority.")
                     if end_after_track and queued_next is not None:
                         queued_next = None
                         queued_after.clear()
@@ -373,11 +388,28 @@ def run_session(paths, *, max_minutes=15, read_command=read_terminal_command,
                         if end_after_track else
                         "End-after-track cancelled; queue and repeat continue. "
                         "No settings saved.")
+                elif command == "g":
+                    if end_after_plan:
+                        end_after_plan = False
+                        out("End-after-pending-plan cancelled; normal "
+                            "playback order and repeat resume.")
+                    elif queued_next is None:
+                        out("Cannot arm end-after-pending-plan without "
+                            "an upcoming queued WAV. Use a1-a8 or k1-k8 first; "
+                            "current audio unchanged.")
+                    else:
+                        end_after_plan = True
+                        out("END AFTER PENDING PLAN ARMED: current and queued "
+                            "WAVs finish naturally, then stop BEFORE normal "
+                            "order/repeat; original session deadline applies.")
                 elif command in ("k0", "k1", "k2", "k3", "k4",
                                  "k5", "k6", "k7", "k8"):
                     if command == "k0":
                         queued_next = None
                         queued_after.clear()
+                        if end_after_plan:
+                            end_after_plan = False
+                            out("End-after-pending-plan cancelled by clear-all.")
                         out("Queued-next selection cleared; normal queue "
                             "and repeat apply. Current WAV uninterrupted.")
                     elif int(command[1]) > report["files"]:
@@ -422,6 +454,10 @@ def run_session(paths, *, max_minutes=15, read_command=read_terminal_command,
                             str(1 + len(queued_after)) + " still pending.")
                     elif queued_next is not None:
                         queued_next = None
+                        if end_after_plan:
+                            end_after_plan = False
+                            out("End-after-pending-plan cancelled: "
+                                "last queued choice removed.")
                         out("Undid last queued track. Pending queue empty; "
                             "normal order and repeat resume.")
                     else:
@@ -457,6 +493,10 @@ def run_session(paths, *, max_minutes=15, read_command=read_terminal_command,
                                 "Current WAV uninterrupted.")
                         queued_next = pending[0] if pending else None
                         queued_after = pending[1:]
+                        if end_after_plan and queued_next is None:
+                            end_after_plan = False
+                            out("End-after-pending-plan cancelled: "
+                                "last queued choice removed.")
                 elif command == "m":
                     repeat_mode = next_repeat_mode(repeat_mode)
                     out("Local repeat mode: " + repeat_mode.upper()
@@ -466,7 +506,8 @@ def run_session(paths, *, max_minutes=15, read_command=read_terminal_command,
                                       repeat_mode=repeat_mode,
                                       end_after_track=end_after_track,
                                       queued_next=queued_next,
-                                      queued_after=queued_after))
+                                      queued_after=queued_after,
+                                      end_after_plan=end_after_plan))
                 elif command in ("n", "p", "r", "q"):
                     requested = command
                     break
@@ -515,6 +556,12 @@ def run_session(paths, *, max_minutes=15, read_command=read_terminal_command,
             end_after_track = False
             out("End-after-track cancelled by manual navigation; "
                 "the new track keeps the session deadline.")
+        if end_after_plan and (requested in ("n", "p", "r") or
+                                (isinstance(requested, tuple) and
+                                 requested[0] == "jump")):
+            end_after_plan = False
+            out("End-after-pending-plan cancelled by immediate navigation; "
+                "normal playback order applies.")
         if queued_next is not None and (requested in ("n", "p", "r") or
                                         (isinstance(requested, tuple) and
                                          requested[0] == "jump")):
@@ -550,6 +597,11 @@ def run_session(paths, *, max_minutes=15, read_command=read_terminal_command,
                 str((1 if queued_next is not None else 0) + len(queued_after)) +
                 " deferred track(s) remain. Private titles hidden.")
             continue
+        if end_after_plan:
+            out("End-after-pending-plan completed on last scheduled WAV "
+                "natural finish. No unscheduled/repeated track started; "
+                "no settings saved.")
+            break
         if repeat_mode == "track":
             out("Repeating current selected track until mode or deadline changes.")
             continue
