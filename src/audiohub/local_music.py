@@ -252,6 +252,8 @@ def play_playlist(paths, *, max_minutes=15, spawn=subprocess.Popen, capture=boun
     for i, (path, metadata) in enumerate(zip(paths, report["tracks"]), 1):
         if time.monotonic() >= deadline:
             raise TimeoutError("Local playlist session deadline reached")
+        if i > 1 and not music_sink_available(capture=capture):
+            raise RuntimeError("Private music-to-USB playback path disconnected; no fallback")
         notify("Playing track " + str(i) + "/" + str(report["files"])
                + " privately through music input; Ctrl+C stops.")
         options = {}
