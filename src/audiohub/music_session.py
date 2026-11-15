@@ -70,6 +70,33 @@ def status_message(position, count, started_at, deadline, *, clock=time.monotoni
             + " | local only; audio not physically verified.")
 
 
+def track_progress_message(duration_ms, elapsed_seconds, *, paused=False):
+    """Readable per-track estimate from WAV header and owned-player clock.
+
+    This is NOT a PCM cursor, loudness meter or proof of sound reaching the
+    output. Pause time is excluded by the caller. No private titles/paths.
+    """
+    if (type(duration_ms) is not int or
+            not 0 < duration_ms <= local_music.MAX_SECONDS * 1000 or
+            type(elapsed_seconds) not in (int, float) or
+            elapsed_seconds < 0 or
+            (type(elapsed_seconds) is float and not math.isfinite(elapsed_seconds)) or
+            type(paused) is not bool):
+        raise ValueError("Invalid anonymous track-timing estimate")
+    total = (duration_ms + 999) // 1000
+    elapsed = min(total, int(elapsed_seconds) if elapsed_seconds < total else total)
+    left = total - elapsed
+
+    def mmss(seconds):
+        minutes, remainder = divmod(seconds, 60)
+        return f"{minutes:02d}:{remainder:02d}"
+
+    return ("Estimated WAV track: " + mmss(elapsed) + " elapsed / " +
+            mmss(total) + " header duration; approximately " + mmss(left) +
+            " remaining" + (" (PAUSED)" if paused else "") +
+            ". Owned-player clock only, not measured PCM position or sound.")
+
+
 def queue_message(report, position, *, repeat_mode="off"):
     """Anonymous user-facing snapshot of the selected local music queue.
 
@@ -140,17 +167,23 @@ def run_session(paths, *, max_minutes=15, read_command=read_terminal_command,
         lock = threading.Lock()
         active = [None]
         paused = [False]  # guarded by lock; never signals unrelated processes
+        player_started = [None]  # monotonic time only after owned child exists
+        pause_started = [None]
+        pause_total = [0.0]  # current track only, not persisted
         failures = []
 
         def on_player(child):
             with lock:
                 active[0] = child
+                if player_started[0] is None:
+                    player_started[0] = clock()
                 if cancelled.is_set() and child.poll() is None:
                     child.terminate()
                 elif paused[0] and child.poll() is None:
                     # A local pause command can arrive before pw-cat spawns.
                     # Apply it to the newly owned child, never PipeWire itself.
                     child.send_signal(signal.SIGSTOP)
+                    pause_started[0] = clock()
 
         def worker():
             try:
@@ -211,6 +244,13 @@ def run_session(paths, *, max_minutes=15, read_command=read_terminal_command,
                     except OSError:
                         # A disappearing child cannot be marked paused.
                         return None
+                now = clock()
+                if want_pause:
+                    if player_started[0] is not None:
+                        pause_started[0] = now
+                elif pause_started[0] is not None:
+                    pause_total[0] += max(0.0, now - pause_started[0])
+                    pause_started[0] = None
                 paused[0] = want_pause
                 return want_pause
 
@@ -224,9 +264,22 @@ def run_session(paths, *, max_minutes=15, read_command=read_terminal_command,
                 if command == "s":
                     with lock:
                         is_paused = paused[0]
+                        observed_start = player_started[0]
+                        now = clock()
+                        stopped_time = pause_total[0]
+                        if pause_started[0] is not None:
+                            stopped_time += max(0.0, now - pause_started[0])
                     out(status_message(position, report["files"], start,
                                        deadline, clock=clock, paused=is_paused,
                                        repeat_mode=repeat_mode))
+                    if observed_start is None:
+                        out("Track estimate pending until our local player starts. "
+                            "No audible hardware output verified.")
+                    else:
+                        seconds = max(0.0, now - observed_start - stopped_time)
+                        out(track_progress_message(
+                            report["tracks"][position - 1]["duration_ms"],
+                            seconds, paused=is_paused))
                 elif command == "u":
                     result = toggle_pause()
                     if result is None:
