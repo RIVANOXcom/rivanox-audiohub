@@ -709,7 +709,7 @@ class LocalMusicLibraryTests(unittest.TestCase):
             track.setsampwidth(3)
             track.setframerate(48000)
             track.writeframes(b"\x01\x02\x03\x04\x05\x06" * 30)
-        (self.root / "private-damaged.wav").write_bytes(b"bad RIFF data")
+        (self.root / "private-damaged.wav").write_bytes(b"bad RIFF data" + b"x" * 80)
         (self.root / "secret-link.wav").symlink_to(self.a)
         unsafe = self.root / "private-world-write.wav"
         self.make_wav(unsafe, 20)
