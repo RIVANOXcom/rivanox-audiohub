@@ -212,6 +212,8 @@ During playback, type a command and press **Enter**:
 | `u` + Enter | Pause or resume only this music session's owned player; session time limit keeps running |
 | `s` + Enter | Show current track number, elapsed session time, remaining session limit **and** a separate pause-aware approximate elapsed/remaining time for this WAV (no filenames or identifiers) |
 | `l` + Enter | Show anonymous selected queue order and planned WAV lengths (not live playback progress) |
+| `k1`–`k8` + Enter | Queue that **already selected numbered WAV** to play once **after the current track naturally finishes**, without cutting or restarting current audio |
+| `k0` + Enter | Cancel the temporary queued-next selection; restore regular queue/repeat order |
 | `n` + Enter | Stop just the current owned player, then start the next selected track in order |
 | `p` + Enter | Stop the current player and go to the previous selected track; on track 1, restart track 1 |
 | `r` + Enter | Restart the current selected track from its beginning |
@@ -220,6 +222,25 @@ During playback, type a command and press **Enter**:
 | `q` + Enter | **Stop immediately**; terminate only the current owned player and exit |
 | `h` + Enter | Repeat the short help text |
 | Ctrl+C | Emergency local interruption; owned child stopped in cleanup |
+
+**Queue a different WAV after the current one finishes:** while playing,
+`l` first shows the anonymous 1–8 track numbers. Enter e.g. `k3` to
+schedule *selected track 3* as the **very next** song. This does not
+interrupt the current owned player or require another PLAY confirmation.
+The one-shot override is shown in `s` and `l` and is consumed only
+after the current track finishes naturally. It temporarily takes
+precedence over repeat-track, repeat-all and the normal sequential
+order, after which the existing repeat/order policy resumes.
+`k0` cancels without interrupting any playback. An invalid or out-of-
+range number is rejected without changing the current/next selection.
+If `e` (end after this track) is armed *after* `kN`, ending takes
+precedence and clears queued-next; if `kN` is entered *after* `e`,
+AudioHub explicitly cancels ending because the operator selected
+another track. Immediate `n`, `p`, `r` or a numbered jump also
+clears queued-next, since that direct command is authoritative.
+`q`, a player failure or the original session deadline always
+prevent starting a queued new WAV. No anonymous queue choice is saved
+to disk, exposed to a network or transferred to another audio source.
 
 **If the private local playback tool fails unexpectedly**, AudioHub now
 refuses the next/previous/replay/jump even if that key was entered at

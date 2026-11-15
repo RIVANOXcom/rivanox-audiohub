@@ -33,7 +33,9 @@ usage() {
     'The album wizard checks private input/player FIRST; missing tools stop before any selection or PLAY.' \
     'The playback wizard shows an anonymous list; select numbers, ALL or SHUFFLE.' \
     'PLAY is required separately to start sound; CHANGE revises the queue.' \
-    'During playback: s=session/track ETA, u=pause/resume, m=repeat, e=finish current WAV then stop, n=next, q=stop now.' \
+    'During playback: s=status, l=queue, k1-k8=play selected track next (no cut), k0=clear next.' \
+    'Also: u=pause/resume, m=repeat, e=finish current WAV then stop, n=next, q=stop now.' \
+    'Queued NEXT is one-shot and anonymous; manual navigation, ending, stop, deadline or failure take priority.' \
     'The end-after-track switch is local and temporary; navigation cancels it, session deadline still applies.' \
     'If our own player fails, next/replay/jump stop safely and never claim more tracks played.' \
     'If the player exited, s cannot claim estimated ongoing WAV progress; no auto-retry or fallback.' \

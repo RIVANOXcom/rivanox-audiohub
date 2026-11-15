@@ -925,6 +925,212 @@ class MusicSessionTests(unittest.TestCase):
                     music_session.queue_message(
                         report, 1, end_after_track=wrong)
 
+    def test_queued_next_plays_after_natural_finish_before_repeat(self):
+        # The current owned child must finish naturally; repeat=track does
+        # not override a one-time operator selection.
+        for repeat in ([], ["m"], ["m", "m"]):
+            with self.subTest(repeat=repeat):
+                self.out.clear()
+                played = []
+                first = threading.Event()
+                finish_first = threading.Event()
+                second = threading.Event()
+                commands = iter([*repeat, "k2", "s", "l", "release"])
+                def playback(paths, *, max_minutes, stop, on_player,
+                             session_deadline, notify):
+                    played.append(paths[0])
+                    if len(played) == 1:
+                        first.set()
+                        self.assertTrue(finish_first.wait(2))
+                        self.assertFalse(stop.is_set())
+                        return True
+                    second.set()
+                    child = FakeChild()
+                    on_player(child)
+                    self.assertTrue(stop.wait(2))
+                    raise InterruptedError("operator quit after queued track")
+                def read(_timeout):
+                    self.assertTrue(first.wait(2))
+                    action = next(commands, None)
+                    if action == "release":
+                        finish_first.set()
+                        return None
+                    if action is not None:
+                        return action
+                    # The main thread must poll 'finished' after this
+                    # callback returns; waiting here for the next worker
+                    # would deadlock the previous track's transition.
+                    if second.is_set():
+                        return "q"
+                    time.sleep(0.001)
+                    return None
+                with mock.patch.object(local_music, "music_sink_available",
+                                       return_value=True), \
+                     mock.patch.object(local_music.os, "geteuid",
+                                       return_value=1000):
+                    self.assertFalse(music_session.run_session(
+                        self.paths, max_minutes=1, playback=playback,
+                        read_command=read, out=self.out.append,
+                        require_tty=False))
+                self.assertEqual(played, self.paths)
+                output = "\n".join(self.out)
+                self.assertIn("QUEUED NEXT TRACK 2", output)
+                self.assertIn("Queued NEXT: track 2.", output)
+                self.assertIn("Playing queued NEXT track 2", output)
+                self.assertNotIn("Repeating current selected track", output)
+                self.assertNotIn(str(self.dir), output)
+                self.assertNotIn("secret-title", output)
+
+    def test_queued_next_can_be_cancelled_or_replaced_without_new_child(self):
+        self.out.clear()
+        played = []
+        entered = threading.Event()
+        release = threading.Event()
+        actions = iter(["k2", "k8", "s", "k1", "k0", "l", "release"])
+        def playback(paths, *, max_minutes, stop, on_player,
+                     session_deadline, notify):
+            played.append(paths[0])
+            if len(played) == 1:
+                entered.set()
+                self.assertTrue(release.wait(2))
+                self.assertFalse(stop.is_set())
+            return True
+        def read(_timeout):
+            self.assertTrue(entered.wait(2))
+            step = next(actions, None)
+            if step == "release":
+                release.set()
+                return None
+            return step
+        with mock.patch.object(local_music, "music_sink_available",
+                               return_value=True), \
+             mock.patch.object(local_music.os, "geteuid", return_value=1000):
+            self.assertTrue(music_session.run_session(
+                self.paths, max_minutes=1, playback=playback,
+                read_command=read, out=self.out.append,
+                require_tty=False))
+        self.assertEqual(played, self.paths)
+        log = "\n".join(self.out)
+        self.assertIn("Next-track number outside this selected queue", log)
+        self.assertIn("Queued-next selection cleared", log)
+        self.assertIn("QUEUED NEXT TRACK 2", log)
+        self.assertNotIn("Playing queued NEXT track", log)
+        self.assertNotIn(str(self.dir), log)
+
+    def test_end_after_current_and_queued_next_last_choice_wins(self):
+        for commands, expected in (
+            (["k2", "e"], [self.paths[0]]),
+            (["e", "k2"], self.paths),
+        ):
+            with self.subTest(commands=commands):
+                self.out.clear()
+                played = []
+                ready = threading.Event()
+                release = threading.Event()
+                actions = iter([*commands, "release"])
+                def playback(paths, *, max_minutes, stop, on_player,
+                             session_deadline, notify):
+                    played.append(paths[0])
+                    if len(played) == 1:
+                        ready.set()
+                        self.assertTrue(release.wait(2))
+                        self.assertFalse(stop.is_set())
+                    return True
+                def read(_timeout):
+                    self.assertTrue(ready.wait(2))
+                    step = next(actions, None)
+                    if step == "release":
+                        release.set()
+                        return None
+                    return step
+                with mock.patch.object(local_music, "music_sink_available",
+                                       return_value=True), \
+                     mock.patch.object(local_music.os, "geteuid",
+                                       return_value=1000):
+                    self.assertTrue(music_session.run_session(
+                        self.paths, max_minutes=1,
+                        read_command=read, playback=playback,
+                        out=self.out.append, require_tty=False))
+                self.assertEqual(played, expected)
+                log = "\n".join(self.out)
+                if commands[-1] == "e":
+                    self.assertIn("Queued-next selection cleared: end-after-current", log)
+                    self.assertIn("End-after-track completed", log)
+                else:
+                    self.assertIn("End-after-this-track cancelled", log)
+                    self.assertIn("Playing queued NEXT track 2", log)
+                self.assertNotIn(str(self.dir), log)
+
+    def test_manual_navigation_cancels_queued_next_and_uses_direct_choice(self):
+        self.assertFalse(self.run_with(["k2", "r", "q"]))
+        self.assertEqual(self.played, [self.paths[0], self.paths[0]])
+        log = "\n".join(self.out)
+        self.assertIn("Queued-next selection cleared by immediate navigation",
+                      log)
+        self.assertIn("Replaying selected track", log)
+        self.assertNotIn("Playing queued NEXT track", log)
+        self.assertTrue(all(c.terminated for c in self.children))
+
+    def test_queued_next_is_not_played_on_spontaneous_player_failure(self):
+        first = threading.Event()
+        failure = threading.Event()
+        played = []
+        commands = iter(["k2", "release"])
+        def playback(paths, *, max_minutes, stop, on_player,
+                     session_deadline, notify):
+            played.append(paths[0])
+            first.set()
+            self.assertTrue(failure.wait(2))
+            raise RuntimeError("private /music/wav input stopped")
+        def read(_timeout):
+            self.assertTrue(first.wait(2))
+            choice = next(commands, None)
+            if choice == "release":
+                failure.set()
+                return None
+            return choice
+        with mock.patch.object(local_music, "music_sink_available",
+                               return_value=True), \
+             mock.patch.object(local_music.os, "geteuid", return_value=1000):
+            with self.assertRaisesRegex(RuntimeError, "player failed"):
+                music_session.run_session(
+                    self.paths, max_minutes=1, read_command=read,
+                    playback=playback, out=self.out.append,
+                    require_tty=False)
+        self.assertEqual(played, [self.paths[0]])
+        log = "\n".join(self.out)
+        self.assertIn("LOCAL PLAYBACK FAILED", log)
+        self.assertNotIn("Playing queued NEXT track", log)
+        self.assertNotIn("private /music", log)
+        self.assertNotIn(str(self.dir), log)
+
+    def test_queued_next_commands_are_local_bounded_and_anonymous(self):
+        with mock.patch.object(music_session.select, "select",
+                               return_value=([1], [], [])):
+            for raw, value in (("K2\n", "k2"), ("k0\n", "k0"),
+                               ("k8\n", "k8")):
+                self.assertEqual(music_session.read_terminal_command(
+                    stream=io.StringIO(raw)), value)
+            for raw in ("k9\n", "k10\n", "k-1\n", "k2,3\n",
+                        "kprivate-track\n", "1k\n"):
+                self.assertEqual(music_session.read_terminal_command(
+                    stream=io.StringIO(raw)), "?")
+        report = local_music.inspect_playlist(self.paths, max_minutes=1)
+        queue = music_session.queue_message(report, 1, queued_next=2)
+        status = music_session.status_message(
+            1, 2, 0, 60, clock=lambda: 1, queued_next=2)
+        self.assertIn("Queued NEXT: track 2.", queue)
+        self.assertIn("QUEUED NEXT TRACK 2", status)
+        self.assertNotIn("secret-title", queue + status)
+        self.assertNotIn(str(self.dir), queue + status)
+        for wrong in (-1, 0, 3, True, "2", 1.0):
+            with self.subTest(wrong=wrong):
+                with self.assertRaises(ValueError):
+                    music_session.queue_message(report, 1, queued_next=wrong)
+                with self.assertRaises(ValueError):
+                    music_session.status_message(
+                        1, 2, 0, 60, clock=lambda: 1, queued_next=wrong)
+
     def test_repeat_track_restarts_after_natural_completion_and_quit_stops(self):
         first = threading.Event()
         release = threading.Event()
