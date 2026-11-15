@@ -20,6 +20,35 @@ is off, mount it on their computer and inspect this small JSON file. This
 does not require Internet access, Ethernet, home Wi-Fi, SSH, passwords or
 an application.
 
+## Identify which exact test image booted (new unverified alpha)
+
+The installed image now carries a fixed **nonsecret** build identity at
+`/etc/audiohub/build-identity.json`, generated from the checked-out
+source commit, pinned `pi-gen` SHA, and GitHub Actions native image-run
+number (or `null` for an independently built image). The one-time
+offline FAT report includes an `image_identity` object containing
+only these immutable source/build references. This helps an operator
+distinguish actual test-SD versions when comparing several boot cards
+and correlates a physical observation with its exact GitHub source
+and native image job. It does **not** identify a person, network,
+USB device, SD serial or Bluetooth peer. The image-builder refuses a
+CI SHA mismatch or uncommitted tracked source so a dirty build is
+not mislabeled with an unrelated Git commit.
+
+If build metadata is absent, malformed, replaced by a symlink,
+writable by other users, not a single ordinary file, or contains
+unapproved claims, the report explicitly shows
+`{"image_identity":{"status":"unavailable"}}` instead of inventing
+a source revision. Its root-owned, bounded, nofollow reader does not
+modify the source file. The report still carries
+`hardware_accepted: false`, `owner_authenticated: false` and
+`UNVERIFIED_ALPHA_OFFLINE_TEST_ONLY`. **The identity is not a
+cryptographic attestation:** anyone with physical SD write access
+could replace the image. Independently verify downloadable ZIP/image
+hashes, physically identify the test SD and preserve the old SD for
+rollback. No phone provisioning, auto-boot approval, network service,
+image flashing or hardware GO is added.
+
 ## What the report contains
 
 At startup and ~30, 60, 120, 180, 300 and 600 seconds later, the diagnostic
