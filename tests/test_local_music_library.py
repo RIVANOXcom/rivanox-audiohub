@@ -701,5 +701,160 @@ class LocalMusicLibraryTests(unittest.TestCase):
         self.assertIn("Next: choose numbers, ALL (up to 8), or SHUFFLE", wizard)
 
 
+    def test_offline_library_health_counts_exact_reasons_without_private_names(self):
+        # Normal valid tracks already in setUp.
+        unsupported = self.root / "secret-24bit.wav"
+        with wave.open(str(unsupported), "wb") as track:
+            track.setnchannels(2)
+            track.setsampwidth(3)
+            track.setframerate(48000)
+            track.writeframes(b"\x01\x02\x03\x04\x05\x06" * 30)
+        (self.root / "private-damaged.wav").write_bytes(b"bad RIFF data")
+        (self.root / "secret-link.wav").symlink_to(self.a)
+        unsafe = self.root / "private-world-write.wav"
+        self.make_wav(unsafe, 20)
+        unsafe.chmod(0o666)
+        (self.root / ".hidden-secret.wav").write_bytes(b"unreadable")
+        (self.root / "different-music-secret.mp3").write_bytes(b"private media")
+        (self.root / "not-music-secret.txt").write_text("other private notes")
+        if hasattr(os, "mkfifo"):
+            os.mkfifo(self.root / "named-pipe.wav")
+        counts = music_library.inspect_library_health(self.root)
+        self.assertEqual(counts["supported_wav"], 2)
+        self.assertEqual(counts["unsupported_pcm_wav"], 1)
+        self.assertEqual(counts["damaged_or_unreadable_wav"], 1)
+        self.assertEqual(counts["unsafe_wav"], 3 if hasattr(os, "mkfifo") else 2)
+        self.assertEqual(counts["hidden_wav"], 1)
+        self.assertEqual(counts["other_audio_format"], 1)
+        self.assertEqual(counts["other_entries"], 1)
+        output = music_library.display_library_health(counts)
+        for label in ("OFFLINE MUSIC LIBRARY HEALTH", "Supported PCM16 WAVs: 2",
+                      "Unsupported WAV sample/channel/rate/duration: 1",
+                      "Other recognized audio formats (not playable here): 1",
+                      "convert OFFLINE", "No playback", "UNVERIFIED"):
+            self.assertIn(label, output)
+        for private in ("secret", "favorite", "demo", "private",
+                        ".wav", ".mp3", self.root.name, str(self.root),
+                        "named-pipe", "\x1b"):
+            # Generic guidance may legitimately mention WAV format, but
+            # must never disclose a specific source filename or path.
+            if private in (".wav", ".mp3"):
+                continue
+            self.assertNotIn(private, output)
+        self.assertFalse((self.root / "library-health.json").exists())
+
+    def test_offline_library_health_empty_fresh_sd_is_not_an_error_or_play(self):
+        empty = self.root.parent / "new-private-library"
+        empty.mkdir(mode=0o700)
+        self.assertEqual(music_library.inspect_library_health(empty),
+                         dict.fromkeys((
+                             "supported_wav", "unsupported_pcm_wav",
+                             "damaged_or_unreadable_wav", "unsafe_wav",
+                             "hidden_wav", "other_audio_format",
+                             "other_entries"), 0))
+        message = music_library.display_library_health(
+            music_library.inspect_library_health(empty))
+        self.assertIn("NO SUPPORTED WAV TRACKS", message)
+        self.assertIn("fresh test SD", message)
+        self.assertIn("SILENT READ-ONLY", message)
+        self.assertEqual(list(empty.iterdir()), [])
+        self.assertNotIn(str(empty), message)
+
+    def test_offline_library_health_more_than_40_wavs_gives_action_not_truncation(self):
+        for i in range(39):
+            self.make_wav(self.root / f"owned-{i:02}.wav", 2)
+        counts = music_library.inspect_library_health(self.root)
+        self.assertEqual(counts["supported_wav"], 41)
+        message = music_library.display_library_health(counts)
+        self.assertIn("TOO MANY PLAYABLE WAVS", message)
+        self.assertIn("smaller private folder", message)
+        self.assertNotIn("owned-00", message)
+
+    def test_offline_library_health_refuses_more_than_256_entries(self):
+        many = self.root.parent / "overcrowded"
+        many.mkdir(mode=0o700)
+        for i in range(music_library.MAX_SCANNED + 1):
+            (many / f"private-{i}.log").touch()
+        with self.assertRaisesRegex(ValueError, "exceeds 256 entries"):
+            music_library.inspect_library_health(many)
+
+    def test_offline_library_health_refuses_unsafe_or_linked_folder(self):
+        shortcut = self.root.parent / "private-link"
+        shortcut.symlink_to(self.root, target_is_directory=True)
+        for candidate in (shortcut, Path("relative"), self.root / ".." / self.root.name):
+            with self.subTest(candidate=candidate):
+                with self.assertRaises((ValueError, OSError)):
+                    music_library.inspect_library_health(candidate)
+        self.root.chmod(0o777)
+        try:
+            with self.assertRaises(PermissionError):
+                music_library.inspect_library_health(self.root)
+        finally:
+            self.root.chmod(0o700)
+
+    def test_offline_library_health_cli_is_silent_and_does_not_touch_audio(self):
+        with mock.patch.object(local_music.os, "geteuid", return_value=1000), \
+             mock.patch.object(local_music, "music_sink_available") as graph, \
+             mock.patch.object(local_music, "play_playlist") as player, \
+             mock.patch.object(local_music, "play_speaker_test") as speaker, \
+             mock.patch("builtins.print") as output:
+            self.assertEqual(local_music.main([
+                "--library-health", "--library", str(self.root)]), 0)
+        rendered = "\n".join(
+            " ".join(map(str, x.args)) for x in output.call_args_list)
+        self.assertIn("Supported PCM16 WAVs: 2", rendered)
+        self.assertNotIn(str(self.root), rendered)
+        self.assertNotIn(self.a.name, rendered)
+        self.assertNotIn(self.b.name, rendered)
+        graph.assert_not_called()
+        player.assert_not_called()
+        speaker.assert_not_called()
+
+    def test_offline_library_health_rejects_play_extra_options_and_root(self):
+        invalid = (
+            ["--library-health"],
+            ["--library-health", "--library", str(self.root), "--play"],
+            ["--library-health", "--library", str(self.root), "--guided"],
+            ["--library-health", "--library", str(self.root), "--check"],
+            ["--library-health", "--library", str(self.root), "--show-titles"],
+            ["--library-health", "--library", str(self.root), "--tracks", "1"],
+            ["--library-health", "--library", str(self.root), "--level", "quiet"],
+            ["--library-health", "--library", str(self.root), "--minutes", "3"],
+            ["--library-health", "--library", str(self.root), "--channel", "left"],
+            ["--library-health", "--library", str(self.root), "--interactive"],
+            ["--library-health", "--library", str(self.root), "--speaker-test"],
+        )
+        with mock.patch.object(local_music.os, "geteuid", return_value=1000), \
+             mock.patch.object(music_library, "inspect_library_health") as scanner, \
+             mock.patch.object(local_music, "play_playlist") as player, \
+             mock.patch("builtins.print"):
+            for args in invalid:
+                with self.subTest(args=args):
+                    self.assertEqual(local_music.main(args), 2)
+            scanner.assert_not_called()
+            player.assert_not_called()
+        with mock.patch.object(local_music.os, "geteuid", return_value=0), \
+             mock.patch.object(music_library, "inspect_library_health") as scanner, \
+             mock.patch("builtins.print"):
+            self.assertEqual(local_music.main([
+                "--library-health", "--library", str(self.root)]), 2)
+            scanner.assert_not_called()
+
+    def test_offline_library_health_rejects_forged_anonymous_counts(self):
+        valid = music_library.inspect_library_health(self.root)
+        for bad in (
+                {**valid, "source_path": "/private/wav"},
+                {**valid, "supported_wav": True},
+                {**valid, "supported_wav": -1},
+                {**valid, "supported_wav": 257},
+                {**valid, "other_entries": 255},
+                {},
+                None):
+            with self.subTest(bad=bad):
+                with self.assertRaises(ValueError):
+                    music_library.display_library_health(bad)
+
+
+
 if __name__ == "__main__":
     unittest.main()
