@@ -719,36 +719,67 @@ def guided_first_use(folder, *, read_line=None, out=print,
     if album is None:
         album = music_library.guided_session
 
+    def silent_status():
+        # Identical bounded read-only checks on first entry and after an
+        # explicitly typed RECHECK. Neither action starts a player.
+        try:
+            ready = bool(preflight(out=out))
+        except (OSError, ValueError, RuntimeError, TypeError, PermissionError):
+            ready = False
+            out("Private speaker preflight: NOT READY; no audio will start.")
+        counts = None
+        try:
+            counts = music_library.inspect_library_health(folder)
+            out(music_library.display_library_health(counts))
+        except (OSError, ValueError, UnicodeError, PermissionError):
+            out("Private music folder: NEEDS ATTENTION. Check a safe absolute "
+                "unprivileged folder with audiohub-music --library-health.")
+        playable = (counts is not None and
+                    0 < counts["supported_wav"] <= music_library.MAX_DISPLAYED)
+        return ready, playable
+
+    def describe_status():
+        out("First-use speaker: " + ("MANUAL TRY AVAILABLE" if speaker_ready
+                                     else "UNAVAILABLE; fix private input/tool first") +
+            "; private WAV picker: " + ("AVAILABLE" if playable else
+                                        "UNAVAILABLE; check library health first") + ".")
+
+    def choice_line():
+        out("Enter exact SPEAKER, MUSIC, RECHECK or QUIT then Enter:")
+        try:
+            return read_line()
+        except (EOFError, KeyboardInterrupt, StopIteration,
+                OSError, ValueError, UnicodeError):
+            return None
+
     out("AUDIOHUB FIRST USE: offline local steps, not a hardware certification.")
     out("STEP 1/2: silent private speaker prerequisites and WAV import health.")
-    try:
-        speaker_ready = bool(preflight(out=out))
-    except (OSError, ValueError, RuntimeError, TypeError, PermissionError):
-        speaker_ready = False
-        out("Private speaker preflight: NOT READY; no audio will start.")
-    counts = None
-    try:
-        counts = music_library.inspect_library_health(folder)
-        out(music_library.display_library_health(counts))
-    except (OSError, ValueError, UnicodeError, PermissionError):
-        out("Private music folder: NEEDS ATTENTION. Check a safe absolute "
-            "unprivileged folder with audiohub-music --library-health.")
-    playable = (counts is not None and
-                0 < counts["supported_wav"] <= music_library.MAX_DISPLAYED)
+    speaker_ready, playable = silent_status()
     out("STEP 2/2: choose ONE action. Neither option starts audio immediately.")
     out("SPEAKER = original low-stream-gain LEFT/RIGHT/BOTH guide with "
         "a NEW exact PLAY for EACH attempted side.")
     out("MUSIC = private numbered WAV picker, QUIET stream 0.05, "
         "5-minute maximum and separate selection + exact PLAY.")
+    out("RECHECK = quietly refresh the USB music route and private WAV folder "
+        "after reconnecting; maximum TWO attempts, no sound or route changes.")
     out("QUIT = exit without audio. No automatic next action.")
-    out("First-use speaker: " + ("MANUAL TRY AVAILABLE" if speaker_ready
-                                 else "UNAVAILABLE; fix private input/tool first") +
-        "; private WAV picker: " + ("AVAILABLE" if playable else
-                                    "UNAVAILABLE; check library health first") + ".")
+    describe_status()
     out("Set the physical amplifier LOW before any separately consented "
         "sound. No Pi4/Edifier loudness, ownership or release GO is implied.")
-    out("Enter exact SPEAKER, MUSIC or QUIT then Enter:")
-    choice = read_line()
+    choice = choice_line()
+    for attempt in (1, 2):
+        if choice != "RECHECK":
+            break
+        out("SILENT RECHECK " + str(attempt) + "/2: re-reading only local "
+            "playback prerequisites and private WAV health; no audio started.")
+        speaker_ready, playable = silent_status()
+        describe_status()
+        choice = choice_line()
+    if choice == "RECHECK":
+        out("First-use RECHECK limit reached. No audio started. Exit and "
+            "check the powered Edifier USB cable or local EQ routing before "
+            "a fresh manual first-use attempt.")
+        return False
     if choice == "QUIT":
         out("First-use guide closed. No sound or settings changed.")
         return True

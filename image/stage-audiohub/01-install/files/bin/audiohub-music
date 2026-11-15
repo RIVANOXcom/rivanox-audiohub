@@ -24,7 +24,8 @@ usage() {
     '--library-health silently counts supported, unsupported, unsafe and missing-format media;' \
     'gives offline correction hints with NO filenames, sound, network, imports or file writes.' \
     '--first-use offers one quiet local guided route from silent checks to speaker or owned WAV.' \
-    'Choose exact SPEAKER, MUSIC or QUIT; no audio until separate fresh PLAY in existing guides.' \
+    'Choose SPEAKER, MUSIC, RECHECK or QUIT; RECHECK retries silent USB/music health at most twice.' \
+    'No audio until separate fresh PLAY in existing guides; RECHECK never starts sound.' \
     '--speaker-check checks private music input, selectable physical USB speaker and tool.' \
     'A missing or ambiguous USB output REFUSES readiness before a guided sound test.' \
     'No WAV library or sound needed; physical USB presence is NOT proof of audible output.' \

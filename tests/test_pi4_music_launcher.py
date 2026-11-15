@@ -438,7 +438,9 @@ class MusicLauncherTests(unittest.TestCase):
     def test_first_use_operator_flow_is_exclusive_no_autoplay_and_native_tty_gated(self):
         help_text = self.shell("--help").stdout
         self.assertIn("audiohub-music [ABSOLUTE_PRIVATE_WAV_FOLDER] --first-use", help_text)
-        self.assertIn("exact SPEAKER, MUSIC or QUIT", help_text)
+        self.assertIn("Choose SPEAKER, MUSIC, RECHECK or QUIT", help_text)
+        self.assertIn("RECHECK retries silent USB/music health at most twice", help_text)
+        self.assertIn("RECHECK never starts sound", help_text)
         source = LAUNCHER.read_text(encoding="utf-8")
         self.assertIn("first_use_only=0", source)
         self.assertIn('if [ "$first_use_only" -eq 1 ]; then', source)

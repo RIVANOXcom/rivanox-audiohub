@@ -42,7 +42,15 @@ A detected USB sink is **not proof of audible sound or safe physical volume**.
 The second step accepts exactly
 one typed choice: **SPEAKER** opens the existing left/right/both original
 low-gain speaker observation guide, **MUSIC** opens the existing owned-WAV
-numbered selection wizard, or **QUIT** exits. Unknown input and EOF cancel,
+numbered selection wizard, **RECHECK** silently refreshes BOTH the actual
+music EQ-to-USB link and private WAV health after you reconnect the Edifier
+USB cable or finish adding owned WAVs, or **QUIT** exits.
+RECHECK works **up to two times** in the same guided first-use session.
+No additional WAV filenames are printed, no speaker/player started, and
+no route, volume, permission or network setting is changed. After two
+RECHECK attempts, another RECHECK exits safely; if prerequisites recover,
+choose SPEAKER or MUSIC and still consent to its own exact PLAY later.
+Unknown input and EOF cancel,
 and the unavailable speaker path or an empty/unsafe/>40-track library disables
 the affected action. The speaker choice still needs **a fresh explicit PLAY
 for each side**; MUSIC still needs selection review and a separate **PLAY**.
