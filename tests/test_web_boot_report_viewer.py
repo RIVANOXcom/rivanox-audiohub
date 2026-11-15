@@ -110,13 +110,35 @@ const file = raw => ({size:Buffer.byteLength(raw,"utf8"),text:async()=>raw});
   assert.equal(el("usb-value").textContent, "USB found; route not checked");
   assert.match(el("advice").textContent,/cannot be verified/);
   assert.equal(el("controller-value").textContent, "Detected");
-  assert.equal(el("snapshots-value").textContent, "2");
+  assert.equal(el("snapshots-value").textContent, "2 · USB appeared after the first check");
   assert.equal(el("runtime-value").textContent, "Reported recently");
   assert.match(el("advice").textContent,/Reconnect/);
   assert.equal(el("report-file").value,"");
   let seen = Object.values(nodes).map(e=>e.textContent).join("\n");
   for(const privateText of ["SECRET-PRIVATE-PHONE","SECRET-PRIVATE-WIFI","DO-NOT-DISPLAY","AA:BB:CC"])
     assert.equal(seen.includes(privateText),false);
+  // Actual viewer detects a transient USB loss hidden by final-only display.
+  const history = values => JSON.stringify({
+    ...report,snapshots:values.map((v,i)=>({
+      ...report.snapshots[1],usb_audio_detected:v,seconds_since_probe_start:i*30
+    }))
+  });
+  for (const [checks,want] of [
+    [[true],"1 · One USB check; no trend"],
+    [[true,true],"2 · USB reported in every sampled check"],
+    [[false,false],"2 · USB absent in all sampled checks"],
+    [[false,true],"2 · USB appeared after the first check"],
+    [[true,false],"2 · USB disappeared after detection"],
+    [[false,true,false],"3 · USB appeared and disappeared"],
+    [[true,false,true],"3 · USB appeared and disappeared"]
+  ]) {
+    el("report-file").files=[file(history(checks))];
+    await listeners["report-file:change"]();
+    assert.equal(el("snapshots-value").textContent,want);
+    assert.ok(!el("advice").textContent.includes("SECRET-PRIVATE-PHONE"));
+  }
+  el("report-file").files=[file(good)];
+  await listeners["report-file:change"]();
   // Real Pi4 report carries BOTH physical USB detection and direct link
   // status. A visible device alone must not be presented as a usable
   // route or audible speaker. No additional cards/buttons are needed.
@@ -170,6 +192,8 @@ const file = raw => ({size:Buffer.byteLength(raw,"utf8"),text:async()=>raw});
     assert.equal(document.documentElement.lang,language);
     assert.notEqual(el("pairing-value").textContent,"—");
     assert.notEqual(el("usb-value").textContent, "undefined");
+    assert.ok(el("snapshots-value").textContent.includes("2 · "));
+    assert.ok(!el("snapshots-value").textContent.includes("undefined"));
   }
   // Malicious or unsupported files must clear stale rendered result.
   for(const [reason,bad] of [

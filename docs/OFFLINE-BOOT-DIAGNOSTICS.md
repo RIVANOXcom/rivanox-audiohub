@@ -109,8 +109,15 @@ distinguishes four outcomes:
   at least one direct EQ-to-USB link; this is **NOT** evidence of audible
   left/right stereo, exactly the music link, or a safe sound level
 
-Only the most recent snapshot is summarized; no device IDs, USB identifiers,
-private WAV names or arbitrary source JSON text are shown. Strict boolean
+The last snapshot still supplies current USB route, Bluetooth and runtime status.
+To reveal intermittent first-boot faults without a Pi login, the existing
+observation count now also summarizes all one to seven validated USB presence
+samples: always present/absent in samples, appeared late, disappeared, or
+changed in both directions. A single sample is insufficient for a trend.
+Five-language guidance recommends only isolated authorized cable/power checks.
+The sampled observations do NOT prove continuous sound or S3 acceptance; no
+device IDs, USB identifiers, private WAV names or arbitrary source JSON
+text are shown. Strict boolean
 and bounded direct-link count validation prevents fabricated ready states;
 older compatible observations remain labelled **not checked**. The viewer
 offers relevant next steps in all five existing languages, never owner,
