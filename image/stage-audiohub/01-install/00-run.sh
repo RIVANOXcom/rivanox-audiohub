@@ -227,5 +227,15 @@ guided_backup_status="$?"
 set -e
 test "$guided_backup_status" -eq 2
 case "$guided_backup_output" in *"Private preset operation safely refused"*) ;; *) exit 1 ;; esac
+
+# Installed version-bound read-only SD swap review reaches Python's
+# noninteractive trusted-TTY guard: it must NEVER open old-SD media,
+# write settings/archives, flash cards or declare readiness in a chroot.
+set +e
+swap_review_output="$(runuser -u audiohub -- /usr/local/bin/audiohub-presets-transfer review-swap /home/audiohub/PrivateMusic /home/audiohub/PrivateMusic /home/audiohub/.config/audiohub aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa 2>&1)"
+swap_review_status="$?"
+set -e
+test "$swap_review_status" -eq 2
+case "$swap_review_output" in *"Private preset operation safely refused"*) ;; *) exit 1 ;; esac
 PYTHONPATH=/opt/audiohub/src runuser -u audiohub -- python3 -m audiohub.eq_setup
 CHROOT
