@@ -37,7 +37,7 @@ usage() {
     'It asks for separate PLAY per side and LOCAL physical observations.' \
     'If unsure/wrong, RETRY same side once with fresh PLAY, or STOP; no auto-next.' \
     'After STOP/EOF, report prior observations, attempts and untested sides locally.' \
-    'GUIDE prints one anonymous copyable SELF-REPORT line (image SHA if available), never hardware GO.' \
+    'GUIDE prints one anonymous copyable SELF-REPORT line (source commit if available), never hardware GO.' \
     'Requires separate PLAY at a local terminal; very low signal and quiet stream only.' \
     '--show-titles explicitly reveals sanitized private titles on this terminal.' \
     'The album wizard checks private input/player FIRST; missing tools stop before any selection or PLAY.' \
