@@ -305,7 +305,7 @@ class MusicLauncherTests(unittest.TestCase):
         self.assertIn("k1-k8=play selected track next (no cut)", help_text)
         self.assertIn("k0=clear next", help_text)
         self.assertIn("a1-a8=append selected WAV (max 8)", help_text)
-        self.assertIn("z=undo last", help_text)
+        self.assertIn("z=remove last", help_text)
         self.assertIn("d1-d8=remove SLOT", help_text)
         self.assertIn("f1-f8=move SLOT to NEXT (no cut)", help_text)
         self.assertIn("g=finish all pending tracks then stop naturally", help_text)
