@@ -25,6 +25,10 @@ CHUNK_SIZE = 64 * 1024
 COPY_BUFFER = 8
 
 
+class UnmigratedAudioError(ValueError):
+    """Full SD migration cannot claim ownership of other media formats."""
+
+
 def _private_dir(path):
     """Open every path component without following symlinks; require 0700."""
     if type(path) is not str or not path.startswith("/") or "\x00" in path:
@@ -56,11 +60,23 @@ def _source_list(path, fd, *, allow_empty=False):
     if type(allow_empty) is not bool:
         raise ValueError("Invalid empty music-source policy")
     if allow_empty:
-        # An ignored hidden .wav is still real private user content. Never
-        # certify an old SD as empty while silently omitting that data.
+        # The combined SD-swap flow claims to account for SAVED music data.
+        # Do NOT silently certify a WAV-only migration if recognizable other
+        # music (including hidden files or links) remains on the old SD.
+        # The normal explicitly WAV-only transfer intentionally keeps its
+        # narrower scope; never read, copy, delete or expose these filenames.
         with os.scandir(fd) as entries:
+            examined = 0
             for entry in entries:
-                if entry.name.startswith(".") and entry.name.lower().endswith(".wav"):
+                examined += 1
+                if examined > music_library.MAX_SCANNED:
+                    raise ValueError("Too many private music entries for complete SD review")
+                name = entry.name.lower()
+                if name.endswith(tuple(music_library.OTHER_AUDIO_SUFFIXES)):
+                    raise UnmigratedAudioError(
+                        "Unmigrated non-WAV audio found: keep original SD intact "
+                        "and arrange a separate authorized backup before SD swap")
+                if entry.name.startswith(".") and name.endswith(".wav"):
                     raise ValueError("Hidden private WAV prevents complete SD migration")
     items, skipped = (music_library.discover_library(path, allow_empty=True)
                       if allow_empty else music_library.discover_library(path))

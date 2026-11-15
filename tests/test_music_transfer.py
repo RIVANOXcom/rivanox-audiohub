@@ -68,6 +68,19 @@ class MusicTransferTests(unittest.TestCase):
         self.assertEqual(archived.read_bytes(), original)
         self.assertNotIn(self.name, "\n".join(self.output))
 
+    def test_explicit_wav_only_backup_stays_available_with_other_music(self):
+        """Only the combined SD migration, not WAV-only transfer, is blocked."""
+        unrelated = self.music / "owner-audio.flac"
+        unrelated.write_bytes(b"OWNER_ONLY_NOT_WAV")
+        unrelated.chmod(0o600)
+        self.assertTrue(self.run_transfer("backup"))
+        self.assertEqual((self.external / self.name).read_bytes(),
+                         self.wav.read_bytes())
+        self.assertFalse((self.external / unrelated.name).exists())
+        self.assertEqual(unrelated.read_bytes(), b"OWNER_ONLY_NOT_WAV")
+        self.assertIn("1 supported tracks", "\n".join(self.output))
+        self.assertNotIn("owner-audio", "\n".join(self.output))
+
     def test_any_nonexact_operator_confirmation_cancels_without_writes(self):
         for answer in (False, None, 0, "COPY", "copy"):
             with self.subTest(answer=answer):

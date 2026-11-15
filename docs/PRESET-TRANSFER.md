@@ -174,6 +174,24 @@ SD flash, OS update, active EQ or sound playback is permitted.
    requested destination WAV and stored preset again. Existing
    conflicts produce STOP, never overwrite
 
+**New safety boundary for personal music:** The combined SD-swap tools
+(`plan-backup`, `backup-guided`, `check-backup`, `plan-new`,
+`check-new`, `restore-guided` and `review-swap`) now refuse a
+misleading **complete saved-data** result whenever an examined private
+music folder contains recognizable audio formats outside supported
+PCM16 WAV, such as MP3, FLAC, AAC, M4A, OGG, Opus or AIFF. Hidden files
+and linked items with such extensions also count as still-unmigrated.
+These files are NEVER opened, copied, deleted, logged by name, or
+silently converted. A normal **explicit WAV-only** transfer remains
+available but must never be treated as a complete device/media backup.
+If the combined review reports `Unmigrated non-WAV audio`, keep the
+original SD and private archive untouched; separately arrange a
+complete, authorized backup and recovery plan for those other files
+before an SD replacement. Do not delete or rename old personal music
+just to turn this warning green. The tool only certifies eligible WAV,
+saved EQ and inactive profile scope; it does not handle other user data
+or system credentials.
+
 The command prints anonymous `STEP 1/3`, `STEP 2/3`, `STEP 3/3`
 and a precise status: **STORED DATA VERIFIED** (exit 0;
 stored-data equality ONLY), **NOT YET READY** (exit 1; separately

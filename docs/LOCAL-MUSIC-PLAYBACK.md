@@ -691,6 +691,14 @@ files, permission problems, insufficient space, collisions and files
 changed during copying. The tool does **not** copy non-WAV items,
 settings, access credentials, Bluetooth pairing data or any other
 files; do not confuse a successful WAV copy with a complete backup.
+**Important:** For a complete combined WAV/EQ SD-swap review, the
+`audiohub-presets-transfer` safety workflow now detects recognizable
+non-WAV music (MP3/FLAC/M4A/Opus/AIFF and similar) and refuses to claim
+complete saved-data migration while those files would be left behind.
+Keep the old SD unchanged and secure a separately authorized backup
+for unsupported audio. This additional check does not copy/convert
+any other format, change permissions or touch user files; individual
+WAV-only backups remain explicitly limited to WAV tracks.
 
 Successful file copies are published with the original name only
 after contents are checked; each new file is mode 0600. Existing files

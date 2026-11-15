@@ -386,6 +386,61 @@ class PresetTransferTests(unittest.TestCase):
             str(self.media), str(self.old_music), str(self.old),
             out=self.logs.append, require_terminal=False)
 
+    def test_complete_old_sd_backup_refuses_other_audio_without_loss(self):
+        """A WAV-only copy must not masquerade as a complete music migration."""
+        name = self.make_old_wav_for_backup()
+        original = (self.old_music / name).read_bytes()
+        for unsupported in ("owned-archive.FLAC", ".private.ogg", "album.mp3",
+                            "local-track.opus", "album.m4a"):
+            with self.subTest(extension=unsupported.rsplit(".", 1)[-1]):
+                path = self.old_music / unsupported
+                path.write_bytes(b"PRIVATE_MEDIA_DO_NOT_COPY")
+                path.chmod(0o600)
+                before = (self.old_settings.read_bytes(),
+                          self.old_profiles.read_bytes(),
+                          path.read_bytes())
+                with self.assertRaisesRegex(ValueError,
+                                            "Unmigrated non-WAV audio"):
+                    self.plan_old_backup()
+                with self.assertRaisesRegex(ValueError,
+                                            "Unmigrated non-WAV audio"):
+                    self.guided_old_backup()
+                self.assertEqual(list(self.media.iterdir()), [])
+                self.assertEqual((self.old_music / name).read_bytes(), original)
+                self.assertEqual((self.old_settings.read_bytes(),
+                                  self.old_profiles.read_bytes(),
+                                  path.read_bytes()), before)
+                self.assertNotIn(unsupported, "\n".join(self.logs))
+                path.unlink()  # Unit-test fixture only; no app data deleted.
+
+    def test_operator_cli_explains_nonwav_sd_stop_without_private_names(self):
+        """Human gets a useful fixed hint, never the name of unbacked media."""
+        self.make_old_wav_for_backup()
+        private = self.old_music / "my-private-artist.FLAC"
+        private.write_bytes(b"never_copy_this_media")
+        private.chmod(0o600)
+        # The installed CLI deliberately requires a trusted local TTY.
+        # Give this synthetic operator-command fixture that explicit
+        # simulated context; otherwise it must refuse before file scanning.
+        with mock.patch.object(preset_transfer.sys, "stdin",
+                               mock.Mock(isatty=lambda: True)), \
+             mock.patch.object(preset_transfer.sys, "stdout",
+                               mock.Mock(isatty=lambda: True)), \
+             mock.patch("builtins.print") as printed:
+            code = preset_transfer.main([
+                "plan-backup", str(self.media), str(self.old_music),
+                str(self.old)])
+        self.assertEqual(code, 2)
+        rendered = " ".join(str(x) for c in printed.call_args_list
+                            for x in c.args)
+        self.assertIn("SD migration STOP", rendered)
+        self.assertIn("non-WAV audio would remain unsaved", rendered)
+        self.assertIn("Keep the original SD", rendered)
+        self.assertNotIn("my-private-artist", rendered)
+        self.assertNotIn(str(self.root), rendered)
+        self.assertEqual(private.read_bytes(), b"never_copy_this_media")
+        self.assertEqual(list(self.media.iterdir()), [])
+
     def test_readonly_backup_plan_before_any_save_or_copy(self):
         name = self.make_old_wav_for_backup()
         old_bytes = (self.old_music / name).read_bytes()
@@ -1256,6 +1311,37 @@ class PresetTransferTests(unittest.TestCase):
             music_dir=str(self.new_music), image_identity_path=image,
             image_identity_owner_id=os.geteuid(), out=self.logs.append,
             require_terminal=False)
+
+    def test_sd_review_refuses_old_non_wav_even_with_verified_wav_and_eq(self):
+        """The final swap review may never certify skipped old MP3 content."""
+        name = self.seed_sd_backup()
+        image = self._make_test_image_identity()
+        unhandled = self.old_music / "owned-private.MP3"
+        unhandled.write_bytes(b"original_not_in_archive")
+        unhandled.chmod(0o600)
+        old_wav = (self.old_music / name).read_bytes()
+        backup_wav = (self.media / name).read_bytes()
+        with self.assertRaisesRegex(ValueError, "Unmigrated non-WAV audio"):
+            self.sd_review(image)
+        self.assertEqual(unhandled.read_bytes(), b"original_not_in_archive")
+        self.assertEqual((self.old_music / name).read_bytes(), old_wav)
+        self.assertEqual((self.media / name).read_bytes(), backup_wav)
+        self.assertFalse(self.new_settings.exists())
+        self.assertFalse(self.new_profiles.exists())
+        self.assertNotIn("owned-private", "\n".join(self.logs))
+        self.assertNotIn("STORED DATA VERIFIED", "\n".join(self.logs))
+
+    def test_new_sd_nonwav_audio_prevents_false_data_complete_result(self):
+        """New-SD music content the migrator cannot validate needs review."""
+        name = self.seed_sd_backup()
+        unexpected = self.new_music / "private-other.aiff"
+        unexpected.write_bytes(b"do_not_remove")
+        unexpected.chmod(0o600)
+        with self.assertRaisesRegex(ValueError, "Unmigrated non-WAV audio"):
+            self.sd_plan()
+        self.assertEqual(unexpected.read_bytes(), b"do_not_remove")
+        self.assertFalse((self.new_music / name).exists())
+        self.assertNotIn("private-other", "\n".join(self.logs))
 
     def test_review_swap_one_pass_finds_missing_data_and_preserves_every_file(self):
         name = self.seed_sd_backup()

@@ -480,11 +480,14 @@ def _music_destination_plan(external, music_dir):
             # unexpected destination WAVs for a clean empty-data migration.
             files, size = music_transfer._source_list(
                 external, source_fd, allow_empty=True)
-            if not files:
-                target_files, _ = music_transfer._source_list(
-                    music_dir, target_fd, allow_empty=True)
-                if target_files:
-                    raise ValueError("Empty WAV archive conflicts with nonempty local music")
+            # Check the destination ALWAYS, not just when the archive is
+            # empty. Otherwise untracked local MP3/FLAC (or unsafe WAVs)
+            # could silently survive alongside transferred WAVs while a
+            # later full-SD review misleadingly claims data completeness.
+            target_files, _ = music_transfer._source_list(
+                music_dir, target_fd, allow_empty=True)
+            if not files and target_files:
+                raise ValueError("Empty WAV archive conflicts with nonempty local music")
             matches = 0
             for item in files:
                 match = music_transfer._matching_destination(
@@ -1027,6 +1030,7 @@ def main(argv=None):
         print("backup-guided requires separate COPY and SAVE, then read-only verification.")
         print("plan-backup is READ-ONLY before changing SD: safe WAV/preset inventory, no COPY.")
         print("review-swap checks installed image SHA, OLD source backup and NEW destination together; no writes.")
+        print("Complete SD migration REFUSES MP3/FLAC/other audio not backed up; keep original SD.")
         print("If BOTH protected music folders are empty, the combined SD migration")
         print("can preserve EQ and inactive profiles without WAV copying; no audio verified.")
         print("Never imports keys, Bluetooth trust, Wi-Fi, IDs, live volume/mutes or OS.")
@@ -1073,6 +1077,13 @@ def main(argv=None):
                          "restore-guided": restore_guided}[args[0]]
             result = operation(args[1])
         return 0 if result is not False else 1
+    except music_transfer.UnmigratedAudioError:
+        # Keep all user-controlled file names, old SD paths and metadata
+        # private. This one fixed recovery hint is safe on a local TTY.
+        print("SD migration STOP: non-WAV audio would remain unsaved. "
+              "Keep the original SD and separately arrange an authorized "
+              "backup for other music formats; nothing was deleted.")
+        return 2
     except (OSError, ValueError, TypeError, UnicodeError,
             mixer_control.MixerControlUnavailable):
         print("Private preset operation safely refused or incomplete; no owner data transferred.")
