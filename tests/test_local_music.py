@@ -828,6 +828,73 @@ class LocalMusicTests(unittest.TestCase):
         self.assertEqual([p.stdin.saved for p in self.players],
                          [self.samples, b"\x05\x06\x07\x08" * 50])
 
+    def test_real_playback_refuses_private_sink_without_physical_usb(self):
+        """Do not spawn a private player when the USB speaker is disconnected."""
+        virtual_only = json.dumps([{
+            "type": "PipeWire:Interface:Node", "id": 17,
+            "info": {"props": {"media.class": "Audio/Sink",
+                               "node.name": "audiohub.music"}}
+        }])
+        calls = []
+        def capture(args, **kwargs):
+            calls.append((args, kwargs))
+            return mock.Mock(returncode=0, stdout=virtual_only)
+        with mock.patch.object(local_music.os, "geteuid", return_value=1000):
+            self.assertFalse(local_music.music_sink_available(capture=capture))
+            with self.assertRaisesRegex(RuntimeError, "music sink unavailable"):
+                local_music.play_playlist([self.wav], max_minutes=1,
+                                          spawn=self.spawn, capture=capture)
+        self.assertFalse(self.players)
+        self.assertEqual([x[0] for x in calls], [["pw-dump"], ["pw-dump"]])
+        self.assertTrue(all(x[1]["timeout"] == 5 for x in calls))
+
+    def test_speaker_play_requires_usb_again_after_consent(self):
+        """A USB unplug after any prior guide cannot start sample playback."""
+        virtual_only = json.dumps([{
+            "type": "PipeWire:Interface:Node", "id": 17,
+            "info": {"props": {"media.class": "Audio/Sink",
+                               "node.name": "audiohub.music"}}
+        }])
+        calls = []
+        def capture(args, **kwargs):
+            calls.append(args)
+            return mock.Mock(returncode=0, stdout=virtual_only)
+        with mock.patch.object(local_music.sys, "stdin",
+                               mock.Mock(isatty=lambda: True)), \
+             mock.patch.object(local_music.sys, "stdout",
+                               mock.Mock(isatty=lambda: True)), \
+             mock.patch.object(local_music.os, "geteuid", return_value=1000):
+            with self.assertRaisesRegex(RuntimeError, "Private music sink unavailable"):
+                local_music.play_speaker_test(
+                    spawn=self.spawn, capture=capture,
+                    read_line=lambda: "PLAY\n", out=lambda _: None)
+        self.assertEqual(calls, [["pw-dump"]])
+        self.assertEqual(self.players, [])
+
+    def test_usb_unplug_between_wavs_does_not_start_next_player(self):
+        """Keep the already finished WAV but refuse the next after a USB loss."""
+        second = self.root / "second.wav"
+        self.make_wav(second, self.samples)
+        virtual_only = json.dumps([{
+            "type": "PipeWire:Interface:Node", "id": 17,
+            "info": {"props": {"media.class": "Audio/Sink",
+                               "node.name": "audiohub.music"}}
+        }])
+        graph_calls = []
+        def capture(args, **kwargs):
+            graph_calls.append(args)
+            if len(graph_calls) == 1:
+                return self.captured_graph()
+            return mock.Mock(returncode=0, stdout=virtual_only)
+        with mock.patch.object(local_music.os, "geteuid", return_value=1000):
+            with self.assertRaisesRegex(RuntimeError, "disconnected"):
+                local_music.play_playlist(
+                    [self.wav, second], max_minutes=1,
+                    spawn=self.spawn, capture=capture, notify=lambda _: None)
+        self.assertEqual(len(self.players), 1)
+        self.assertEqual(self.players[0].stdin.saved, self.samples)
+        self.assertEqual(graph_calls, [["pw-dump"], ["pw-dump"]])
+
     def test_no_target_fails_without_fallback_or_spawn(self):
         def missing(*args, **kwargs):
             return self.captured_graph("not-audiohub.music")
