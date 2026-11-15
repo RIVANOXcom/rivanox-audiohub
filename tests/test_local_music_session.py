@@ -226,6 +226,34 @@ class MusicSessionTests(unittest.TestCase):
         self.assertIn("Local music session ended", text)
         self.assertNotIn("secret-title", text)
 
+    def test_midtrack_usb_loss_is_distinct_and_never_restarts_private_audio(self):
+        """USB disconnect must be actionable and must not leak a device ID."""
+        def lost_usb(paths, *, max_minutes, stop, session_deadline,
+                     on_player, notify):
+            self.played.append(paths[0])
+            child = FakeChild()
+            self.children.append(child)
+            on_player(child)
+            child.kill()  # The actual owned-child watchdog already stopped it.
+            raise local_music.USBRouteLost("PRIVATE_MAC_ADDRESS")
+        with mock.patch.object(local_music, "music_sink_available",
+                               return_value=True), \
+             mock.patch.object(local_music.os, "geteuid", return_value=1000):
+            with self.assertRaisesRegex(RuntimeError, "no file paths disclosed"):
+                music_session.run_session(
+                    self.paths, max_minutes=1, read_command=lambda _: None,
+                    playback=lost_usb, out=self.out.append,
+                    require_tty=False)
+        self.assertEqual(self.played, [self.paths[0]])
+        self.assertTrue(self.children[0].killed)
+        shown = "\n".join(self.out)
+        self.assertIn("USB SPEAKER ROUTE LOST DURING PLAYBACK", shown)
+        self.assertIn("No next/repeated WAV started", shown)
+        self.assertIn("new manual PLAY", shown)
+        self.assertNotIn("PRIVATE_MAC_ADDRESS", shown)
+        self.assertNotIn("secret-title", shown)
+        self.assertNotIn(str(self.dir), shown)
+
     def test_spontaneous_player_failure_cannot_hide_behind_navigation(self):
         # Regression: the player may fail while the operator's read_line()
         # is finishing. NEXT/PREVIOUS/REPLAY/JUMP must never suppress this
