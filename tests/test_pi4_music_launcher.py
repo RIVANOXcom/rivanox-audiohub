@@ -442,6 +442,7 @@ class MusicLauncherTests(unittest.TestCase):
         self.assertIn("RECHECK retries silent USB/music health at most twice", help_text)
         self.assertIn("RECHECK never starts sound", help_text)
         source = LAUNCHER.read_text(encoding="utf-8")
+        self.assertIn("GUIDE prints one anonymous copyable SELF-REPORT line", help_text)
         self.assertIn("first_use_only=0", source)
         self.assertIn('if [ "$first_use_only" -eq 1 ]; then', source)
         self.assertIn(
