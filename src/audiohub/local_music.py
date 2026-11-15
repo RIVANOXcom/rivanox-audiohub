@@ -610,6 +610,8 @@ def main(argv=None):
     parser.add_argument("wav", nargs="*", help="1–8 absolute local 16-bit PCM WAV files")
     parser.add_argument("--library", metavar="FOLDER",
                         help="Browse a private local WAV folder without playback")
+    parser.add_argument("--library-health", action="store_true",
+                        help="Silent private-WAV compatibility and import diagnostics, no names")
     parser.add_argument("--speaker-check", action="store_true",
                         help="WAV-free first-sound prerequisites only, NEVER plays")
     parser.add_argument("--speaker-guide", action="store_true",
@@ -656,6 +658,21 @@ def main(argv=None):
                     and options[1] in STEREO_MODES):
                 return 0 if play_speaker_test(mode=options[1]) else 2
             raise ValueError("Speaker test accepts only optional left, right or both")
+        if args.library_health:
+            if (args.library is None or args.wav or args.guided or args.check
+                    or args.tracks is not None or args.play or args.interactive
+                    or args.show_titles or args.speaker_check
+                    or args.speaker_guide or args.speaker_test
+                    or args.minutes != 15 or args.level != "normal"
+                    or args.channel != "both"):
+                raise ValueError(
+                    "Offline library-health only accepts --library FOLDER")
+            if hasattr(os, "geteuid") and os.geteuid() == 0:
+                raise PermissionError("Run music health as unprivileged operator")
+            from . import music_library
+            counts = music_library.inspect_library_health(args.library)
+            print(music_library.display_library_health(counts))
+            return 0
         if args.check:
             if (args.library is None or args.wav or args.guided
                     or args.tracks is not None or args.play or args.interactive
