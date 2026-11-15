@@ -2,6 +2,21 @@
 
 **Status:** Alpha / pre-release. No verified ready-to-flash Pi 4 image has been published. Native ARM64 test-only SD images have been built and uploaded to GitHub Actions (latest prior-to-renaming run 42057278883; 159 tests, 48 rootfs checks). **No real Pi4/Edifier playback, ownership security or product-ready Release has been verified.**
 
+## Local WAV session end-after-current-track control (unverified alpha)
+
+The existing unprivileged, operator-started interactive `audiohub-music`
+session now accepts `e`+Enter to toggle **end after this track**:
+finish the current owned WAV naturally, then exit before any next
+track or repeat cycle. The `s` status and `l` anonymous queue reflect
+the armed policy, while a second `e` cancels it. Any deliberate
+skip/previous/replay/numbered jump disarms with an explicit message;
+`q` still stops immediately and the original total session deadline
+still cuts off playback on time. This uses the existing player and
+local trusted TTY only; no audio fade, timer persistence, private file
+disclosure, network command, extra service, global mixer change,
+owner BT/WiFi access or hardware certification. See
+[operator instructions](LOCAL-MUSIC-PLAYBACK.md).
+
 ## Pause-aware local music track time estimates (unverified alpha)
 
 During an explicitly approved unprivileged local WAV playback
