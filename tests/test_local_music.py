@@ -2,6 +2,8 @@
 import io
 import json
 import os
+import subprocess
+import time
 from pathlib import Path
 import tempfile
 import sys
@@ -894,6 +896,98 @@ class LocalMusicTests(unittest.TestCase):
         self.assertEqual(len(self.players), 1)
         self.assertEqual(self.players[0].stdin.saved, self.samples)
         self.assertEqual(graph_calls, [["pw-dump"], ["pw-dump"]])
+
+    def test_active_wav_usb_watch_kills_only_owned_child(self):
+        """Disconnect during a long WAV cannot keep a virtual stream alive."""
+        checks = []
+        class WaitingPlayer(FakePlayer):
+            def __init__(self):
+                super().__init__()
+                self.killed = False
+            def poll(self):
+                return -9 if self.terminated else None
+            def wait(self, timeout=None):
+                if self.terminated:
+                    self.waited = True
+                    return -9
+                time.sleep(0.004)
+                raise subprocess.TimeoutExpired(cmd="pw-cat", timeout=timeout)
+            def kill(self):
+                self.killed = True
+                self.terminated = True
+        player = WaitingPlayer()
+        info = local_music.inspect_playlist([self.wav], max_minutes=1)["tracks"][0]
+        before = self.wav.read_bytes()
+        def missing_usb():
+            checks.append("silent_poll")
+            return False
+        with mock.patch.object(local_music, "USB_ROUTE_WATCH_SECONDS", 0.02), \
+             mock.patch.object(local_music, "music_sink_available",
+                               side_effect=missing_usb):
+            with self.assertRaisesRegex(local_music.USBRouteLost,
+                                        "owned player stopped"):
+                local_music._play_one(
+                    self.wav, info, deadline=time.monotonic() + 2,
+                    spawn=lambda *_args, **_kwargs: player)
+        self.assertTrue(checks)
+        self.assertTrue(player.killed)
+        self.assertTrue(player.stdin.closed)
+        self.assertEqual(self.wav.read_bytes(), before)
+
+    def test_active_wav_usb_watch_does_not_stop_healthy_player(self):
+        """A real currently routable USB sink keeps original PCM intact."""
+        polls = []
+        begun = time.monotonic()
+        class HealthyPlayer(FakePlayer):
+            def wait(self, timeout=None):
+                if time.monotonic() - begun < 0.12:
+                    time.sleep(0.005)
+                    raise subprocess.TimeoutExpired(cmd="pw-cat", timeout=timeout)
+                self.waited = True
+                return 0
+        player = HealthyPlayer()
+        info = local_music.inspect_playlist([self.wav], max_minutes=1)["tracks"][0]
+        def healthy_usb():
+            polls.append(True)
+            return True
+        with mock.patch.object(local_music, "USB_ROUTE_WATCH_SECONDS", 0.02), \
+             mock.patch.object(local_music, "music_sink_available",
+                               side_effect=healthy_usb):
+            result = local_music._play_one(
+                self.wav, info, deadline=time.monotonic() + 2,
+                spawn=lambda *_args, **_kwargs: player)
+        self.assertTrue(result)
+        self.assertTrue(polls)
+        self.assertFalse(player.terminated)
+        self.assertEqual(player.stdin.saved, self.samples)
+
+    def test_active_wav_bad_usb_probe_never_prints_private_metadata(self):
+        """A malicious pw-dump error fails closed, with a generic message."""
+        class WaitingPlayer(FakePlayer):
+            def poll(self):
+                return -9 if self.terminated else None
+            def wait(self, timeout=None):
+                if self.terminated:
+                    self.waited = True
+                    return -9
+                time.sleep(0.004)
+                raise subprocess.TimeoutExpired(cmd="pw-cat", timeout=timeout)
+            def kill(self):
+                self.terminated = True
+        player = WaitingPlayer()
+        info = local_music.inspect_playlist([self.wav], max_minutes=1)["tracks"][0]
+        def broken_usb():
+            raise RuntimeError("PRIVATE_USB_SERIAL_123")
+        with mock.patch.object(local_music, "USB_ROUTE_WATCH_SECONDS", 0.02), \
+             mock.patch.object(local_music, "music_sink_available",
+                               side_effect=broken_usb):
+            with self.assertRaises(local_music.USBRouteLost) as raised:
+                local_music._play_one(
+                    self.wav, info, deadline=time.monotonic() + 2,
+                    spawn=lambda *_args, **_kwargs: player)
+        self.assertTrue(player.terminated)
+        self.assertNotIn("PRIVATE_USB", str(raised.exception))
+        self.assertNotIn(str(self.wav), str(raised.exception))
 
     def test_no_target_fails_without_fallback_or_spawn(self):
         def missing(*args, **kwargs):
