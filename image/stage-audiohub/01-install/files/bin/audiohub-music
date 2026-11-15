@@ -33,7 +33,8 @@ usage() {
     'The album wizard checks private input/player FIRST; missing tools stop before any selection or PLAY.' \
     'The playback wizard shows an anonymous list; select numbers, ALL or SHUFFLE.' \
     'PLAY is required separately to start sound; CHANGE revises the queue.' \
-    'During playback: s=session/track ETA (estimated, pause-aware), u=pause/resume, m=repeat, n=next, q=stop.' \
+    'During playback: s=session/track ETA, u=pause/resume, m=repeat, e=finish current WAV then stop, n=next, q=stop now.' \
+    'The end-after-track switch is local and temporary; navigation cancels it, session deadline still applies.' \
     'Track ETA uses checked WAV header and owned-player time, not a real PCM cursor or proof of sound.' \
     'No network, settings, privileged operation or background service is started.'
 }
