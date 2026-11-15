@@ -8,6 +8,7 @@ already-authorized Pi terminal can explicitly start or stop playback.
 from __future__ import annotations
 
 import argparse
+import json
 import math
 import os
 import shutil
@@ -632,6 +633,36 @@ def guided_speaker_check(*, side=None, read_line=None, out=print,
         if side is not None:
             out("TARGETED ONLY: other stereo channels were NOT tested;")
             out("do not infer complete stereo hardware readiness.")
+
+        # One portable fixed-schema handoff line records ONLY fixed operator
+        # tokens, no WAV titles, PipeWire node IDs, MACs, free text or files.
+        # This is human SELF-REPORT, never automated evidence of sound.
+        from .firstboot_diag import read_image_identity
+        identity = read_image_identity()
+        origin = identity if identity is not None else {}
+        report = {
+            "schema": "rivanox-audiohub-local-speaker-self-report/1",
+            "classification": "OPERATOR_SELF_REPORTED_NOT_HARDWARE_VERIFIED",
+            "source_sha_from_embedded_unverified_image": origin.get("source_sha"),
+            "ci_run_id_from_embedded_unverified_image": origin.get("ci_run_id"),
+            "scope": "all" if side is None else side,
+            "attempts": {channel: list(history.get(channel, ()))
+                         for channel in ("left", "right", "both")},
+            "observations": {
+                channel: ("NOT_TESTED" if channel not in reached else
+                          (history[channel][-1] if history[channel]
+                           else "NO_REPORT"))
+                for channel in ("left", "right", "both")
+            },
+            "operator_completed_selected_steps": bool(completed),
+            "hardware_verified": False,
+            "release_ready": False,
+            "stored_or_transmitted": False,
+        }
+        out("AUDIOHUB_SPEAKER_SELF_REPORT_V1=" +
+            json.dumps(report, sort_keys=True, separators=(",", ":")))
+        out("Optional: manually copy this anonymous SELF-REPORT line for "
+            "separate hardware review. Nothing saved or uploaded.")
         if not completed:
             if side is None:
                 out("NEEDS PHYSICAL REVIEW; remaining channels were NOT tested "

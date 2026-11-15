@@ -1076,8 +1076,23 @@ success. No audio is replayed merely to generate the summary.
 
 All feedback remains temporary and terminal-local, never saved to
 SD, uploaded, exposed to any remote interface, or treated as
-independent hardware certification. Never
-raise physical speaker volume or change other source routing
+independent hardware certification. At the end of every attempted
+`--speaker-guide` run, the local terminal now prints exactly ONE
+`AUDIOHUB_SPEAKER_SELF_REPORT_V1={...}` line. This **manual copy/paste
+handoff**, not a network upload, contains only fixed LEFT/RIGHT/BOTH
+self-reported outcomes (including NOT_TESTED/NO_REPORT and earlier
+wrong/retry observations) and the source commit / CI run from the
+root-owned build identity **when available**. It contains no MAC, serial,
+WAV title, private path, credential, or arbitrary typed input. A
+targeted RIGHT recheck does **not** claim the other two speakers passed.
+The report always says `hardware_verified:false`,
+`release_ready:false` and `stored_or_transmitted:false`; a copied
+self-report still needs human review and separate physical S3 evidence
+before any release GO. If version identity is missing or untrusted, the
+commit/CI fields are null, NEVER guessed. You may manually copy the
+single line into the approved project handoff after reviewing it.
+Do not automatically upload it or alter privacy/security settings.
+Never raise physical speaker volume or change other source routing
 automatically to diagnose a silent or reversed side.
 
 There is **no automatic hardware PASS** even if every step is reported
