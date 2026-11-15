@@ -25,7 +25,9 @@ usage() {
     'gives offline correction hints with NO filenames, sound, network, imports or file writes.' \
     '--first-use offers one quiet local guided route from silent checks to speaker or owned WAV.' \
     'Choose exact SPEAKER, MUSIC or QUIT; no audio until separate fresh PLAY in existing guides.' \
-    '--speaker-check checks built-in FIRST SOUND without a WAV library and never plays sound.' \
+    '--speaker-check checks private music input, selectable physical USB speaker and tool.' \
+    'A missing or ambiguous USB output REFUSES readiness before a guided sound test.' \
+    'No WAV library or sound needed; physical USB presence is NOT proof of audible output.' \
     '--speaker-test creates a brief original 2.1s LEFT/RIGHT/BOTH signal in RAM. No WAV required.' \
     'Optional left, right or both replays that channel 3 times with short silence gaps.' \
     '--speaker-guide FIRST checks private sink and playback tool without WAV or sound.' \
