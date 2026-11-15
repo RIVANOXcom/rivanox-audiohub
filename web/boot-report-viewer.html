@@ -84,7 +84,9 @@
       file:"Boot report",clear:"Clear result",empty:"No file opened.",bad:"Unsupported, incomplete or invalid report. Nothing was uploaded.",
       loading:"Reading locally…",ready:"Read-only summary of the last recorded boot observation. No approval granted.",
       results:"2 · Offline findings",pairing:"Bluetooth pairing state",paired:"Paired devices (anonymous count)",
-      controller:"Bluetooth controller observed",usb:"USB audio device observed",
+      controller:"Bluetooth controller observed",usb:"USB output and direct audio link",
+      usbLinked:"Direct link reported (not sound)",usbBroken:"USB found; route needs attention",usbUnknown:"USB found; route not checked",usbAbsent:"USB device not reported",
+      routeTipLinked:"A direct USB output link is reported, but speaker sound is NOT verified. Listen only during an authorized low-volume physical test.",routeTipBroken:"USB hardware was detected but no working direct audio link was reported. Do not assume sound or change routing without authorized access.",routeTipUnknown:"USB was detected, but its direct audio route cannot be verified from this report. Do not assume sound.",routeTipAbsent:"No USB audio output was reported; check the Edifier USB connection on an isolated bench, without changing network or owner access."
       snapshots:"First-boot observations",runtime:"Last audio-runtime status",
       next:"3 · What to do next",chooseFirst:"Choose a report to see the next safe step.",
       disclaimer:"This SD report is not live telemetry, proof of audio or ownership, or permission to pair. No settings can be changed here.",
@@ -113,7 +115,9 @@
       file:"Startbericht",clear:"Ergebnis löschen",empty:"Noch keine Datei geöffnet.",bad:"Nicht unterstützter, unvollständiger oder ungültiger Bericht. Nichts wurde übertragen.",
       loading:"Lese nur lokal…",ready:"Anonyme Auswertung des letzten aufgezeichneten Startzustands. Keine Freigabe.",
       results:"2 · Offline-Ergebnis",pairing:"Bluetooth-Kopplungsstatus",paired:"Gekoppelte Geräte (nur Anzahl)",
-      controller:"Bluetooth-Controller erkannt",usb:"USB-Audiogerät erkannt",
+      controller:"Bluetooth-Controller erkannt",usb:"USB-Ausgang und Audioverbindung",
+      usbLinked:"Direkte Verbindung gemeldet (kein Tonbeweis)",usbBroken:"USB erkannt; Verbindung prüfen",usbUnknown:"USB erkannt; Verbindung nicht geprüft",usbAbsent:"USB-Gerät nicht gemeldet",
+      routeTipLinked:"Eine direkte USB-Audioverbindung wurde gemeldet; hörbarer Ton ist NICHT nachgewiesen. Nur im freigegebenen Hardwaretest bei niedrigem Pegel hören.",routeTipBroken:"USB-Hardware wurde erkannt, aber keine funktionsbereite direkte Audioverbindung gemeldet. Ton nicht annehmen oder Routing ohne Freigabe ändern.",routeTipUnknown:"USB wurde erkannt, die direkte Audioverbindung ist in diesem Bericht aber nicht prüfbar. Keinen hörbaren Ton annehmen.",routeTipAbsent:"Kein USB-Audioausgang gemeldet. Edifier-USB-Verbindung nur am isolierten Testgerät prüfen, ohne Besitzer- oder Netzwerkeinstellungen zu ändern."
       snapshots:"Erststart-Beobachtungen",runtime:"Letzter Audio-Laufzeitstatus",
       next:"3 · Nächster Schritt",chooseFirst:"Bericht auswählen, um sichere nächste Schritte zu sehen.",
       disclaimer:"SD-Bericht, kein Live-Zustand oder Nachweis von Ton, Besitz oder Kopplungsberechtigung. Hier werden keine Einstellungen geändert.",
@@ -142,7 +146,9 @@
       file:"Informe de arranque",clear:"Borrar resultado",empty:"Ningún archivo abierto.",bad:"Informe no válido, incompleto o incompatible. No se transfirió nada.",
       loading:"Lectura local…",ready:"Resumen de la última observación registrada. Sin aprobación.",
       results:"2 · Resultados sin conexión",pairing:"Estado de emparejamiento Bluetooth",paired:"Dispositivos emparejados (cantidad)",
-      controller:"Controlador Bluetooth detectado",usb:"Audio USB detectado",
+      controller:"Controlador Bluetooth detectado",usb:"Salida USB y enlace de audio",
+      usbLinked:"Enlace directo informado (no prueba sonido)",usbBroken:"USB detectado; revisar enlace",usbUnknown:"USB detectado; enlace no comprobado",usbAbsent:"Dispositivo USB no informado",
+      routeTipLinked:"Se informa un enlace directo USB, pero NO se ha comprobado sonido audible. Escucha solo en una prueba física autorizada a volumen bajo.",routeTipBroken:"Se detectó USB, pero no se informó un enlace de audio directo funcional. No supongas sonido ni cambies rutas sin autorización.",routeTipUnknown:"Se detectó USB, pero este informe no permite verificar el enlace directo. No supongas sonido.",routeTipAbsent:"No se informó salida de audio USB. Comprueba el cable Edifier solo en un entorno aislado y sin cambiar red o propietario."
       snapshots:"Observaciones del arranque",runtime:"Estado del motor de audio",
       next:"3 · Próximo paso",chooseFirst:"Selecciona un informe para ver el siguiente paso seguro.",
       disclaimer:"No son datos en vivo ni prueba de sonido, propiedad o permiso para emparejar. No modifica ajustes.",
@@ -171,7 +177,9 @@
       file:"Rapport de démarrage",clear:"Effacer le résultat",empty:"Aucun fichier ouvert.",bad:"Rapport invalide, incomplet ou non pris en charge. Aucun envoi.",
       loading:"Lecture locale…",ready:"Résumé de la dernière observation enregistrée. Aucune validation.",
       results:"2 · Résultats hors ligne",pairing:"État de l'appairage Bluetooth",paired:"Appareils appairés (nombre)",
-      controller:"Contrôleur Bluetooth détecté",usb:"Périphérique audio USB détecté",
+      controller:"Contrôleur Bluetooth détecté",usb:"Sortie USB et liaison audio",
+      usbLinked:"Liaison directe signalée (pas de preuve sonore)",usbBroken:"USB détecté ; liaison à vérifier",usbUnknown:"USB détecté ; liaison non vérifiée",usbAbsent:"Aucun périphérique USB signalé",
+      routeTipLinked:"Une liaison USB directe est signalée, mais aucun son audible n'est prouvé. Écouter uniquement lors d'un test matériel autorisé à faible volume.",routeTipBroken:"L'USB est détecté, mais aucune liaison audio directe fonctionnelle n'est signalée. Ne présumez pas du son et ne modifiez pas le routage sans autorisation.",routeTipUnknown:"L'USB est détecté, mais la liaison directe ne peut être vérifiée dans ce rapport. Aucun son n'est prouvé.",routeTipAbsent:"Aucune sortie audio USB signalée. Vérifiez le câble Edifier uniquement en environnement isolé, sans changer le réseau ou le propriétaire."
       snapshots:"Observations de démarrage",runtime:"Dernier état audio",
       next:"3 · Étape suivante",chooseFirst:"Choisissez un rapport pour afficher la prochaine étape sûre.",
       disclaimer:"Ce rapport n'est pas une mesure en direct ni une preuve de son, propriété ou autorisation. Aucun paramètre modifié.",
@@ -200,7 +208,9 @@
       file:"Rapporto di avvio",clear:"Cancella risultato",empty:"Nessun file aperto.",bad:"Rapporto non valido, incompleto o incompatibile. Nessun invio.",
       loading:"Lettura locale…",ready:"Riepilogo dell'ultima osservazione registrata. Nessuna approvazione.",
       results:"2 · Risultati offline",pairing:"Stato associazione Bluetooth",paired:"Dispositivi associati (numero)",
-      controller:"Controller Bluetooth rilevato",usb:"Audio USB rilevato",
+      controller:"Controller Bluetooth rilevato",usb:"Uscita USB e collegamento audio",
+      usbLinked:"Collegamento diretto segnalato (non prova audio)",usbBroken:"USB rilevato; collegamento da controllare",usbUnknown:"USB rilevato; collegamento non verificato",usbAbsent:"Dispositivo USB non segnalato",
+      routeTipLinked:"È segnalato un collegamento USB diretto, ma NON è provato alcun suono udibile. Ascoltare solo in un test fisico autorizzato a basso volume.",routeTipBroken:"USB rilevato, ma nessun collegamento audio diretto funzionante segnalato. Non presumere audio e non modificare i percorsi senza autorizzazione.",routeTipUnknown:"USB rilevato, ma il collegamento diretto non è verificabile da questo rapporto. Non presumere audio.",routeTipAbsent:"Nessuna uscita audio USB segnalata. Controllare il cavo Edifier solo in laboratorio isolato senza cambiare rete o proprietario."
       snapshots:"Osservazioni del primo avvio",runtime:"Ultimo stato audio",
       next:"3 · Passo successivo",chooseFirst:"Scegli un rapporto per vedere i prossimi passi sicuri.",
       disclaimer:"Non è uno stato in tempo reale né una prova di audio, proprietà o autorizzazione. Nessuna impostazione modificata.",
@@ -265,11 +275,26 @@
       pairing = obj.bluetooth_pairing_state;
       paired = obj.bluetooth_paired_devices;
     }
+    // Older snapshots may lack the direct link health fields. Never infer
+    // a working route from merely having a physical USB device. New
+    // snapshots must supply BOTH a strict boolean and bounded link count.
+    const routeFieldsPresent =
+      Object.prototype.hasOwnProperty.call(last,"usb_audio_route_ready") ||
+      Object.prototype.hasOwnProperty.call(last,"eq_usb_direct_links");
+    if (routeFieldsPresent &&
+        (typeof last.usb_audio_route_ready !== "boolean" ||
+         !Number.isInteger(last.eq_usb_direct_links) ||
+         last.eq_usb_direct_links < 0 || last.eq_usb_direct_links > 3))
+      return null;
+    const usbRoute = !last.usb_audio_detected ? "absent" :
+      (!routeFieldsPresent || last.runtime_status !== "recent") ? "unknown" :
+      (last.usb_audio_route_ready && last.eq_usb_direct_links > 0)
+        ? "linked" : "broken";
     // Only fixed enums, counts and strict booleans escape this function.
     // Never retain the untrusted object, raw strings, names or other keys.
     return Object.freeze({
       pairing, paired, controller: last.bluetooth_controller_present,
-      usb: last.usb_audio_detected, runtime: last.runtime_status,
+      usbRoute, runtime: last.runtime_status,
       snapshots: obj.snapshots.length
     });
   }
@@ -301,10 +326,20 @@
     label("pairing-value").textContent = index < 0 ? t.unknown : t.states[index];
     label("paired-value").textContent = current.paired === null ? t.unknown : String(current.paired);
     label("controller-value").textContent = current.controller ? t.yes : t.no;
-    label("usb-value").textContent = current.usb ? t.yes : t.no;
+    label("usb-value").textContent = t[{
+      linked:"usbLinked",broken:"usbBroken",
+      unknown:"usbUnknown",absent:"usbAbsent"
+    }[current.usbRoute]];
     label("snapshots-value").textContent = String(current.snapshots);
     label("runtime-value").textContent = current.runtime === "recent" ? t.recent : t.stale;
-    label("advice").textContent = index < 0 ? t.older : t.tips[index];
+    // Keep existing pairing guidance, and always explain USB routing
+    // separately. The status report is NOT a speaker audibility test.
+    const usbTip = {
+      linked:t.routeTipLinked,broken:t.routeTipBroken,
+      unknown:t.routeTipUnknown,absent:t.routeTipAbsent
+    }[current.usbRoute];
+    label("advice").textContent = (index < 0 ? t.older : t.tips[index]) +
+      " " + usbTip;
   }
   function clear() {
     serial += 1; current = null; status = "empty";
