@@ -382,28 +382,40 @@ class SourceRightsLedgerTests(unittest.TestCase):
             with self.subTest(stale=stale):
                 self.assertNotIn(stale, guide)
 
-    def test_backlog_pi4_operator_action_uses_pinned_verified_guide(self):
+    def test_backlog_pi4_operator_action_uses_matching_native_image(self):
         backlog = (ROOT / "docs/ENGINEERING-BACKLOG.md").read_text()
         line = next(
             line for line in backlog.splitlines()
             if line.startswith("| AUDIO-01 / AH-009 |")
         )
-        self.assertIn("FIRST-PI-ALPHA-TEST.md", line)
-        self.assertIn("42305548510", line)
-        self.assertIn("13546207449", line)
-        self.assertIn("separate human decision", line)
-        self.assertNotIn("13433476966", line)
+        for token in (
+            "FIRST-PI-ALPHA-TEST.md", "same intended source SHA",
+            "matching non-expired five-file ZIP", "ZIP/image/viewer SHA256",
+            "approved safe shutdown", "separate human decision",
+            "no actual Pi4 + Edifier audible playback report",
+        ):
+            with self.subTest(token=token):
+                self.assertIn(token.lower(), line.lower())
+        self.assertNotIn("pinned PR75 source SHA", line)
+        self.assertNotIn("13546207449", line)
+        self.assertNotIn("42305548510", line)
 
-    def test_three_source_lab_links_to_same_verified_nonrelease_image(self):
+    def test_three_source_lab_requires_same_sha_and_safe_shutdown(self):
         lab = (ROOT / "docs/THREE-SOURCE-LAB-ACCEPTANCE.md").read_text()
-        self.assertIn("FIRST-PI-ALPHA-TEST.md", lab)
-        self.assertIn("2b02bb4968467cd1033b47ddeaccaba092b96db0", lab)
-        self.assertIn("13546207449", lab)
-        self.assertIn("92/92", lab)
-        self.assertIn("NOT TESTED", lab)
-        self.assertIn("no network listener during boot", lab.lower())
-        self.assertNotIn("13522368901", lab)
-        self.assertNotIn("42255968531", lab)
+        for token in (
+            "FIRST-PI-ALPHA-TEST.md",
+            "same-SHA", "non-expired authenticated five-file ZIP",
+            "outer ZIP SHA256", "inner IMG.XZ SHA256",
+            "PREVIEW-MANIFEST.json", "offline HTML viewer",
+            "safe power-down procedure", "Do not start the hardware test",
+            "NOT TESTED", "no network listener during boot",
+            "MP3/FLAC/other unsupported audio",
+        ):
+            with self.subTest(token=token):
+                self.assertIn(token.lower(), lab.lower())
+        self.assertNotIn("source `2b02bb4968467cd1033b47ddeaccaba092b96db0`", lab)
+        self.assertNotIn("artifact #13546207449", lab)
+        self.assertNotIn("92/92 rootfs", lab)
 
     def test_declared_license_switch_has_not_occurred(self):
         state = json.loads(
