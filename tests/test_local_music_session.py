@@ -1855,12 +1855,12 @@ class MusicSessionTests(unittest.TestCase):
 
     def test_last_edit_undo_restores_undone_append_and_empty_plan(self):
         self.assertFalse(self.run_with(["k2", "a1", "z", "b", "l", "q"]))
-        self.assertIn("PENDING SLOTS 1=track 2, 2=track 1", "\n".join(self.out))
+        self.assertIn("Pending slots (1=NEXT): 1=track 2, 2=track 1.", "\n".join(self.out))
         self.out.clear()
         self.played.clear()
         self.children.clear()
         self.assertFalse(self.run_with(["k2", "d1", "b", "l", "q"]))
-        self.assertIn("PENDING SLOTS 1=track 2", "\n".join(self.out))
+        self.assertIn("Pending slots (1=NEXT): 1=track 2.", "\n".join(self.out))
         self.assertTrue(self.children[0].terminated)
 
     def test_last_edit_undo_is_single_step_noop_and_invalid_edits_do_not_replace_it(self):
