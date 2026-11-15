@@ -205,9 +205,14 @@ def run_session(paths, *, max_minutes=15, read_command=read_terminal_command,
                     failures.append("interrupted")
             except (ValueError, OSError, RuntimeError, PermissionError,
                     TimeoutError, BrokenPipeError):
-                failures.append("playback_failed")
+                # The operator's explicit navigation/quit terminates ONLY
+                # the owned child. A resulting broken pipe is an expected
+                # consequence, not a new spontaneous hardware failure.
+                if not cancelled.is_set():
+                    failures.append("playback_failed")
             except BaseException:
-                failures.append("playback_failed")
+                if not cancelled.is_set():
+                    failures.append("playback_failed")
             finally:
                 finished.set()
 
@@ -271,6 +276,13 @@ def run_session(paths, *, max_minutes=15, read_command=read_terminal_command,
                     with lock:
                         is_paused = paused[0]
                         observed_start = player_started[0]
+                        child = active[0]
+                        # A terminated player is not still progressing.
+                        # Never infer audible PCM output from our clock.
+                        try:
+                            exited = child is not None and child.poll() is not None
+                        except OSError:
+                            exited = True
                         now = clock()
                         stopped_time = pause_total[0]
                         if pause_started[0] is not None:
@@ -279,7 +291,11 @@ def run_session(paths, *, max_minutes=15, read_command=read_terminal_command,
                                        deadline, clock=clock, paused=is_paused,
                                        repeat_mode=repeat_mode,
                                        end_after_track=end_after_track))
-                    if observed_start is None:
+                    if exited:
+                        out("Owned music player has exited; track estimate "
+                            "unavailable until playback completion is checked. "
+                            "No hardware sound verified.")
+                    elif observed_start is None:
                         out("Track estimate pending until our local player starts. "
                             "No audible hardware output verified.")
                     else:
@@ -343,7 +359,15 @@ def run_session(paths, *, max_minutes=15, read_command=read_terminal_command,
         if requested == "timeout":
             out("Music session time limit reached. Playback stopped.")
             return False
-        if failures and requested not in ("n", "p", "r") and not (isinstance(requested, tuple) and requested[0] == "jump"):
+        if failures:
+            # Do not let a nearly simultaneous NEXT/PREVIOUS/REPLAY/JUMP
+            # conceal an already failed pw-cat and start more audio.
+            # Failure messages are fixed and cannot leak a private WAV path,
+            # subprocess stderr, device identity or owner information.
+            out("LOCAL PLAYBACK FAILED: no next, repeated or jumped track "
+                "started. Check the private audiohub.music input and "
+                "installed pw-cat tool before a separate manual retry. "
+                "No default sound-output fallback or settings changed.")
             raise RuntimeError("Local music player failed; no file paths disclosed")
         # Explicit navigation selects another playback attempt and disarms
         # the old-track finish policy, avoiding a surprising premature end.
