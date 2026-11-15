@@ -216,6 +216,8 @@ During playback, type a command and press **Enter**:
 | `k0` + Enter | Clear **all** temporary following tracks; restore normal order/repeat |
 | `a1`–`a8` + Enter | Append another **already selected** numbered WAV after the pending choices, without stopping the current track; at most eight total |
 | `z` + Enter | Undo just the **last** pending choice; leave the rest and current WAV untouched |
+| `d1`–`d8` + Enter | Delete one **pending position** displayed by `l`, preserving the remaining order and current WAV |
+| `f1`–`f8` + Enter | Move that **pending position** to be NEXT after this WAV; other pending items keep their order |
 | `n` + Enter | Stop just the current owned player, then start the next selected track in order |
 | `p` + Enter | Stop the current player and go to the previous selected track; on track 1, restart track 1 |
 | `r` + Enter | Restart the current selected track from its beginning |
@@ -256,6 +258,21 @@ replay, immediate quit, session deadline or actual player error still
 take priority over *every* pending choice. Only the already validated
 private WAV selection can be queued; no saved playlist, no automatic
 first PLAY and no extra player or network command.
+
+**Edit individual upcoming positions:** Use `l` to see the
+pending slot numbers, for example `1=track 3, 2=track 2, 3=track 1`.
+Here `track 3` is an already selected WAV number; `slot 2` is the
+second *upcoming position*, not WAV 2. `d2` removes only the second
+pending choice, preserving upcoming slots 1 and 3. `f3` promotes the
+third upcoming choice to NEXT while preserving the relative order of
+the others. Both operations leave the current owned WAV playing
+uninterrupted; they do not create an extra player or reset the
+session deadline. Empty/nonexistent pending slot numbers are refused
+without modifying anything. All slots remain anonymous, temporary
+and restricted to the original 1–8 selected licensed WAV tracks.
+Immediate navigation/quit, `e`, timeout and real player failure
+still take precedence. `kN`/`aN` refer to selected **WAV numbers**,
+whereas `dN`/`fN` refer to **pending slot positions**.
 
 **If the private local playback tool fails unexpectedly**, AudioHub now
 refuses the next/previous/replay/jump even if that key was entered at
