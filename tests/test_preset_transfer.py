@@ -413,6 +413,27 @@ class PresetTransferTests(unittest.TestCase):
                 self.assertNotIn(unsupported, "\n".join(self.logs))
                 path.unlink()  # Unit-test fixture only; no app data deleted.
 
+    def test_operator_cli_explains_nonwav_sd_stop_without_private_names(self):
+        """Human gets a useful fixed hint, never the name of unbacked media."""
+        self.make_old_wav_for_backup()
+        private = self.old_music / "my-private-artist.FLAC"
+        private.write_bytes(b"never_copy_this_media")
+        private.chmod(0o600)
+        with mock.patch("builtins.print") as printed:
+            code = preset_transfer.main([
+                "plan-backup", str(self.media), str(self.old_music),
+                str(self.old)])
+        self.assertEqual(code, 2)
+        rendered = " ".join(str(x) for c in printed.call_args_list
+                            for x in c.args)
+        self.assertIn("SD migration STOP", rendered)
+        self.assertIn("non-WAV audio would remain unsaved", rendered)
+        self.assertIn("Keep the original SD", rendered)
+        self.assertNotIn("my-private-artist", rendered)
+        self.assertNotIn(str(self.root), rendered)
+        self.assertEqual(private.read_bytes(), b"never_copy_this_media")
+        self.assertEqual(list(self.media.iterdir()), [])
+
     def test_readonly_backup_plan_before_any_save_or_copy(self):
         name = self.make_old_wav_for_backup()
         old_bytes = (self.old_music / name).read_bytes()
