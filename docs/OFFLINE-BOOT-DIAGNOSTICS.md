@@ -73,13 +73,27 @@ field whitelisting, and is capped at 4096 bytes.
 
 ## Reading USB *routing*, not merely finding a USB speaker
 
-The existing [standalone offline report viewer](../web/boot-report-viewer.html)
-can be downloaded from the **exact matching AudioHub source commit** onto a
-trusted computer and opened **locally** (no browser network, no Pi login, no
-new card, button or service required). After safely powering down the
-isolated Pi, select the SD boot partition's
-`AUDIOHUB-TEST-REPORT.json` through the local file picker. Never upload the
-report, enter phone credentials or connect a trusted network to the test Pi.
+For the **new five-file S2 operator ZIP** (not older four-file alpha
+bundles), the existing [standalone offline report viewer](../web/boot-report-viewer.html)
+is included directly as
+`AUDIOHUB-OFFLINE-REPORT-VIEWER.html` **next to the native image**. No
+second network download or Pi login is required to understand first-boot
+results. The same source HTML continues to be packaged in the native
+rootfs. The `PREVIEW-MANIFEST.json` includes the exact viewer SHA256 and
+byte size, and the existing `scripts/release_bundle_audit.py --zip`
+operator verifier now checks this fifth file and the image together.
+Previous **four-file** ZIPs remain supported but lack the bundled viewer.
+
+On a trusted PC, download the authenticated ZIP, check its **outer** SHA256
+against the exact provider digest, extract it, compare the viewer's SHA256
+against `PREVIEW-MANIFEST.json.offline_viewer.sha256`, and open the HTML
+**locally**. After safely powering down the isolated Pi, manually select
+`AUDIOHUB-TEST-REPORT.json` from the spare SD boot partition using the
+viewer's local file picker. The report is produced by the Pi **after boot**
+and is NOT a prefilled or imported report inside the ZIP. Never upload a
+report, enter phone credentials or connect a trusted network to the test
+Pi. Keep old SD and private WAV/EQ/non-WAV backups intact, and do not treat
+a reported USB route as evidence of actual audible sound.
 
 The viewer's existing **USB output and direct audio link** row now
 distinguishes four outcomes:
