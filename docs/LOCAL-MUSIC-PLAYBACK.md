@@ -221,6 +221,19 @@ During playback, type a command and press **Enter**:
 | `h` + Enter | Repeat the short help text |
 | Ctrl+C | Emergency local interruption; owned child stopped in cleanup |
 
+**If the private local playback tool fails unexpectedly**, AudioHub now
+refuses the next/previous/replay/jump even if that key was entered at
+nearly the same moment. It stops with an anonymous LOCAL PLAYBACK FAILED
+message and directs the operator to inspect the existing private
+`audiohub.music` input and installed `pw-cat` tool. An intended
+navigation or quit may stop the owned child and produce an expected
+broken pipe; that is not misreported as a new hardware failure.
+The `s` status likewise withholds estimated song progress once the
+owned child is observed exited, rather than counting a stopped player's
+clock as sound. No retries, fallback route, playback of another track,
+or technical repair are silently performed. The current private WAV
+and real physical Edifier sound remain unverified and undisclosed.
+
 The `e` mode is local and temporary. Press `e` once to arm it, and
 again to cancel. It is shown in `s` status and `l` anonymous queue
 reports while armed. It does not pause, shorten or restart the current
