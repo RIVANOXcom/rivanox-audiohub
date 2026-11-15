@@ -2,6 +2,22 @@
 
 **Status:** Alpha / pre-release. No verified ready-to-flash Pi 4 image has been published. Native ARM64 test-only SD images have been built and uploaded to GitHub Actions (latest prior-to-renaming run 42057278883; 159 tests, 48 rootfs checks). **No real Pi4/Edifier playback, ownership security or product-ready Release has been verified.**
 
+## Bounded private multi-track queue (unverified alpha)
+
+The trusted interactive Pi4 WAV player can now schedule **up to eight**
+following numbered selected WAVs without interrupting the current owned
+player. `k1`–`k8` replaces the pending plan with one chosen NEXT WAV;
+`a1`–`a8` appends additional numbered choices in order; `z` undoes
+the most recent choice and `k0` clears the full pending plan. The
+anonymous status/queue views show order, never titles, paths or devices.
+Only natural completion consumes one deferred choice at a time,
+ahead of the ordinary repeat/order policy. Ending after current clears
+the pending plan, while appending after an end request explicitly
+disarms it. Direct navigation, stop, deadline and true player failure
+take precedence. Maximum pending count eight; duplicates allowed;
+no storage, extra audio player, automatic PLAY, mixer/network or
+permission changes. This remains an unverified operator TEST alpha.
+
 ## Schedule an existing private WAV as next without cutting current (unverified alpha)
 
 Within the already operator-authorized local Pi4 WAV playback session,
