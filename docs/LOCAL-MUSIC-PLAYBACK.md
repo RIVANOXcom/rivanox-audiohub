@@ -112,7 +112,8 @@ track of a manual playlist; if the USB output disappears after a prior
 readiness report, the next owned player is refused rather than silently
 playing into an unattached virtual sink or falling back to HDMI/default.
 During each **actively running WAV track**, a separate read-only USB-route
-watchdog also checks the same private-to-USB prerequisites **every 3 seconds**
+watchdog also checks the same real exclusive EQ-to-USB link
+prerequisites **every 3 seconds**
 using a bounded (up to 5-second) PipeWire snapshot. If the USB output
 disappears or the graph cannot be inspected reliably, it stops **only the
 `pw-cat` child started by that WAV**, including a locally paused child.
