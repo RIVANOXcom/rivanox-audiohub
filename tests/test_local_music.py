@@ -62,9 +62,16 @@ class LocalMusicTests(unittest.TestCase):
             stream.writeframes(data)
 
     def captured_graph(self, name="audiohub.music"):
+        # A physical USB sink is now required as well as the virtual input
+        # for a meaningful first-sound manual test.
         raw = json.dumps([{
             "type":"PipeWire:Interface:Node","id":17,
             "info":{"props":{"media.class":"Audio/Sink","node.name":name}}
+        }, {
+            "type":"PipeWire:Interface:Node","id":18,
+            "info":{"props":{"media.class":"Audio/Sink",
+                             "node.name":"alsa_output.usb-EDIFIER_R600USB",
+                             "node.description":"Edifier USB Speaker"}}
         }])
         return mock.Mock(returncode=0, stdout=raw)
 
@@ -386,6 +393,7 @@ class LocalMusicTests(unittest.TestCase):
         report = "\n".join(messages)
         for phrase in ("FIRST SOUND CHECK", "no WAV files needed",
                        "Private PipeWire music input: READY",
+                       "Physical USB speaker output: ONE UNAMBIGUOUS ROUTABLE USB SINK",
                        "Local PipeWire playback tool: AVAILABLE",
                        "READY FOR MANUAL TRY, NOT sound-verified",
                        "audiohub-music --speaker-guide",
@@ -394,6 +402,81 @@ class LocalMusicTests(unittest.TestCase):
         self.assertNotIn(str(self.wav), report)
         self.assertNotIn(str(self.root), report)
         self.assertFalse(self.players)
+
+    def test_first_sound_refuses_virtual_sink_without_real_usb_output(self):
+        # A virtual music sink alone cannot imply a sound path to USB.
+        messages = []
+        raw = json.dumps([{
+            "type": "PipeWire:Interface:Node", "id": 17,
+            "info": {"props": {"media.class": "Audio/Sink",
+                               "node.name": "audiohub.music"}}
+        }])
+        checks = []
+        def capture(argv, **kwargs):
+            checks.append((argv, kwargs))
+            return mock.Mock(returncode=0, stdout=raw)
+        with mock.patch.object(local_music.os, "geteuid", return_value=1000):
+            result = local_music.check_first_sound_readiness(
+                capture=capture, which=lambda _: "/usr/bin/pw-cat",
+                out=messages.append)
+        self.assertFalse(result)
+        self.assertEqual(len(checks), 1)
+        self.assertEqual(checks[0][0], ["pw-dump"])
+        self.assertEqual(checks[0][1]["timeout"], 5)
+        report = "\n".join(messages)
+        self.assertIn("Private PipeWire music input: READY", report)
+        self.assertIn("Physical USB speaker output: NEEDS ATTENTION", report)
+        self.assertIn("NOT READY FOR MANUAL TRY", report)
+        self.assertNotIn("READY FOR MANUAL TRY, NOT", report)
+
+    def test_first_sound_refuses_ambiguous_usb_and_never_exposes_metadata(self):
+        base = json.loads(self.captured_graph().stdout)
+        base.append({"type": "PipeWire:Interface:Node", "id": 91,
+                     "info": {"props": {"media.class": "Audio/Sink",
+                                        "node.name": "alsa_output.usb-EDIFIER_SECRET_SN",
+                                        "node.description": "PRIVATE_SERIAL_SECRET"}}})
+        messages = []
+        with mock.patch.object(local_music.os, "geteuid", return_value=1000):
+            ready = local_music.check_first_sound_readiness(
+                capture=lambda *_args, **_kw: mock.Mock(
+                    returncode=0, stdout=json.dumps(base)),
+                which=lambda _: "/usr/bin/pw-cat", out=messages.append)
+        self.assertFalse(ready)
+        report = "\n".join(messages)
+        self.assertIn("Multiple ambiguous USB outputs are refused", report)
+        self.assertNotIn("SECRET", report)
+        self.assertNotIn("Edifier USB Speaker", report)
+        self.assertNotIn("PRIVATE_SERIAL", report)
+
+    def test_first_sound_accepts_one_edifier_with_generic_usb_not_sound_proof(self):
+        nodes = json.loads(self.captured_graph().stdout)
+        nodes.append({"type": "PipeWire:Interface:Node", "id": 92,
+                      "info": {"props": {"media.class": "Audio/Sink",
+                                         "node.name": "alsa_output.usb-GENERIC"}}})
+        messages = []
+        with mock.patch.object(local_music.os, "geteuid", return_value=1000):
+            self.assertTrue(local_music.check_first_sound_readiness(
+                capture=lambda *_args, **_kw: mock.Mock(
+                    returncode=0, stdout=json.dumps(nodes)),
+                which=lambda _: "/usr/bin/pw-cat", out=messages.append))
+        report = "\n".join(messages)
+        self.assertIn("audibility UNVERIFIED", report)
+        self.assertNotIn("alsa_output.usb-", report)
+
+    def test_first_sound_duplicate_pipewire_identity_fails_closed(self):
+        nodes = json.loads(self.captured_graph().stdout)
+        nodes.append({"type": "PipeWire:Interface:Node", "id": 17,
+                      "info": {"props": {"media.class": "Audio/Sink",
+                                         "node.name": "alsa_output.usb-SECRET"}}})
+        with mock.patch.object(local_music.os, "geteuid", return_value=1000):
+            messages = []
+            self.assertFalse(local_music.check_first_sound_readiness(
+                capture=lambda *_args, **_kw: mock.Mock(
+                    returncode=0, stdout=json.dumps(nodes)),
+                which=lambda _: "/usr/bin/pw-cat", out=messages.append))
+        report = "\n".join(messages)
+        self.assertIn("Physical USB speaker output: NEEDS ATTENTION", report)
+        self.assertNotIn("SECRET", report)
 
     def test_first_sound_check_missing_sink_still_reports_player(self):
         messages = []
