@@ -84,7 +84,18 @@ def safe_input_target(slot):
     inspected = bounded_command_output(("pw-dump",), timeout=5)
     if inspected is None or inspected.returncode != 0:
         raise SoundcheckUnavailable("Input test unavailable: PipeWire inspection failed")
-    graph = _parse_pipewire_graph(inspected.stdout)
+    return safe_input_target_from_graph(inspected.stdout, slot)
+
+
+def safe_input_target_from_graph(raw_graph, slot):
+    """Share the exact production USB-only EQ link predicate with music.
+
+    Operates on the ALREADY captured bounded graph: no second/stale graph
+    query, no writes, no fallback and no device identifiers in exceptions.
+    """
+    if type(slot) is not str or slot not in CHANNELS:
+        raise SoundcheckUnavailable("Unsupported local input test slot")
+    graph = _parse_pipewire_graph(raw_graph)
     if graph is None:
         raise SoundcheckUnavailable("Input test unavailable: unreliable PipeWire graph")
     nodes = pipewire_nodes(graph)

@@ -29,10 +29,13 @@ The first step checks the already configured private PipeWire music input and
 local player tool, then silently and anonymously diagnoses the WAV folder
 (maximum 256 entries, no media-name display). An empty new SD is normal.
 **No audio starts during these checks.** The first-sound step now
-also checks a **real, unambiguous USB speaker output** in the same bounded
-PipeWire snapshot as the private music input, reusing the shipping router's
-USB selector. A virtual `audiohub.music` sink and installed `pw-cat` alone
-are no longer sufficient to mark speaker playback ready. If USB is missing
+also checks a **real, unambiguous USB speaker output AND an actual direct
+USB-only music EQ output link** in the same bounded PipeWire snapshot as
+the private music input, reusing the shipping router's USB selector and
+the existing guarded input soundcheck's link policy. A virtual
+`audiohub.music` sink, installed `pw-cat`, or physically present Edifier
+without a proven music EQ-to-USB link is NOT sufficient for readiness.
+A competing HDMI/default-output EQ link is refused. If USB is missing
 or ambiguous, check the Edifier power, cable and USB connection; never fall
 back to HDMI or the default output. No private USB identifiers are printed.
 A detected USB sink is **not proof of audible sound or safe physical volume**.
@@ -100,14 +103,17 @@ safe phone/Wi-Fi ownership. Next run `audiohub-music --list` for an
 anonymous numbered preview, or the separately approved
 `audiohub-music --speaker-check` for silent first-sound prerequisites.
 Beyond the first-use precheck, **every actual local speaker signal and WAV PLAY**
-rechecks a current bounded PipeWire graph for both the private
-`audiohub.music` sink and an unambiguous selectable physical USB speaker
-output. This is also enforced for direct WAV playback and each subsequent
+rechecks a current bounded PipeWire graph for the private
+`audiohub.music` sink, one unambiguous selectable physical USB speaker,
+and a **real exclusive `audiohub.music.output` to USB node link**.
+Missing or additional EQ-to-HDMI/default links refuse playback without
+attempting to repair, reroute or print device identifiers. This is also enforced for direct WAV playback and each subsequent
 track of a manual playlist; if the USB output disappears after a prior
 readiness report, the next owned player is refused rather than silently
 playing into an unattached virtual sink or falling back to HDMI/default.
 During each **actively running WAV track**, a separate read-only USB-route
-watchdog also checks the same private-to-USB prerequisites **every 3 seconds**
+watchdog also checks the same real exclusive EQ-to-USB link
+prerequisites **every 3 seconds**
 using a bounded (up to 5-second) PipeWire snapshot. If the USB output
 disappears or the graph cannot be inspected reliably, it stops **only the
 `pw-cat` child started by that WAV**, including a locally paused child.
@@ -1092,14 +1098,14 @@ private WAV library is ready for music playback, `--speaker-check`
 intentionally does **not inspect the library at all**. An empty
 `/home/audiohub/PrivateMusic` does not count as a first-sound failure.
 
-The check reads two bounded local prerequisites independently:
-the exact private `audiohub.music` PipeWire sink and whether the
+The check reads ONE bounded local PipeWire graph to report the virtual
+`audiohub.music` input, one unambiguous physical USB output, and a
+**direct exclusive music EQ output-to-USB link**, alongside whether the
 unprivileged operator can locate `pw-cat`. Each missing prerequisite
-receives an actionable, non-identifying explanation. A green
-**READY FOR MANUAL TRY** means only that these two prerequisites appear
-present: it does NOT play a sound or prove the USB output, left/right
-routing, physical SPL, speaker wiring, multi-source mixing, first-owner
-security or production suitability. The graph may change after the
+receives actionable anonymous feedback. **READY FOR MANUAL TRY** means
+only that the observed software route is available; it does NOT play
+sound or prove audible left/right output, actual speaker wiring, physical
+SPL, live multi-source mixing, first-owner security or production readiness. The graph may change after the
 check. Failure returns exit status 2; readiness returns 0.
 
 Only after explicit permission for an isolated spare-SD hardware test

@@ -41,7 +41,7 @@ usage() {
     'The album wizard checks private input/player FIRST; missing tools stop before any selection or PLAY.' \
     'The playback wizard shows an anonymous list; select numbers, ALL or SHUFFLE.' \
     'PLAY is required separately to start sound; CHANGE revises the queue.' \
-    'Every speaker or WAV PLAY rechecks a selectable physical USB output; no HDMI/default fallback.' \
+    'Every speaker or WAV PLAY requires direct music EQ-to-USB link; no HDMI/default fallback.' \
     'During WAV playback a 3s silent USB watcher stops ONLY our owned player on disconnect; no auto-replay.' \
     'During playback: s=status, l=queue, k1-k8=play selected track next (no cut), k0=clear next.' \
     'Also: u=pause/resume, m=repeat, e=finish current WAV then stop, n=next, q=stop now.' \
