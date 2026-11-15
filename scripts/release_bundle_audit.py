@@ -29,6 +29,8 @@ IMAGE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*-UNVERIFIED\.img\.xz\Z")
 SHA40 = re.compile(r"[a-f0-9]{40}\Z")
 SHA64 = re.compile(r"[a-f0-9]{64}\Z")
 MAX_META_BYTES = 8192
+OFFLINE_VIEWER = "AUDIOHUB-OFFLINE-REPORT-VIEWER.html"
+MAX_OFFLINE_VIEWER_BYTES = 128 * 1024
 MAX_IMAGE_BYTES = 16 * 1024**3
 MAX_UNCOMPRESSED_BYTES = 64 * 1024**3
 MAX_ZIP_BYTES = MAX_IMAGE_BYTES + MAX_INVENTORY_BYTES + 64 * 1024**2
@@ -67,7 +69,11 @@ def inspect(directory: Path, *, expected_source_sha=None, verify_xz=True):
         raise ValueError("Exactly one UNVERIFIED Pi image required")
     image = images[0]
     required = {image.name, "SHA256SUMS.txt", "PREVIEW-MANIFEST.json", "ROOTFS-PACKAGES.json"}
-    if {p.name for p in children} != required or len(children) != 4:
+    viewer = directory / OFFLINE_VIEWER
+    has_viewer = OFFLINE_VIEWER in {p.name for p in children}
+    if has_viewer:
+        required.add(OFFLINE_VIEWER)
+    if {p.name for p in children} != required or len(children) != len(required):
         raise ValueError("Unexpected, missing or extra files in preview ZIP")
     _regular(image, max_bytes=MAX_IMAGE_BYTES)
     checksum_file = directory / "SHA256SUMS.txt"
@@ -87,6 +93,24 @@ def inspect(directory: Path, *, expected_source_sha=None, verify_xz=True):
         raise ValueError("Wrong provenance format")
     if meta.get("package_inventory") != {"file": "ROOTFS-PACKAGES.json", **inventory_proof}:
         raise ValueError("Installed package inventory provenance mismatch")
+    # Optional fifth member is ONLY the trusted, bounded, offline HTML
+    # viewer. Four-file legacy alpha ZIPs remain verifiable, while a
+    # present viewer must have its exact bytes pinned in the manifest.
+    if has_viewer:
+        size = _regular(viewer, max_bytes=MAX_OFFLINE_VIEWER_BYTES)
+        proof = meta.get("offline_viewer")
+        if (type(proof) is not dict or
+                set(proof) != {"file", "bytes", "sha256"} or
+                proof["file"] != OFFLINE_VIEWER or
+                type(proof["bytes"]) is not int or proof["bytes"] != size or
+                type(proof["sha256"]) is not str or
+                SHA64.fullmatch(proof["sha256"]) is None):
+            raise ValueError("Offline viewer provenance missing or malformed")
+        with viewer.open("rb") as stream:
+            if hashlib.file_digest(stream, "sha256").hexdigest() != proof["sha256"]:
+                raise ValueError("Offline viewer checksum/provenance mismatch")
+    elif "offline_viewer" in meta:
+        raise ValueError("Offline viewer missing from bundle")
     if meta.get("image") != image.name or (
         type(meta.get("image_bytes")) is not int
         or meta["image_bytes"] != image.stat().st_size
@@ -161,7 +185,8 @@ def inspect_zip(archive: Path, *, expected_zip_sha256, expected_source_sha=None,
 
     Unlike CI's already-unpacked preview, an operator must prove that the
     downloaded ZIP's bytes match the pinned GitHub-provider digest before
-    extracting anything. Extract only four allowlisted flat, bounded files
+    extracting anything. Extract only four legacy or five (with the offline
+    viewer) allowlisted flat, bounded files
     into a short-lived private temporary directory; NEVER flash an SD.
     """
     if type(expected_zip_sha256) is not str or SHA64.fullmatch(expected_zip_sha256) is None:
@@ -181,21 +206,26 @@ def inspect_zip(archive: Path, *, expected_zip_sha256, expected_source_sha=None,
     try:
         with zipfile.ZipFile(archive) as zf:
             members = zf.infolist()
-            if len(members) != 4:
-                raise ValueError("Operator ZIP must contain exactly four files")
+            if len(members) not in (4, 5):
+                raise ValueError("Operator ZIP must contain four or five files")
             names = [item.filename for item in members]
             images = [n for n in names if IMAGE.fullmatch(n)]
-            if (len(images) != 1 or len(set(names)) != 4 or
-                    set(names) != {
-                        images[0], "SHA256SUMS.txt", "PREVIEW-MANIFEST.json",
-                        "ROOTFS-PACKAGES.json",
-                    }):
+            required = {
+                "SHA256SUMS.txt", "PREVIEW-MANIFEST.json", "ROOTFS-PACKAGES.json",
+            }
+            if len(images) != 1:
+                raise ValueError("Unsafe, duplicate or unexpected ZIP members")
+            required.add(images[0])
+            if OFFLINE_VIEWER in names:
+                required.add(OFFLINE_VIEWER)
+            if len(set(names)) != len(members) or set(names) != required:
                 raise ValueError("Unsafe, duplicate or unexpected ZIP members")
             bounds = {
                 images[0]: MAX_IMAGE_BYTES,
                 "SHA256SUMS.txt": MAX_META_BYTES,
                 "PREVIEW-MANIFEST.json": MAX_META_BYTES,
                 "ROOTFS-PACKAGES.json": MAX_INVENTORY_BYTES,
+                OFFLINE_VIEWER: MAX_OFFLINE_VIEWER_BYTES,
             }
             for item in members:
                 # Accept standard Unix regular or Windows ZIP entries, not
@@ -230,14 +260,14 @@ def inspect_zip(archive: Path, *, expected_zip_sha256, expected_source_sha=None,
         raise ValueError("Corrupted or unsupported operator ZIP") from exc
     # No other filesystem changes, release auth or runtime settings.
     return {**result, "download_zip_sha256": expected_zip_sha256,
-            "verified_zip_entries": 4}
+            "verified_zip_entries": len(members)}
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     choices = parser.add_mutually_exclusive_group(required=True)
     choices.add_argument("--directory", type=Path,
-                         help="Already extracted four-file preview bundle (CI)")
+                         help="Already extracted four- or five-file preview bundle (CI)")
     choices.add_argument("--zip", type=Path,
                          help="Downloaded GitHub Actions TEST ZIP, offline/read-only")
     parser.add_argument("--expected-source-sha")
