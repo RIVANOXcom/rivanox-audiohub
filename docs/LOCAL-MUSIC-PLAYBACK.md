@@ -215,7 +215,8 @@ During playback, type a command and press **Enter**:
 | `k1`–`k8` + Enter | Queue that **already selected numbered WAV** to play once **after the current track naturally finishes**, without cutting or restarting current audio |
 | `k0` + Enter | Clear **all** temporary following tracks; restore normal order/repeat |
 | `a1`–`a8` + Enter | Append another **already selected** numbered WAV after the pending choices, without stopping the current track; at most eight total |
-| `z` + Enter | Undo just the **last** pending choice; leave the rest and current WAV untouched |
+| `z` + Enter | Remove the **last** pending choice; leave remaining choices and current WAV untouched |
+| `b` + Enter | Restore the queue **before the last successful pending edit** (`k0`, `kN`, `aN`, `z`, `dN`, `fN`), only while the **same** current WAV is playing; one step only, not persistent history |
 | `d1`–`d8` + Enter | Delete one **pending position** displayed by `l`, preserving the remaining order and current WAV |
 | `f1`–`f8` + Enter | Move that **pending position** to be NEXT after this WAV; other pending items keep their order |
 | `n` + Enter | Stop just the current owned player, then start the next selected track in order |
