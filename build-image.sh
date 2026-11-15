@@ -30,6 +30,26 @@ cp -a "$ROOT/image/stage-audiohub" "$WORK/pi-gen/"
 rm -rf "$WORK/pi-gen/stage-audiohub/01-install/files/src"
 install -d "$WORK/pi-gen/stage-audiohub/01-install/files/src"
 cp -a "$ROOT/src/audiohub" "$WORK/pi-gen/stage-audiohub/01-install/files/src/"
+# Embed traceable NONSECRET image identity inside the actual bootable SD rootfs.
+# The offline FAT diagnostic later exposes only exact immutable source/build
+# identifiers, never runner paths, credentials, serials or hardware claims.
+SOURCE_SHA="$(git -C "$ROOT" rev-parse HEAD)"
+if [[ ! "$SOURCE_SHA" =~ ^[a-f0-9]{40}$ ]]; then
+  echo "Refusing image build without exact Git source SHA." >&2; exit 2
+fi
+if [[ -n "${GITHUB_SHA:-}" && "${GITHUB_SHA}" != "$SOURCE_SHA" ]]; then
+  echo "Refusing image build: checkout HEAD differs from CI source SHA." >&2; exit 2
+fi
+if ! git -C "$ROOT" diff --quiet HEAD --; then
+  echo "Refusing provenance for modified tracked source: commit first." >&2; exit 2
+fi
+RUN_ID='null'
+if [[ "${GITHUB_RUN_ID:-}" =~ ^[1-9][0-9]{0,19}$ ]]; then
+  RUN_ID="$GITHUB_RUN_ID"
+fi
+printf '{"schema":"rivanox-audiohub-image-identity/1","source_sha":"%s","pi_gen_sha":"%s","ci_run_id":%s,"hardware_verified":false,"release_approved":false}\n' \
+  "$SOURCE_SHA" "$PIN" "$RUN_ID" > \
+  "$WORK/pi-gen/stage-audiohub/01-install/files/build-identity.json"
 rm -rf "$WORK/pi-gen/stage-audiohub/01-install/files/web"
 install -d "$WORK/pi-gen/stage-audiohub/01-install/files/web"
 cp -a "$ROOT/web/." "$WORK/pi-gen/stage-audiohub/01-install/files/web/"

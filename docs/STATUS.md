@@ -2,6 +2,21 @@
 
 **Status:** Alpha / pre-release. No verified ready-to-flash Pi 4 image has been published. Native ARM64 test-only SD images have been built and uploaded to GitHub Actions (latest prior-to-renaming run 42057278883; 159 tests, 48 rootfs checks). **No real Pi4/Edifier playback, ownership security or product-ready Release has been verified.**
 
+## Offline SD report identifies the actual test image build (unverified alpha)
+
+The existing boot-partition `AUDIOHUB-TEST-REPORT.json` now includes
+strictly checked nonsecret `image_identity` fields: immutable source
+commit, pinned Pi-gen revision and optional native CI run ID. This
+allows physical observations from different spare-SD test images to
+be traced to GitHub code and the exact native build even without
+Wi-Fi, screen, SSH or remote access. The image builder rejects
+dirty tracked source and a GitHub checkout SHA mismatch, embeds a
+root-owned read-only metadata file, and the actual ARM64 rootfs audit
+checks its structure. Missing, symlinked, writable, ambiguous or
+misleading identity metadata yields `unavailable`, never a guessed
+version. An SD report is not signed or a secure boot attestation;
+physical sound and legal/ownership/production acceptance remain open.
+
 ## End naturally after all explicitly queued WAVs (unverified alpha)
 
 A trusted unprivileged Pi4 operator may now press `g` **after**

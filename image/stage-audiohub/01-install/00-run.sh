@@ -7,9 +7,13 @@ install -d -m755 "${ROOTFS_DIR}/opt/audiohub/src" \
   "${ROOTFS_DIR}/etc/systemd/user" \
   "${ROOTFS_DIR}/etc/systemd/user/default.target.wants" \
   "${ROOTFS_DIR}/etc/wireplumber/wireplumber.conf.d" \
-  "${ROOTFS_DIR}/var/lib/systemd/linger"
+  "${ROOTFS_DIR}/var/lib/systemd/linger" \
+  "${ROOTFS_DIR}/etc/audiohub"
 cp -a files/src/audiohub "${ROOTFS_DIR}/opt/audiohub/src/"
 cp -a files/web/. "${ROOTFS_DIR}/opt/audiohub/web/"
+# Generated only by build-image.sh from the checked-out source HEAD.
+# Root-owned, nonsecret, read-only identity for the offline FAT report.
+install -m644 files/build-identity.json "${ROOTFS_DIR}/etc/audiohub/build-identity.json"
 install -m755 files/bin/audiohub-music "${ROOTFS_DIR}/usr/local/bin/audiohub-music"
 install -m755 files/bin/audiohub-music-transfer "${ROOTFS_DIR}/usr/local/bin/audiohub-music-transfer"
 install -m755 files/bin/audiohub-presets-transfer "${ROOTFS_DIR}/usr/local/bin/audiohub-presets-transfer"
