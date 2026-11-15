@@ -1227,5 +1227,172 @@ class MusicSessionTests(unittest.TestCase):
         self.assertIn("PAUSED", out)
 
 
+    def test_multi_next_appends_three_in_order_after_natural_finish(self):
+        # Pending choices never interrupt the current owned WAV.
+        played = []
+        started = threading.Event()
+        release = threading.Event()
+        steps = iter(["k2", "a1", "a2", "s", "l", "release"])
+
+        def playback(paths, *, max_minutes, stop, on_player,
+                     session_deadline, notify):
+            played.append(paths[0])
+            if len(played) == 1:
+                started.set()
+                self.assertTrue(release.wait(2))
+                self.assertFalse(stop.is_set())
+            return True
+
+        def read(_timeout):
+            self.assertTrue(started.wait(2))
+            action = next(steps, None)
+            if action == "release":
+                release.set()
+                return None
+            return action
+
+        with mock.patch.object(local_music, "music_sink_available", return_value=True), \
+             mock.patch.object(local_music.os, "geteuid", return_value=1000):
+            self.assertTrue(music_session.run_session(
+                self.paths, max_minutes=1, read_command=read,
+                playback=playback, out=self.out.append, require_tty=False))
+        self.assertEqual(played, [self.paths[0], self.paths[1],
+                                  self.paths[0], self.paths[1]])
+        report = "\n".join(self.out)
+        self.assertIn("QUEUED NEXT TRACK 2", report)
+        self.assertIn("FOLLOWING TRACKS 1, 2", report)
+        self.assertIn("Following: track 1, track 2.", report)
+        self.assertIn("Playing queued NEXT track 2", report)
+        self.assertNotIn("secret-title", report)
+        self.assertNotIn(str(self.dir), report)
+
+    def test_multi_next_undo_and_replace_remove_old_pending_order(self):
+        played = []
+        started = threading.Event()
+        release = threading.Event()
+        steps = iter(["a1", "a2", "z", "k2", "a1", "k1",
+                      "s", "l", "release"])
+
+        def playback(paths, *, max_minutes, stop, on_player,
+                     session_deadline, notify):
+            played.append(paths[0])
+            if len(played) == 1:
+                started.set()
+                self.assertTrue(release.wait(2))
+                self.assertFalse(stop.is_set())
+            return True
+
+        def read(_timeout):
+            self.assertTrue(started.wait(2))
+            action = next(steps, None)
+            if action == "release":
+                release.set()
+                return None
+            return action
+
+        with mock.patch.object(local_music, "music_sink_available", return_value=True), \
+             mock.patch.object(local_music.os, "geteuid", return_value=1000):
+            self.assertTrue(music_session.run_session(
+                self.paths, max_minutes=1, read_command=read,
+                playback=playback, out=self.out.append, require_tty=False))
+        self.assertEqual(played, [self.paths[0], self.paths[0], self.paths[1]])
+        log = "\n".join(self.out)
+        self.assertIn("Undid last appended track", log)
+        self.assertIn("QUEUED NEXT TRACK 1", log)
+        self.assertNotIn("FOLLOWING TRACKS", log)
+        self.assertNotIn("secret-title", log)
+
+    def test_multi_next_max_eight_and_invalid_append_do_not_interrupt(self):
+        actions = ["a2"] * 9 + ["a8", "s", "l", "q"]
+        self.assertFalse(self.run_with(actions))
+        self.assertEqual(self.played, [self.paths[0]])
+        self.assertTrue(self.children[0].terminated)
+        log = "\n".join(self.out)
+        self.assertIn("Pending queue full (8 tracks)", log)
+        self.assertIn("Append number outside this selected queue", log)
+        self.assertIn("FOLLOWING TRACKS 2, 2, 2, 2, 2, 2, 2", log)
+        self.assertNotIn("secret-title", log)
+
+    def test_multi_next_end_navigation_and_clear_take_priority(self):
+        self.assertFalse(self.run_with(["a2", "a1", "e", "s", "l", "q"]))
+        first = "\n".join(self.out)
+        self.assertIn("Queued-next selection cleared: end-after-current", first)
+        self.assertNotIn("FOLLOWING TRACKS", first)
+        self.out.clear()
+        self.played.clear()
+        self.children.clear()
+        self.assertFalse(self.run_with(["e", "a2", "a1", "n", "s", "q"]))
+        self.assertEqual(self.played, [self.paths[0], self.paths[1]])
+        second = "\n".join(self.out)
+        self.assertIn("End-after-this-track cancelled", second)
+        self.assertIn("Queued-next selection cleared by immediate navigation", second)
+        self.assertNotIn("secret-title", second)
+        self.out.clear()
+        self.played.clear()
+        self.children.clear()
+        self.assertFalse(self.run_with(["a2", "a1", "z", "z", "z", "s", "q"]))
+        self.assertIn("Pending queue already empty", "\n".join(self.out))
+
+    def test_multi_next_command_decoder_and_metadata_reject_bad_values(self):
+        with mock.patch.object(music_session.select, "select",
+                               return_value=([1], [], [])):
+            for raw, expected in (("A2\n", "a2"), ("a1\n", "a1"),
+                                  ("a8\n", "a8"), ("Z\n", "z")):
+                self.assertEqual(music_session.read_terminal_command(
+                    stream=io.StringIO(raw)), expected)
+            for raw in ("a0\n", "a9\n", "a10\n", "a-1\n",
+                        "a1,2\n", "a/secret.wav\n", "zz\n"):
+                self.assertEqual(music_session.read_terminal_command(
+                    stream=io.StringIO(raw)), "?")
+        report = local_music.inspect_playlist(self.paths, max_minutes=1)
+        for bad in (-1, 0, 3, True, "2", 1.0, None):
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                music_session.queue_message(report, 1, queued_next=1,
+                                            queued_after=(bad,))
+        for rest in ((1,) * 8, ("2",), [3], (True,)):
+            with self.subTest(rest=rest), self.assertRaises(ValueError):
+                music_session.status_message(
+                    1, 2, 0, 60, clock=lambda: 1, queued_next=1,
+                    queued_after=rest)
+        with self.assertRaises(ValueError):
+            music_session.queue_message(report, 1, queued_after=(2,))
+        queue = music_session.queue_message(report, 1, queued_next=2,
+                                            queued_after=(1, 2))
+        self.assertIn("Following: track 1, track 2.", queue)
+        self.assertNotIn("secret-title", queue)
+
+    def test_multi_next_never_autoplays_after_actual_player_failure(self):
+        played = []
+        first = threading.Event()
+        fail_now = threading.Event()
+        steps = iter(["a2", "a1", "release"])
+
+        def playback(paths, *, max_minutes, stop, on_player,
+                     session_deadline, notify):
+            played.append(paths[0])
+            first.set()
+            self.assertTrue(fail_now.wait(2))
+            raise RuntimeError("private WAV path must never leak")
+
+        def read(_timeout):
+            self.assertTrue(first.wait(2))
+            choice = next(steps, None)
+            if choice == "release":
+                fail_now.set()
+                return None
+            return choice
+
+        with mock.patch.object(local_music, "music_sink_available", return_value=True), \
+             mock.patch.object(local_music.os, "geteuid", return_value=1000):
+            with self.assertRaisesRegex(RuntimeError, "player failed"):
+                music_session.run_session(
+                    self.paths, max_minutes=1, read_command=read,
+                    playback=playback, out=self.out.append, require_tty=False)
+        self.assertEqual(played, [self.paths[0]])
+        log = "\n".join(self.out)
+        self.assertIn("LOCAL PLAYBACK FAILED", log)
+        self.assertNotIn("private WAV path", log)
+        self.assertNotIn("Playing queued NEXT track", log)
+
 if __name__ == "__main__":
     unittest.main()
