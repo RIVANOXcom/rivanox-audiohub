@@ -107,7 +107,8 @@ const file = raw => ({size:Buffer.byteLength(raw,"utf8"),text:async()=>raw});
   await listeners["report-file:change"]();
   assert.equal(el("pairing-value").textContent, "Known device(s)");
   assert.equal(el("paired-value").textContent, "1");
-  assert.equal(el("usb-value").textContent, "Detected");
+  assert.equal(el("usb-value").textContent, "USB found; route not checked");
+  assert.match(el("advice").textContent,/cannot be verified/);
   assert.equal(el("controller-value").textContent, "Detected");
   assert.equal(el("snapshots-value").textContent, "2");
   assert.equal(el("runtime-value").textContent, "Reported recently");
@@ -116,6 +117,47 @@ const file = raw => ({size:Buffer.byteLength(raw,"utf8"),text:async()=>raw});
   let seen = Object.values(nodes).map(e=>e.textContent).join("\n");
   for(const privateText of ["SECRET-PRIVATE-PHONE","SECRET-PRIVATE-WIFI","DO-NOT-DISPLAY","AA:BB:CC"])
     assert.equal(seen.includes(privateText),false);
+  // Real Pi4 report carries BOTH physical USB detection and direct link
+  // status. A visible device alone must not be presented as a usable
+  // route or audible speaker. No additional cards/buttons are needed.
+  const withLast = changes => JSON.stringify({
+    ...report,
+    snapshots:[report.snapshots[0], {...report.snapshots[1],...changes}]
+  });
+  for(const [route,links,expected] of [
+    [false,0,"USB found; route needs attention"],
+    [true,0,"USB found; route needs attention"],
+    [false,1,"USB found; route needs attention"],
+    [true,1,"Direct link reported (not sound)"],
+    [true,3,"Direct link reported (not sound)"]
+  ]) {
+    el("report-file").files = [file(withLast({
+      usb_audio_route_ready:route,eq_usb_direct_links:links
+    }))];
+    await listeners["report-file:change"]();
+    assert.equal(el("usb-value").textContent,expected);
+    if(route && links)
+      assert.match(el("advice").textContent,/NOT verified/);
+    else
+      assert.match(el("advice").textContent,/Do not assume sound/);
+  }
+  // Stale runtime cannot claim an active route even if old true flags
+  // remain in a synthetic report.
+  el("report-file").files = [file(withLast({
+    runtime_status:"unavailable_or_stale",
+    usb_audio_route_ready:true,eq_usb_direct_links:1
+  }))];
+  await listeners["report-file:change"]();
+  assert.equal(el("usb-value").textContent,"USB found; route not checked");
+  el("report-file").files = [file(withLast({
+    usb_audio_detected:false,
+    usb_audio_route_ready:true,eq_usb_direct_links:1
+  }))];
+  await listeners["report-file:change"]();
+  assert.equal(el("usb-value").textContent,"USB device not reported");
+  // Return to compatible old reports before cross-language checks.
+  el("report-file").files = [file(good)];
+  await listeners["report-file:change"]();
   // Changing browser locale re-renders a previously sanitized snapshot.
   el("language").value = "de";
   listeners["language:change"]();
@@ -127,6 +169,7 @@ const file = raw => ({size:Buffer.byteLength(raw,"utf8"),text:async()=>raw});
     listeners["language:change"]();
     assert.equal(document.documentElement.lang,language);
     assert.notEqual(el("pairing-value").textContent,"—");
+    assert.notEqual(el("usb-value").textContent, "undefined");
   }
   // Malicious or unsupported files must clear stale rendered result.
   for(const [reason,bad] of [
@@ -138,6 +181,10 @@ const file = raw => ({size:Buffer.byteLength(raw,"utf8"),text:async()=>raw});
     ["missing snapshots", JSON.stringify({...report,snapshots:[]})],
     ["invalid observation time", JSON.stringify({...report,snapshots:[{...report.snapshots[1],
       seconds_since_probe_start:-1}]})],
+    ["route not boolean",withLast({usb_audio_route_ready:"true",eq_usb_direct_links:1})],
+    ["missing direct count",withLast({usb_audio_route_ready:true})],
+    ["huge direct count",withLast({usb_audio_route_ready:true,eq_usb_direct_links:999})],
+    ["negative direct count",withLast({usb_audio_route_ready:true,eq_usb_direct_links:-1})],
     ["false Wi-Fi status", JSON.stringify({...report,phone_wifi_provisioned:true})],
     ["oversized", "x".repeat(5000)]
   ]){
