@@ -37,6 +37,7 @@ usage() {
     'Also: u=pause/resume, m=repeat, e=finish current WAV then stop, n=next, q=stop now.' \
     'Pending tracks: a1-a8=append selected WAV (max 8), z=undo last, kN=replaces pending.' \
     'Use l for pending slots: d1-d8=remove SLOT, f1-f8=move SLOT to NEXT (no cut).' \
+    'g=finish all pending tracks then stop naturally; g again cancels, e stops after CURRENT.' \
     'Queue is temporary and anonymous; manual navigation, ending, stop, deadline or failure take priority.' \
     'The end-after-track switch is local and temporary; navigation cancels it, session deadline still applies.' \
     'If our own player fails, next/replay/jump stop safely and never claim more tracks played.' \
