@@ -1580,6 +1580,112 @@ class GuidedFirstUseTests(unittest.TestCase):
         self.assertNotIn("private-song", "\n".join(self.messages))
         self.assertIn("separate exact PLAY", "\n".join(self.messages))
 
+    def test_recheck_after_usb_reconnect_then_manual_speaker_guide(self):
+        """A missing USB route can recover quietly without restarting first-use."""
+        states = iter((False, True))
+        replies = iter(("RECHECK", "SPEAKER"))
+        def preflight(*, out):
+            self.called.append("preflight")
+            return next(states)
+        def speaker(*, out):
+            self.called.append("speaker")
+            return True
+        with mock.patch.object(local_music, "sys") as console, \
+             mock.patch.object(local_music.os, "geteuid", return_value=1000):
+            console.stdin.isatty.return_value = True
+            console.stdout.isatty.return_value = True
+            ok = local_music.guided_first_use(
+                str(self.folder), read_line=replies.__next__,
+                out=self.messages.append, preflight=preflight,
+                speaker=speaker, album=lambda *_a, **_k:
+                self.fail("WAV player must not start"))
+        self.assertTrue(ok)
+        self.assertEqual(self.called, ["preflight", "preflight", "speaker"])
+        text = "\n".join(self.messages)
+        self.assertIn("SILENT RECHECK 1/2", text)
+        self.assertIn("MANUAL TRY AVAILABLE", text)
+        self.assertIn("fresh PLAY", text)
+        self.assertNotIn("private-song", text)
+
+    def test_recheck_after_private_wav_arrives_enables_quiet_music_choice(self):
+        """Operator may finish copying owned WAVs before requesting a retry."""
+        self.called.clear()
+        def reader():
+            if not self.called:
+                self.called.append("read-recheck")
+                self.add_wav()
+                return "RECHECK"
+            return "MUSIC"
+        def preflight(*, out):
+            return True
+        def album(folder, **kw):
+            self.called.append(("album", folder, kw))
+            return True
+        with mock.patch.object(local_music, "sys") as console, \
+             mock.patch.object(local_music.os, "geteuid", return_value=1000):
+            console.stdin.isatty.return_value = True
+            console.stdout.isatty.return_value = True
+            ok = local_music.guided_first_use(
+                str(self.folder), read_line=reader,
+                out=self.messages.append, preflight=preflight,
+                speaker=lambda **kw: self.fail("No speaker PLAY requested"),
+                album=album)
+        self.assertTrue(ok)
+        self.assertEqual(self.called[0], "read-recheck")
+        self.assertEqual(self.called[1][0], "album")
+        self.assertEqual(self.called[1][2]["level"], "quiet")
+        self.assertEqual(self.called[1][2]["max_minutes"], 5)
+        text = "\n".join(self.messages)
+        self.assertIn("NO SUPPORTED WAV TRACKS", text)
+        self.assertIn("private WAV picker: AVAILABLE", text)
+        self.assertNotIn("private-song.wav", text)
+
+    def test_recheck_has_strict_two_attempt_limit_without_audio(self):
+        """Repeated RECHECK cannot create an unbounded terminal or player loop."""
+        invoked = []
+        replies = iter(("RECHECK", "RECHECK", "RECHECK"))
+        def never_ready(*, out):
+            invoked.append("preflight")
+            return False
+        with mock.patch.object(local_music, "sys") as console, \
+             mock.patch.object(local_music.os, "geteuid", return_value=1000):
+            console.stdin.isatty.return_value = True
+            console.stdout.isatty.return_value = True
+            ok = local_music.guided_first_use(
+                str(self.folder), read_line=replies.__next__,
+                out=self.messages.append, preflight=never_ready,
+                speaker=lambda **kw: self.fail("No speaker player"),
+                album=lambda *_a, **_k: self.fail("No WAV player"))
+        self.assertFalse(ok)
+        self.assertEqual(invoked, ["preflight"] * 3)
+        self.assertIn("RECHECK limit reached", "\n".join(self.messages))
+        self.assertIn("No audio started", "\n".join(self.messages))
+
+    def test_disconnected_or_closed_terminal_during_recheck_cancels(self):
+        for error in (EOFError, KeyboardInterrupt, StopIteration, OSError):
+            with self.subTest(error=error):
+                self.messages.clear()
+                self.called.clear()
+                calls = iter(("RECHECK",))
+                def reader():
+                    try:
+                        return next(calls)
+                    except StopIteration:
+                        raise error()
+                with mock.patch.object(local_music, "sys") as console, \
+                     mock.patch.object(local_music.os, "geteuid",
+                                       return_value=1000):
+                    console.stdin.isatty.return_value = True
+                    console.stdout.isatty.return_value = True
+                    ok = local_music.guided_first_use(
+                        str(self.folder), read_line=reader,
+                        out=self.messages.append,
+                        preflight=lambda **kw: False,
+                        speaker=lambda **kw: self.fail("No PLAY after EOF"),
+                        album=lambda *_a, **_k: self.fail("No WAV after EOF"))
+                self.assertFalse(ok)
+                self.assertIn("No sound started", "\n".join(self.messages))
+
     def test_missing_private_sink_disables_both_audio_paths(self):
         self.add_wav()
         for choice in ("SPEAKER", "MUSIC"):
