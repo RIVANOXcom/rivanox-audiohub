@@ -268,7 +268,9 @@ class ReleaseBundlePreflightTests(unittest.TestCase):
 
     def test_viewer_tampering_and_missing_provenance_are_blocked(self):
         viewer = self.add_real_viewer()
-        viewer.write_bytes(viewer.read_bytes() + b"modified")
+        changed = bytearray(viewer.read_bytes())
+        changed[-1] ^= 1  # Same byte count: test actual SHA mismatch, not size.
+        viewer.write_bytes(changed)
         with self.assertRaisesRegex(ValueError, "viewer checksum"):
             self.audit()
         self.add_real_viewer()
