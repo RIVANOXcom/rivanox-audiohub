@@ -132,11 +132,19 @@ def inspect_playlist(paths, *, max_minutes=15):
 
 
 def music_sink_available(*, capture=bounded_command_output):
+    """Check the actual private-to-USB playback prerequisites in one snapshot.
+
+    A virtual music sink alone does not make audible USB playback possible.
+    All real player entrypoints recheck this just before spawning pw-cat, so
+    unplugging the speaker after a guided preflight cannot start a misleading
+    audio session. Neither query nor output prints private device identities.
+    """
     result = capture(["pw-dump"], timeout=5, max_bytes=discovery.MAX_PIPEWIRE_GRAPH_BYTES)
     if result is None or result.returncode != 0:
         return False
     nodes = discovery.pipewire_nodes(result.stdout)
-    return TARGET in discovery.virtual_sinks(nodes)
+    return (TARGET in discovery.virtual_sinks(nodes)
+            and discovery.choose_usb_output(nodes) is not None)
 
 
 def _play_one(path, metadata, *, deadline, spawn, stop=None, on_player=None,
