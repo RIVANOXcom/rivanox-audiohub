@@ -29,10 +29,13 @@ The first step checks the already configured private PipeWire music input and
 local player tool, then silently and anonymously diagnoses the WAV folder
 (maximum 256 entries, no media-name display). An empty new SD is normal.
 **No audio starts during these checks.** The first-sound step now
-also checks a **real, unambiguous USB speaker output** in the same bounded
-PipeWire snapshot as the private music input, reusing the shipping router's
-USB selector. A virtual `audiohub.music` sink and installed `pw-cat` alone
-are no longer sufficient to mark speaker playback ready. If USB is missing
+also checks a **real, unambiguous USB speaker output AND an actual direct
+USB-only music EQ output link** in the same bounded PipeWire snapshot as
+the private music input, reusing the shipping router's USB selector and
+the existing guarded input soundcheck's link policy. A virtual
+`audiohub.music` sink, installed `pw-cat`, or physically present Edifier
+without a proven music EQ-to-USB link is NOT sufficient for readiness.
+A competing HDMI/default-output EQ link is refused. If USB is missing
 or ambiguous, check the Edifier power, cable and USB connection; never fall
 back to HDMI or the default output. No private USB identifiers are printed.
 A detected USB sink is **not proof of audible sound or safe physical volume**.
