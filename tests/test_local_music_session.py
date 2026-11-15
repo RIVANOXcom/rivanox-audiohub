@@ -1768,5 +1768,190 @@ class MusicSessionTests(unittest.TestCase):
                 1, 2, 0, 60, clock=lambda: 1,
                 end_after_track=True, end_after_plan=True)
 
+    def test_last_edit_undo_restores_deleted_middle_and_natural_play_order(self):
+        played = []
+        first = threading.Event()
+        release = threading.Event()
+        actions = iter(["k2", "a1", "a2", "d2", "b", "l", "s", "release"])
+
+        def playback(paths, *, max_minutes, stop, on_player,
+                     session_deadline, notify):
+            played.append(paths[0])
+            if len(played) == 1:
+                first.set()
+                self.assertTrue(release.wait(2))
+                self.assertFalse(stop.is_set())
+            return True
+
+        def read(_timeout):
+            self.assertTrue(first.wait(2))
+            cmd = next(actions, None)
+            if cmd == "release":
+                release.set()
+                return None
+            return cmd
+
+        with mock.patch.object(local_music, "music_sink_available",
+                               return_value=True), \
+             mock.patch.object(local_music.os, "geteuid",
+                               return_value=1000):
+            self.assertTrue(music_session.run_session(
+                self.paths, max_minutes=1, read_command=read,
+                playback=playback, out=self.out.append, require_tty=False))
+        self.assertEqual(played, [self.paths[0], self.paths[1],
+                                  self.paths[0], self.paths[1]])
+        log = "\n".join(self.out)
+        self.assertIn("Removed pending slot 2", log)
+        self.assertIn("Restored previous pending queue edit; 3 planned", log)
+        self.assertIn("PENDING SLOTS 1=track 2, 2=track 1, 3=track 2", log)
+        self.assertNotIn("secret-title", log)
+        self.assertNotIn(str(self.dir), log)
+
+    def test_last_edit_undo_reverts_promote_replace_and_queue_capacity(self):
+        self.assertFalse(self.run_with([
+            "k1", "a2", "a1", "f2", "b", "l", "k2", "b", "l", "q"]))
+        log = "\n".join(self.out)
+        self.assertIn("Moved pending slot 2 to NEXT", log)
+        self.assertIn("Restored previous pending queue edit; 3 planned", log)
+        self.assertEqual(log.count(
+            "Pending slots (1=NEXT): 1=track 1, 2=track 2, 3=track 1."), 2)
+        self.assertEqual(self.played, [self.paths[0]])
+        self.assertTrue(self.children[0].terminated)
+
+    def test_last_edit_undo_restores_cleared_end_plan_then_finishes(self):
+        played = []
+        started = threading.Event()
+        release = threading.Event()
+        commands = iter(["k2", "a1", "g", "k0", "b", "l", "release"])
+
+        def playback(paths, *, max_minutes, stop, on_player,
+                     session_deadline, notify):
+            played.append(paths[0])
+            if len(played) == 1:
+                started.set()
+                self.assertTrue(release.wait(2))
+            return True
+
+        def read(_timeout):
+            self.assertTrue(started.wait(2))
+            step = next(commands, None)
+            if step == "release":
+                release.set()
+                return None
+            return step
+
+        with mock.patch.object(local_music, "music_sink_available",
+                               return_value=True), \
+             mock.patch.object(local_music.os, "geteuid", return_value=1000):
+            self.assertTrue(music_session.run_session(
+                self.paths, max_minutes=1, read_command=read,
+                playback=playback, out=self.out.append, require_tty=False))
+        self.assertEqual(played, [self.paths[0], self.paths[1], self.paths[0]])
+        log = "\n".join(self.out)
+        self.assertIn("End-after-pending-plan cancelled by clear-all", log)
+        self.assertIn("Restored previous pending queue edit; 2 planned", log)
+        self.assertIn("END AFTER PENDING PLAN ARMED", log)
+        self.assertIn("End-after-pending-plan completed", log)
+
+    def test_last_edit_undo_restores_undone_append_and_empty_plan(self):
+        self.assertFalse(self.run_with(["k2", "a1", "z", "b", "l", "q"]))
+        self.assertIn("Pending slots (1=NEXT): 1=track 2, 2=track 1.", "\n".join(self.out))
+        self.out.clear()
+        self.played.clear()
+        self.children.clear()
+        self.assertFalse(self.run_with(["k2", "d1", "b", "l", "q"]))
+        self.assertIn("Pending slots (1=NEXT): 1=track 2.", "\n".join(self.out))
+        self.assertTrue(self.children[0].terminated)
+
+    def test_last_edit_undo_is_single_step_noop_and_invalid_edits_do_not_replace_it(self):
+        self.assertFalse(self.run_with([
+            "b", "k2", "a1", "f8", "d8", "b", "b", "s", "l", "q"]))
+        log = "\n".join(self.out)
+        self.assertGreaterEqual(log.count("No pending queue edit to undo"), 2)
+        self.assertIn("Pending slot 8 unavailable", log)
+        self.assertIn("PENDING SLOTS 1=track 2", log)
+        self.assertNotIn("FOLLOWING TRACKS", log)
+        self.assertNotIn(str(self.dir), log)
+
+    def test_last_edit_undo_cannot_revive_after_end_policy_override(self):
+        for steps in (["k2", "a1", "e", "b", "s", "q"],
+                      ["k2", "g", "a1", "g", "b", "s", "q"]):
+            with self.subTest(steps=steps):
+                self.out.clear()
+                self.played.clear()
+                self.children.clear()
+                self.assertFalse(self.run_with(steps))
+                log = "\n".join(self.out)
+                self.assertIn("No pending queue edit to undo", log)
+                self.assertNotIn("Restored previous pending queue edit", log)
+                self.assertEqual(self.played, [self.paths[0]])
+                self.assertTrue(self.children[0].terminated)
+
+    def test_last_edit_undo_expires_at_track_boundary(self):
+        played = []
+        second = threading.Event()
+        release_first = threading.Event()
+        first = threading.Event()
+        steps = iter(["k2", "release_first"])
+        after_second = [False]
+
+        def playback(paths, *, max_minutes, stop, on_player,
+                     session_deadline, notify):
+            played.append(paths[0])
+            if len(played) == 1:
+                first.set()
+                self.assertTrue(release_first.wait(2))
+                return True
+            if len(played) == 2:
+                child = FakeChild()
+                on_player(child)
+                second.set()
+                while not stop.wait(0.002):
+                    pass
+                raise InterruptedError("ended by operator")
+            return True
+
+        def read(_timeout):
+            self.assertTrue(first.wait(2))
+            action = next(steps, None)
+            if action == "release_first":
+                release_first.set()
+                return None
+            if action is not None:
+                return action
+            if second.is_set():
+                if not after_second[0]:
+                    after_second[0] = True
+                    return "b"
+                return "q"
+            return None
+
+        with mock.patch.object(local_music, "music_sink_available",
+                               return_value=True), \
+             mock.patch.object(local_music.os, "geteuid", return_value=1000):
+            self.assertFalse(music_session.run_session(
+                self.paths, max_minutes=1, playback=playback,
+                read_command=read, out=self.out.append, require_tty=False))
+        self.assertEqual(played, [self.paths[0], self.paths[1]])
+        self.assertIn("No pending queue edit to undo", "\n".join(self.out))
+        self.assertNotIn("Restored previous pending queue edit", "\n".join(self.out))
+
+    def test_last_edit_undo_is_bounded_local_command_and_never_leaks_private_music(self):
+        with mock.patch.object(music_session.select, "select",
+                               return_value=([1], [], [])):
+            self.assertEqual(music_session.read_terminal_command(
+                stream=io.StringIO("b\n")), "b")
+            self.assertEqual(music_session.read_terminal_command(
+                stream=io.StringIO("B\n")), "b")
+            for raw in ("bb\n", "b1\n", "b/private.wav\n", "b2,3\n"):
+                self.assertEqual(music_session.read_terminal_command(
+                    stream=io.StringIO(raw)), "?")
+        self.assertFalse(self.run_with(["k2", "a1", "d1", "b", "l", "q"]))
+        log = "\n".join(self.out)
+        self.assertIn("Restored previous pending queue edit", log)
+        self.assertNotIn("secret-title", log)
+        self.assertNotIn(str(self.dir), log)
+
+
 if __name__ == "__main__":
     unittest.main()

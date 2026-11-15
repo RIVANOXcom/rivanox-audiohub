@@ -24,7 +24,7 @@ COMMAND_HELP = ("Enter: [u] pause/resume, [m] repeat off/track/all, [s] status, 
                 "[l] queue, [e] end after current (toggle), "
                 "[g] finish after queued plan (toggle), "
                 "[k1-k8] replace NEXT, [a1-a8] append (max 8), "
-                "[z] undo last pending, [k0] clear pending, "
+                "[z] remove last pending, [b] undo last queue edit, [k0] clear pending, "
                 "[d1-d8] delete pending SLOT, [f1-f8] move SLOT to NEXT, "
                 "[n] next, [p] previous, [r] replay, "
                 "[1-8] jump, [q] quit now, [h] help.")
@@ -57,7 +57,7 @@ def read_terminal_command(timeout=POLL_SECONDS, *, stream=None):
     if len(line) > 16:
         return "?"
     value = line.strip().lower()
-    allowed = ("u", "m", "s", "l", "e", "g", "n", "p", "r", "q", "h", "z",
+    allowed = ("u", "m", "s", "l", "e", "g", "n", "p", "r", "q", "h", "z", "b",
                "1", "2", "3", "4", "5", "6", "7", "8",
                "k0", "k1", "k2", "k3", "k4", "k5", "k6", "k7", "k8",
                "a1", "a2", "a3", "a4", "a5", "a6", "a7", "a8",
@@ -215,7 +215,16 @@ def run_session(paths, *, max_minutes=15, read_command=read_terminal_command,
     end_after_plan = False  # stop naturally after planned queue; never persists
     queued_next = None  # first anonymous deferred choice; no saved files
     queued_after = []  # at most 7 more choices, only during this session
+
+    def planned_snapshot():
+        # Only immutable anonymous numbers/end flags, never paths or player.
+        return (queued_next, tuple(queued_after), end_after_track, end_after_plan)
+
     while position <= report["files"]:
+        # One-level edit undo is valid ONLY while the SAME owned WAV plays.
+        # Once this track ends/navigates, never revive a consumed pending
+        # track, stale selection or an old stop-after-plan setting.
+        undo_pending = None
         path = paths[position - 1]
         if clock() >= deadline:
             out("Session time limit reached. No new track started.")
@@ -373,6 +382,7 @@ def run_session(paths, *, max_minutes=15, read_command=read_terminal_command,
                 elif command == "h":
                     out(COMMAND_HELP)
                 elif command == "e":
+                    undo_pending = None  # stronger end intent invalidates edit undo
                     end_after_track = not end_after_track
                     if end_after_track and end_after_plan:
                         end_after_plan = False
@@ -389,6 +399,7 @@ def run_session(paths, *, max_minutes=15, read_command=read_terminal_command,
                         "End-after-track cancelled; queue and repeat continue. "
                         "No settings saved.")
                 elif command == "g":
+                    undo_pending = None  # changed stop policy invalidates edit undo
                     if end_after_plan:
                         end_after_plan = False
                         out("End-after-pending-plan cancelled; normal "
@@ -405,23 +416,29 @@ def run_session(paths, *, max_minutes=15, read_command=read_terminal_command,
                 elif command in ("k0", "k1", "k2", "k3", "k4",
                                  "k5", "k6", "k7", "k8"):
                     if command == "k0":
+                        before_edit = planned_snapshot()
                         queued_next = None
                         queued_after.clear()
                         if end_after_plan:
                             end_after_plan = False
                             out("End-after-pending-plan cancelled by clear-all.")
+                        if planned_snapshot() != before_edit:
+                            undo_pending = before_edit
                         out("Queued-next selection cleared; normal queue "
                             "and repeat apply. Current WAV uninterrupted.")
                     elif int(command[1]) > report["files"]:
                         out("Next-track number outside this selected queue. "
                             "Current WAV and next selection unchanged.")
                     else:
+                        before_edit = planned_snapshot()
                         queued_next = int(command[1])
                         queued_after.clear()  # kN replaces the full pending plan
                         if end_after_track:
                             end_after_track = False
                             out("End-after-this-track cancelled: another "
                                 "next track was explicitly selected.")
+                        if planned_snapshot() != before_edit:
+                            undo_pending = before_edit
                         out("Queued NEXT: track " + str(queued_next) +
                             " after this WAV ends naturally. Current owned "
                             "player uninterrupted; private titles hidden.")
@@ -435,6 +452,7 @@ def run_session(paths, *, max_minutes=15, read_command=read_terminal_command,
                         out("Pending queue full (8 tracks); unchanged. "
                             "Use z to undo last or k0 to clear.")
                     else:
+                        before_edit = planned_snapshot()
                         if queued_next is None:
                             queued_next = number
                         else:
@@ -443,11 +461,13 @@ def run_session(paths, *, max_minutes=15, read_command=read_terminal_command,
                             end_after_track = False
                             out("End-after-this-track cancelled: a following "
                                 "track was explicitly appended.")
+                        undo_pending = before_edit
                         out("Appended deferred track " + str(number) +
                             "; " + str(1 + len(queued_after)) +
                             " pending. Current WAV uninterrupted; "
                             "private titles hidden.")
                 elif command == "z":
+                    before_edit = planned_snapshot()
                     if queued_after:
                         queued_after.pop()
                         out("Undid last appended track. " +
@@ -462,6 +482,8 @@ def run_session(paths, *, max_minutes=15, read_command=read_terminal_command,
                             "normal order and repeat resume.")
                     else:
                         out("Pending queue already empty; no playback changed.")
+                    if planned_snapshot() != before_edit:
+                        undo_pending = before_edit
                 elif command in ("d1", "d2", "d3", "d4", "d5",
                                  "d6", "d7", "d8", "f1", "f2", "f3",
                                  "f4", "f5", "f6", "f7", "f8"):
@@ -475,6 +497,7 @@ def run_session(paths, *, max_minutes=15, read_command=read_terminal_command,
                             " unavailable; no change to the queue or "
                             "current owned player.")
                     else:
+                        before_edit = planned_snapshot()
                         number = pending.pop(slot - 1)
                         if command[0] == "f":
                             pending.insert(0, number)
@@ -493,10 +516,26 @@ def run_session(paths, *, max_minutes=15, read_command=read_terminal_command,
                                 "Current WAV uninterrupted.")
                         queued_next = pending[0] if pending else None
                         queued_after = pending[1:]
+                        if planned_snapshot() != before_edit:
+                            undo_pending = before_edit
                         if end_after_plan and queued_next is None:
                             end_after_plan = False
                             out("End-after-pending-plan cancelled: "
                                 "last queued choice removed.")
+                elif command == "b":
+                    if undo_pending is None:
+                        out("No pending queue edit to undo for this playing WAV; "
+                            "current audio and pending selections unchanged.")
+                    else:
+                        restored = undo_pending
+                        undo_pending = None  # one step, not a history stack
+                        queued_next, following, end_after_track, end_after_plan = restored
+                        queued_after = list(following)
+                        out("Restored previous pending queue edit; " +
+                            str((1 if queued_next is not None else 0) +
+                                len(queued_after)) +
+                            " planned WAV(s), original end policy restored. "
+                            "Current owned WAV uninterrupted.")
                 elif command == "m":
                     repeat_mode = next_repeat_mode(repeat_mode)
                     out("Local repeat mode: " + repeat_mode.upper()
