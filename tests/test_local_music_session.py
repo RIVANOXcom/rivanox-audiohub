@@ -666,6 +666,136 @@ class MusicSessionTests(unittest.TestCase):
                 self.assertRaises(ValueError, music_session.status_message,
                                   1, 2, 0, 60, repeat_mode=bad)
 
+    def test_end_after_current_finishes_naturally_without_next_or_repeat(self):
+        for repeat_commands in ([], ["m"], ["m", "m"]):
+            with self.subTest(repeat_commands=repeat_commands):
+                self.out.clear()
+                tracks = []
+                active = threading.Event()
+                release = threading.Event()
+                commands = iter([*repeat_commands, "e", "s", "l", "release"])
+                def playback(paths, *, max_minutes, stop, session_deadline,
+                             on_player, notify):
+                    tracks.append(paths[0])
+                    active.set()
+                    self.assertTrue(release.wait(2), "natural player not released")
+                    self.assertFalse(stop.is_set(), "player was cut off")
+                    return True
+                def read(_timeout):
+                    self.assertTrue(active.wait(2))
+                    step = next(commands, None)
+                    if step == "release":
+                        release.set()
+                        return None
+                    return step
+                with mock.patch.object(local_music, "music_sink_available",
+                                       return_value=True), \
+                     mock.patch.object(local_music.os, "geteuid", return_value=1000):
+                    self.assertTrue(music_session.run_session(
+                        self.paths, read_command=read, playback=playback,
+                        out=self.out.append, max_minutes=1, require_tty=False))
+                self.assertEqual(tracks, [self.paths[0]])
+                message = "\n".join(self.out)
+                self.assertIn("END AFTER THIS TRACK ARMED", message)
+                self.assertIn("End after current track ARMED", message)
+                self.assertIn("End-after-track completed after natural player finish",
+                              message)
+                self.assertNotIn("Track 2/2 finished", message)
+                self.assertIn("Local music session ended", message)
+                self.assertNotIn("secret-title", message)
+                self.assertNotIn(str(self.dir), message)
+
+    def test_end_after_track_toggle_cancel_restores_automatic_next(self):
+        self.out.clear()
+        tracks = []
+        ready = threading.Event()
+        release = threading.Event()
+        operations = iter(["e", "e", "release"])
+        def playback(paths, *, max_minutes, stop, session_deadline,
+                     on_player, notify):
+            tracks.append(paths[0])
+            if len(tracks) == 1:
+                ready.set()
+                self.assertTrue(release.wait(2))
+            return True
+        def read(_timeout):
+            self.assertTrue(ready.wait(2))
+            step = next(operations, None)
+            if step == "release":
+                release.set()
+                return None
+            return step
+        with mock.patch.object(local_music, "music_sink_available",
+                               return_value=True), \
+             mock.patch.object(local_music.os, "geteuid", return_value=1000):
+            self.assertTrue(music_session.run_session(
+                self.paths, read_command=read, playback=playback,
+                out=self.out.append, max_minutes=1, require_tty=False))
+        self.assertEqual(tracks, self.paths)
+        message = "\n".join(self.out)
+        self.assertIn("End-after-track cancelled; queue and repeat continue",
+                      message)
+        self.assertNotIn("End-after-track completed", message)
+
+    def test_navigation_disarms_end_after_track_before_new_playback(self):
+        self.out.clear()
+        commands = iter(["e", "n", "q"])
+        def read(_timeout):
+            return next(commands, None)
+        with mock.patch.object(local_music, "music_sink_available",
+                               return_value=True), \
+             mock.patch.object(local_music.os, "geteuid", return_value=1000):
+            self.assertFalse(music_session.run_session(
+                self.paths, read_command=read,
+                playback=self.waiting_playback, out=self.out.append,
+                max_minutes=1, require_tty=False))
+        self.assertEqual(self.played, self.paths)
+        self.assertTrue(all(c.terminated for c in self.children))
+        output = "\n".join(self.out)
+        self.assertIn("End-after-track cancelled by manual navigation", output)
+        self.assertIn("Music track 2/2", output)
+        self.assertNotIn("End-after-track completed", output)
+        self.assertNotIn(str(self.dir), output)
+
+    def test_end_after_track_never_overrides_immediate_stop_or_pause(self):
+        self.assertFalse(self.run_paused(["e", "u", "s", "q"]))
+        self.assertTrue(self.children[0].terminated)
+        self.assertEqual(self.children[0].sent_signals,
+                         [signal.SIGSTOP, signal.SIGCONT])
+        output = "\n".join(self.out)
+        self.assertIn("END AFTER THIS TRACK", output)
+        self.assertIn("PAUSED", output)
+        self.assertIn("Music session stopped by operator", output)
+        self.assertNotIn("End-after-track completed", output)
+        self.assertNotIn("secret-title", output)
+
+    def test_end_after_track_decoder_and_status_queue_stay_anonymous(self):
+        with mock.patch.object(music_session.select, "select",
+                               return_value=([1], [], [])):
+            self.assertEqual(music_session.read_terminal_command(
+                stream=io.StringIO("E\n")), "e")
+            self.assertEqual(music_session.read_terminal_command(
+                stream=io.StringIO("secret-track-name\n")), "?")
+        status = music_session.status_message(
+            1, 2, 0, 60, clock=lambda: 5, end_after_track=True)
+        self.assertIn("END AFTER THIS TRACK", status)
+        self.assertNotIn("END AFTER", music_session.status_message(
+            1, 2, 0, 60, clock=lambda: 5))
+        report = local_music.inspect_playlist(self.paths, max_minutes=1)
+        queue = music_session.queue_message(report, 1, end_after_track=True)
+        self.assertIn("End after current track ARMED.", queue)
+        self.assertNotIn("secret-title", queue)
+        self.assertNotIn(str(self.dir), queue)
+        for wrong in ("true", None, 1):
+            with self.subTest(wrong=wrong):
+                with self.assertRaises(ValueError):
+                    music_session.status_message(
+                        1, 2, 0, 60, clock=lambda: 5,
+                        end_after_track=wrong)
+                with self.assertRaises(ValueError):
+                    music_session.queue_message(
+                        report, 1, end_after_track=wrong)
+
     def test_repeat_track_restarts_after_natural_completion_and_quit_stops(self):
         first = threading.Event()
         release = threading.Event()

@@ -216,9 +216,21 @@ During playback, type a command and press **Enter**:
 | `p` + Enter | Stop the current player and go to the previous selected track; on track 1, restart track 1 |
 | `r` + Enter | Restart the current selected track from its beginning |
 | `1`–`8` + Enter | Jump directly to an existing numbered track in the selected queue (invalid positions do not interrupt playback) |
-| `q` + Enter | Stop the current owned player and exit the session |
+| `e` + Enter | Toggle **end after this track**: let the currently playing owned WAV finish naturally, then stop without playing another, even if repeat is active |
+| `q` + Enter | **Stop immediately**; terminate only the current owned player and exit |
 | `h` + Enter | Repeat the short help text |
 | Ctrl+C | Emergency local interruption; owned child stopped in cleanup |
+
+The `e` mode is local and temporary. Press `e` once to arm it, and
+again to cancel. It is shown in `s` status and `l` anonymous queue
+reports while armed. It does not pause, shorten or restart the current
+WAV; when that player finishes normally, AudioHub stops **before**
+starting any next/repeated track. It overrides repeat-track/repeat-all
+but **not** `q` or the original session deadline. Choosing `n`,
+`p`, `r` or a numbered jump explicitly disarms it and tells the
+operator; this prevents an unexpectedly early stop of a newly selected
+track. A playback error is still an error, not a claimed normal finish.
+No timer or stop-after-track choice is saved or sent over a network.
 
 The track is displayed only as `track X/Y`, with no private title or
 file path. The session timer still counts **wall-clock time**, including

@@ -20,8 +20,9 @@ from . import local_music
 POLL_SECONDS = 0.15
 QUIT_JOIN_SECONDS = 3.0
 COMMAND_HELP = ("Enter: [u] pause/resume, [m] repeat off/track/all, [s] status, "
-                "[l] queue, [n] next, [p] previous, [r] replay, "
-                "[1-8] jump, [q] quit, [h] help.")
+                "[l] queue, [e] end after current track (toggle), "
+                "[n] next, [p] previous, [r] replay, "
+                "[1-8] jump, [q] quit now, [h] help.")
 
 
 def next_repeat_mode(mode):
@@ -51,14 +52,14 @@ def read_terminal_command(timeout=POLL_SECONDS, *, stream=None):
     if len(line) > 16:
         return "?"
     value = line.strip().lower()
-    return value if value in ("u", "m", "s", "l", "n", "p", "r", "q", "h",
+    return value if value in ("u", "m", "s", "l", "e", "n", "p", "r", "q", "h",
                               "1", "2", "3", "4", "5", "6", "7", "8") else "?"
 
 
 def status_message(position, count, started_at, deadline, *, clock=time.monotonic,
-                   paused=False, repeat_mode="off"):
-    if repeat_mode not in ("off", "track", "all"):
-        raise ValueError("Unknown local repeat mode")
+                   paused=False, repeat_mode="off", end_after_track=False):
+    if repeat_mode not in ("off", "track", "all") or type(end_after_track) is not bool:
+        raise ValueError("Unknown local repeat/end mode")
     now = clock()
     elapsed = max(0, int(now - started_at))
     remaining = max(0, math.ceil(deadline - now))
@@ -67,6 +68,7 @@ def status_message(position, count, started_at, deadline, *, clock=time.monotoni
             + " | session remaining " + str(remaining) + " s"
             + (" | PAUSED (owned player only)" if paused else "")
             + (" | repeating " + repeat_mode if repeat_mode != "off" else "")
+            + (" | END AFTER THIS TRACK" if end_after_track else "")
             + " | local only; audio not physically verified.")
 
 
@@ -97,14 +99,15 @@ def track_progress_message(duration_ms, elapsed_seconds, *, paused=False):
             ". Owned-player clock only, not measured PCM position or sound.")
 
 
-def queue_message(report, position, *, repeat_mode="off"):
+def queue_message(report, position, *, repeat_mode="off",
+                  end_after_track=False):
     """Anonymous user-facing snapshot of the selected local music queue.
 
     The displayed durations come only from prechecked WAV headers, not
     from hardware playback, and never include filenames or identities.
     """
-    if repeat_mode not in ("off", "track", "all"):
-        raise ValueError("Unknown local repeat mode")
+    if repeat_mode not in ("off", "track", "all") or type(end_after_track) is not bool:
+        raise ValueError("Unknown local repeat/end mode")
     if (not isinstance(report, dict) or
             type(report.get("files")) is not int or
             type(position) is not int or
@@ -124,7 +127,8 @@ def queue_message(report, position, *, repeat_mode="off"):
     return ("Selected WAV queue: track " + str(position) + "/" +
             str(report["files"]) + "; durations (NOT live progress): " +
             ", ".join(chunks) + "; * = selected. No private titles."
-            + (" Repeat: " + repeat_mode + "." if repeat_mode != "off" else ""))
+            + (" Repeat: " + repeat_mode + "." if repeat_mode != "off" else "")
+            + (" End after current track ARMED." if end_after_track else ""))
 
 
 def run_session(paths, *, max_minutes=15, read_command=read_terminal_command,
@@ -157,6 +161,7 @@ def run_session(paths, *, max_minutes=15, read_command=read_terminal_command,
         + COMMAND_HELP)
     position = 1
     repeat_mode = "off"  # volatile, this session only; never saved
+    end_after_track = False  # one current-track natural ending; never persists
     while position <= report["files"]:
         path = paths[position - 1]
         if clock() >= deadline:
@@ -210,7 +215,8 @@ def run_session(paths, *, max_minutes=15, read_command=read_terminal_command,
                                   daemon=True)
         thread.start()
         out(status_message(position, report["files"], start, deadline,
-                           clock=clock, repeat_mode=repeat_mode))
+                           clock=clock, repeat_mode=repeat_mode,
+                           end_after_track=end_after_track))
 
         def stop_owned_player():
             cancelled.set()
@@ -271,7 +277,8 @@ def run_session(paths, *, max_minutes=15, read_command=read_terminal_command,
                             stopped_time += max(0.0, now - pause_started[0])
                     out(status_message(position, report["files"], start,
                                        deadline, clock=clock, paused=is_paused,
-                                       repeat_mode=repeat_mode))
+                                       repeat_mode=repeat_mode,
+                                       end_after_track=end_after_track))
                     if observed_start is None:
                         out("Track estimate pending until our local player starts. "
                             "No audible hardware output verified.")
@@ -290,13 +297,21 @@ def run_session(paths, *, max_minutes=15, read_command=read_terminal_command,
                             "Owned local music player RESUMED; no settings changed.")
                 elif command == "h":
                     out(COMMAND_HELP)
+                elif command == "e":
+                    end_after_track = not end_after_track
+                    out("END AFTER THIS TRACK ARMED: current owned player "
+                        "continues to its natural finish; no next/repeat track."
+                        if end_after_track else
+                        "End-after-track cancelled; queue and repeat continue. "
+                        "No settings saved.")
                 elif command == "m":
                     repeat_mode = next_repeat_mode(repeat_mode)
                     out("Local repeat mode: " + repeat_mode.upper()
                         + "; limited by the original session deadline.")
                 elif command == "l":
                     out(queue_message(report, position,
-                                      repeat_mode=repeat_mode))
+                                      repeat_mode=repeat_mode,
+                                      end_after_track=end_after_track))
                 elif command in ("n", "p", "r", "q"):
                     requested = command
                     break
@@ -330,6 +345,13 @@ def run_session(paths, *, max_minutes=15, read_command=read_terminal_command,
             return False
         if failures and requested not in ("n", "p", "r") and not (isinstance(requested, tuple) and requested[0] == "jump"):
             raise RuntimeError("Local music player failed; no file paths disclosed")
+        # Explicit navigation selects another playback attempt and disarms
+        # the old-track finish policy, avoiding a surprising premature end.
+        if end_after_track and (requested in ("n", "p", "r") or
+                                (isinstance(requested, tuple) and requested[0] == "jump")):
+            end_after_track = False
+            out("End-after-track cancelled by manual navigation; "
+                "the new track keeps the session deadline.")
         if requested == "n":
             out("Track skipped. No private filename was displayed.")
             position += 1
@@ -346,6 +368,10 @@ def run_session(paths, *, max_minutes=15, read_command=read_terminal_command,
             out("Jumping to selected queue track " + str(position) + ". No filename.")
             continue
         out("Track " + str(position) + "/" + str(report["files"]) + " finished.")
+        if end_after_track:
+            out("End-after-track completed after natural player finish. "
+                "No next or repeated track started; no settings saved.")
+            break
         if repeat_mode == "track":
             out("Repeating current selected track until mode or deadline changes.")
             continue
