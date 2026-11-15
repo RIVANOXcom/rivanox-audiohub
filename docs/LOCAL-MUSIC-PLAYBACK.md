@@ -103,9 +103,11 @@ safe phone/Wi-Fi ownership. Next run `audiohub-music --list` for an
 anonymous numbered preview, or the separately approved
 `audiohub-music --speaker-check` for silent first-sound prerequisites.
 Beyond the first-use precheck, **every actual local speaker signal and WAV PLAY**
-rechecks a current bounded PipeWire graph for both the private
-`audiohub.music` sink and an unambiguous selectable physical USB speaker
-output. This is also enforced for direct WAV playback and each subsequent
+rechecks a current bounded PipeWire graph for the private
+`audiohub.music` sink, one unambiguous selectable physical USB speaker,
+and a **real exclusive `audiohub.music.output` to USB node link**.
+Missing or additional EQ-to-HDMI/default links refuse playback without
+attempting to repair, reroute or print device identifiers. This is also enforced for direct WAV playback and each subsequent
 track of a manual playlist; if the USB output disappears after a prior
 readiness report, the next owned player is refused rather than silently
 playing into an unattached virtual sink or falling back to HDMI/default.
