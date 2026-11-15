@@ -42,7 +42,7 @@ usage() {
     'The playback wizard shows an anonymous list; select numbers, ALL or SHUFFLE.' \
     'PLAY is required separately to start sound; CHANGE revises the queue.' \
     'Every speaker or WAV PLAY rechecks a selectable physical USB output; no HDMI/default fallback.' \
-    'During WAV playback a 3s silent USB watcher stops ONLY our pw-cat on disconnect; no auto-replay.' \
+    'During WAV playback a 3s silent USB watcher stops ONLY our owned player on disconnect; no auto-replay.' \
     'During playback: s=status, l=queue, k1-k8=play selected track next (no cut), k0=clear next.' \
     'Also: u=pause/resume, m=repeat, e=finish current WAV then stop, n=next, q=stop now.' \
     'Pending tracks: a1-a8=append selected WAV (max 8), z=remove last, kN=replaces pending.' \
