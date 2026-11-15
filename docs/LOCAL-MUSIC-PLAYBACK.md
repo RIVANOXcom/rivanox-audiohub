@@ -213,7 +213,9 @@ During playback, type a command and press **Enter**:
 | `s` + Enter | Show current track number, elapsed session time, remaining session limit **and** a separate pause-aware approximate elapsed/remaining time for this WAV (no filenames or identifiers) |
 | `l` + Enter | Show anonymous selected queue order and planned WAV lengths (not live playback progress) |
 | `k1`–`k8` + Enter | Queue that **already selected numbered WAV** to play once **after the current track naturally finishes**, without cutting or restarting current audio |
-| `k0` + Enter | Cancel the temporary queued-next selection; restore regular queue/repeat order |
+| `k0` + Enter | Clear **all** temporary following tracks; restore normal order/repeat |
+| `a1`–`a8` + Enter | Append another **already selected** numbered WAV after the pending choices, without stopping the current track; at most eight total |
+| `z` + Enter | Undo just the **last** pending choice; leave the rest and current WAV untouched |
 | `n` + Enter | Stop just the current owned player, then start the next selected track in order |
 | `p` + Enter | Stop the current player and go to the previous selected track; on track 1, restart track 1 |
 | `r` + Enter | Restart the current selected track from its beginning |
@@ -241,6 +243,19 @@ clears queued-next, since that direct command is authoritative.
 `q`, a player failure or the original session deadline always
 prevent starting a queued new WAV. No anonymous queue choice is saved
 to disk, exposed to a network or transferred to another audio source.
+
+**Plan several tracks without cutting the current one:** choose `k3`
+to replace the pending plan with track 3; then `a2` and `a1` to
+play **3 → 2 → 1** after the current WAV ends naturally. Repeated numbers
+are allowed, but no more than **eight** pending choices. `l` and `s`
+show only anonymous numbered order (no filenames); `z` undoes the last
+pending choice, while `k0` clears the entire plan. Invalid/out-of-range
+or ninth additions do nothing. `e` entered later clears all choices;
+`aN` after `e` explicitly disarms ending. Direct jump, next, previous,
+replay, immediate quit, session deadline or actual player error still
+take priority over *every* pending choice. Only the already validated
+private WAV selection can be queued; no saved playlist, no automatic
+first PLAY and no extra player or network command.
 
 **If the private local playback tool fails unexpectedly**, AudioHub now
 refuses the next/previous/replay/jump even if that key was entered at
