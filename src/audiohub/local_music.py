@@ -293,9 +293,11 @@ def check_music_readiness(folder, *, capture=bounded_command_output,
     except (OSError, ValueError, RuntimeError, TypeError):
         sink_ready = False
     out("Private PipeWire music input: " +
-        ("READY" if sink_ready else
-         "NEEDS ATTENTION; inspect the audiohub user PipeWire runtime "
-         "and audiohub.music input. No default-output fallback."))
+        ("READY; one selectable USB speaker output also found "
+         "(audibility UNVERIFIED)." if sink_ready else
+         "NEEDS ATTENTION; inspect the audiohub user PipeWire runtime, "
+         "audiohub.music input and unambiguous USB speaker output. "
+         "No HDMI/default-output fallback."))
 
     try:
         player_ready = bool(which("pw-cat"))
