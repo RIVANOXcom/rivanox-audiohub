@@ -2,6 +2,19 @@
 
 **Status:** Alpha / pre-release. No verified ready-to-flash Pi 4 image has been published. Native ARM64 test-only SD images have been built and uploaded to GitHub Actions (latest prior-to-renaming run 42057278883; 159 tests, 48 rootfs checks). **No real Pi4/Edifier playback, ownership security or product-ready Release has been verified.**
 
+## Edit and prioritize private pending queue slots (unverified alpha)
+
+Within a trusted, explicitly consented local WAV session, the
+operator may now see numbered pending positions in `s` and `l`, remove
+any one with `d1`–`d8`, or move any one to NEXT with `f1`–`f8`,
+without cutting the current player. These commands target *pending
+positions*, not the selected WAV track numbers used by `kN` and
+`aN`. Remaining order stays stable; impossible/empty positions
+do nothing. The bounded maximum stays eight. No private names,
+filesystem, gain, route, owner credentials, network interface,
+automatic first playback or operator session deadline changes.
+Unverified hardware alpha; manual operator test only.
+
 ## Bounded private multi-track queue (unverified alpha)
 
 The trusted interactive Pi4 WAV player can now schedule **up to eight**
