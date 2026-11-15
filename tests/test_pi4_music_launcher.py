@@ -160,6 +160,7 @@ class MusicLauncherTests(unittest.TestCase):
         self.assertIn("no WAV files needed.", native)
         self.assertIn("Read-only only: NO sound", native)
         self.assertIn("Physical USB speaker output:", native)
+        self.assertIn("Music EQ output to USB speaker link:", native)
 
     def test_native_image_empty_private_wav_folder_shows_safe_first_boot(self):
         native = STAGE.read_text(encoding="utf-8")
