@@ -1,5 +1,22 @@
 # Development status
 
+## One-step correction of pending WAV playback-plan mistakes (unverified alpha)
+
+Within the explicitly consented, unprivileged local terminal music
+session, `b` now reverses **one last actual pending-plan edit**:
+delete a slot, move a slot to NEXT, undo/remove last, append, replace
+next or clear all. The previous anonymous bounded queue and stop-after
+policy return without cutting or restarting the current owned player.
+Invalid/empty/no-op edits do not replace the last valid undo. Any
+explicit `e`/`g` stop-policy action and every natural or navigated
+transition to another WAV clear the undo snapshot; no cross-track
+resurrection, persistent file, history stack, background player,
+routing/gain/network/privacy/privilege changes. The pre-existing `z`
+continues to **remove the last pending choice**; `b` specifically
+restores the prior queue after an edit. Includes native launcher help
+and precise local music guide. Hardware unverified, internal Pi4
+operator TEST only.
+
 ## Version-bound old SD to replacement SD data review (development alpha)
 
 A new, operator-initiated local `audiohub-presets-transfer review-swap
