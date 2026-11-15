@@ -22,6 +22,8 @@ SHA = re.compile(r"[a-f0-9]{40}\Z")
 RUN = re.compile(r"[0-9]{1,20}\Z")
 PIN = re.compile(r'^PIN="([a-f0-9]{40})"$', re.MULTILINE)
 IMAGE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*\.img\.xz\Z")
+OFFLINE_VIEWER = "AUDIOHUB-OFFLINE-REPORT-VIEWER.html"
+MAX_OFFLINE_VIEWER_BYTES = 128 * 1024
 
 
 def manifest(directory: Path, source_sha: str, run_id: str, build_script: Path):
@@ -47,9 +49,26 @@ def manifest(directory: Path, source_sha: str, run_id: str, build_script: Path):
     ]:
         raise ValueError("Image digest does not match checksum file")
     inventory_proof = verify_package_inventory(directory / "ROOTFS-PACKAGES.json")
+    # Existing four-file preview bundles remain supported for offline recovery.
+    # New native builds add the ALREADY EXISTING self-contained HTML viewer in
+    # this ZIP, so the operator needs no second network download to inspect
+    # the report copied from the spare SD's FAT boot partition.
+    viewer_path = directory / OFFLINE_VIEWER
+    offline_viewer = None
+    if viewer_path.exists() or viewer_path.is_symlink():
+        if viewer_path.is_symlink() or not viewer_path.is_file():
+            raise ValueError("Offline viewer must be a regular file")
+        size = viewer_path.stat().st_size
+        if not 0 < size <= MAX_OFFLINE_VIEWER_BYTES:
+            raise ValueError("Offline viewer must be bounded and nonempty")
+        with viewer_path.open("rb") as handle:
+            viewer_sha = hashlib.file_digest(handle, "sha256").hexdigest()
+        offline_viewer = {"file": OFFLINE_VIEWER, "bytes": size,
+                          "sha256": viewer_sha}
     metadata = {
         "schema": "rivanox-audiohub-preview-bundle/2",
         "package_inventory": {"file": "ROOTFS-PACKAGES.json", **inventory_proof},
+        **({"offline_viewer": offline_viewer} if offline_viewer is not None else {}),
         "image": image.name,
         "image_bytes": image.stat().st_size,
         "image_sha256": digest,
