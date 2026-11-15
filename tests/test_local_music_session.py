@@ -957,8 +957,13 @@ class MusicSessionTests(unittest.TestCase):
                         return None
                     if action is not None:
                         return action
-                    self.assertTrue(second.wait(2))
-                    return "q"
+                    # The main thread must poll 'finished' after this
+                    # callback returns; waiting here for the next worker
+                    # would deadlock the previous track's transition.
+                    if second.is_set():
+                        return "q"
+                    time.sleep(0.001)
+                    return None
                 with mock.patch.object(local_music, "music_sink_available",
                                        return_value=True), \
                      mock.patch.object(local_music.os, "geteuid",
