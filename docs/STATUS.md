@@ -1,5 +1,20 @@
 # Development status
 
+## Offline music-library health and media compatibility guide (unverified alpha)
+
+The installed `audiohub-music --library-health` command now diagnoses
+an empty or imported private WAV collection without touching PipeWire or
+playing sound. It counts compatible PCM16 WAVs, unsupported WAV format,
+damaged/unreadable WAV headers, linked/oversized/unsafe or hidden WAVs,
+and alternate audio formats (MP3/FLAC/etc.), with **anonymous bounded
+counts only** and private offline correction hints. It detects more
+than 40 playable WAVs rather than presenting an incomplete album.
+All mixed options including `--show-titles` and PLAY are rejected;
+the source CLI and actual native Pi4 launcher have dedicated
+tests and pristine-SD chroot smoke. No filenames, paths, metadata,
+network, music writes, conversions, Bluetooth, owner or mixer state
+are exposed or changed. No real Pi4/Edifier sound has been accepted.
+
 ## One-step correction of pending WAV playback-plan mistakes (unverified alpha)
 
 Within the explicitly consented, unprivileged local terminal music
