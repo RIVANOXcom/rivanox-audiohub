@@ -308,6 +308,7 @@ class MusicLauncherTests(unittest.TestCase):
         self.assertIn("z=undo last", help_text)
         self.assertIn("d1-d8=remove SLOT", help_text)
         self.assertIn("f1-f8=move SLOT to NEXT (no cut)", help_text)
+        self.assertIn("g=finish all pending tracks then stop naturally", help_text)
         self.assertIn("e=finish current WAV then stop", help_text)
         self.assertIn("deadline or failure take priority", help_text)
         self.assertIn("navigation cancels it, session deadline still applies", help_text)
