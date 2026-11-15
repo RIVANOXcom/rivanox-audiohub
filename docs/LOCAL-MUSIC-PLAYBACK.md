@@ -28,7 +28,15 @@ audiohub-music /absolute/private/music-folder --first-use
 The first step checks the already configured private PipeWire music input and
 local player tool, then silently and anonymously diagnoses the WAV folder
 (maximum 256 entries, no media-name display). An empty new SD is normal.
-**No audio starts during these checks.** The second step accepts exactly
+**No audio starts during these checks.** The first-sound step now
+also checks a **real, unambiguous USB speaker output** in the same bounded
+PipeWire snapshot as the private music input, reusing the shipping router's
+USB selector. A virtual `audiohub.music` sink and installed `pw-cat` alone
+are no longer sufficient to mark speaker playback ready. If USB is missing
+or ambiguous, check the Edifier power, cable and USB connection; never fall
+back to HDMI or the default output. No private USB identifiers are printed.
+A detected USB sink is **not proof of audible sound or safe physical volume**.
+The second step accepts exactly
 one typed choice: **SPEAKER** opens the existing left/right/both original
 low-gain speaker observation guide, **MUSIC** opens the existing owned-WAV
 numbered selection wizard, or **QUIT** exits. Unknown input and EOF cancel,
