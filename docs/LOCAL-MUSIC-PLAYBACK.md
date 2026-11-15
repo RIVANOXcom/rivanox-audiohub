@@ -210,7 +210,7 @@ During playback, type a command and press **Enter**:
 | Command | Action |
 |---|---|
 | `u` + Enter | Pause or resume only this music session's owned player; session time limit keeps running |
-| `s` + Enter | Show current track number, elapsed session time and remaining session limit; no filenames or user identifiers |
+| `s` + Enter | Show current track number, elapsed session time, remaining session limit **and** a separate pause-aware approximate elapsed/remaining time for this WAV (no filenames or identifiers) |
 | `l` + Enter | Show anonymous selected queue order and planned WAV lengths (not live playback progress) |
 | `n` + Enter | Stop just the current owned player, then start the next selected track in order |
 | `p` + Enter | Stop the current player and go to the previous selected track; on track 1, restart track 1 |
@@ -221,8 +221,20 @@ During playback, type a command and press **Enter**:
 | Ctrl+C | Emergency local interruption; owned child stopped in cleanup |
 
 The track is displayed only as `track X/Y`, with no private title or
-file path. The status is **session elapsed time** rather than exact PCM
-playback position or proof of audible sound. Files stay on the Pi4;
+file path. The session timer still counts **wall-clock time**, including
+pauses. The new second line on `s` uses the existing checked WAV
+header duration and the time since this process launched its **owned
+local player**, excluding the time spent deliberately paused with
+`u`. It shows estimated per-track elapsed and remaining
+`MM:SS`, independently of the overall session deadline.
+This is intentionally **not an exact PCM playback cursor**: a stuck
+player, buffering, system delays or actual speaker failure cannot be
+detected through a clock estimate. Before the local player has
+actually started the command explicitly reports that track timing is
+unavailable, rather than inventing audible progress. Navigation,
+replay or repeating restarts the estimate for the new owned child,
+and no track title, private path, timing history or settings are
+persisted or exposed over a network. Files stay on the Pi4;
 there is no playlist file, public HTTP/IPC control endpoint, cloud,
 Bluetooth adjustment or change to PipeWire's existing music sink.
 Each child is only owned by this local invocation. If the audio tool

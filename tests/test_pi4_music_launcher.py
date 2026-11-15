@@ -301,6 +301,8 @@ class MusicLauncherTests(unittest.TestCase):
         help_text = self.shell("--help").stdout
         self.assertIn("audiohub-music --speaker-guide [left|right|both]", help_text)
         self.assertIn("album wizard checks private input/player FIRST", help_text)
+        self.assertIn("s=session/track ETA (estimated, pause-aware)", help_text)
+        self.assertIn("not a real PCM cursor or proof of sound", help_text)
         self.assertIn("targeted left/right/both side", help_text)
         self.assertIn("FIRST checks private sink and playback tool", help_text)
         self.assertIn("refuses all PLAY unless both", help_text)
