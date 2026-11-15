@@ -12,6 +12,7 @@ import math
 import os
 from pathlib import Path
 import pwd
+import re
 import secrets
 import stat
 import time
@@ -24,6 +25,9 @@ CHECKPOINT_DELAYS = (0, 30, 30, 60, 60, 120, 300)
 MAX_RUNTIME_BYTES = 4096
 MAX_REPORT_BYTES = 4096
 SCHEMA = "rivanox-audiohub-offline-boot-diagnostic/1"
+IMAGE_IDENTITY_PATH = Path("/etc/audiohub/build-identity.json")
+IMAGE_IDENTITY_SCHEMA = "rivanox-audiohub-image-identity/1"
+MAX_IMAGE_IDENTITY_BYTES = 256
 
 
 def _bounded(value, upper):
@@ -111,6 +115,69 @@ def _read_runtime(path, user_id):
             os.close(filefd)
         if dirfd is not None:
             os.close(dirfd)
+
+
+def read_image_identity(path=IMAGE_IDENTITY_PATH, *, owner_id=0):
+    """Read strictly bounded root-owned image metadata, NOT a signature.
+
+    No dynamic operator string, device identifier or network lookup enters
+    the removable-SD report. Refuse symlinks and hardlinks; missing or
+    untrusted metadata is reported as unavailable, never guessed.
+    """
+    try:
+        path = Path(path)
+    except (TypeError, ValueError):
+        return None
+    if (not path.is_absolute() or ".." in path.parts or not path.name or
+            type(owner_id) is not int or owner_id < 0):
+        return None
+    directory = None
+    fd = None
+    try:
+        directory = os.open(
+            path.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+        dstat = os.fstat(directory)
+        if (not stat.S_ISDIR(dstat.st_mode) or dstat.st_uid != owner_id or
+                stat.S_IMODE(dstat.st_mode) & 0o022):
+            return None
+        fd = os.open(path.name, os.O_RDONLY | os.O_NONBLOCK |
+                     os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=directory)
+        meta = os.fstat(fd)
+        if (not stat.S_ISREG(meta.st_mode) or meta.st_uid != owner_id or
+                meta.st_nlink != 1 or stat.S_IMODE(meta.st_mode) != 0o644 or
+                not 0 < meta.st_size <= MAX_IMAGE_IDENTITY_BYTES):
+            return None
+        raw = os.read(fd, MAX_IMAGE_IDENTITY_BYTES + 1)
+        if len(raw) != meta.st_size:
+            return None
+        data = json.loads(
+            raw.decode("ascii"),
+            object_pairs_hook=_unique_runtime_json_object,
+            parse_constant=_reject_runtime_json_constant)
+        if (type(data) is not dict or
+                set(data) != {"schema", "source_sha", "pi_gen_sha",
+                              "ci_run_id", "hardware_verified", "release_approved"} or
+                data["schema"] != IMAGE_IDENTITY_SCHEMA or
+                any(type(data[k]) is not str or
+                    re.fullmatch(r"[0-9a-f]{40}", data[k]) is None
+                    for k in ("source_sha", "pi_gen_sha")) or
+                (data["ci_run_id"] is not None and
+                 (type(data["ci_run_id"]) is not int or
+                  not 0 < data["ci_run_id"] < 10**20)) or
+                data["hardware_verified"] is not False or
+                data["release_approved"] is not False):
+            return None
+        return {"status": "embedded_unverified_alpha",
+                "source_sha": data["source_sha"],
+                "pi_gen_sha": data["pi_gen_sha"],
+                "ci_run_id": data["ci_run_id"]}
+    except (OSError, TypeError, ValueError, UnicodeError, RecursionError):
+        return None
+    finally:
+        if fd is not None:
+            os.close(fd)
+        if directory is not None:
+            os.close(directory)
 
 
 def sample(runtime_path, user_id, *, now=None, controller_present=False):
@@ -221,7 +288,8 @@ def write_report(directory, report, *, require_mount=True):
 def run_probe(*, sleep=time.sleep, now=time.time, mono=time.monotonic,
               output_dir=OUTPUT_DIR, runtime_path=None, user_id=None,
               controller_path=Path("/sys/class/bluetooth/hci0"),
-              require_mount=True):
+              require_mount=True, image_identity_path=IMAGE_IDENTITY_PATH,
+              image_identity_owner_id=0):
     """Collect seven bounded snapshots in the first ten minutes after launch."""
     if user_id is None:
         try:
@@ -234,6 +302,10 @@ def run_probe(*, sleep=time.sleep, now=time.time, mono=time.monotonic,
     report = {
         "schema": SCHEMA,
         "classification": "UNVERIFIED_ALPHA_OFFLINE_TEST_ONLY",
+        # Fixed image identification only: no cryptographic boot/acceptance proof.
+        "image_identity": (read_image_identity(
+            image_identity_path, owner_id=image_identity_owner_id) or
+            {"status": "unavailable"}),
         "hardware_accepted": False,
         "owner_authenticated": False,
         "phone_wifi_provisioned": False,
