@@ -24,6 +24,7 @@ COMMAND_HELP = ("Enter: [u] pause/resume, [m] repeat off/track/all, [s] status, 
                 "[l] queue, [e] end after current track (toggle), "
                 "[k1-k8] replace NEXT, [a1-a8] append (max 8), "
                 "[z] undo last pending, [k0] clear pending, "
+                "[d1-d8] delete pending SLOT, [f1-f8] move SLOT to NEXT, "
                 "[n] next, [p] previous, [r] replay, "
                 "[1-8] jump, [q] quit now, [h] help.")
 
@@ -58,7 +59,9 @@ def read_terminal_command(timeout=POLL_SECONDS, *, stream=None):
     allowed = ("u", "m", "s", "l", "e", "n", "p", "r", "q", "h", "z",
                "1", "2", "3", "4", "5", "6", "7", "8",
                "k0", "k1", "k2", "k3", "k4", "k5", "k6", "k7", "k8",
-               "a1", "a2", "a3", "a4", "a5", "a6", "a7", "a8")
+               "a1", "a2", "a3", "a4", "a5", "a6", "a7", "a8",
+               "d1", "d2", "d3", "d4", "d5", "d6", "d7", "d8",
+               "f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8")
     return value if value in allowed else "?"
 
 
@@ -82,7 +85,7 @@ def status_message(position, count, started_at, deadline, *, clock=time.monotoni
                    queued_next=None, queued_after=()):
     if repeat_mode not in ("off", "track", "all") or type(end_after_track) is not bool:
         raise ValueError("Unknown local repeat/end mode")
-    _validate_deferred_tracks(count, queued_next, queued_after)
+    slots = _validate_deferred_tracks(count, queued_next, queued_after)
     now = clock()
     elapsed = max(0, int(now - started_at))
     remaining = max(0, math.ceil(deadline - now))
@@ -96,6 +99,9 @@ def status_message(position, count, started_at, deadline, *, clock=time.monotoni
                if queued_next is not None else "")
             + (" | FOLLOWING TRACKS " + ", ".join(map(str, queued_after))
                if queued_after else "")
+            + (" | PENDING SLOTS " +
+               ", ".join(f"{i}=track {n}" for i, n in enumerate(slots, 1))
+               if slots else "")
             + " | local only; audio not physically verified.")
 
 
@@ -141,7 +147,7 @@ def queue_message(report, position, *, repeat_mode="off",
             not 1 <= position <= report["files"] <= local_music.MAX_FILES or
             len(report.get("tracks", ())) != report["files"]):
         raise ValueError("Invalid selected local music queue")
-    _validate_deferred_tracks(report["files"], queued_next, queued_after)
+    slots = _validate_deferred_tracks(report["files"], queued_next, queued_after)
     chunks = []
     for number, track in enumerate(report["tracks"], 1):
         duration = track["duration_ms"]
@@ -161,7 +167,10 @@ def queue_message(report, position, *, repeat_mode="off",
                if queued_next is not None else "")
             + (" Following: " + ", ".join("track " + str(n)
                                           for n in queued_after) + "."
-               if queued_after else ""))
+               if queued_after else "")
+            + (" Pending slots (1=NEXT): " +
+               ", ".join(f"{i}=track {n}" for i, n in enumerate(slots, 1)) +
+               "." if slots else " Pending slots: empty."))
 
 
 def run_session(paths, *, max_minutes=15, read_command=read_terminal_command,
@@ -417,6 +426,37 @@ def run_session(paths, *, max_minutes=15, read_command=read_terminal_command,
                             "normal order and repeat resume.")
                     else:
                         out("Pending queue already empty; no playback changed.")
+                elif command in ("d1", "d2", "d3", "d4", "d5",
+                                 "d6", "d7", "d8", "f1", "f2", "f3",
+                                 "f4", "f5", "f6", "f7", "f8"):
+                    # The digit is a pending SLOT (as shown by l), not a
+                    # selected WAV number. Only volatile state is edited.
+                    slot = int(command[1])
+                    pending = list(_validate_deferred_tracks(
+                        report["files"], queued_next, queued_after))
+                    if slot > len(pending):
+                        out("Pending slot " + str(slot) +
+                            " unavailable; no change to the queue or "
+                            "current owned player.")
+                    else:
+                        number = pending.pop(slot - 1)
+                        if command[0] == "f":
+                            pending.insert(0, number)
+                            if slot == 1:
+                                out("Pending slot 1 is already NEXT; current "
+                                    "owned WAV uninterrupted.")
+                            else:
+                                out("Moved pending slot " + str(slot) +
+                                    " to NEXT (selected track " + str(number) +
+                                    "); remaining order preserved. "
+                                    "Current WAV uninterrupted.")
+                        else:
+                            out("Removed pending slot " + str(slot) +
+                                " (selected track " + str(number) +
+                                "); other choices preserved. "
+                                "Current WAV uninterrupted.")
+                        queued_next = pending[0] if pending else None
+                        queued_after = pending[1:]
                 elif command == "m":
                     repeat_mode = next_repeat_mode(repeat_mode)
                     out("Local repeat mode: " + repeat_mode.upper()
