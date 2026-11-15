@@ -210,7 +210,7 @@ During playback, type a command and press **Enter**:
 | Command | Action |
 |---|---|
 | `u` + Enter | Pause or resume only this music session's owned player; session time limit keeps running |
-| `s` + Enter | Show current track number, elapsed session time and remaining session limit; no filenames or user identifiers |
+| `s` + Enter | Show current track number, elapsed session time, remaining session limit **and** a separate pause-aware approximate elapsed/remaining time for this WAV (no filenames or identifiers) |
 | `l` + Enter | Show anonymous selected queue order and planned WAV lengths (not live playback progress) |
 | `n` + Enter | Stop just the current owned player, then start the next selected track in order |
 | `p` + Enter | Stop the current player and go to the previous selected track; on track 1, restart track 1 |
