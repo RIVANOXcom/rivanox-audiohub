@@ -304,6 +304,8 @@ class MusicLauncherTests(unittest.TestCase):
         self.assertIn("s=status, l=queue", help_text)
         self.assertIn("k1-k8=play selected track next (no cut)", help_text)
         self.assertIn("k0=clear next", help_text)
+        self.assertIn("a1-a8=append selected WAV (max 8)", help_text)
+        self.assertIn("z=undo last", help_text)
         self.assertIn("e=finish current WAV then stop", help_text)
         self.assertIn("deadline or failure take priority", help_text)
         self.assertIn("navigation cancels it, session deadline still applies", help_text)
