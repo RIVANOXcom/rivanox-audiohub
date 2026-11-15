@@ -12,6 +12,48 @@ raw stdin playback, explicitly targeted to the existing
 \`audiohub.music\` virtual stereo mixer input. It does NOT automatically
 select the default sound card or bypass the private mixer/EQ routing.
 
+## Diagnose music import or incompatible WAVs without playing sound
+
+On a fresh or manually populated private folder, the installed Pi4 test
+image now offers:
+
+```sh
+audiohub-music --library-health
+# Or diagnose a different independently approved private folder:
+audiohub-music /absolute/private/music-folder --library-health
+```
+
+This is a **silent, offline, read-only** operation as the existing
+unprivileged `audiohub` user. It counts bounded *recognized* media
+in the chosen folder (at most 256 directory entries): valid PCM16
+WAVs, incompatible WAV encoding/channel/rate/duration, damaged or
+inaccessible WAV headers, symlinks/unsafe WAV entries, hidden WAVs,
+recognizable but unsupported audio extensions (such as MP3/FLAC),
+and non-audio entries. It **does not display** individual filenames,
+titles, full paths, format metadata from a particular file, SSIDs,
+device names or user information, even if `--show-titles` is requested:
+the combination is rejected. No PipeWire checks, sound, player process,
+media conversion, file writes, Wi-Fi, Bluetooth or automatic import.
+
+The report states whether the numbered album list has playable entries;
+if more than 40 compatible WAVs exist, select a smaller private folder
+first rather than silently omitting tracks. A new SD with **zero** private
+WAVs is a normal initial state. If media encoding is incompatible, use
+your own or licensed original files on your *own computer* to export
+uncompressed 16-bit PCM mono/stereo WAV at 8–96 kHz, at most 64 MiB
+each. No converter is installed or run by the Pi health check.
+A broken WAV should be re-exported; a symlink, world-writable or
+oversized WAV is intentionally refused. **Do not weaken file permissions
+to bypass a safety check.**
+
+This is a format/availability diagnosis, NOT a measure of audible
+sound, playback readiness, physical Edifier level, hardware GO or
+safe phone/Wi-Fi ownership. Next run `audiohub-music --list` for an
+anonymous numbered preview, or the separately approved
+`audiohub-music --speaker-check` for silent first-sound prerequisites.
+Actual audio still requires the existing operator-reviewed queue
+and distinct exact `PLAY` confirmation; there is no autoplay.
+
 ## Start with a file preview (no sound)
 
 On an **operator-authorized isolated Pi4** with its existing per-user
