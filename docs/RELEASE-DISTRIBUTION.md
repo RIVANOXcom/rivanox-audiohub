@@ -33,6 +33,57 @@ should not use them on a trusted home/company network or as a secure
 owner-controlled appliance. The Windows UDP receiver, if manually
 started for testing, is unauthenticated.
 
+## One-command downloaded test ZIP verification (operator-only)
+
+**NEW, still development-only:** The existing `scripts/release_bundle_audit.py`
+can now verify the exact GitHub Actions **downloaded ZIP** without
+manually extracting files first. This is an offline operation on the
+operator's own computer (Python 3 required), not a Pi installer or
+network downloader. Save the ZIP from the specific reviewed native
+run and separately copy its exact **provider ZIP SHA256** and
+**source commit SHA** from that run's confirmed evidence. From the
+corresponding immutable source checkout, run:
+
+```sh
+python3 scripts/release_bundle_audit.py \
+  --zip /absolute/path/to/downloaded-artifact.zip \
+  --expected-zip-sha256 64_lowercase_hex_characters_from_the_verified_artifact \
+  --expected-source-sha 40_lowercase_hex_characters_from_the_reviewed_source
+```
+
+Replace both descriptive placeholders with the **real** SHA values
+for the SAME artifact/source commit. The downloaded ZIP is first read
+and compared byte-for-byte via SHA256; a mismatch aborts **before
+extraction**. Only four expected flat entries (one UNVERIFIED
+`.img.xz`, `SHA256SUMS.txt`, `PREVIEW-MANIFEST.json`,
+`ROOTFS-PACKAGES.json`) are admitted. Encrypted, symlink, duplicate,
+nested/traversal, oversized or extraneous members fail closed.
+The four files are streamed into a private temporary directory,
+subject to bounds, then the existing independent inner file SHA256,
+XZ decompression, package inventory and manifest audits run. Temporary
+files are cleaned afterward; the downloaded ZIP is not modified.
+Have enough temporary disk space for the compressed image (roughly
+0.7 GB, depends on build) and the time to verify its whole XZ
+contents. The tool does **not** mount, write or flash any SD and
+does not alter a running Pi.
+
+A successful JSON report contains both `download_zip_sha256`
+and `image_sha256`, exact `source_sha`/`actions_run_id`, plus
+`bundle_integrity: passed`. Crucially it **always** retains
+`public_release_ready: false` and
+`classification: UNVERIFIED_ALPHA_TEST_ONLY`: checksum integrity
+does not prove provenance authenticity, sound, hardware approval,
+safe operator ownership, legal rights or release approval. Stop if
+any check fails. An authorized operator may separately choose to
+flash a **spare microSD** only after retaining the original card
+and making independent private WAV/EQ backups. ZIP artifacts expire,
+require GitHub authentication and are NOT permanent Gitea Releases.
+
+CI still uses the existing `--directory` mode for its four-file
+preflight without any release-go change. This tool must be run from
+the source commit matching the new ZIP; older sources may not support
+`--zip`, and older three-file preview archives intentionally fail.
+
 ## New automated offline bundle inspector (engineering-only)
 
 `scripts/release_bundle_audit.py` independently checks an extracted
