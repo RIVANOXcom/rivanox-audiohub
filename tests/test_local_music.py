@@ -1271,6 +1271,81 @@ class GuidedSpeakerCheckTests(unittest.TestCase):
                        "not a certification"):
             self.assertIn(phrase, report)
 
+    def test_speaker_self_report_has_exact_safe_terminal_schema_and_provenance(self):
+        """User can copy one anonymous, version-identifiable self-report."""
+        from audiohub import firstboot_diag
+        with mock.patch.object(firstboot_diag, "read_image_identity",
+                               return_value={
+                                   "status": "embedded_unverified_alpha",
+                                   "source_sha": "a" * 40,
+                                   "pi_gen_sha": "b" * 40,
+                                   "ci_run_id": 12345,
+                               }):
+            ok, called, output = self.run_guide([
+                "PLAY\n", "CORRECT\n", "PLAY\n", "CORRECT\n",
+                "PLAY\n", "CORRECT\n"])
+        self.assertTrue(ok)
+        self.assertEqual(called, ["left", "right", "both"])
+        lines = [line for line in output.split("\n")
+                 if line.startswith("AUDIOHUB_SPEAKER_SELF_REPORT_V1=")]
+        self.assertEqual(len(lines), 1)
+        record = json.loads(lines[0].split("=", 1)[1])
+        self.assertEqual(record["schema"],
+                         "rivanox-audiohub-local-speaker-self-report/1")
+        self.assertEqual(record["classification"],
+                         "OPERATOR_SELF_REPORTED_NOT_HARDWARE_VERIFIED")
+        self.assertEqual(record["source_sha_from_embedded_unverified_image"],
+                         "a" * 40)
+        self.assertEqual(record["ci_run_id_from_embedded_unverified_image"],
+                         12345)
+        self.assertEqual(record["scope"], "all")
+        self.assertEqual(record["observations"], {
+            "left": "CORRECT", "right": "CORRECT", "both": "CORRECT"})
+        self.assertEqual(record["attempts"], {
+            "left": ["CORRECT"], "right": ["CORRECT"], "both": ["CORRECT"]})
+        self.assertTrue(record["operator_completed_selected_steps"])
+        self.assertIs(record["hardware_verified"], False)
+        self.assertIs(record["release_ready"], False)
+        self.assertIs(record["stored_or_transmitted"], False)
+        self.assertNotIn("device", lines[0])
+        self.assertIn("Nothing saved or uploaded", output)
+
+    def test_speaker_self_report_keeps_partial_fault_and_no_report(self):
+        """Cancel cannot turn a wrong speaker or skipped side into success."""
+        with mock.patch("audiohub.firstboot_diag.read_image_identity",
+                        return_value=None):
+            ok, called, output = self.run_guide([
+                "PLAY\n", "WRONG\n", "RETRY\n", "PLAY\n"])
+        self.assertFalse(ok)
+        self.assertEqual(called, ["left", "left"])
+        line = next(line for line in output.split("\n")
+                    if line.startswith("AUDIOHUB_SPEAKER_SELF_REPORT_V1="))
+        report = json.loads(line.split("=", 1)[1])
+        self.assertEqual(report["attempts"]["left"], ["WRONG"])
+        self.assertEqual(report["observations"], {
+            "left": "WRONG", "right": "NOT_TESTED", "both": "NOT_TESTED"})
+        self.assertFalse(report["operator_completed_selected_steps"])
+        self.assertIsNone(report["source_sha_from_embedded_unverified_image"])
+        self.assertIsNone(report["ci_run_id_from_embedded_unverified_image"])
+        self.assertFalse(report["hardware_verified"])
+        self.assertNotIn("PLAY\n", line)
+
+    def test_targeted_speaker_self_report_marks_other_channels_unobserved(self):
+        ok, called, output = self.run_guide(
+            ["PLAY\n", "CORRECT\n"], side="right")
+        self.assertTrue(ok)
+        self.assertEqual(called, ["right"])
+        line = next(line for line in output.split("\n")
+                    if line.startswith("AUDIOHUB_SPEAKER_SELF_REPORT_V1="))
+        report = json.loads(line.split("=", 1)[1])
+        self.assertEqual(report["scope"], "right")
+        self.assertEqual(report["observations"], {
+            "left": "NOT_TESTED", "right": "CORRECT", "both": "NOT_TESTED"})
+        self.assertEqual(report["attempts"]["left"], [])
+        self.assertEqual(report["attempts"]["both"], [])
+        self.assertTrue(report["operator_completed_selected_steps"])
+        self.assertFalse(report["hardware_verified"])
+
     def test_silent_first_channel_requires_stop_and_never_advances(self):
         result, called, report = self.run_guide([
             "PLAY\n", "SILENT\n", "STOP\n"])
