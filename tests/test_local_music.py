@@ -836,6 +836,79 @@ class LocalMusicTests(unittest.TestCase):
         self.assertEqual([p.stdin.saved for p in self.players],
                          [self.samples, b"\x05\x06\x07\x08" * 50])
 
+    def test_existing_usb_speaker_without_real_music_eq_link_refuses_player(self):
+        """Existing USB hardware is NOT proof music EQ reaches the speaker."""
+        full = json.loads(self.captured_graph().stdout)
+        cases = {
+            "missing_link": [item for item in full
+                             if item["type"] != "PipeWire:Interface:Link"],
+            "unrelated_output": [item for item in full
+                                 if item["type"] != "PipeWire:Interface:Link"] +
+                                [{"type": "PipeWire:Interface:Link", "id": 20,
+                                  "info": {"output-node-id": 999,
+                                           "input-node-id": 18}}],
+            "hdmi_instead": [item for item in full
+                            if item["type"] != "PipeWire:Interface:Link"] +
+                           [{"type": "PipeWire:Interface:Link", "id": 20,
+                             "info": {"output-node-id": 19,
+                                      "input-node-id": 77}}],
+            "usb_plus_hdmi": full +
+                             [{"type": "PipeWire:Interface:Link", "id": 21,
+                               "info": {"output-node-id": 19,
+                                        "input-node-id": 77}}],
+            "ambiguous_eq_output": full +
+                                   [{"type": "PipeWire:Interface:Node", "id": 33,
+                                     "info": {"props": {
+                                         "node.name": "audiohub.music.output"}}}],
+        }
+        for label, graph in cases.items():
+            with self.subTest(case=label):
+                self.events.clear()
+                self.players.clear()
+                capture = lambda *_args, **_kwargs: mock.Mock(
+                    returncode=0, stdout=json.dumps(graph))
+                with mock.patch.object(local_music.os, "geteuid",
+                                       return_value=1000):
+                    self.assertFalse(local_music.music_sink_available(
+                        capture=capture))
+                    with self.assertRaisesRegex(RuntimeError, "music sink unavailable"):
+                        local_music.play_playlist(
+                            [self.wav], max_minutes=1, spawn=self.spawn,
+                            capture=capture, notify=lambda _: None)
+                self.assertFalse(self.players)
+                self.assertFalse(any(event[0] == "spawn"
+                                     for event in self.events))
+
+    def test_first_sound_shows_missing_music_link_even_when_usb_is_present(self):
+        nodes = [item for item in json.loads(self.captured_graph().stdout)
+                 if item["type"] != "PipeWire:Interface:Link"]
+        log = []
+        with mock.patch.object(local_music.os, "geteuid", return_value=1000):
+            result = local_music.check_first_sound_readiness(
+                capture=lambda *_a, **_k: mock.Mock(
+                    returncode=0, stdout=json.dumps(nodes)),
+                which=lambda _: "/usr/bin/pw-cat",
+                out=log.append)
+        self.assertFalse(result)
+        text = "\n".join(log)
+        self.assertIn("Private PipeWire music input: READY", text)
+        self.assertIn("Physical USB speaker output: ONE UNAMBIGUOUS", text)
+        self.assertIn("Music EQ output to USB speaker link: NEEDS ATTENTION", text)
+        self.assertIn("NOT READY FOR MANUAL TRY", text)
+        self.assertNotIn("alsa_output.usb-", text)
+
+    def test_good_pipewire_link_allows_private_music_but_not_sound_certification(self):
+        log = []
+        with mock.patch.object(local_music.os, "geteuid", return_value=1000):
+            self.assertTrue(local_music.music_sink_available(capture=self.capture))
+            self.assertTrue(local_music.check_first_sound_readiness(
+                capture=self.capture, which=lambda _: "/usr/bin/pw-cat",
+                out=log.append))
+        text = "\n".join(log)
+        self.assertIn("Music EQ output to USB speaker link: USB-ONLY LINK FOUND", text)
+        self.assertIn("audibility UNVERIFIED", text)
+        self.assertNotIn("Edifier USB Speaker", text)
+
     def test_real_playback_refuses_private_sink_without_physical_usb(self):
         """Do not spawn a private player when the USB speaker is disconnected."""
         virtual_only = json.dumps([{
