@@ -480,11 +480,14 @@ def _music_destination_plan(external, music_dir):
             # unexpected destination WAVs for a clean empty-data migration.
             files, size = music_transfer._source_list(
                 external, source_fd, allow_empty=True)
-            if not files:
-                target_files, _ = music_transfer._source_list(
-                    music_dir, target_fd, allow_empty=True)
-                if target_files:
-                    raise ValueError("Empty WAV archive conflicts with nonempty local music")
+            # Check the destination ALWAYS, not just when the archive is
+            # empty. Otherwise untracked local MP3/FLAC (or unsafe WAVs)
+            # could silently survive alongside transferred WAVs while a
+            # later full-SD review misleadingly claims data completeness.
+            target_files, _ = music_transfer._source_list(
+                music_dir, target_fd, allow_empty=True)
+            if not files and target_files:
+                raise ValueError("Empty WAV archive conflicts with nonempty local music")
             matches = 0
             for item in files:
                 match = music_transfer._matching_destination(
