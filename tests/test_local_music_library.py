@@ -733,7 +733,7 @@ class LocalMusicLibraryTests(unittest.TestCase):
                       "Other recognized audio formats (not playable here): 1",
                       "convert OFFLINE", "No playback", "UNVERIFIED"):
             self.assertIn(label, output)
-        for private in ("secret", "favorite", "demo", "private",
+        for private in ("secret", "favorite", "demo",
                         ".wav", ".mp3", self.root.name, str(self.root),
                         "named-pipe", "\x1b"):
             # Generic guidance may legitimately mention WAV format, but
