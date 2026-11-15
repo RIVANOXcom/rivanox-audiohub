@@ -16,9 +16,12 @@ from pathlib import Path
 import re
 import stat
 import sys
+import tempfile
+import zipfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from scripts.verify_package_inventory import verify as verify_package_inventory
+from scripts.verify_package_inventory import MAX_SIZE as MAX_INVENTORY_BYTES
 
 PREVIEW_SCHEMA = "rivanox-audiohub-preview-bundle/2"
 REPORT_SCHEMA = "rivanox-audiohub-release-preflight/1"
@@ -28,6 +31,7 @@ SHA64 = re.compile(r"[a-f0-9]{64}\Z")
 MAX_META_BYTES = 8192
 MAX_IMAGE_BYTES = 16 * 1024**3
 MAX_UNCOMPRESSED_BYTES = 64 * 1024**3
+MAX_ZIP_BYTES = MAX_IMAGE_BYTES + MAX_INVENTORY_BYTES + 64 * 1024**2
 MISSING_GATES = (
     "physical_pi4_edifier_boot_audio_and_recovery",
     "headless_physical_ownership_and_authenticated_phone_setup",
@@ -151,13 +155,104 @@ def inspect(directory: Path, *, expected_source_sha=None, verify_xz=True):
     }
 
 
+def inspect_zip(archive: Path, *, expected_zip_sha256, expected_source_sha=None,
+                verify_xz=True):
+    """One-command offline operator inspection of the *downloaded* ZIP.
+
+    Unlike CI's already-unpacked preview, an operator must prove that the
+    downloaded ZIP's bytes match the pinned GitHub-provider digest before
+    extracting anything. Extract only four allowlisted flat, bounded files
+    into a short-lived private temporary directory; NEVER flash an SD.
+    """
+    if type(expected_zip_sha256) is not str or SHA64.fullmatch(expected_zip_sha256) is None:
+        raise ValueError("Expected exact 64-character ZIP SHA256 is required")
+    if (type(expected_source_sha) is not str or
+            SHA40.fullmatch(expected_source_sha) is None):
+        raise ValueError("Expected exact 40-character source SHA is required")
+    archive = Path(archive)
+    _regular(archive, max_bytes=MAX_ZIP_BYTES)
+    outer = hashlib.sha256()
+    with archive.open("rb") as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            outer.update(block)
+    if outer.hexdigest() != expected_zip_sha256:
+        raise ValueError("Downloaded ZIP SHA256 mismatch; do NOT extract/flash")
+
+    try:
+        with zipfile.ZipFile(archive) as zf:
+            members = zf.infolist()
+            if len(members) != 4:
+                raise ValueError("Operator ZIP must contain exactly four files")
+            names = [item.filename for item in members]
+            images = [n for n in names if IMAGE.fullmatch(n)]
+            if (len(images) != 1 or len(set(names)) != 4 or
+                    set(names) != {
+                        images[0], "SHA256SUMS.txt", "PREVIEW-MANIFEST.json",
+                        "ROOTFS-PACKAGES.json",
+                    }):
+                raise ValueError("Unsafe, duplicate or unexpected ZIP members")
+            bounds = {
+                images[0]: MAX_IMAGE_BYTES,
+                "SHA256SUMS.txt": MAX_META_BYTES,
+                "PREVIEW-MANIFEST.json": MAX_META_BYTES,
+                "ROOTFS-PACKAGES.json": MAX_INVENTORY_BYTES,
+            }
+            for item in members:
+                # Accept standard Unix regular or Windows ZIP entries, not
+                # symlinks, devices, directories, encrypted or nested files.
+                mode = (item.external_attr >> 16) & 0o170000
+                if (item.is_dir() or mode not in (0, stat.S_IFREG) or
+                        item.flag_bits & 1 or
+                        item.compress_type not in (
+                            zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED) or
+                        not 0 < item.file_size <= bounds[item.filename] or
+                        item.compress_size <= 0):
+                    raise ValueError("Unsafe ZIP member type, size or encryption")
+            with tempfile.TemporaryDirectory(prefix="audiohub-test-zip-") as temp:
+                directory = Path(temp)
+                for item in members:
+                    limit = bounds[item.filename]
+                    written = 0
+                    # No ZipFile.extract(): no untrusted path joins or attrs.
+                    with zf.open(item) as source, (
+                            directory / item.filename).open("xb") as dest:
+                        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+                            written += len(chunk)
+                            if written > limit:
+                                raise ValueError("ZIP member exceeded size bound")
+                            dest.write(chunk)
+                    if written != item.file_size:
+                        raise ValueError("ZIP member extracted size mismatch")
+                result = inspect(
+                    directory, expected_source_sha=expected_source_sha,
+                    verify_xz=verify_xz)
+    except (zipfile.BadZipFile, zipfile.LargeZipFile, EOFError) as exc:
+        raise ValueError("Corrupted or unsupported operator ZIP") from exc
+    # No other filesystem changes, release auth or runtime settings.
+    return {**result, "download_zip_sha256": expected_zip_sha256,
+            "verified_zip_entries": 4}
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--directory", required=True, type=Path)
+    choices = parser.add_mutually_exclusive_group(required=True)
+    choices.add_argument("--directory", type=Path,
+                         help="Already extracted four-file preview bundle (CI)")
+    choices.add_argument("--zip", type=Path,
+                         help="Downloaded GitHub Actions TEST ZIP, offline/read-only")
     parser.add_argument("--expected-source-sha")
+    parser.add_argument("--expected-zip-sha256",
+                        help="Required in --zip mode; exact provider ZIP digest")
     args = parser.parse_args(argv)
     try:
-        result = inspect(args.directory, expected_source_sha=args.expected_source_sha)
+        if args.zip is not None:
+            result = inspect_zip(
+                args.zip, expected_zip_sha256=args.expected_zip_sha256,
+                expected_source_sha=args.expected_source_sha)
+        else:
+            if args.expected_zip_sha256 is not None:
+                raise ValueError("ZIP SHA256 is only valid in --zip mode")
+            result = inspect(args.directory, expected_source_sha=args.expected_source_sha)
     except (OSError, UnicodeError, ValueError) as exc:
         parser.exit(2, "AudioHub preview preflight REFUSED: " + str(exc) + "\n")
     print(json.dumps(result, sort_keys=True, indent=2))

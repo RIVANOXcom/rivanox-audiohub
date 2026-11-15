@@ -1,5 +1,20 @@
 # Development status
 
+## Verify an actual downloaded Pi4 image ZIP before human-authorized flash
+
+The existing offline release preflight script now supports explicit
+`--zip` plus expected provider ZIP SHA256 and exact source SHA256
+parameters. It refuses the wrong ZIP before any extraction, checks
+only the four exact nonsecret preview entries without traversal,
+links, duplicates or oversized members, temporarily extracts to an
+isolated folder, and reuses existing image SHA256/XZ/manifest and rootfs
+package inventory auditing. This reduces operator mistakes when
+several expiring GitHub Actions archives have identical display names.
+Success still means INTERNAL UNVERIFIED ALPHA only; no flash or SD
+mutation is performed, and production/legal/hardware GO remains blocked.
+See [release distribution](RELEASE-DISTRIBUTION.md).
+
+
 **Status:** Alpha / pre-release. No verified ready-to-flash Pi 4 image has been published. Native ARM64 test-only SD images have been built and uploaded to GitHub Actions (latest prior-to-renaming run 42057278883; 159 tests, 48 rootfs checks). **No real Pi4/Edifier playback, ownership security or product-ready Release has been verified.**
 
 ## Offline SD report identifies the actual test image build (unverified alpha)
