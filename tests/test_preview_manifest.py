@@ -62,6 +62,34 @@ class PreviewBundleTests(unittest.TestCase):
         self.assertEqual(data["package_inventory"]["installed_packages"], 1)
         self.assertEqual(json.loads((self.dist / "PREVIEW-MANIFEST.json").read_text()), data)
 
+    def test_optional_real_offline_viewer_has_provenance_and_bounded_bytes(self):
+        # The same self-contained HTML that ships in the tested source tree.
+        viewer = self.dist / "AUDIOHUB-OFFLINE-REPORT-VIEWER.html"
+        viewer.write_bytes((ROOT / "web/boot-report-viewer.html").read_bytes())
+        data = self.create()
+        import hashlib
+        self.assertEqual(data["offline_viewer"], {
+            "file": viewer.name,
+            "bytes": viewer.stat().st_size,
+            "sha256": hashlib.sha256(viewer.read_bytes()).hexdigest(),
+        })
+        self.assertFalse(data["hardware_verified"])
+        self.assertFalse(data["release_approved"])
+
+    def test_rejects_linked_or_oversized_viewer_before_manifest_creation(self):
+        viewer = self.dist / "AUDIOHUB-OFFLINE-REPORT-VIEWER.html"
+        source = self.path / "trusted-viewer.html"
+        source.write_text("offline fixture", encoding="utf-8")
+        viewer.symlink_to(source)
+        with self.assertRaisesRegex(ValueError, "regular file"):
+            self.create()
+        self.assertFalse((self.dist / "PREVIEW-MANIFEST.json").exists())
+        viewer.unlink()
+        viewer.write_bytes(b"X" * (128 * 1024 + 1))
+        with self.assertRaisesRegex(ValueError, "bounded"):
+            self.create()
+        self.assertFalse((self.dist / "PREVIEW-MANIFEST.json").exists())
+
     def test_never_marks_release_hardware_or_wifi_setup_ready(self):
         data = self.create()
         self.assertIs(data["hardware_verified"], False)
