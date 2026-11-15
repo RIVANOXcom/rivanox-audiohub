@@ -1394,5 +1394,170 @@ class MusicSessionTests(unittest.TestCase):
         self.assertNotIn("private WAV path", log)
         self.assertNotIn("Playing queued NEXT track", log)
 
+    def test_pending_slot_delete_middle_preserves_order_and_playback(self):
+        played = []
+        first = threading.Event()
+        release = threading.Event()
+        steps = iter(["k2", "a1", "a2", "d2", "s", "l", "release"])
+
+        def playback(paths, *, max_minutes, stop, on_player,
+                     session_deadline, notify):
+            played.append(paths[0])
+            if len(played) == 1:
+                first.set()
+                self.assertTrue(release.wait(2))
+                self.assertFalse(stop.is_set())
+            return True
+
+        def read(_timeout):
+            self.assertTrue(first.wait(2))
+            action = next(steps, None)
+            if action == "release":
+                release.set()
+                return None
+            return action
+
+        with mock.patch.object(local_music, "music_sink_available", return_value=True), \
+             mock.patch.object(local_music.os, "geteuid", return_value=1000):
+            self.assertTrue(music_session.run_session(
+                self.paths, max_minutes=1, read_command=read,
+                playback=playback, out=self.out.append, require_tty=False))
+        self.assertEqual(played, [self.paths[0], self.paths[1], self.paths[1]])
+        text = "\n".join(self.out)
+        self.assertIn("Removed pending slot 2", text)
+        self.assertIn("PENDING SLOTS 1=track 2, 2=track 2", text)
+        self.assertIn("Pending slots (1=NEXT): 1=track 2, 2=track 2.", text)
+        self.assertNotIn("secret-title", text)
+        self.assertNotIn(str(self.dir), text)
+
+    def test_pending_slot_promote_without_cutting_current_owned_wav(self):
+        played = []
+        first = threading.Event()
+        release = threading.Event()
+        steps = iter(["k1", "a2", "a1", "f2", "s", "l", "release"])
+
+        def playback(paths, *, max_minutes, stop, on_player,
+                     session_deadline, notify):
+            played.append(paths[0])
+            if len(played) == 1:
+                first.set()
+                self.assertTrue(release.wait(2))
+                self.assertFalse(stop.is_set())
+                return True
+            if len(played) == 4:
+                child = FakeChild()
+                on_player(child)
+                while not stop.wait(0.002):
+                    pass
+                raise InterruptedError("operator quit after reordered queue")
+            return True
+
+        def read(_timeout):
+            self.assertTrue(first.wait(2))
+            action = next(steps, None)
+            if action == "release":
+                release.set()
+                return None
+            if action is not None:
+                return action
+            if len(played) >= 4:
+                return "q"
+            time.sleep(0.001)
+            return None
+
+        with mock.patch.object(local_music, "music_sink_available", return_value=True), \
+             mock.patch.object(local_music.os, "geteuid", return_value=1000):
+            self.assertFalse(music_session.run_session(
+                self.paths, max_minutes=1, read_command=read,
+                playback=playback, out=self.out.append, require_tty=False))
+        self.assertEqual(played, [self.paths[0], self.paths[1],
+                                  self.paths[0], self.paths[0]])
+        text = "\n".join(self.out)
+        self.assertIn("Moved pending slot 2 to NEXT", text)
+        self.assertIn("PENDING SLOTS 1=track 2, 2=track 1, 3=track 1", text)
+        self.assertIn("Pending slots (1=NEXT): 1=track 2, 2=track 1, 3=track 1.", text)
+        self.assertNotIn("secret-title", text)
+        self.assertNotIn(str(self.dir), text)
+
+    def test_invalid_pending_slots_and_noop_promotion_are_harmless(self):
+        self.assertFalse(self.run_with([
+            "d1", "f1", "k2", "f8", "d8", "f1", "s", "l", "q"]))
+        self.assertEqual(self.played, [self.paths[0]])
+        self.assertEqual(len(self.children), 1)
+        self.assertTrue(self.children[0].terminated)
+        log = "\n".join(self.out)
+        self.assertIn("Pending slot 1 unavailable", log)
+        self.assertIn("Pending slot 8 unavailable", log)
+        self.assertIn("Pending slot 1 is already NEXT", log)
+        self.assertIn("PENDING SLOTS 1=track 2", log)
+        self.assertNotIn("secret-title", log)
+
+    def test_pending_slot_delete_first_undo_and_end_keep_player_safe(self):
+        self.assertFalse(self.run_with([
+            "k2", "a1", "d1", "z", "a2", "e", "s", "l", "q"]))
+        self.assertEqual(self.played, [self.paths[0]])
+        log = "\n".join(self.out)
+        self.assertIn("Removed pending slot 1", log)
+        self.assertIn("Undid last queued track", log)
+        self.assertIn("END AFTER THIS TRACK", log)
+        self.assertNotIn("PENDING SLOTS", log)
+        self.assertNotIn(str(self.dir), log)
+
+    def test_pending_slot_commands_are_bounded_local_and_private(self):
+        with mock.patch.object(music_session.select, "select",
+                               return_value=([1], [], [])):
+            for value, expected in (("D1\n", "d1"), ("d8\n", "d8"),
+                                    ("f1\n", "f1"), ("F8\n", "f8")):
+                self.assertEqual(music_session.read_terminal_command(
+                    stream=io.StringIO(value)), expected)
+            for value in ("d0\n", "f0\n", "d9\n", "f9\n", "d10\n",
+                          "d-1\n", "f2,3\n", "fsecret.wav\n"):
+                self.assertEqual(music_session.read_terminal_command(
+                    stream=io.StringIO(value)), "?")
+        report = local_music.inspect_playlist(self.paths, max_minutes=1)
+        overview = music_session.queue_message(
+            report, 1, queued_next=2, queued_after=(1, 2))
+        status = music_session.status_message(
+            1, 2, 0, 60, clock=lambda: 1,
+            queued_next=2, queued_after=(1, 2))
+        self.assertIn("Pending slots (1=NEXT): 1=track 2, 2=track 1, 3=track 2.", overview)
+        self.assertIn("PENDING SLOTS 1=track 2, 2=track 1, 3=track 2", status)
+        self.assertNotIn(str(self.dir), overview + status)
+        self.assertNotIn("secret-title", overview + status)
+
+    def test_pending_slot_changes_cannot_bypass_actual_player_failure(self):
+        started = threading.Event()
+        release = threading.Event()
+        played = []
+        steps = iter(["a2", "a1", "f2", "d2", "release"])
+
+        def playback(paths, *, max_minutes, stop, on_player,
+                     session_deadline, notify):
+            played.append(paths[0])
+            started.set()
+            self.assertTrue(release.wait(2))
+            raise RuntimeError("private /secret/music/player failed")
+
+        def read(_timeout):
+            self.assertTrue(started.wait(2))
+            action = next(steps, None)
+            if action == "release":
+                release.set()
+                return None
+            return action
+
+        with mock.patch.object(local_music, "music_sink_available", return_value=True), \
+             mock.patch.object(local_music.os, "geteuid", return_value=1000):
+            with self.assertRaisesRegex(RuntimeError, "player failed"):
+                music_session.run_session(
+                    self.paths, max_minutes=1, read_command=read,
+                    playback=playback, out=self.out.append, require_tty=False)
+        self.assertEqual(played, [self.paths[0]])
+        log = "\n".join(self.out)
+        self.assertIn("LOCAL PLAYBACK FAILED", log)
+        self.assertNotIn("private /secret", log)
+        self.assertNotIn("Playing queued NEXT track", log)
+
+
 if __name__ == "__main__":
     unittest.main()
