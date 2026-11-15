@@ -20,7 +20,7 @@ import threading
 import time
 import wave
 
-from . import discovery
+from . import discovery, usb_soundcheck
 from .process_capture import bounded_command_output
 
 TARGET = "audiohub.music"
@@ -139,19 +139,21 @@ def inspect_playlist(paths, *, max_minutes=15):
 
 
 def music_sink_available(*, capture=bounded_command_output):
-    """Check the actual private-to-USB playback prerequisites in one snapshot.
+    """Require an ACTUAL USB-only music EQ-output link in one graph snapshot.
 
-    A virtual music sink alone does not make audible USB playback possible.
-    All real player entrypoints recheck this just before spawning pw-cat, so
-    unplugging the speaker after a guided preflight cannot start a misleading
-    audio session. Neither query nor output prints private device identities.
+    A virtual music sink plus present USB hardware is insufficient if their
+    EQ output is unlinked or also linked elsewhere. Reuse the same exact
+    guarded topology predicate as the independent input soundcheck, without
+    a second graph query. Never print private PipeWire metadata or filenames.
     """
     result = capture(["pw-dump"], timeout=5, max_bytes=discovery.MAX_PIPEWIRE_GRAPH_BYTES)
     if result is None or result.returncode != 0:
         return False
-    nodes = discovery.pipewire_nodes(result.stdout)
-    return (TARGET in discovery.virtual_sinks(nodes)
-            and discovery.choose_usb_output(nodes) is not None)
+    try:
+        return usb_soundcheck.safe_input_target_from_graph(
+            result.stdout, "music") == TARGET
+    except usb_soundcheck.SoundcheckUnavailable:
+        return False
 
 
 def _play_one(path, metadata, *, deadline, spawn, stop=None, on_player=None,
@@ -389,9 +391,15 @@ def check_first_sound_readiness(*, capture=bounded_command_output,
         # Reuse the conflict-free selector from the actual audio router.
         # No PipeWire names, IDs or user-specific metadata are printed.
         usb_ready = discovery.choose_usb_output(nodes) is not None
+        try:
+            link_ready = (usb_soundcheck.safe_input_target_from_graph(
+                result.stdout, "music") == TARGET)
+        except usb_soundcheck.SoundcheckUnavailable:
+            link_ready = False
     except (OSError, ValueError, RuntimeError, TypeError, AttributeError):
         sink_ready = False
         usb_ready = False
+        link_ready = False
     out("Private PipeWire music input: " +
         ("READY" if sink_ready else
          "NEEDS ATTENTION; check audiohub user PipeWire runtime and "
@@ -403,6 +411,11 @@ def check_first_sound_readiness(*, capture=bounded_command_output,
          "and cable, then retry. Multiple ambiguous USB outputs are refused; "
          "never substitute HDMI or the default audio output."))
 
+    out("Music EQ output to USB speaker link: " +
+        ("USB-ONLY LINK FOUND (audibility UNVERIFIED)." if link_ready else
+         "NEEDS ATTENTION; check AudioHub music EQ-to-USB routing. "
+         "A present USB speaker alone is NOT enough; no HDMI/default fallback."))
+
     try:
         player_ready = bool(which("pw-cat"))
     except (OSError, ValueError, RuntimeError, TypeError):
@@ -412,7 +425,7 @@ def check_first_sound_readiness(*, capture=bounded_command_output,
          "NEEDS ATTENTION; check installed pw-cat for the current "
          "unprivileged audiohub user."))
 
-    ready = sink_ready and usb_ready and player_ready
+    ready = sink_ready and usb_ready and link_ready and player_ready
     if ready:
         out("First sound: READY FOR MANUAL TRY, NOT sound-verified.")
         out("At a trusted local TTY with physical amplifier LOW, run "
