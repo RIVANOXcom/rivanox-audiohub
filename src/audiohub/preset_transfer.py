@@ -11,12 +11,13 @@ import fcntl
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import secrets
 import stat
 import sys
 
-from . import mixer_control, music_transfer
+from . import firstboot_diag, mixer_control, music_transfer
 from .mixer import CHANNELS, EQ_BANDS
 from .runtime import SETTINGS, _private_parent_fd
 
@@ -934,6 +935,81 @@ def restore_guided(external, *, settings_path=SETTINGS,
     return verified
 
 
+def review_sd_swap(external, old_music, old_config, expected_source_sha, *,
+                   settings_path=SETTINGS,
+                   profile_path=mixer_control.PROFILE_PATH,
+                   music_dir=music_transfer.DEFAULT_MUSIC_DIR,
+                   image_identity_path=firstboot_diag.IMAGE_IDENTITY_PATH,
+                   image_identity_owner_id=0,
+                   out=print, require_terminal=True):
+    """One read-only, version-bound SD transition review; never moves data.
+
+    Three independent checks, ordered so neither a stale image nor a stale
+    archive can make the operator believe restoration is complete. Source
+    SD must already be externally mounted read-only with explicit approval.
+    No root, network, new mounts, writable SD access or owner trust data.
+    """
+    _guard(require_terminal=require_terminal)
+    if (type(expected_source_sha) is not str or
+            re.fullmatch(r"[0-9a-f]{40}", expected_source_sha) is None):
+        raise ValueError("Exact expected Pi4 image source SHA is required")
+    image = firstboot_diag.read_image_identity(
+        image_identity_path, owner_id=image_identity_owner_id)
+    if (image is None or image.get("status") != "embedded_unverified_alpha" or
+            image["source_sha"] != expected_source_sha):
+        raise ValueError("Replacement image identity is missing or not the expected SHA")
+    out("STEP 1/3 – replacement TEST image source agrees with exact reviewed "
+        "Git commit " + image["source_sha"] + "; native build " +
+        (str(image["ci_run_id"]) if image["ci_run_id"] is not None else
+         "unknown (independent build)") + ". "
+        "Not a signed/secure-boot or hardware claim.")
+    out("STEP 2/3 – verify BOTH old-SD saved WAV bytes and saved EQ/inactive "
+        "profiles against the independent private archive. "
+        "Old SD must already be mounted READ-ONLY by an authorized operator.")
+    check_backup(external, old_music, old_config, out=out, require_terminal=False)
+    out("STEP 3/3 – review NEW-SD destination WAV, EQ and inactive profile "
+        "gaps/conflicts. NO copying, apply, overwrite or SD/OS changes.")
+    plan = plan_new_sd(
+        external, settings_path=settings_path, profile_path=profile_path,
+        music_dir=music_dir, out=out, require_terminal=False)
+    blocked = (plan["profile_conflicts"] or plan["profile_limit_exceeded"]
+               or plan["eq_non_neutral_conflict"])
+    if blocked:
+        status = "blocked_manual_conflict"
+        out("STOP: existing new-SD profiles or non-neutral EQ conflict. "
+            "Do not overwrite, flash or apply; resolve separately.")
+    elif plan["ready_for_final_readonly_check"]:
+        out("No stored-data migration gap remains; perform final read-only "
+            "full WAV/preset verification on new SD.")
+        check_new(
+            external, settings_path=settings_path, profile_path=profile_path,
+            music_dir=music_dir, out=out, require_terminal=False)
+        status = "stored_data_verified_only"
+        out("STORED DATA VERIFIED for this anonymous archive and new SD. "
+            "Not an OS update, physical sound/ownership acceptance or GO.")
+    else:
+        status = "manual_restore_needed"
+        out("NOT YET READY: use existing separately consented restore-guided "
+            "PRIVATE_ARCHIVE, then rerun this read-only review. "
+            "No automatic copy, permission change or rollback.")
+    # Re-read build identity to catch changes during a multi-file review.
+    if firstboot_diag.read_image_identity(
+            image_identity_path, owner_id=image_identity_owner_id) != image:
+        raise OSError("Installed image identity changed during SD review")
+    out("Rollback boundary: preserve unmodified original SD and external "
+        "private backup. Manual SD replacement only after explicit consent.")
+    return {"status": status, "source_sha": image["source_sha"],
+            "ci_run_id": image["ci_run_id"],
+            "wav_total": plan["wav_total"],
+            "wav_missing": plan["wav_missing"],
+            "profile_missing": plan["profile_missing"],
+            "profile_conflicts": plan["profile_conflicts"],
+            "eq_bands_different": plan["eq_bands_different"],
+            "owner_identity_transferred": False,
+            "hardware_playback_verified": False,
+            "no_files_changed": True}
+
+
 def main(argv=None):
     args = list(sys.argv[1:] if argv is None else argv)
     if args in (["--help"], ["-h"]):
@@ -943,26 +1019,34 @@ def main(argv=None):
         print("       audiohub-presets-transfer plan-backup PRIVATE_BACKUP OLD_MUSIC_DIR OLD_CONFIG_DIR")
         print("       audiohub-presets-transfer backup-guided PRIVATE_BACKUP OLD_MUSIC_DIR OLD_CONFIG_DIR")
         print("       audiohub-presets-transfer restore-guided ABSOLUTE_PRIVATE_ARCHIVE")
+        print("       audiohub-presets-transfer review-swap BACKUP OLD_MUSIC OLD_CONFIG EXPECTED_SOURCE_SHA40")
         print("       audiohub-presets-transfer export-old OLD_SD_PRIVATE_CONFIG_DIR ABSOLUTE_PRIVATE_FOLDER")
         print("Export SAVE; strict restore RESTORE; conflict-free profile merge MERGE.")
         print("Saved EQ APPLY-EQ to neutral EQ only; verify-merged permits extra local profiles.")
         print("restore-guided requires separate COPY, MERGE and APPLY-EQ, then read-only verification.")
         print("backup-guided requires separate COPY and SAVE, then read-only verification.")
         print("plan-backup is READ-ONLY before changing SD: safe WAV/preset inventory, no COPY.")
+        print("review-swap checks installed image SHA, OLD source backup and NEW destination together; no writes.")
         print("If BOTH protected music folders are empty, the combined SD migration")
         print("can preserve EQ and inactive profiles without WAV copying; no audio verified.")
         print("Never imports keys, Bluetooth trust, Wi-Fi, IDs, live volume/mutes or OS.")
         return 0
     old_sd_mode = len(args) == 3 and args[0] == "export-old"
+    review_swap_mode = len(args) == 5 and args[0] == "review-swap"
     backup_check_mode = len(args) == 4 and args[0] in (
         "check-backup", "backup-guided", "plan-backup")
-    if not (old_sd_mode or backup_check_mode or (len(args) == 2 and args[0] in (
+    if not (old_sd_mode or backup_check_mode or review_swap_mode or (len(args) == 2 and args[0] in (
             "export", "inspect", "plan-profiles", "restore-profiles",
             "merge-profiles", "restore-eq", "verify", "verify-merged",
             "plan-new", "check-new", "restore-guided"))):
         print("Choose an explicit preset action and an absolute private folder.")
         return 2
     try:
+        if review_swap_mode:
+            reviewed = review_sd_swap(args[1], args[2], args[3], args[4])
+            return {"stored_data_verified_only": 0,
+                    "manual_restore_needed": 1,
+                    "blocked_manual_conflict": 2}[reviewed["status"]]
         if backup_check_mode:
             action = {
                 "check-backup": check_backup,

@@ -1231,5 +1231,194 @@ class PresetTransferTests(unittest.TestCase):
         self.assertEqual(preset_transfer.main(["verify", "relative", "bad"]), 2)
 
 
+    def _make_test_image_identity(self, *, source_sha="d" * 40,
+                                  ci_run_id=43726791812):
+        from audiohub import firstboot_diag
+        folder = self.root / "read-only-image"
+        folder.mkdir(mode=0o755, exist_ok=True)
+        folder.chmod(0o755)
+        image = folder / "build-identity.json"
+        image.write_text(json.dumps({
+            "schema": firstboot_diag.IMAGE_IDENTITY_SCHEMA,
+            "source_sha": source_sha,
+            "pi_gen_sha": "c851f00178c64b87a86c06c2be216bd89d62e55b",
+            "ci_run_id": ci_run_id,
+            "hardware_verified": False,
+            "release_approved": False,
+        }), encoding="ascii")
+        image.chmod(0o644)
+        return image
+
+    def sd_review(self, image, *, source_sha="d" * 40):
+        return preset_transfer.review_sd_swap(
+            str(self.media), str(self.old_music), str(self.old), source_sha,
+            settings_path=self.new_settings, profile_path=self.new_profiles,
+            music_dir=str(self.new_music), image_identity_path=image,
+            image_identity_owner_id=os.geteuid(), out=self.logs.append,
+            require_terminal=False)
+
+    def test_review_swap_one_pass_finds_missing_data_and_preserves_every_file(self):
+        name = self.seed_sd_backup()
+        image = self._make_test_image_identity()
+        original = (self.old_settings.read_bytes(), self.old_profiles.read_bytes(),
+                    (self.old_music / name).read_bytes(),
+                    (self.media / name).read_bytes(),
+                    image.read_bytes())
+        review = self.sd_review(image)
+        self.assertEqual(review["status"], "manual_restore_needed")
+        self.assertEqual(review["source_sha"], "d" * 40)
+        self.assertEqual(review["ci_run_id"], 43726791812)
+        self.assertEqual(review["wav_missing"], 1)
+        self.assertEqual(review["profile_missing"], 1)
+        self.assertGreater(review["eq_bands_different"], 0)
+        self.assertTrue(review["no_files_changed"])
+        self.assertFalse(review["owner_identity_transferred"])
+        self.assertFalse(review["hardware_playback_verified"])
+        self.assertFalse(self.new_settings.exists())
+        self.assertEqual((self.old_settings.read_bytes(),
+                          self.old_profiles.read_bytes(),
+                          (self.old_music / name).read_bytes(),
+                          (self.media / name).read_bytes(), image.read_bytes()),
+                         original)
+        log = "\n".join(self.logs)
+        self.assertIn("STEP 1/3", log)
+        self.assertIn("STEP 2/3", log)
+        self.assertIn("STEP 3/3", log)
+        self.assertIn("NOT YET READY", log)
+        self.assertIn("Rollback boundary", log)
+        self.assertNotIn(name, log)
+        self.assertNotIn("private-one", log)
+        self.assertNotIn(str(self.root), log)
+
+    def test_review_swap_after_guided_restore_proves_data_without_changes(self):
+        name = self.seed_sd_backup()
+        image = self._make_test_image_identity()
+        self.assertTrue(self.guided())
+        before = ((self.old_music / name).stat().st_ino,
+                  (self.new_music / name).stat().st_ino,
+                  self.new_profiles.stat().st_ino,
+                  self.new_settings.stat().st_ino)
+        review = self.sd_review(image)
+        self.assertEqual(review["status"], "stored_data_verified_only")
+        self.assertEqual(review["wav_missing"], 0)
+        self.assertEqual(review["profile_missing"], 0)
+        self.assertEqual(review["profile_conflicts"], 0)
+        self.assertEqual(((self.old_music / name).stat().st_ino,
+                          (self.new_music / name).stat().st_ino,
+                          self.new_profiles.stat().st_ino,
+                          self.new_settings.stat().st_ino), before)
+        log = "\n".join(self.logs)
+        self.assertIn("STORED DATA VERIFIED", log)
+        self.assertIn("NOT live PipeWire", log)
+        self.assertNotIn("owner setup verified", log)
+
+    def test_review_swap_refuses_wrong_or_absent_build_before_old_sd_read(self):
+        self.seed_sd_backup()
+        image = self._make_test_image_identity()
+        for sha in ("a" * 40, "", "a" * 39, "A" * 40, 123, None):
+            with self.subTest(sha=sha):
+                with mock.patch.object(preset_transfer, "check_backup") as backup:
+                    with self.assertRaises(ValueError):
+                        self.sd_review(image, source_sha=sha)
+                    backup.assert_not_called()
+        image.unlink()
+        with self.assertRaisesRegex(ValueError, "image identity"):
+            self.sd_review(image)
+        self.assertFalse(self.new_settings.exists())
+
+    def test_review_swap_detects_old_sd_changed_even_with_valid_archive(self):
+        name = self.seed_sd_backup()
+        image = self._make_test_image_identity()
+        (self.old_music / name).write_bytes(b"changed old SD after backup")
+        with mock.patch.object(preset_transfer, "plan_new_sd") as plan:
+            with self.assertRaises((ValueError, OSError)):
+                self.sd_review(image)
+            plan.assert_not_called()
+        self.assertFalse(self.new_settings.exists())
+
+    def test_review_swap_detects_old_eq_change_without_restoring(self):
+        self.seed_sd_backup()
+        image = self._make_test_image_identity()
+        mixer_control.change({"music": {"bass": 4}},
+                             path=self.old_settings, confirmed=True)
+        with self.assertRaisesRegex(ValueError, "EQ or inactive profiles"):
+            self.sd_review(image)
+        self.assertFalse(self.new_settings.exists())
+
+    def test_review_swap_reports_blocked_same_name_profile_without_overwrite(self):
+        self.seed_sd_backup()
+        image = self._make_test_image_identity()
+        mixer_control.save_volume_profile(
+            "private-one", 9, 10, 11, 12, path=self.new_profiles,
+            confirmed=True)
+        original = self.new_profiles.read_bytes()
+        review = self.sd_review(image)
+        self.assertEqual(review["status"], "blocked_manual_conflict")
+        self.assertEqual(review["profile_conflicts"], 1)
+        self.assertEqual(self.new_profiles.read_bytes(), original)
+        self.assertIn("STOP: existing new-SD profiles", "\n".join(self.logs))
+        self.assertNotIn("private-one", "\n".join(self.logs))
+
+    def test_review_swap_reports_non_neutral_eq_as_blocked(self):
+        self.seed_sd_backup()
+        image = self._make_test_image_identity()
+        mixer_control.change({"music": {"bass": 5}},
+                             path=self.new_settings, confirmed=True)
+        original = self.new_settings.read_bytes()
+        review = self.sd_review(image)
+        self.assertEqual(review["status"], "blocked_manual_conflict")
+        self.assertEqual(review["eq_bands_different"] > 0, True)
+        self.assertEqual(self.new_settings.read_bytes(), original)
+        self.assertIn("STOP:", "\n".join(self.logs))
+
+    def test_review_swap_requires_unprivileged_trusted_tty(self):
+        self.seed_sd_backup()
+        image = self._make_test_image_identity()
+        with mock.patch.object(preset_transfer.os, "geteuid", return_value=0):
+            with self.assertRaises(PermissionError):
+                self.sd_review(image)
+        with mock.patch.object(preset_transfer.sys.stdin, "isatty",
+                               return_value=False):
+            with self.assertRaises(PermissionError):
+                preset_transfer.review_sd_swap(
+                    str(self.media), str(self.old_music), str(self.old),
+                    "d" * 40, image_identity_path=image,
+                    image_identity_owner_id=os.geteuid())
+        self.assertFalse(self.new_settings.exists())
+
+    def test_review_swap_cli_exit_codes_and_real_installed_wrapper(self):
+        args = ["review-swap", str(self.media), str(self.old),
+                str(self.old), "d" * 40]
+        for status, code in (("stored_data_verified_only", 0),
+                             ("manual_restore_needed", 1),
+                             ("blocked_manual_conflict", 2)):
+            with self.subTest(status=status):
+                with mock.patch.object(
+                        preset_transfer, "review_sd_swap",
+                        return_value={"status": status}) as action:
+                    self.assertEqual(preset_transfer.main(args), code)
+                    self.assertEqual(action.call_args.args,
+                                     tuple(args[1:]))
+        script = (Path(__file__).resolve().parents[1] /
+                  "image/stage-audiohub/01-install/files/bin/audiohub-presets-transfer")
+        self.assertEqual(subprocess.run(
+            ["/bin/sh", "-n", str(script)], capture_output=True).returncode, 0)
+        source = script.read_text()
+        self.assertIn("review-swap)", source)
+        self.assertIn('"$#" -ne 5', source)
+        for arguments in (["review-swap", str(self.media), str(self.old),
+                           str(self.old), "invalid"],
+                          ["review-swap", str(self.media), str(self.old),
+                           str(self.old), "d" * 39],
+                          ["review-swap", str(self.media), "relative-old",
+                           str(self.old), "d" * 40],
+                          ["review-swap", str(self.media), str(self.old),
+                           "relative-config", "d" * 40]):
+            with self.subTest(args=arguments):
+                self.assertEqual(subprocess.run(
+                    ["/bin/sh", str(script), *arguments],
+                    capture_output=True, timeout=5).returncode, 2)
+
+
 if __name__ == "__main__":
     unittest.main()

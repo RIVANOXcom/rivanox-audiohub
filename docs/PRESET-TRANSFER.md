@@ -134,6 +134,67 @@ Retain the archive and original SD until all separately authorized
 hardware tests and operator acceptance are complete. These are
 unverified, operator-only alpha commands; not an in-place OS update.
 
+## Version-bound complete SD switch review — one read-only command
+
+**NEW:** After the operator has separately verified the downloaded
+TEST-only `.img.xz`, explicitly authorized an isolated spare-microSD flash,
+booted the **new** SD, and manually attached an independently created
+private backup **plus an old-SD mount that the operator has made
+READ-ONLY**, a single `review-swap` command now checks the three
+most important version and stored-data conditions together:
+
+```sh
+audiohub-presets-transfer review-swap \
+  /absolute/private/archive \
+  /absolute/readonly-old-SD/home/audiohub/PrivateMusic \
+  /absolute/readonly-old-SD/home/audiohub/.config/audiohub \
+  EXPECTED_40_CHAR_LOWERCASE_IMAGE_SOURCE_SHA
+```
+
+Use the exact source SHA of the operator-approved downloaded Pi4 image,
+NOT a random branch name. This command is installed on the **new**
+Pi4 test SD (PR291 and later, after a real native build). It runs only
+on the trusted local terminal as unprivileged `audiohub`; no remote
+interface, root operation, automatic mount, unplanned backup,
+SD flash, OS update, active EQ or sound playback is permitted.
+
+1. **Version**: compare the new SD's installed root-owned read-only
+   build identity `/etc/audiohub/build-identity.json` with the entered
+   exact Git source SHA; show the pinned native run number. If missing,
+   untrusted, or a different source, STOP **before touching private
+   backup media**. This is a consistency check, not a signed boot proof
+2. **Old SD**: reuse the existing strict `check-backup` to compare
+   every supported old-SD private WAV's bytes and saved EQ/inactive
+   profiles with the independent archive. Refuse any missing/changed
+   file, unsafe path or stale preset snapshot. The original SD is
+   never modified
+3. **Replacement SD**: reuse `plan-new` to report needed WAV copies,
+   profile merges, EQ differences and conflicts **without writes**.
+   If complete, automatically reuse `check-new` to check every
+   requested destination WAV and stored preset again. Existing
+   conflicts produce STOP, never overwrite
+
+The command prints anonymous `STEP 1/3`, `STEP 2/3`, `STEP 3/3`
+and a precise status: **STORED DATA VERIFIED** (exit 0;
+stored-data equality ONLY), **NOT YET READY** (exit 1; separately
+review/consent `restore-guided ARCHIVE`, then rerun), or **STOP** for
+conflicts (exit 2). Missing image identity, changed old backup or
+private-data failures also refuse with exit 2. No file names, profile
+names, Bluetooth addresses, Wi-Fi, tokens or private paths are shown.
+`restore-guided` remains the **only** combined data-copy/apply command
+and still requires distinct `COPY`, `MERGE` and `APPLY-EQ` consents;
+`review-swap` cannot call it or authorize these steps.
+
+**Rollback:** Before using the spare image preserve the untouched
+original SD and the private WAV/EQ archive. If physical boot,
+Edifier sound, safety, ownership or recovery fails, stop the test,
+power down safely and have the operator manually replace the spare
+with the ORIGINAL SD. The stored-data check cannot prove a safe OS
+rollback, live mixer settings, a bootable new image, audible sound,
+hardware acceptance, device identity, or production GO.
+No automatically executed flash, restore, rollback or migration is
+implemented.
+
 ## One-command read-only SD transfer readiness (both WAV and presets)
 
 The individual WAV and preset commands remain separately confirmed and

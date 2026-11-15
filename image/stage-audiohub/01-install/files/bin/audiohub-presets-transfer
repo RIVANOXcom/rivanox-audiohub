@@ -7,14 +7,26 @@ if [ "$#" -eq 1 ] && { [ "$1" = "--help" ] || [ "$1" = "-h" ]; }; then
   export PYTHONPATH
   exec /usr/bin/python3 -m audiohub.preset_transfer --help
 fi
-if [ "$#" -ne 2 ] && [ "$#" -ne 3 ] && [ "$#" -ne 4 ]; then
-  printf '%s\n' 'Usage: audiohub-presets-transfer export|inspect|plan-profiles|restore-profiles|merge-profiles|restore-eq|verify|verify-merged|plan-new|check-new|restore-guided ABSOLUTE_FOLDER; backup-guided ARCHIVE OLD_MUSIC OLD_CONFIG' >&2
+if [ "$#" -ne 2 ] && [ "$#" -ne 3 ] && [ "$#" -ne 4 ] && [ "$#" -ne 5 ]; then
+  printf '%s\n' 'Usage: audiohub-presets-transfer export|inspect|plan-profiles|restore-profiles|merge-profiles|restore-eq|verify|verify-merged|plan-new|check-new|restore-guided ABSOLUTE_FOLDER; review-swap ARCHIVE OLD_MUSIC OLD_CONFIG SOURCE_SHA40' >&2
   exit 2
 fi
 case "$1" in
   export|inspect|plan-profiles|restore-profiles|merge-profiles|restore-eq|verify|verify-merged|plan-new|check-new|restore-guided)
     if [ "$#" -ne 2 ]; then
       printf '%s\n' 'This preset action takes one absolute folder.' >&2; exit 2
+    fi
+    ;;
+  review-swap)
+    if [ "$#" -ne 5 ]; then
+      printf '%s\n' 'review-swap needs archive, mounted OLD music, OLD config and expected source SHA.' >&2; exit 2
+    fi
+    case "$5" in
+      *[!0-9a-f]*|'')
+        printf '%s\n' 'Expected source SHA must be exact lowercase hex.' >&2; exit 2 ;;
+    esac
+    if [ "${#5}" -ne 40 ]; then
+      printf '%s\n' 'Expected source SHA needs exactly 40 characters.' >&2; exit 2
     fi
     ;;
   check-backup|backup-guided|plan-backup)
@@ -40,7 +52,7 @@ if [ "$#" -ge 3 ]; then
     *) printf '%s\n' 'Private archive directory must be absolute.' >&2; exit 2 ;;
   esac
 fi
-if [ "$#" -eq 4 ]; then
+if [ "$#" -ge 4 ]; then
   case "$4" in
     /*) ;;
     *) printf '%s\n' 'Old SD config directory must be absolute.' >&2; exit 2 ;;
