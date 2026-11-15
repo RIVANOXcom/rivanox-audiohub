@@ -308,23 +308,38 @@ def check_music_readiness(folder, *, capture=bounded_command_output,
 
 def check_first_sound_readiness(*, capture=bounded_command_output,
                                 which=shutil.which, out=print):
-    """Read-only first SOUND prerequisites with NO WAV library requirement.
+    """Silent first-sound prerequisites without WAV or private user data.
 
-    This checks only the existing private music sink and installed pw-cat.
-    It never opens a file, sends samples, sets a route, changes gain or
-    certifies that any physical speaker will actually produce sound.
+    Observe one bounded PipeWire snapshot for BOTH the private input and the
+    real selectable USB speaker output. The same USB selector as the actual
+    AudioHub router rejects duplicate or ambiguous devices and never falls
+    back to HDMI/default sound. A visible USB node is NOT proof of audibility.
     """
     if hasattr(os, "geteuid") and os.geteuid() == 0:
         raise PermissionError("Run first-sound check as the unprivileged operator")
     out("FIRST SOUND CHECK: built-in original stereo sample; no WAV files needed.")
     try:
-        sink_ready = music_sink_available(capture=capture)
-    except (OSError, ValueError, RuntimeError, TypeError):
+        result = capture(["pw-dump"], timeout=5,
+                         max_bytes=discovery.MAX_PIPEWIRE_GRAPH_BYTES)
+        nodes = (discovery.pipewire_nodes(result.stdout)
+                 if result is not None and result.returncode == 0 else [])
+        sink_ready = TARGET in discovery.virtual_sinks(nodes)
+        # Reuse the conflict-free selector from the actual audio router.
+        # No PipeWire names, IDs or user-specific metadata are printed.
+        usb_ready = discovery.choose_usb_output(nodes) is not None
+    except (OSError, ValueError, RuntimeError, TypeError, AttributeError):
         sink_ready = False
+        usb_ready = False
     out("Private PipeWire music input: " +
         ("READY" if sink_ready else
          "NEEDS ATTENTION; check audiohub user PipeWire runtime and "
          "audiohub.music sink. No default audio fallback."))
+    out("Physical USB speaker output: " +
+        ("ONE UNAMBIGUOUS ROUTABLE USB SINK FOUND (audibility UNVERIFIED)."
+         if usb_ready else
+         "NEEDS ATTENTION; connect the intended USB speakers, check power "
+         "and cable, then retry. Multiple ambiguous USB outputs are refused; "
+         "never substitute HDMI or the default audio output."))
 
     try:
         player_ready = bool(which("pw-cat"))
@@ -335,7 +350,7 @@ def check_first_sound_readiness(*, capture=bounded_command_output,
          "NEEDS ATTENTION; check installed pw-cat for the current "
          "unprivileged audiohub user."))
 
-    ready = sink_ready and player_ready
+    ready = sink_ready and usb_ready and player_ready
     if ready:
         out("First sound: READY FOR MANUAL TRY, NOT sound-verified.")
         out("At a trusted local TTY with physical amplifier LOW, run "
