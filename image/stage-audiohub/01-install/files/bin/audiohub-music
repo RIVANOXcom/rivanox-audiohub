@@ -35,6 +35,8 @@ usage() {
     'PLAY is required separately to start sound; CHANGE revises the queue.' \
     'During playback: s=session/track ETA, u=pause/resume, m=repeat, e=finish current WAV then stop, n=next, q=stop now.' \
     'The end-after-track switch is local and temporary; navigation cancels it, session deadline still applies.' \
+    'If our own player fails, next/replay/jump stop safely and never claim more tracks played.' \
+    'If the player exited, s cannot claim estimated ongoing WAV progress; no auto-retry or fallback.' \
     'Track ETA uses checked WAV header and owned-player time, not a real PCM cursor or proof of sound.' \
     'No network, settings, privileged operation or background service is started.'
 }

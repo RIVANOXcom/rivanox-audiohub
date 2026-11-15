@@ -304,6 +304,8 @@ class MusicLauncherTests(unittest.TestCase):
         self.assertIn("s=session/track ETA", help_text)
         self.assertIn("e=finish current WAV then stop", help_text)
         self.assertIn("navigation cancels it, session deadline still applies", help_text)
+        self.assertIn("next/replay/jump stop safely", help_text)
+        self.assertIn("s cannot claim estimated ongoing WAV progress", help_text)
         self.assertIn("not a real PCM cursor or proof of sound", help_text)
         self.assertIn("targeted left/right/both side", help_text)
         self.assertIn("FIRST checks private sink and playback tool", help_text)

@@ -226,6 +226,135 @@ class MusicSessionTests(unittest.TestCase):
         self.assertIn("Local music session ended", text)
         self.assertNotIn("secret-title", text)
 
+    def test_spontaneous_player_failure_cannot_hide_behind_navigation(self):
+        # Regression: the player may fail while the operator's read_line()
+        # is finishing. NEXT/PREVIOUS/REPLAY/JUMP must never suppress this
+        # actual failure and launch a new player.
+        for navigation in ("n", "p", "r", "2"):
+            with self.subTest(navigation=navigation):
+                self.out.clear()
+                started = threading.Event()
+                fail_now = threading.Event()
+                attempts = []
+                def playback(paths, *, max_minutes, stop, on_player,
+                             session_deadline, notify):
+                    attempts.append(paths[0])
+                    started.set()
+                    self.assertTrue(fail_now.wait(2))
+                    raise RuntimeError("private /secret-track.wav playback failure")
+                def read(_timeout):
+                    self.assertTrue(started.wait(2))
+                    fail_now.set()
+                    # Return navigation after a real failure is already
+                    # recorded, while this main thread is still in read().
+                    time.sleep(0.03)
+                    return navigation
+                with mock.patch.object(local_music, "music_sink_available",
+                                       return_value=True), \
+                     mock.patch.object(local_music.os, "geteuid",
+                                       return_value=1000):
+                    with self.assertRaisesRegex(RuntimeError, "player failed") as captured:
+                        music_session.run_session(
+                            self.paths, read_command=read,
+                            playback=playback, out=self.out.append,
+                            max_minutes=1, require_tty=False)
+                self.assertEqual(attempts, [self.paths[0]])
+                self.assertIn("LOCAL PLAYBACK FAILED: no next, repeated or jumped",
+                              "\n".join(self.out))
+                self.assertIn("private audiohub.music input",
+                              "\n".join(self.out))
+                self.assertNotIn("Track skipped", "\n".join(self.out))
+                self.assertNotIn(str(self.dir), "\n".join(self.out))
+                self.assertNotIn("secret-track", "\n".join(self.out))
+                self.assertNotIn("secret-track", str(captured.exception))
+
+    def test_explicit_navigation_broken_pipe_is_expected_not_player_failure(self):
+        # Owned child cancellation may produce BrokenPipeError. That is
+        # expected and must not block deliberate next/replay/quit.
+        for navigation in ("n", "p", "r", "2"):
+            with self.subTest(navigation=navigation):
+                self.out.clear()
+                self.played.clear()
+                child_ready = threading.Event()
+                def playback(paths, *, max_minutes, stop, on_player,
+                             session_deadline, notify):
+                    self.played.append(paths[0])
+                    child = FakeChild()
+                    on_player(child)
+                    child_ready.set()
+                    self.assertTrue(stop.wait(2))
+                    raise BrokenPipeError("private terminal playback stopped")
+                commands = iter((navigation, "q"))
+                def read(_timeout):
+                    self.assertTrue(child_ready.wait(2))
+                    return next(commands, None)
+                with mock.patch.object(local_music, "music_sink_available",
+                                       return_value=True), \
+                     mock.patch.object(local_music.os, "geteuid",
+                                       return_value=1000):
+                    self.assertFalse(music_session.run_session(
+                        self.paths, read_command=read,
+                        playback=playback, out=self.out.append,
+                        max_minutes=1, require_tty=False))
+                self.assertEqual(len(self.played), 2)
+                self.assertNotIn("LOCAL PLAYBACK FAILED", "\n".join(self.out))
+                self.assertNotIn("private terminal", "\n".join(self.out))
+
+    def test_status_on_exited_owned_player_never_invents_progress(self):
+        child_ready = threading.Event()
+        def playback(paths, *, max_minutes, stop, on_player,
+                     session_deadline, notify):
+            child = FakeChild()
+            child.exit_code = 1
+            on_player(child)
+            child_ready.set()
+            self.assertTrue(stop.wait(2))
+            raise InterruptedError("expected operator quit")
+        commands = iter(("s", "q"))
+        def read(_timeout):
+            self.assertTrue(child_ready.wait(2))
+            return next(commands, None)
+        with mock.patch.object(local_music, "music_sink_available",
+                               return_value=True), \
+             mock.patch.object(local_music.os, "geteuid",
+                               return_value=1000):
+            self.assertFalse(music_session.run_session(
+                self.paths, read_command=read,
+                playback=playback, out=self.out.append,
+                max_minutes=1, require_tty=False))
+        shown = "\n".join(self.out)
+        self.assertIn("Owned music player has exited; track estimate unavailable",
+                      shown)
+        self.assertNotIn("Estimated WAV track:", shown)
+        self.assertNotIn(str(self.dir), shown)
+        self.assertNotIn("secret-title", shown)
+
+    def test_failed_player_armed_finish_current_never_claims_natural_finish(self):
+        started = threading.Event()
+        fail_now = threading.Event()
+        def playback(paths, *, max_minutes, stop, on_player,
+                     session_deadline, notify):
+            started.set()
+            self.assertTrue(fail_now.wait(2))
+            raise OSError("secret-player-path")
+        def read(_timeout):
+            self.assertTrue(started.wait(2))
+            fail_now.set()
+            time.sleep(0.03)
+            return "e"
+        with mock.patch.object(local_music, "music_sink_available",
+                               return_value=True), \
+             mock.patch.object(local_music.os, "geteuid",
+                               return_value=1000):
+            with self.assertRaisesRegex(RuntimeError, "player failed"):
+                music_session.run_session(
+                    self.paths, read_command=read, playback=playback,
+                    out=self.out.append, max_minutes=1, require_tty=False)
+        output = "\n".join(self.out)
+        self.assertNotIn("End-after-track completed", output)
+        self.assertIn("LOCAL PLAYBACK FAILED", output)
+        self.assertNotIn("secret-player-path", output)
+
     def test_failing_player_is_reported_without_private_identity(self):
         def play(paths, **kwargs):
             raise ValueError("private /secret-file.wav")

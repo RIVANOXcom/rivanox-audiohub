@@ -2,6 +2,21 @@
 
 **Status:** Alpha / pre-release. No verified ready-to-flash Pi 4 image has been published. Native ARM64 test-only SD images have been built and uploaded to GitHub Actions (latest prior-to-renaming run 42057278883; 159 tests, 48 rootfs checks). **No real Pi4/Edifier playback, ownership security or product-ready Release has been verified.**
 
+## Safe failure reporting and no unintended next WAV after player loss (unverified alpha)
+
+An unexpectedly failed local `pw-cat`/private PipeWire playback now
+**stops the trusted interactive session even when a next/previous/replay
+or numbered jump was pressed nearly simultaneously**. Ordinary user
+navigation/quit cleanly cancels only the owned player (an expected
+broken pipe is not treated as a new fault). The fixed anonymous message
+guides the operator to check the existing private `audiohub.music`
+input and installed player; no automatic retry, default sink fallback,
+additional WAV playback or private device/path data is exposed.
+The `s` status never shows a running track-time estimate if its owned
+playback child is already exited. This closes a reproducible false
+progress/hidden failure path without changing routing, mixer, gain,
+owner/BT/Wi-Fi or file storage. See [local playback guide](LOCAL-MUSIC-PLAYBACK.md).
+
 ## Local WAV session end-after-current-track control (unverified alpha)
 
 The existing unprivileged, operator-started interactive `audiohub-music`
