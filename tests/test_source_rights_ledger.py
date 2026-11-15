@@ -349,37 +349,38 @@ class SourceRightsLedgerTests(unittest.TestCase):
         self.assertIn("AGPL-3.0-only", text)
 
 
-    def test_first_pi_alpha_guide_has_verified_image_provenance(self):
+    def test_first_pi_alpha_guide_uses_current_exact_build_not_stale_pr75(self):
+        """Shipped operator guide must never recommend an unrelated older ZIP."""
         guide = (ROOT / "docs/FIRST-PI-ALPHA-TEST.md").read_text()
         for token in (
+            "version-independent operator procedure",
+            "[Draft PR304 evidence](https://github.com/RIVANOXcom/rivanox-audiohub/pull/304)",
+            "exact intended source SHA",
+            "outer ZIP SHA256",
+            "--expected-source-sha", "--expected-zip-sha256",
+            "SHA256SUMS.txt", "PREVIEW-MANIFEST.json",
+            "ROOTFS-PACKAGES.json",
+            "AUDIOHUB-OFFLINE-REPORT-VIEWER.html",
+            "image SHA256", "offline", "Get-FileHash", "sha256sum",
+            "public_release_ready=false", "NOT TESTED",
+            "NOT APPROVED", "24-hour", "AGPL-3.0-only",
+            "83 source-rights", "nine unresolved",
+            "AH-005", "safe shutdown method",
+            "do not begin the physical flash/boot test",
+        ):
+            with self.subTest(required=token):
+                self.assertIn(token, guide)
+        # Previous PR75 was an authentic historic build, but its artifact
+        # must NOT be promoted as the current operator download.
+        for stale in (
             "2b02bb4968467cd1033b47ddeaccaba092b96db0",
             "42305591855", "42305548510", "13546207449",
             "7b1adf94685ffe2cdbe1e86e83e11839da0fcd814d78bca0818e362f24167c95",
             "b6bc5175fdee8f7c89aa0e041ec5521e7881ec2f1bd1d658156237434e1b9ad5",
-            "92/92", "UNVERIFIED_ALPHA_TEST_ONLY",
-            "public_release_ready=false", "SHA256SUMS.txt",
-            "PREVIEW-MANIFEST.json", "ROOTFS-PACKAGES.json",
-            "Get-FileHash", "sha256sum", "NOT TESTED",
-            "NOT APPROVED", "24-hour", "AGPL-3.0-only",
-            "83 source-rights", "nine unresolved",
+            "[PR75](", "[PR70](",
         ):
-            with self.subTest(token=token):
-                self.assertIn(token, guide)
-        # Old PR70 and initial preview image artifacts must not be re-promoted.
-        self.assertNotIn("41792407565", guide)
-        self.assertNotIn("13303394505", guide)
-        self.assertNotIn("93e637276d5fc772a4b06f7848aacdeddfddaf17", guide)
-        self.assertNotIn("13522368901", guide)
-        self.assertNotIn("42255968531", guide)
-        # The label and actual destination must identify the SAME Draft PR.
-        self.assertIn(
-            "[PR75](https://github.com/RIVANOXcom/rivanox-audiohub/pull/75)", guide
-        )
-        self.assertNotIn(
-            "[PR75](https://github.com/RIVANOXcom/rivanox-audiohub/pull/70)", guide
-        )
-        self.assertIn("native image-build run ID is #42305548510", guide)
-        self.assertIn("deliberately pinned", guide)
+            with self.subTest(stale=stale):
+                self.assertNotIn(stale, guide)
 
     def test_backlog_pi4_operator_action_uses_pinned_verified_guide(self):
         backlog = (ROOT / "docs/ENGINEERING-BACKLOG.md").read_text()
