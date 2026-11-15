@@ -212,6 +212,8 @@ During playback, type a command and press **Enter**:
 | `u` + Enter | Pause or resume only this music session's owned player; session time limit keeps running |
 | `s` + Enter | Show current track number, elapsed session time, remaining session limit **and** a separate pause-aware approximate elapsed/remaining time for this WAV (no filenames or identifiers) |
 | `l` + Enter | Show anonymous selected queue order and planned WAV lengths (not live playback progress) |
+| `k1`–`k8` + Enter | Queue that **already selected numbered WAV** to play once **after the current track naturally finishes**, without cutting or restarting current audio |
+| `k0` + Enter | Cancel the temporary queued-next selection; restore regular queue/repeat order |
 | `n` + Enter | Stop just the current owned player, then start the next selected track in order |
 | `p` + Enter | Stop the current player and go to the previous selected track; on track 1, restart track 1 |
 | `r` + Enter | Restart the current selected track from its beginning |
