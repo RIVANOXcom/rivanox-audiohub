@@ -1,5 +1,24 @@
 # Development status
 
+## Version-bound old SD to replacement SD data review (development alpha)
+
+A new, operator-initiated local `audiohub-presets-transfer review-swap
+BACKUP OLD_MUSIC OLD_CONFIG EXPECTED_SOURCE_SHA40` now composes three
+**existing** read-only checks into one actionable human handoff:
+the root-owned installed image source SHA must match the exact reviewed
+Git commit, the real old-SD WAV/EQ/inactive-profile data must match
+the independent archive, and the new SD must be scanned for remaining
+data gaps or conflicts. A fully matched destination additionally runs
+the existing full `check-new` checksum verification; missing data
+gets a clear manual-restore-needed status, conflicts cause STOP.
+It never mounts either SD, copies WAVs, applies EQ, starts playback,
+changes owner settings or performs OS updates. The operator must
+have separately and explicitly authorized the spare SD, mounted old
+SD READ-ONLY and retained original SD and independent archive for
+physical rollback. Exit codes 0 = only saved-data equality verified,
+1 = restore needed, 2 = conflict/unsafe/mismatch; NO hardware or
+release GO. See [preset transfer](PRESET-TRANSFER.md).
+
 ## Verify an actual downloaded Pi4 image ZIP before human-authorized flash
 
 The existing offline release preflight script now supports explicit
