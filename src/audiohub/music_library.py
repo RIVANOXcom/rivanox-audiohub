@@ -89,6 +89,139 @@ def discover_library(path, *, allow_empty=False):
     return items, excluded
 
 
+
+# Only an explicitly recognizable extension is counted as convertible audio;
+# no contents of non-WAV files are inspected. This never copies or converts.
+OTHER_AUDIO_SUFFIXES = frozenset((
+    ".mp3", ".flac", ".m4a", ".aac", ".ogg", ".opus",
+    ".aiff", ".aif", ".wma", ".alac",
+))
+
+
+def inspect_library_health(folder):
+    """Bounded, filename-free first-use audit of a local private music folder.
+
+    Reuses the production WAV parser and the same nofollow folder guard as
+    normal browsing. A health report is guidance, not playback readiness,
+    a full checksum scan, hardware sound proof or a substitute for consent.
+    """
+    fd, folder = _private_directory(folder)
+    counts = {
+        "supported_wav": 0,
+        "unsupported_pcm_wav": 0,
+        "damaged_or_unreadable_wav": 0,
+        "unsafe_wav": 0,
+        "hidden_wav": 0,
+        "other_audio_format": 0,
+        "other_entries": 0,
+    }
+    examined = 0
+    try:
+        with os.scandir(fd) as entries:
+            for entry in entries:
+                examined += 1
+                if examined > MAX_SCANNED:
+                    raise ValueError(
+                        "Private music folder exceeds 256 entries; "
+                        "choose a smaller folder for a complete diagnosis")
+                name = entry.name
+                suffix = Path(name).suffix.lower()
+                if name.startswith(".") and suffix == ".wav":
+                    counts["hidden_wav"] += 1
+                elif suffix in OTHER_AUDIO_SUFFIXES:
+                    counts["other_audio_format"] += 1
+                elif suffix != ".wav":
+                    counts["other_entries"] += 1
+                elif not entry.is_file(follow_symlinks=False):
+                    counts["unsafe_wav"] += 1
+                else:
+                    try:
+                        local_music._open_wav(folder / name)
+                    except ValueError as exc:
+                        # Categorize only fixed errors from our parser. Never
+                        # print exception text, filenames or private paths.
+                        code = str(exc)
+                        if code == "Only bounded 16-bit PCM mono/stereo WAV is supported":
+                            counts["unsupported_pcm_wav"] += 1
+                        elif code in (
+                                "WAV must be a bounded, non-world-writable regular file",
+                                "Links cannot be played"):
+                            counts["unsafe_wav"] += 1
+                        else:
+                            counts["damaged_or_unreadable_wav"] += 1
+                    except (OSError, UnicodeError, EOFError):
+                        counts["damaged_or_unreadable_wav"] += 1
+                    else:
+                        counts["supported_wav"] += 1
+        # A changed final directory path could otherwise make a misleading
+        # "healthy" report about a folder other than the operator's choice.
+        current = os.lstat(folder)
+        original = os.fstat(fd)
+        if (not stat.S_ISDIR(current.st_mode) or
+                (current.st_dev, current.st_ino) !=
+                (original.st_dev, original.st_ino)):
+            raise ValueError("Private music folder changed during diagnosis")
+    except (OSError, UnicodeError) as exc:
+        raise ValueError("Cannot safely inspect private music folder") from exc
+    finally:
+        os.close(fd)
+    return counts
+
+
+def display_library_health(counts):
+    """Actionable anonymous guidance with no per-file metadata or playback."""
+    keys = ("supported_wav", "unsupported_pcm_wav",
+            "damaged_or_unreadable_wav", "unsafe_wav", "hidden_wav",
+            "other_audio_format", "other_entries")
+    if (type(counts) is not dict or set(counts) != set(keys) or
+            any(type(counts[k]) is not int or
+                not 0 <= counts[k] <= MAX_SCANNED for k in keys) or
+            sum(counts.values()) > MAX_SCANNED):
+        raise ValueError("Invalid anonymous music health report")
+    count = counts["supported_wav"]
+    lines = [
+        "OFFLINE MUSIC LIBRARY HEALTH: SILENT READ-ONLY REPORT.",
+        "Supported PCM16 WAVs: " + str(count) +
+        " (numbered album list can display at most 40).",
+        "Unsupported WAV sample/channel/rate/duration: " +
+        str(counts["unsupported_pcm_wav"]) + ".",
+        "Broken or inaccessible WAV headers: " +
+        str(counts["damaged_or_unreadable_wav"]) + ".",
+        "Unsafe/linked/oversized WAV entries: " +
+        str(counts["unsafe_wav"]) + ".",
+        "Hidden WAV entries not listed: " + str(counts["hidden_wav"]) + ".",
+        "Other recognized audio formats (not playable here): " +
+        str(counts["other_audio_format"]) + ".",
+        "Other non-audio entries ignored: " +
+        str(counts["other_entries"]) + ".",
+    ]
+    if count == 0:
+        lines.append("NO SUPPORTED WAV TRACKS. A fresh test SD may "
+                     "normally have zero private music files.")
+    elif count > MAX_DISPLAYED:
+        lines.append("TOO MANY PLAYABLE WAVS for the 40-track album list: "
+                     "select a smaller private folder before browsing.")
+    else:
+        lines.append("SUPPORTED WAVS FOUND for a separate numbered "
+                     "audiohub-music --list preview; NOT sound-ready.")
+    if counts["other_audio_format"] or counts["unsupported_pcm_wav"]:
+        lines.append("For OWN or LICENSED media only, convert OFFLINE on "
+                     "your computer to uncompressed 16-bit PCM mono/stereo "
+                     "WAV, 8-96 kHz, at most 64 MiB per track. "
+                     "This tool never converts or imports music.")
+    if counts["damaged_or_unreadable_wav"]:
+        lines.append("Recheck the source export and readable WAV header "
+                     "on your computer; no broken file is repaired here.")
+    if counts["unsafe_wav"] or counts["hidden_wav"]:
+        lines.append("Inspect your private folder locally for links, "
+                     "oversized/world-writable entries or hidden WAVs. "
+                     "Do not weaken permissions to bypass validation.")
+    lines.append("No filenames, paths, titles or media contents displayed. "
+                 "No playback, network, file writes or mixer changes.")
+    lines.append("Pi4/Edifier speakers, ownership and hardware remain UNVERIFIED.")
+    return "\n".join(lines)
+
+
 def parse_track_numbers(selection, available):
     """Require an explicit, bounded, unique 1-based comma-separated choice."""
     if (type(selection) is not str or not 1 <= len(selection) <= 64

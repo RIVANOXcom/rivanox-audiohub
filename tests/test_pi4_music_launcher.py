@@ -394,6 +394,42 @@ class MusicLauncherTests(unittest.TestCase):
         gate = (ROOT / "src/audiohub/music_library.py").read_text(encoding="utf-8")
         self.assertIn('if type(answer) is not str or answer != "PLAY":', gate)
 
+    def test_installed_library_health_is_exclusive_readonly_and_named_in_help(self):
+        help_text = self.shell("--help").stdout
+        self.assertIn("audiohub-music [ABSOLUTE_PRIVATE_WAV_FOLDER] --library-health",
+                      help_text)
+        self.assertIn("NO filenames, sound, network, imports or file writes",
+                      help_text)
+        launcher = LAUNCHER.read_text(encoding="utf-8")
+        self.assertIn("health_only=0", launcher)
+        self.assertIn('if [ "$health_only" -eq 1 ]; then', launcher)
+        self.assertIn(
+            'exec /usr/bin/python3 -m audiohub.local_music --library-health --library "$folder"',
+            launcher)
+        self.assertNotIn("pw-cat", launcher)
+        self.assertNotIn("sudo ", launcher)
+        for args in (
+                ("--library-health", "--library-health"),
+                ("--library-health", "--list"),
+                ("--library-health", "--check"),
+                ("--library-health", "--show-titles"),
+                ("--library-health", "--minutes", "10"),
+                ("--library-health", "--level", "soft"),
+                ("--library-health", "--channel", "right"),
+                ("--library-health", "--play"),
+                ("--library-health", "relative"),
+                ("--library-health", "/abs/private", "/another/private"),
+        ):
+            with self.subTest(args=args):
+                outcome = self.shell(*args)
+                self.assertEqual(outcome.returncode, 2, outcome.stderr)
+                self.assertNotIn("Playing track", outcome.stdout)
+                self.assertNotIn("PLAY confirmed", outcome.stdout)
+        stage = STAGE.read_text(encoding="utf-8")
+        self.assertIn("empty_health_output=", stage)
+        self.assertIn("audiohub-music --library-health", stage)
+        self.assertIn("NO SUPPORTED WAV TRACKS", stage)
+
 
 if __name__ == "__main__":
     unittest.main()

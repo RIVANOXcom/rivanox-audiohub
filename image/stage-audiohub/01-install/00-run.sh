@@ -56,6 +56,16 @@ case "$empty_library_output" in *"0 valid WAV track(s)"*"No playback started."*"
 case "$invalid_level_output" in *"Only quiet, soft or normal"*) ;; *) exit 1 ;; esac
 case "$invalid_time_output" in *"Minutes must be a whole number"*) ;; *) exit 1 ;; esac
 
+# Verify the REAL installed Pi4 unprivileged health guide on a pristine SD.
+# It must describe zero files without starting sound, writing music or
+# requiring a network or the phone/owner onboarding that remains unverified.
+set +e
+empty_health_output="$(runuser -u audiohub -- /usr/local/bin/audiohub-music --library-health 2>&1)"
+empty_health_status="$?"
+set -e
+test "$empty_health_status" -eq 0
+case "$empty_health_output" in *"OFFLINE MUSIC LIBRARY HEALTH"*"Supported PCM16 WAVs: 0"*"NO SUPPORTED WAV TRACKS"*"No playback, network, file writes or mixer changes"*"UNVERIFIED"*) ;; *) exit 1 ;; esac
+
 # Actual installed Pi4 stereo channel option must fail closed for invalid
 # names. This cannot play sound or modify user volume or other sinks.
 set +e
