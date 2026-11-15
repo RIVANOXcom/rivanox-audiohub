@@ -16,6 +16,7 @@ import stat
 import struct
 import subprocess
 import sys
+import threading
 import time
 import wave
 
@@ -27,6 +28,12 @@ MAX_FILES = 8
 MAX_WAV_BYTES = 64 * 1024 * 1024
 MAX_SECONDS = 30 * 60
 STREAM_VOLUME = "0.20"  # Conservative starting point; NOT calibrated SPL.
+USB_ROUTE_WATCH_SECONDS = 3.0  # Per active owned track; NOT sound measurement.
+
+
+class USBRouteLost(RuntimeError):
+    """Only the owned player was stopped after its USB route disappeared."""
+
 # Only allow softer-than-default stream levels, never louder/uncalibrated boosts.
 PLAYBACK_LEVELS = {"quiet": "0.05", "soft": "0.10", "normal": STREAM_VOLUME}
 
@@ -163,6 +170,32 @@ def _play_one(path, metadata, *, deadline, spawn, stop=None, on_player=None,
     )
     stream = None
     child = None
+    route_watch_done = threading.Event()
+    route_lost = threading.Event()
+    route_watcher = None
+
+    def watch_owned_usb_route():
+        # Only while THIS owned child exists; never signal global PipeWire,
+        # the supervisor or another user/player. Inspect no private WAVs.
+        while not route_watch_done.wait(USB_ROUTE_WATCH_SECONDS):
+            if child.poll() is not None:
+                return
+            try:
+                ready = music_sink_available()
+            except (OSError, ValueError, RuntimeError, TypeError, AttributeError):
+                ready = False
+            if route_watch_done.is_set() or child.poll() is not None:
+                return
+            if not ready:
+                route_lost.set()
+                # SIGKILL only the pw-cat child we spawned. This also stops
+                # paused (SIGSTOP) players without a transient SIGCONT.
+                try:
+                    child.kill()
+                except (OSError, ProcessLookupError):
+                    pass
+                return
+
     try:
         st = os.fstat(fd)
         if not stat.S_ISREG(st.st_mode) or st.st_size > MAX_WAV_BYTES:
@@ -186,8 +219,14 @@ def _play_one(path, metadata, *, deadline, spawn, stop=None, on_player=None,
                           start_new_session=True)
             if on_player is not None:
                 on_player(child)
+            route_watcher = threading.Thread(
+                target=watch_owned_usb_route, name="audiohub-usb-watch",
+                daemon=True)
+            route_watcher.start()
             sent = 0
             while sent < metadata["frames"]:
+                if route_lost.is_set():
+                    raise USBRouteLost("Physical USB audio route lost; owned player stopped")
                 if (time.monotonic() >= deadline
                         or (stop is not None and stop.is_set())):
                     raise InterruptedError("Operator playback stopped or timed out")
@@ -202,6 +241,8 @@ def _play_one(path, metadata, *, deadline, spawn, stop=None, on_player=None,
             # wait. Check cancel/deadline on every short interval instead,
             # including after the entire WAV was sent into the player's pipe.
             while True:
+                if route_lost.is_set():
+                    raise USBRouteLost("Physical USB audio route lost; owned player stopped")
                 remaining = deadline - time.monotonic()
                 if (remaining <= 0 or
                         (stop is not None and stop.is_set())):
@@ -211,12 +252,21 @@ def _play_one(path, metadata, *, deadline, spawn, stop=None, on_player=None,
                     break
                 except subprocess.TimeoutExpired:
                     continue
+            if route_lost.is_set():
+                raise USBRouteLost("Physical USB audio route lost; owned player stopped")
             if result != 0:
                 raise RuntimeError("Local PipeWire playback tool was unavailable")
             return True
     except BrokenPipeError as exc:
+        if route_lost.is_set():
+            raise USBRouteLost("Physical USB audio route lost; owned player stopped") from exc
         raise RuntimeError("Local PipeWire player closed unexpectedly") from exc
     finally:
+        route_watch_done.set()
+        if route_watcher is not None:
+            # A bounded pw-dump probe can still be finishing. As a daemon
+            # it must never block an operator STOP or hold the whole session.
+            route_watcher.join(timeout=0.2)
         if child is not None:
             if child.poll() is None:
                 child.terminate()

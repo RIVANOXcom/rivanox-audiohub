@@ -106,9 +106,20 @@ output. This is also enforced for direct WAV playback and each subsequent
 track of a manual playlist; if the USB output disappears after a prior
 readiness report, the next owned player is refused rather than silently
 playing into an unattached virtual sink or falling back to HDMI/default.
-Already running hardware audio cannot be independently guaranteed by this
-snapshot and real Pi4/Edifier unplug/replug, loudness and sound need a
-separately authorized operator test. No device identifiers are printed.
+During each **actively running WAV track**, a separate read-only USB-route
+watchdog also checks the same private-to-USB prerequisites **every 3 seconds**
+using a bounded (up to 5-second) PipeWire snapshot. If the USB output
+disappears or the graph cannot be inspected reliably, it stops **only the
+`pw-cat` child started by that WAV**, including a locally paused child.
+The interactive player then explains the USB loss anonymously, refuses
+automatic next/repeat/replay, and requires a fresh operator-selected PLAY
+after the speaker connection and physical loudness have been checked.
+Never kill PipeWire, other sources, or another player's process.
+A disconnect may take several seconds to detect: this is not a realtime
+safety interlock, SPL guarantee, sound measurement or hardware acceptance.
+Actual Pi4/Edifier unplug/replug, loudness and audibility still require a
+separately authorized hands-on operator test. No private device identifiers
+or WAV names are emitted by the watchdog.
 
 Actual audio still requires the existing operator-reviewed queue
 and distinct exact `PLAY` confirmation; there is no autoplay.

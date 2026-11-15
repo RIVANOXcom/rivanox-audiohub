@@ -265,6 +265,9 @@ def run_session(paths, *, max_minutes=15, read_command=read_terminal_command,
             except InterruptedError:
                 if not cancelled.is_set():
                     failures.append("interrupted")
+            except local_music.USBRouteLost:
+                if not cancelled.is_set():
+                    failures.append("usb_route_lost")
             except (ValueError, OSError, RuntimeError, PermissionError,
                     TimeoutError, BrokenPipeError):
                 # The operator's explicit navigation/quit terminates ONLY
@@ -579,14 +582,22 @@ def run_session(paths, *, max_minutes=15, read_command=read_terminal_command,
             out("Music session time limit reached. Playback stopped.")
             return False
         if failures:
-            # Do not let a nearly simultaneous NEXT/PREVIOUS/REPLAY/JUMP
-            # conceal an already failed pw-cat and start more audio.
-            # Failure messages are fixed and cannot leak a private WAV path,
-            # subprocess stderr, device identity or owner information.
-            out("LOCAL PLAYBACK FAILED: no next, repeated or jumped track "
-                "started. Check the private audiohub.music input and "
-                "installed pw-cat tool before a separate manual retry. "
-                "No default sound-output fallback or settings changed.")
+            # A route disappearing in the middle of a long WAV has its own
+            # actionable privacy-safe message; never auto-resume after USB
+            # hotplug or claim sound restoration without new user consent.
+            if "usb_route_lost" in failures:
+                out("USB SPEAKER ROUTE LOST DURING PLAYBACK: AudioHub stopped "
+                    "its owned local player. No next/repeated WAV started. "
+                    "Check the powered USB speaker and cable, then start a "
+                    "new manual PLAY only after safe physical volume review. "
+                    "No fallback, global route or settings changed.")
+            else:
+                # Do not let NEXT/PREVIOUS/REPLAY/JUMP conceal player failure.
+                # Messages contain no filenames or PipeWire device identities.
+                out("LOCAL PLAYBACK FAILED: no next, repeated or jumped track "
+                    "started. Check the private audiohub.music input and "
+                    "installed pw-cat tool before a separate manual retry. "
+                    "No default sound-output fallback or settings changed.")
             raise RuntimeError("Local music player failed; no file paths disclosed")
         # Explicit navigation selects another playback attempt and disarms
         # the old-track finish policy, avoiding a surprising premature end.
