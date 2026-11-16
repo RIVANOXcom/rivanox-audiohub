@@ -15,7 +15,7 @@
     .card{border:1px solid #385475;border-radius:16px;background:#15243c;padding:20px;margin-top:18px}
     .notice{background:#2f291c;border-color:#866e33;color:#f8e2ad}
     .notice p{color:#f8e2ad;margin:4px 0}.fields{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
-    label{font-weight:650}select,input[type=file],button{font:inherit;color:inherit;background:#203956;border:1px solid #7395be;border-radius:9px;padding:10px;max-width:100%}
+    label{font-weight:650}select,input[type=file],input[type=text],button{font:inherit;color:inherit;background:#203956;border:1px solid #7395be;border-radius:9px;padding:10px;max-width:100%}
     input[type=file]{flex:1;min-width:240px}button{cursor:pointer;min-height:44px}
     button:hover{background:#35577d}button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #dba5ff;outline-offset:3px}
     .results{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:14px}
@@ -50,6 +50,10 @@
       <input id="report-file" type="file" accept=".json,application/json" aria-describedby="choose-note feedback">
       <button type="button" id="clear">Clear result</button>
     </div>
+    <div class="fields" style="margin-top:12px">
+      <label for="expected-sha" id="expected-sha-label">Expected source SHA from package</label>
+      <input type="text" id="expected-sha" maxlength="40" size="40" autocomplete="off" spellcheck="false" aria-describedby="choose-note" placeholder="40 hexadecimal characters">
+    </div>
     <p id="feedback" role="status" aria-live="polite">No file opened.</p>
   </section>
   <section class="card" aria-labelledby="results-title">
@@ -61,6 +65,7 @@
       <div class="metric"><dt id="usb-label">USB audio device observed</dt><dd id="usb-value">—</dd></div>
       <div class="metric"><dt id="snapshots-label">First-boot observations</dt><dd id="snapshots-value">—</dd></div>
       <div class="metric"><dt id="runtime-label">Last audio-runtime status</dt><dd id="runtime-value">—</dd></div>
+      <div class="metric"><dt id="identity-label">Image source vs package</dt><dd id="identity-value">—</dd></div>
     </dl>
   </section>
   <section class="card" aria-labelledby="next-title">
@@ -81,7 +86,7 @@
       intro:"Open AUDIOHUB-TEST-REPORT.json from the boot partition of a safely powered-off Raspberry Pi SD card. No connection or Python installation required.",
       privacyTitle:"Private by design",privacy:"This self-contained viewer never uploads, saves or sends the report. Only a fixed anonymous summary appears. A boot report is not ownership, hardware or release approval.",
       choose:"1 · Choose your SD report",chooseNote:"Choose AUDIOHUB-TEST-REPORT.json, maximum 4 KiB. The file stays on your computer.",
-      file:"Boot report",clear:"Clear result",empty:"No file opened.",bad:"Unsupported, incomplete or invalid report. Nothing was uploaded.",
+      file:"Boot report",expectedSha:"Expected source SHA from package",identity:"Image source vs package",sourceMissing:"Image identity unavailable",sourceExpected:"Paste package SHA to compare",sourceMatch:"MATCH (not authenticity)",sourceMismatch:"MISMATCH — check SD and package",sourceInvalid:"Enter the complete 40-character SHA",mismatchTip:"STOP: the report does not match this source. Check the SD card before further testing.",clear:"Clear result",empty:"No file opened.",bad:"Unsupported, incomplete or invalid report. Nothing was uploaded.",
       loading:"Reading locally…",ready:"Read-only summary of the last recorded boot observation. No approval granted.",
       results:"2 · Offline findings",pairing:"Bluetooth pairing state",paired:"Paired devices (anonymous count)",
       controller:"Bluetooth controller observed",usb:"USB output and direct audio link",
@@ -113,7 +118,7 @@
       intro:"AUDIOHUB-TEST-REPORT.json von der Bootpartition einer sicher heruntergefahrenen Raspberry-Pi-SD-Karte öffnen. Keine Verbindung oder Python-Installation nötig.",
       privacyTitle:"Privat statt Datenübertragung",privacy:"Dieser eigenständige Betrachter lädt die Datei niemals hoch, speichert oder sendet sie nicht. Er zeigt nur eine feste anonyme Zusammenfassung. Kein Eigentums-, Hardware- oder Release-Nachweis.",
       choose:"1 · SD-Bericht auswählen",chooseNote:"AUDIOHUB-TEST-REPORT.json auswählen, maximal 4 KiB. Die Datei bleibt lokal.",
-      file:"Startbericht",clear:"Ergebnis löschen",empty:"Noch keine Datei geöffnet.",bad:"Nicht unterstützter, unvollständiger oder ungültiger Bericht. Nichts wurde übertragen.",
+      file:"Startbericht",expectedSha:"Erwarteter Quell-SHA aus dem Paket",identity:"Image-Quelle und Paket",sourceMissing:"Image-Kennung fehlt",sourceExpected:"Paket-SHA zum Vergleich einfügen",sourceMatch:"GLEICH (kein Echtheitsbeweis)",sourceMismatch:"ABWEICHUNG – SD und Paket prüfen",sourceInvalid:"Vollständigen 40-stelligen SHA eingeben",mismatchTip:"STOPP: Der Bericht passt nicht zur Quellversion. SD-Karte vor weiteren Tests prüfen.",clear:"Ergebnis löschen",empty:"Noch keine Datei geöffnet.",bad:"Nicht unterstützter, unvollständiger oder ungültiger Bericht. Nichts wurde übertragen.",
       loading:"Lese nur lokal…",ready:"Anonyme Auswertung des letzten aufgezeichneten Startzustands. Keine Freigabe.",
       results:"2 · Offline-Ergebnis",pairing:"Bluetooth-Kopplungsstatus",paired:"Gekoppelte Geräte (nur Anzahl)",
       controller:"Bluetooth-Controller erkannt",usb:"USB-Ausgang und Audioverbindung",
@@ -145,7 +150,7 @@
       intro:"Abre AUDIOHUB-TEST-REPORT.json de la partición de arranque de una tarjeta SD del Pi apagado correctamente. Sin conexión ni Python.",
       privacyTitle:"Privacidad local",privacy:"Este visor no sube, guarda ni envía el informe. Solo muestra datos anónimos predefinidos. No confirma propiedad, hardware ni lanzamiento.",
       choose:"1 · Seleccionar informe SD",chooseNote:"Selecciona AUDIOHUB-TEST-REPORT.json, máximo 4 KiB. El archivo permanece en tu equipo.",
-      file:"Informe de arranque",clear:"Borrar resultado",empty:"Ningún archivo abierto.",bad:"Informe no válido, incompleto o incompatible. No se transfirió nada.",
+      file:"Informe de arranque",expectedSha:"SHA esperado del paquete",identity:"Origen de imagen frente al paquete",sourceMissing:"Identidad de imagen no disponible",sourceExpected:"Pega el SHA del paquete para comparar",sourceMatch:"COINCIDE (no autentica)",sourceMismatch:"NO COINCIDE: revisa SD y paquete",sourceInvalid:"Introduce el SHA completo de 40 caracteres",mismatchTip:"ALTO: el informe no coincide con el código seleccionado. Comprueba la tarjeta SD.",clear:"Borrar resultado",empty:"Ningún archivo abierto.",bad:"Informe no válido, incompleto o incompatible. No se transfirió nada.",
       loading:"Lectura local…",ready:"Resumen de la última observación registrada. Sin aprobación.",
       results:"2 · Resultados sin conexión",pairing:"Estado de emparejamiento Bluetooth",paired:"Dispositivos emparejados (cantidad)",
       controller:"Controlador Bluetooth detectado",usb:"Salida USB y enlace de audio",
@@ -177,7 +182,7 @@
       intro:"Ouvrez AUDIOHUB-TEST-REPORT.json depuis la partition de démarrage d'une carte SD après arrêt correct du Pi. Sans connexion ni Python.",
       privacyTitle:"Lecture privée",privacy:"Cette visionneuse ne transmet, n'enregistre et n'envoie aucun rapport. Seul un résumé anonyme apparaît. Aucune preuve de propriété, de matériel ou de version.",
       choose:"1 · Choisir le rapport SD",chooseNote:"Sélectionnez AUDIOHUB-TEST-REPORT.json, 4 Kio maximum. Le fichier reste sur votre ordinateur.",
-      file:"Rapport de démarrage",clear:"Effacer le résultat",empty:"Aucun fichier ouvert.",bad:"Rapport invalide, incomplet ou non pris en charge. Aucun envoi.",
+      file:"Rapport de démarrage",expectedSha:"SHA source attendu du paquet",identity:"Source image et paquet",sourceMissing:"Identité image indisponible",sourceExpected:"Collez le SHA du paquet pour comparer",sourceMatch:"IDENTIQUE (pas une authentification)",sourceMismatch:"DIFFÉRENT : vérifier SD et paquet",sourceInvalid:"Saisissez le SHA complet de 40 caractères",mismatchTip:"ARRÊT : le rapport ne correspond pas au code choisi. Vérifiez la carte SD.",clear:"Effacer le résultat",empty:"Aucun fichier ouvert.",bad:"Rapport invalide, incomplet ou non pris en charge. Aucun envoi.",
       loading:"Lecture locale…",ready:"Résumé de la dernière observation enregistrée. Aucune validation.",
       results:"2 · Résultats hors ligne",pairing:"État de l'appairage Bluetooth",paired:"Appareils appairés (nombre)",
       controller:"Contrôleur Bluetooth détecté",usb:"Sortie USB et liaison audio",
@@ -209,7 +214,7 @@
       intro:"Apri AUDIOHUB-TEST-REPORT.json dalla partizione di avvio della scheda SD dopo aver spento correttamente il Pi. Nessuna rete o Python.",
       privacyTitle:"Privacy locale",privacy:"Questo visualizzatore non carica, salva o invia il rapporto. Mostra solo dati anonimi prestabiliti. Non prova proprietà, hardware o rilascio.",
       choose:"1 · Scegli il rapporto SD",chooseNote:"Seleziona AUDIOHUB-TEST-REPORT.json, massimo 4 KiB. Il file resta sul computer.",
-      file:"Rapporto di avvio",clear:"Cancella risultato",empty:"Nessun file aperto.",bad:"Rapporto non valido, incompleto o incompatibile. Nessun invio.",
+      file:"Rapporto di avvio",expectedSha:"SHA sorgente atteso dal pacchetto",identity:"Sorgente immagine e pacchetto",sourceMissing:"Identità immagine non disponibile",sourceExpected:"Incolla lo SHA del pacchetto per confrontare",sourceMatch:"COINCIDE (non autentica)",sourceMismatch:"DIVERSO: controlla SD e pacchetto",sourceInvalid:"Inserisci lo SHA completo di 40 caratteri",mismatchTip:"STOP: il rapporto non corrisponde al codice scelto. Controlla la scheda SD.",clear:"Cancella risultato",empty:"Nessun file aperto.",bad:"Rapporto non valido, incompleto o incompatibile. Nessun invio.",
       loading:"Lettura locale…",ready:"Riepilogo dell'ultima osservazione registrata. Nessuna approvazione.",
       results:"2 · Risultati offline",pairing:"Stato associazione Bluetooth",paired:"Dispositivi associati (numero)",
       controller:"Controller Bluetooth rilevato",usb:"Uscita USB e collegamento audio",
@@ -268,6 +273,25 @@
           !["recent","unavailable_or_stale"].includes(s.runtime_status)) return null;
       before = s.seconds_since_probe_start;
     }
+    // The SD report is unsigned. This is a comparison of PUBLIC SHAs,
+    // not proof of authentic boot, hardware, sound or operator approval.
+    let imageSha = null;
+    if (Object.prototype.hasOwnProperty.call(obj, "image_identity")) {
+      const id = obj.image_identity;
+      if (!plain(id)) return null;
+      if (id.status === "unavailable") {
+        if (Object.keys(id).length !== 1) return null;
+      } else if (id.status === "embedded_unverified_alpha") {
+        if (Object.keys(id).sort().join(",") !== "ci_run_id,pi_gen_sha,source_sha,status" ||
+            typeof id.source_sha !== "string" ||
+            !/^[0-9a-f]{40}$/.test(id.source_sha) ||
+            typeof id.pi_gen_sha !== "string" ||
+            !/^[0-9a-f]{40}$/.test(id.pi_gen_sha) ||
+            !(id.ci_run_id === null ||
+              (Number.isSafeInteger(id.ci_run_id) && id.ci_run_id > 0))) return null;
+        imageSha = id.source_sha;
+      } else return null;
+    }
     // Analyze only whitelisted sampled USB presence; not device identity.
     // Samples do not certify continuity, audibility or hardware approval.
     let seenYes = false, seenNo = false, appeared = false, lost = false;
@@ -307,11 +331,11 @@
       (!routeFieldsPresent || last.runtime_status !== "recent") ? "unknown" :
       (last.usb_audio_route_ready && last.eq_usb_direct_links > 0)
         ? "linked" : "broken";
-    // Only fixed enums, counts and strict booleans escape this function.
-    // Never retain the untrusted object, raw strings, names or other keys.
+    // Only fixed enums, counts, booleans and strictly validated public SHA escape.
+    // Do not retain arbitrary untrusted strings or private device identifiers.
     return Object.freeze({
       pairing, paired, controller: last.bluetooth_controller_present,
-      usbRoute, usbTrend, runtime: last.runtime_status,
+      usbRoute, usbTrend, runtime: last.runtime_status, imageSha,
       snapshots: obj.snapshots.length
     });
   }
@@ -324,10 +348,12 @@
       "language-label":t.language,"title":t.title,"intro":t.intro,
       "privacy-title":t.privacyTitle,"privacy-text":t.privacy,
       "choose-title":t.choose,"choose-note":t.chooseNote,"file-label":t.file,
+      "expected-sha-label":t.expectedSha,
       "clear":t.clear,"results-title":t.results,
       "pairing-label":t.pairing,"paired-label":t.paired,
       "controller-label":t.controller,"usb-label":t.usb,
       "snapshots-label":t.snapshots,"runtime-label":t.runtime,
+      "identity-label":t.identity,
       "next-title":t.next,"disclaimer":t.disclaimer
     };
     Object.keys(nodes).forEach(id => { byId(id).textContent = nodes[id]; });
@@ -335,10 +361,17 @@
     const label = id => byId(id);
     if (!current) {
       for (const id of ["pairing-value","paired-value","controller-value","usb-value",
-                         "snapshots-value","runtime-value"]) label(id).textContent = "—";
+                         "snapshots-value","runtime-value","identity-value"]) label(id).textContent = "—";
       label("advice").textContent = t.chooseFirst;
       return;
     }
+    const expectedSha = byId("expected-sha").value.trim().toLowerCase();
+    const validExpected = /^[0-9a-f]{40}$/.test(expectedSha);
+    const comparison = expectedSha === "" ? t.sourceExpected :
+      !validExpected ? t.sourceInvalid :
+      expectedSha === current.imageSha ? t.sourceMatch : t.sourceMismatch;
+    label("identity-value").textContent = current.imageSha === null ?
+      t.sourceMissing : current.imageSha + " · " + comparison;
     const index = states.indexOf(current.pairing);
     label("pairing-value").textContent = index < 0 ? t.unknown : t.states[index];
     label("paired-value").textContent = current.paired === null ? t.unknown : String(current.paired);
@@ -363,11 +396,14 @@
       appeared:t.tipAppeared,lost:t.tipLost,intermittent:t.tipIntermittent
     }[current.usbTrend];
     label("advice").textContent = (index < 0 ? t.older : t.tips[index]) +
-      " " + usbTip + (trendTip ? " " + trendTip : "");
+      " " + usbTip + (trendTip ? " " + trendTip : "") +
+      (current.imageSha && validExpected && expectedSha !== current.imageSha
+        ? " " + t.mismatchTip : "");
   }
   function clear() {
     serial += 1; current = null; status = "empty";
     byId("report-file").value = "";
+    byId("expected-sha").value = "";
     render();
   }
   async function openReport() {
@@ -398,6 +434,7 @@
   }
   byId("language").addEventListener("change", render);
   byId("report-file").addEventListener("change", openReport);
+  byId("expected-sha").addEventListener("input", render);
   byId("clear").addEventListener("click", clear);
   render();
 })();

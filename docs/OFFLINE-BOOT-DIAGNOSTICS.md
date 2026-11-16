@@ -171,3 +171,20 @@ or WLAN provisioning. Release gates G2/G3/G4/G7/G8 and G10 remain open.
 
 Project: `PJ2611-0001:R001`; AH-009 requirement 3275 and
 AH-001 requirement 3267. No physical test signoff or official release.
+
+## Compare a removable-SD report with the chosen package (offline)
+
+The offline HTML viewer now shows the strictly validated **public source
+commit SHA** in current Pi4 FAT first-boot reports. After independently
+verifying the authenticated test ZIP and inner IMG.XZ checksums, paste the
+`source_commit_sha` from that ZIP's `PREVIEW-MANIFEST.json` into the
+viewer's expected-source field. MATCH, MISMATCH, invalid input, or missing
+image identity is shown in all five languages. On **MISMATCH: STOP** and
+check which spare SD booted before any physical acceptance step. The
+comparison performs no network request, credential action, Pi write or
+external report upload. Older valid reports without identity still load.
+
+**The FAT report is mutable and unsigned:** even a matching SHA proves
+neither authentic boot, real stereo output, S3 nor release authorization.
+The original ZIP and image integrity and real human observations are
+separate acceptance requirements.

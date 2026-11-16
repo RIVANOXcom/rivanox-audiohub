@@ -22,6 +22,8 @@ class OfflineBootViewerTests(unittest.TestCase):
         self.assertIn("default-src 'none'", source)
         self.assertIn('type="file"', source)
         self.assertIn('id="report-file"', source)
+        self.assertIn('id="expected-sha"', source)
+        self.assertIn('id="identity-value"', source)
         self.assertIn('role="status"', source)
         self.assertIn('id="language"', source)
         self.assertIn('href="./boot-report-viewer.html"',
@@ -80,11 +82,14 @@ const document = {
 const ctx = vm.createContext({document});
 vm.runInContext(found[1], ctx, {timeout: 3000});
 const el = id => document.getElementById(id);
+const observedSha = "a".repeat(40);
 const report = {
   schema:"rivanox-audiohub-offline-boot-diagnostic/1",
   classification:"UNVERIFIED_ALPHA_OFFLINE_TEST_ONLY",
   owner_authenticated:false,hardware_accepted:false,
   phone_wifi_provisioned:false,network_configuration:"not_inspected",
+  image_identity:{status:"embedded_unverified_alpha",source_sha:observedSha,
+    pi_gen_sha:"b".repeat(40),ci_run_id:43764602858},
   bluetooth_pairing_state:"known_devices",bluetooth_paired_devices:1,
   device_name:"SECRET-PRIVATE-PHONE",
   ssid:"SECRET-PRIVATE-WIFI",
@@ -112,6 +117,20 @@ const file = raw => ({size:Buffer.byteLength(raw,"utf8"),text:async()=>raw});
   assert.equal(el("controller-value").textContent, "Detected");
   assert.equal(el("snapshots-value").textContent, "2 · USB appeared after the first check");
   assert.equal(el("runtime-value").textContent, "Reported recently");
+  assert.ok(el("identity-value").textContent.startsWith(observedSha));
+  assert.match(el("identity-value").textContent,/Paste package SHA/);
+  el("expected-sha").value=observedSha.toUpperCase();
+  listeners["expected-sha:input"]();
+  assert.match(el("identity-value").textContent,/MATCH/);
+  el("expected-sha").value="c".repeat(40);
+  listeners["expected-sha:input"]();
+  assert.match(el("identity-value").textContent,/MISMATCH/);
+  assert.match(el("advice").textContent,/STOP/);
+  el("expected-sha").value="wrong";
+  listeners["expected-sha:input"]();
+  assert.match(el("identity-value").textContent,/40-character/);
+  el("expected-sha").value="";
+  listeners["expected-sha:input"]();
   assert.match(el("advice").textContent,/Reconnect/);
   assert.equal(el("report-file").value,"");
   let seen = Object.values(nodes).map(e=>e.textContent).join("\n");
@@ -210,6 +229,9 @@ const file = raw => ({size:Buffer.byteLength(raw,"utf8"),text:async()=>raw});
     ["huge direct count",withLast({usb_audio_route_ready:true,eq_usb_direct_links:999})],
     ["negative direct count",withLast({usb_audio_route_ready:true,eq_usb_direct_links:-1})],
     ["false Wi-Fi status", JSON.stringify({...report,phone_wifi_provisioned:true})],
+    ["forged identity", JSON.stringify({...report,image_identity:{status:"verified"}})],
+    ["invalid image SHA", JSON.stringify({...report,image_identity:{...report.image_identity,source_sha:"SECRET"}})],
+    ["extra identity data", JSON.stringify({...report,image_identity:{...report.image_identity,ssid:"SECRET-PRIVATE-WIFI"}})],
     ["oversized", "x".repeat(5000)]
   ]){
     el("report-file").files = [file(bad)];
@@ -222,12 +244,14 @@ const file = raw => ({size:Buffer.byteLength(raw,"utf8"),text:async()=>raw});
   const older = {...report};
   delete older.bluetooth_pairing_state;
   delete older.bluetooth_paired_devices;
+  delete older.image_identity;
   el("language").value = "en";
   listeners["language:change"]();
   el("report-file").files = [file(JSON.stringify(older))];
   await listeners["report-file:change"]();
   assert.equal(el("pairing-value").textContent,"Unavailable");
   assert.match(el("advice").textContent,/older report/);
+  assert.equal(el("identity-value").textContent,"Image identity unavailable");
   // A manual reset revokes a pending async selection, no ghost results.
   let resolveRead;
   el("report-file").files=[{size:good.length,text:()=>new Promise(r=>resolveRead=r)}];
@@ -237,6 +261,7 @@ const file = raw => ({size:Buffer.byteLength(raw,"utf8"),text:async()=>raw});
   await pending;
   assert.equal(el("pairing-value").textContent,"—");
   assert.equal(el("feedback").textContent,"No file opened.");
+  assert.equal(el("expected-sha").value,"");
   console.log("offline SD viewer browser integration PASS");
 })().catch(error => { console.error(error); process.exitCode=1; });
 '''
