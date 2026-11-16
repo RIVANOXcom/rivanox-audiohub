@@ -5,33 +5,37 @@ This document is not release approval. The operator controls production
 publication; `.github/workflows/publish-image.yml` deliberately fails
 until hardware, ownership security and redistribution rights are accepted.
 
-## What exists now
+## What exists now — select the exact operator build, not a stale sample
 
-The repository contains native ARM64 test images produced by GitHub Actions,
-not persistent public GitHub Release assets. A signed-in GitHub user can
-download an expiring ZIP from the run's Artifacts area:
+The latest **operator-only native Raspberry Pi4 ARM64 S2** ZIP is tracked in
+the [first section of the active Draft PR304](https://github.com/RIVANOXcom/rivanox-audiohub/pull/304).
+It records a GitHub Actions run with **completed/success**, exact source
+commit SHA, authenticated downloadable artifact ID, GitHub provider outer
+ZIP SHA256, inner compressed-image SHA256 and expiry. Always read those
+values live and require that **all refer to the same immutable Git SHA**.
+A later source-only commit needs its own completed native build; never use
+an old ZIP to test new code. Historical examples and the public main branch
+are not the current operator build. If source, run, artifact, provider
+digest or authorization is missing/expired, **STOP**; do not flash.
 
-- Latest independently verified development baseline: stacked
-  [Draft PR #30](https://github.com/RIVANOXcom/rivanox-audiohub/pull/30),
-  SHA `8ab26da637604723e4c29f114cc93a478e0d02f0`.
-- [Source tests 42086920486](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42086920486)
-  **SUCCESS: 226 Python tests**.
-- [Native ARM64 image build 42086909475](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42086909475)
-  **SUCCESS**: Pi image source tests, image production, rootfs pre-export
-  guards, exact XZ+SHA256 validation and provenance manifest; status is still
-  UNVERIFIED due to missing physical acceptance.
-- [Download temporary Actions test ZIP #13443339137](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42086909475/artifacts/13443339137),
-  606,222,225 bytes; expires **2026-12-05**. GitHub sign-in can be required.
-  The bundle contains a single `*-UNVERIFIED.img.xz`,
-  `SHA256SUMS.txt`, `PREVIEW-MANIFEST.json` and a redacted `ROOTFS-PACKAGES.json`
-  in the newer inventory-enabled development branch. The prior verified PR #30 ZIP
-  has only the first three files.
+The current operator bundle has **five allowlisted flat files**:
+`image_*-AudioHub-Pi4-UNVERIFIED.img.xz`, `SHA256SUMS.txt`,
+`PREVIEW-MANIFEST.json`, `ROOTFS-PACKAGES.json` and
+`AUDIOHUB-OFFLINE-REPORT-VIEWER.html`. The manifest SHA-binds the viewer
+to the exact build. Four-file legacy test bundles without the viewer are
+still separately recognized by the current auditor, but they do NOT offer
+the current user experience. A former three-file archive is older and
+cannot pass the current v2 manifest/inventory audit.
 
-These are **not** publicly downloadable long-lived Releases and they
-cannot honestly be called "latest verified stable SD image". The user
-should not use them on a trusted home/company network or as a secure
-owner-controlled appliance. The Windows UDP receiver, if manually
-started for testing, is unauthenticated.
+These are short-lived authenticated GitHub Actions test attachments,
+**NOT a publicly released or installed appliance**. No Pi4/Edifier real
+audio or secure initial ownership has been operator-verified (S3).
+The separately owned AH-005 safe operator shutdown method must be approved
+**before** a physical boot, original SD and all owned WAV/EQ/MP3/FLAC
+data must remain independently recoverable, and only an explicitly
+approved spare SD on an isolated bench can be considered for flashing.
+A test ZIP never authorizes a public GitHub/Gitea Release, trusted network,
+unsafe SSH/owner bypass or production deployment.
 
 ## One-command downloaded test ZIP verification (operator-only)
 
@@ -54,11 +58,12 @@ python3 scripts/release_bundle_audit.py \
 Replace both descriptive placeholders with the **real** SHA values
 for the SAME artifact/source commit. The downloaded ZIP is first read
 and compared byte-for-byte via SHA256; a mismatch aborts **before
-extraction**. Only four expected flat entries (one UNVERIFIED
-`.img.xz`, `SHA256SUMS.txt`, `PREVIEW-MANIFEST.json`,
-`ROOTFS-PACKAGES.json`) are admitted. Encrypted, symlink, duplicate,
+extraction**. Only **four legacy or five current** allowlisted flat entries are admitted:
+one UNVERIFIED `.img.xz`, `SHA256SUMS.txt`, `PREVIEW-MANIFEST.json`,
+`ROOTFS-PACKAGES.json` and, for the current S2 bundle, the SHA-bound
+`AUDIOHUB-OFFLINE-REPORT-VIEWER.html`. Encrypted, symlink, duplicate,
 nested/traversal, oversized or extraneous members fail closed.
-The four files are streamed into a private temporary directory,
+The approved files are streamed into a private temporary directory,
 subject to bounds, then the existing independent inner file SHA256,
 XZ decompression, package inventory and manifest audits run. Temporary
 files are cleaned afterward; the downloaded ZIP is not modified.
@@ -79,8 +84,8 @@ flash a **spare microSD** only after retaining the original card
 and making independent private WAV/EQ backups. ZIP artifacts expire,
 require GitHub authentication and are NOT permanent Gitea Releases.
 
-CI still uses the existing `--directory` mode for its four-file
-preflight without any release-go change. This tool must be run from
+CI still uses the existing `--directory` mode for the current five-file
+preflight (and legacy four-file compatibility) without any release-go change. This tool must be run from
 the source commit matching the new ZIP; older sources may not support
 `--zip`, and older three-file preview archives intentionally fail.
 
@@ -89,9 +94,11 @@ the source commit matching the new ZIP; older sources may not support
 `scripts/release_bundle_audit.py` independently checks an extracted
 Actions ZIP for all of:
 
-1. Exactly one properly named **UNVERIFIED** `.img.xz` plus only
-   `SHA256SUMS.txt`, `PREVIEW-MANIFEST.json` and `ROOTFS-PACKAGES.json` — no accidental
-   secret-bearing extra files, empty files or symlink shortcuts.
+1. Exactly one properly named **UNVERIFIED** `.img.xz` plus
+   `SHA256SUMS.txt`, `PREVIEW-MANIFEST.json`, `ROOTFS-PACKAGES.json`
+   and for a current operator bundle, exactly one SHA-bound
+   `AUDIOHUB-OFFLINE-REPORT-VIEWER.html`. Extra, empty, unsafe,
+   symlinked or secret-bearing files fail closed.
 2. Expected source SHA (optionally supplied), pi-gen pin, workflow
    run ID, manifest schema, image size and SHA-256 digest.
 3. Exact single-line checksum and actual compressed-image hash, and
@@ -112,12 +119,12 @@ On a trusted engineering workstation with the ZIP already unpacked:
 ```sh
 python3 scripts/release_bundle_audit.py \
   --directory /path/to/extracted-zip \
-  --expected-source-sha <exact-40-character-source-commit-from-this-four-file-zip>
+  --expected-source-sha <exact-40-character-source-commit-from-this-zip>
 ```
 
-Use the **SHA from the same new four-file bundle's manifest** above;
-prior Draft PR #30 three-file artifacts use a different legacy schema and
-cannot pass the current v2/four-file auditor. Replace the placeholder with
+Use the **source SHA from the chosen exact-run ZIP's manifest** above;
+old three-file artifacts use a different legacy schema and cannot pass
+this v2 four- or five-file auditor. Replace the placeholder with
 the exact reviewed source commit; the placeholder is not literal shell input.
 
 This prints JSON about integrity and unresolved gates. It **does not**

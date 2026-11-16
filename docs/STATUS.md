@@ -56,8 +56,8 @@ release GO. See [preset transfer](PRESET-TRANSFER.md).
 The existing offline release preflight script now supports explicit
 `--zip` plus expected provider ZIP SHA256 and exact source SHA256
 parameters. It refuses the wrong ZIP before any extraction, checks
-only the four exact nonsecret preview entries without traversal,
-links, duplicates or oversized members, temporarily extracts to an
+only the four legacy or five current allowlisted nonsecret preview
+entries without traversal, links, duplicates or oversized members, temporarily extracts to an
 isolated folder, and reuses existing image SHA256/XZ/manifest and rootfs
 package inventory auditing. This reduces operator mistakes when
 several expiring GitHub Actions archives have identical display names.
@@ -66,7 +66,7 @@ mutation is performed, and production/legal/hardware GO remains blocked.
 See [release distribution](RELEASE-DISTRIBUTION.md).
 
 
-**Status:** Alpha / pre-release. No verified ready-to-flash Pi 4 image has been published. Native ARM64 test-only SD images have been built and uploaded to GitHub Actions (latest prior-to-renaming run 42057278883; 159 tests, 48 rootfs checks). **No real Pi4/Edifier playback, ownership security or product-ready Release has been verified.**
+**Status:** Alpha / pre-release. No hardware-verified or operator-approved public Pi4 image has been published. Real **S2 ARM64 operator-only test ZIPs** have been built in GitHub Actions; always select the most recent exact-source completed native run via [active Draft PR304](https://github.com/RIVANOXcom/rivanox-audiohub/pull/304), not historical test run IDs. The current bundle includes the SHA-bound offline viewer. **No real Pi4/Edifier playback, secure initial ownership, safe shutdown or production Release is verified.**
 
 ## Offline SD report identifies the actual test image build (unverified alpha)
 
