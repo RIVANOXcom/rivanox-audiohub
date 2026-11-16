@@ -76,6 +76,8 @@ class WindowsPortableBundleTests(unittest.TestCase):
             self.assertIn(self.prefix + "/README-OFFLINE-WAV-PREP.md", paths)
             self.assertEqual(len(paths), 18)
             self.assertTrue(manifest["optional_offline_pcm16_media_prep"])
+            self.assertTrue(manifest["offline_media_prep_local_file_picker"])
+            self.assertTrue(manifest["offline_media_prep_preview_before_gui_export"])
             self.assertTrue(manifest["external_ffmpeg_required_for_prep"])
             self.assertFalse(manifest["ffmpeg_included"])
             self.assertFalse(manifest["original_music_overwrite_permitted"])

@@ -134,6 +134,8 @@ def build(root, directory, sha):
         "local_operator_observation_json": True,
         "manual_observation_not_hardware_approval": True,
         "optional_offline_pcm16_media_prep": True,
+        "offline_media_prep_local_file_picker": True,
+        "offline_media_prep_preview_before_gui_export": True,
         "external_ffmpeg_required_for_prep": True,
         "ffmpeg_included": False,
         "original_music_overwrite_permitted": False,

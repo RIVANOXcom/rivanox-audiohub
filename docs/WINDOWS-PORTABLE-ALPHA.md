@@ -9,15 +9,18 @@ included. Nothing starts automatically.
 
 ## Optional offline MP3/FLAC-to-WAV preparation (no Pi changes)
 
-The same **15-file? no: currently 18-member** source-verified portable ALPHA
-includes \`START-OFFLINE-WAV-PREP.py\` and
-\`README-OFFLINE-WAV-PREP.md\`. They let the operator prepare one
+The same **18-member** source-verified portable ALPHA
+includes `START-OFFLINE-WAV-PREP.py` and
+`README-OFFLINE-WAV-PREP.md`. They let the operator prepare one
 owned/licensed FLAC or MP3 file as a NEW PCM16 stereo 48-kHz WAV on a
 **trusted local PC**, using a separately installed FFmpeg. The tool
 does **not bundle FFmpeg**, fetch anything, use the Windows Scream driver,
 modify the original music file, overwrite any target, or access the Pi.
-A read-only preview runs before FFmpeg is needed; actual conversion requires
-\`--convert\`, a local TTY and typing exact uppercase \`CONVERT\`.
+A read-only preview runs before FFmpeg is needed. For Windows users,
+`py -3 START-OFFLINE-WAV-PREP.py --gui` launches a local file-picker
+with explicit Preview and CONVERT confirmation (no automatic export).
+The terminal `--convert` alternative still requires a local TTY and
+typing exact uppercase `CONVERT`.
 The output is bounded to 64 MiB and printed with its SHA256 but never a
 private filename. Use the included preparation README for exact commands,
 limitations and independent media backup requirements. This is a
@@ -46,7 +49,7 @@ download, chat message, LAN discovery or certificate file.
    private operator-approved folder on the Windows test PC. Keep the
    individually provisioned 32-byte per-bench shared key separately
    protected, and verify Windows key-file NTFS ACLs manually.
-3. In \`py -3 START-WINDOWS-BRIDGE.py --gui\`, type the independently
+3. In `py -3 START-WINDOWS-BRIDGE.py --gui`, type the independently
    verified Pi SHA256 into the existing fingerprint field; it is
    intentionally **not filled automatically**. Select the public
    certificate with **Choose public cert…**. Choose
@@ -62,10 +65,10 @@ download, chat message, LAN discovery or certificate file.
    After entering the Pi address, fingerprint and private key path,
    this performs the same fail-closed offline check. Only after
    separate isolated-lab approval, run the command without
-   \`--check-only\`, confirm \`ISOLATED\` and run the existing
+   `--check-only`, confirm `ISOLATED` and run the existing
    5-second speaker test or the normal Windows Scream bridge.
    To *inspect* a public certificate without keys or sockets, use
-   \`py -3 START-WINDOWS-BRIDGE.py --show-cert-fingerprint "C:\path\pi-public.crt"\`.
+   `py -3 START-WINDOWS-BRIDGE.py --show-cert-fingerprint "C:\path\pi-public.crt"`.
    **An inspection of a Windows-local certificate is not an independent
    trust check.** Only a hash confirmed at the trusted Pi console
    establishes the expected identity.
@@ -157,7 +160,7 @@ socket. Terminal-only operators can add
 ~~~text
 --expected-key-code <the-private-32-hex-code-from-trusted-Pi>
 ~~~
-to \`--check-only\` or a separately approved live invocation; this
+to `--check-only` or a separately approved live invocation; this
 option never carries the 32 secret bytes. A shell history may retain the
 code. Do not mix it up with the separate 64-hex *certificate* SHA256 pin.
 
@@ -195,7 +198,7 @@ The Pi4 image in this test pair predates this Windows-only feature.
    above works on the older Pi alpha: run it separately for the old and
    staged files. Codes are not key bytes, but MUST still be kept private.
 3. On Windows, in the extracted package, open the GUI using
-   \`py -3 START-WINDOWS-BRIDGE.py --gui\`. Choose the active (old)
+   `py -3 START-WINDOWS-BRIDGE.py --gui`. Choose the active (old)
    private key file in the original field, then click **4 · Staged PSK
    preview (offline)**. Select the **existing staged** Windows file,
    enter BOTH independently obtained Pi codes into the masked fields,
@@ -205,7 +208,7 @@ The Pi4 image in this test pair predates this Windows-only feature.
    private codes at the time of the check, and the codes were different.
    No Pi is contacted. The dialog never switches the active key.
 4. For a keyboard-only Windows console, the same no-network preflight is
-   available as \`py -3 START-WINDOWS-BRIDGE.py --rotation-preflight\`.
+   available as `py -3 START-WINDOWS-BRIDGE.py --rotation-preflight`.
    It prompts for old and staged paths, then asks for both Pi codes using
    non-echoing private prompts rather than command-line arguments.
    Neither preview saves a JSON report, stores codes, or changes OS ACLs.
@@ -230,7 +233,7 @@ makes the preview **fail closed**. Windows NTFS ACLs are not independently
 certified, and the tool cannot establish whether the Pi code really
 came from a trusted Pi. Recheck immediately before the manual cutover;
 there is no transactional Pi/Windows key switch. A passing preview is
-always \`OFFLINE_STAGING_CHECK_ONLY\`, **not** credential deployment,
+always `OFFLINE_STAGING_CHECK_ONLY`, **not** credential deployment,
 Pi ownership, physical hardware acceptance, or public release GO.
 
 ## Four steps for a manually authorized isolated test
@@ -433,9 +436,9 @@ instructions: README-ISOLATED-LAB.md in this bundle.
 ## Headless Pi4 SD report viewer without connecting Windows to the Pi
 
 The portable Windows ZIP also contains the independent, self-contained
-\`AUDIOHUB-BOOT-REPORT-VIEWER.html\` (five-language offline HTML). This
+`AUDIOHUB-BOOT-REPORT-VIEWER.html` (five-language offline HTML). This
 is a read-only user interface for the existing Pi4
-\`AUDIOHUB-TEST-REPORT.json\` written on the FAT boot partition. After
+`AUDIOHUB-TEST-REPORT.json` written on the FAT boot partition. After
 safely shutting down the **operator-authorized isolated Pi4**, remove
 the SD card, insert it in a trusted computer, open the HTML file directly
 in a modern browser and manually select the small JSON report. The

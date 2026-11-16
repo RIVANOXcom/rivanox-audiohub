@@ -131,12 +131,195 @@ def _convert(source, output, *, ffmpeg="ffmpeg", timeout=120):
             proc.stdout.close()
 
 
+
+def launch_gui():
+    """A local, explicitly opted-in Tk file picker. Never auto-starts FFmpeg."""
+    import queue
+    try:
+        import tkinter as tk
+        from tkinter import filedialog, messagebox, simpledialog, ttk
+    except ImportError as exc:
+        raise RuntimeError("Local Python desktop support unavailable") from exc
+    try:
+        root = tk.Tk()
+    except tk.TclError as exc:
+        raise RuntimeError("No trusted local desktop session") from exc
+    root.title("AudioHub - Offline WAV preparation")
+    root.minsize(560, 340)
+    root.columnconfigure(0, weight=1)
+    body = ttk.Frame(root, padding=16)
+    body.grid(sticky="nsew")
+    body.columnconfigure(1, weight=1)
+    source, output = tk.StringVar(master=root), tk.StringVar(master=root)
+    status = tk.StringVar(master=root, value=(
+        "Offline only: select your owned music and an UNUSED WAV destination."))
+    approved = [None]
+    working = [False]
+    results = queue.Queue(maxsize=1)
+
+    def invalidate(*_):
+        approved[0] = None
+        convert_button.configure(state="disabled")
+        if not working[0]:
+            status.set("Selection changed. Run read-only Preview again.")
+    source.trace_add("write", invalidate)
+    output.trace_add("write", invalidate)
+
+    def pick_source():
+        chosen = filedialog.askopenfilename(
+            parent=root, title="Select local owned MP3 or FLAC",
+            filetypes=[("Music", "*.flac *.mp3"), ("All files", "*.*")])
+        if chosen:
+            source.set(chosen)
+    def pick_destination():
+        chosen = filedialog.asksaveasfilename(
+            parent=root, title="Choose NEW (unused) WAV filename",
+            defaultextension=".wav", filetypes=[("WAV", "*.wav")])
+        if chosen:
+            output.set(chosen)
+
+    ttk.Label(body, text="Owned/licensed local MP3 or FLAC").grid(
+        row=0, column=0, columnspan=3, sticky="w", pady=(0, 6))
+    source_entry = ttk.Entry(body, textvariable=source, width=55)
+    source_entry.grid(row=1, column=0, columnspan=2,
+                      sticky="ew", padx=(0, 8))
+    source_button = ttk.Button(body, text="Choose source", command=pick_source)
+    source_button.grid(row=1, column=2, sticky="e")
+    ttk.Label(body, text="New WAV in existing LOCAL folder (never overwrite)").grid(
+        row=2, column=0, columnspan=3, sticky="w", pady=(14, 6))
+    output_entry = ttk.Entry(body, textvariable=output, width=55)
+    output_entry.grid(row=3, column=0, columnspan=2,
+                      sticky="ew", padx=(0, 8))
+    destination_button = ttk.Button(body, text="Choose new WAV",
+                                    command=pick_destination)
+    destination_button.grid(row=3, column=2, sticky="e")
+
+    def preview():
+        if working[0]:
+            return
+        approved[0] = None
+        convert_button.configure(state="disabled")
+        try:
+            _plan(source.get(), output.get())
+        except (OSError, ValueError, RuntimeError):
+            status.set("PREVIEW REFUSED: check local owned source and UNUSED "
+                       "WAV destination. No files changed.")
+            return
+        approved[0] = (source.get(), output.get())
+        status.set("PREVIEW READY. Output PCM16 stereo 48 kHz, max 64 MiB. "
+                   "No FFmpeg run, no files written. Review then CONVERT.")
+        convert_button.configure(state="normal")
+
+    def finish():
+        try:
+            ok, value = results.get_nowait()
+        except queue.Empty:
+            root.after(150, finish)
+            return
+        working[0] = False
+        approved[0] = None
+        preview_button.configure(state="normal")
+        source_button.configure(state="normal")
+        destination_button.configure(state="normal")
+        source_entry.configure(state="normal")
+        output_entry.configure(state="normal")
+        convert_button.configure(state="disabled")
+        if ok:
+            status.set("NEW WAV created; original untouched. "
+                       "SHA256: " + value["sha256"])
+            messagebox.showinfo("New offline WAV created",
+                                "Output SHA256:\n" + value["sha256"] +
+                                "\nOriginal untouched. NOT Pi/Edifier verified.",
+                                parent=root)
+        else:
+            status.set("EXPORT INCOMPLETE or refused. Existing files untouched.")
+            messagebox.showwarning("No completed WAV",
+                                   "Check local FFmpeg, input and unused output. "
+                                   "Nothing was overwritten.", parent=root)
+
+    def convert():
+        if working[0] or approved[0] != (source.get(), output.get()):
+            status.set("Preview these exact paths before any conversion.")
+            return
+        try:
+            _plan(source.get(), output.get())
+            if hasattr(os, "geteuid") and os.geteuid() == 0:
+                raise PermissionError("No privileged conversions")
+        except (OSError, ValueError, PermissionError):
+            invalidate()
+            status.set("PREVIEW EXPIRED: source or target changed; no files written.")
+            return
+        answer = simpledialog.askstring(
+            "Confirm one new WAV",
+            "Use ONLY music you own or may legally use.\n"
+            "External FFmpeg must be installed on THIS PC.\n"
+            "Existing files are NEVER overwritten.\n"
+            "Type EXACT uppercase CONVERT:", parent=root)
+        if answer != "CONVERT":
+            status.set("CANCELLED: no audio decoder started, no files created.")
+            return
+        chosen_source, chosen_output = approved[0]
+        working[0] = True
+        source_button.configure(state="disabled")
+        destination_button.configure(state="disabled")
+        source_entry.configure(state="disabled")
+        output_entry.configure(state="disabled")
+        preview_button.configure(state="disabled")
+        convert_button.configure(state="disabled")
+        status.set("Converting locally. No WAV is published until complete.")
+        def worker():
+            try:
+                result = _convert(chosen_source, chosen_output)
+                results.put((True, result))
+            except (OSError, ValueError, RuntimeError, PermissionError,
+                    subprocess.SubprocessError):
+                results.put((False, None))
+        threading.Thread(target=worker, daemon=True,
+                         name="audiohub-local-wav-prep").start()
+        root.after(150, finish)
+
+    controls = ttk.Frame(body)
+    controls.grid(row=4, column=0, columnspan=3, sticky="w", pady=(18, 12))
+    preview_button = ttk.Button(controls, text="1. Preview (no writes)",
+                                command=preview)
+    preview_button.grid(row=0, column=0, padx=(0, 10))
+    convert_button = ttk.Button(controls, text="2. Convert after confirmation",
+                                command=convert, state="disabled")
+    convert_button.grid(row=0, column=1)
+    ttk.Label(body, textvariable=status, wraplength=510, justify="left").grid(
+        row=5, column=0, columnspan=3, sticky="w", pady=(4, 8))
+    ttk.Label(body, text="External FFmpeg required for conversion; no network, "
+              "Bluetooth, Pi, SD or original file changes.", wraplength=510).grid(
+        row=6, column=0, columnspan=3, sticky="w")
+    def close():
+        if working[0]:
+            messagebox.showwarning("Conversion in progress",
+                                   "Wait for the bounded local conversion to finish.",
+                                   parent=root)
+        else:
+            root.destroy()
+    root.protocol("WM_DELETE_WINDOW", close)
+    root.mainloop()
+    return 0
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--source", required=True, help="Absolute local owned .flac/.mp3 path")
-    parser.add_argument("--output", required=True, help="New absolute .wav path; never overwritten")
+    parser.add_argument("--source", help="Absolute local owned .flac/.mp3 path")
+    parser.add_argument("--output", help="New absolute .wav path; never overwritten")
     parser.add_argument("--convert", action="store_true", help="Require a local TTY and exact CONVERT")
+    parser.add_argument("--gui", action="store_true", help="Local file picker, Preview and exact CONVERT dialog")
     args = parser.parse_args(argv)
+    if args.gui:
+        if args.source is not None or args.output is not None or args.convert:
+            parser.error("--gui cannot be combined with --source, --output or --convert")
+        try:
+            return launch_gui()
+        except (OSError, RuntimeError):
+            print("Local desktop GUI is unavailable; nothing was changed.", file=sys.stderr)
+            return 2
+    if args.source is None or args.output is None:
+        parser.error("Both --source and --output are required in terminal mode")
     try:
         _plan(args.source, args.output)
         print("PRIVATE OFFLINE AUDIO PREVIEW: compatible MP3/FLAC input and unused WAV output.")

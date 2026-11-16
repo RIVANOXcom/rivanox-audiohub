@@ -103,9 +103,14 @@ class OfflineWavPreparationTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     prep._plan(input_path, output)
         alias = self.root / 'secret-alias.flac'
-        alias.symlink_to(self.source)
-        with self.assertRaises(ValueError):
-            prep._plan(alias, self.destination)
+        try:
+            alias.symlink_to(self.source)
+        except (OSError, NotImplementedError):
+            # Unprivileged Windows may not allow making symlinks.
+            pass
+        else:
+            with self.assertRaises(ValueError):
+                prep._plan(alias, self.destination)
         self.assertFalse(self.destination.exists())
 
     def test_broken_decode_rejects_without_new_wav_or_source_mutation(self):
@@ -131,6 +136,33 @@ class OfflineWavPreparationTests(unittest.TestCase):
             self.assertEqual(prep.main(['--source',str(self.source),
                                         '--output',str(self.destination), '--convert']),2)
             p.assert_not_called()
+        self.assertFalse(self.destination.exists())
+
+
+    def test_gui_only_opt_in_and_never_autostarts_converter(self):
+        with mock.patch.object(prep, "launch_gui", return_value=0) as gui, \
+             mock.patch.object(prep, "_convert") as converter:
+            self.assertEqual(prep.main(["--gui"]), 0)
+            gui.assert_called_once_with()
+            converter.assert_not_called()
+        with mock.patch.object(prep, "launch_gui") as gui:
+            for extra in (["--convert"], ["--source", str(self.source)],
+                          ["--output", str(self.destination)]):
+                with self.subTest(extra=extra), \
+                     contextlib.redirect_stderr(io.StringIO()), \
+                     self.assertRaises(SystemExit):
+                    prep.main(["--gui", *extra])
+            gui.assert_not_called()
+        self.assertFalse(self.destination.exists())
+
+    def test_gui_unavailable_refuses_without_mutating_original(self):
+        untouched = self.source.read_bytes()
+        with mock.patch.object(prep, "launch_gui", side_effect=RuntimeError("headless")), \
+             mock.patch.object(prep.subprocess, "Popen") as converter, \
+             contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(prep.main(["--gui"]), 2)
+            converter.assert_not_called()
+        self.assertEqual(self.source.read_bytes(), untouched)
         self.assertFalse(self.destination.exists())
 
     @unittest.skipUnless(shutil.which('ffmpeg'), 'external FFmpeg not installed on test host')

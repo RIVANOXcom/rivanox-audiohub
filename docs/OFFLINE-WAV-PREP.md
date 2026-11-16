@@ -12,33 +12,56 @@ convert existing music without explicit manual approval.
 
 - Use the current **source-SHA-matched** AudioHub Windows portable ALPHA ZIP.
   It already requires separately installed Python 3.11+.
-- On the **trusted PC only**, have a separately installed \`ffmpeg\` on PATH.
+- On the **trusted PC only**, have a separately installed `ffmpeg` on PATH.
   FFmpeg is a third-party application NOT included, purchased, downloaded,
   installed or licensed for you by AudioHub. Review its terms independently.
   No codec executable is present in this ZIP or installed on Raspberry Pi.
 - Use **your own or licensed** MP3/FLAC, an **absolute local** source path
   (no UNC/network shares or directory links), and a DIFFERENT, unused
-  absolute \`.wav\` destination path in an **existing local folder**.
+  absolute `.wav` destination path in an **existing local folder**.
   Files on the original SD are not automatically copied, scanned, or changed.
+
+## GUI: choose source and target, then explicitly confirm
+
+On Windows, open a PowerShell terminal in the **extracted inner portable ZIP**
+folder. With the already-required Python 3.11+ and a local desktop session,
+run:
+
+```powershell
+py -3 START-OFFLINE-WAV-PREP.py --gui
+```
+
+The GUI provides **Choose source** (owned MP3/FLAC), **Choose new WAV**
+(an unused filename in an existing LOCAL folder), **1. Preview** and
+**2. Convert**. Preview has NO decoder and creates nothing. After a
+successful preview, the second button requires typing **CONVERT** in a
+modal dialog. Cancel, closing the dialog or changing either path never
+starts FFmpeg; paths changed after Preview must be previewed again.
+While a bounded conversion runs, the fields and file-picker buttons are
+locked, preventing edits and accidental repeat starts. Completion displays
+the new WAV SHA256 without logging your private filenames. Both the
+GUI and terminal path use the SAME non-overwriting, memory-bounded local
+conversion. The GUI has no remote access and is not available on a
+headless PC. Installing FFmpeg separately on your own PC remains necessary.
 
 ## Step 1 — no-write preview (FFmpeg not required)
 
 From a trusted Windows terminal in the extracted portable alpha folder:
 
-\`\`\`powershell
+```powershell
 py -3 START-OFFLINE-WAV-PREP.py --source "C:\Private\owned-song.flac" --output "C:\Private\Prepared\owned-song.wav"
-\`\`\`
+```
 
 The preview checks supported suffix, size and safe source/destination paths
 only. It neither opens an audio decoder nor creates/overwrites files. The
-folder \`C:\Private\Prepared\` must already exist. For MP3 use \`.mp3\`.
+folder `C:\Private\Prepared` must already exist. For MP3 use `.mp3`.
 Never paste your actual private file paths into public issue reports.
 
 ## Step 2 — explicitly write one new WAV, no overwrite
 
-\`\`\`powershell
+```powershell
 py -3 START-OFFLINE-WAV-PREP.py --source "C:\Private\owned-song.flac" --output "C:\Private\Prepared\owned-song.wav" --convert
-\`\`\`
+```
 
 Review the preview and type exactly **CONVERT** and Enter in that same
 trusted local terminal. Cancel with any other input. FFmpeg is invoked
@@ -63,7 +86,7 @@ The utility prints only the generated WAV byte count and SHA256, **not
 your filenames**. Independently inspect the output WAV and hash on the
 trusted PC. Keep all originals and the original Pi SD unchanged. Separately
 approve any local music transfer using the existing
-\`audiohub-music-transfer\` workflow only after AH-005 secure local owner
+`audiohub-music-transfer` workflow only after AH-005 secure local owner
 access and safe Pi shutdown are authorized. Backup/verify all other
 WAV/EQ/MP3/FLAC/personal data independently; the WAV-only transfer is not
 a complete SD backup.

@@ -135,6 +135,8 @@ jobs:
           $env:PYTHONPATH = Join-Path $PWD 'src'
           python -m unittest discover -s tests -p "test_windows*.py" -v
           if ($LASTEXITCODE -ne 0) { throw 'Windows offline tests failed' }
+          python -m unittest discover -s tests -p "test_offline_wav_prep.py" -v
+          if ($LASTEXITCODE -ne 0) { throw 'Windows WAV preparation tests failed' }
           python -c "import tkinter; print('Windows Tk runtime available: ', tkinter.TkVersion)"
           if ($LASTEXITCODE -ne 0) { throw 'Windows Tk unavailable' }
           python scripts/package_windows_bridge.py --source-sha $env:SOURCE_COMMIT --directory dist/windows
@@ -155,5 +157,14 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw 'Portable starter failed' }
             python START-WINDOWS-BRIDGE.py --gui --help
             if ($LASTEXITCODE -ne 0) { throw 'Portable GUI CLI failed' }
+            python START-OFFLINE-WAV-PREP.py --gui --help
+            if ($LASTEXITCODE -ne 0) { throw 'Extracted file picker option unavailable' }
+            $owned = Join-Path $env:RUNNER_TEMP 'audiohub-owned-synthetic.flac'
+            $newWav = Join-Path $env:RUNNER_TEMP 'audiohub-unused-synthetic.wav'
+            [System.IO.File]::WriteAllBytes($owned, [byte[]](0x12,0x34,0x56,0x78))
+            python START-OFFLINE-WAV-PREP.py --source $owned --output $newWav
+            if ($LASTEXITCODE -ne 0) { throw 'Extracted Windows WAV preview failed' }
+            if (Test-Path -LiteralPath $newWav) { throw 'Read-only WAV preview created output' }
+            Write-Host 'Extracted Windows WAV no-write preview and GUI option PASS'
           } finally { Pop-Location }
           Write-Host "Windows operator ALPHA source-only smoke PASS. No GUI launched or hardware claim."
