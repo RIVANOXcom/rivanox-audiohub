@@ -1,5 +1,6 @@
 """Check that a preview build matches the pinned pi-gen external contract."""
 import unittest
+import stat
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -16,6 +17,10 @@ class ImageBuildContractTests(unittest.TestCase):
         stage=ROOT/"image"/"stage-audiohub"
         self.assertTrue((stage/"00-packages"/"00-packages-nr").is_file())
         self.assertTrue((stage/"01-install"/"00-run.sh").is_file())
+        self.assertTrue(
+            (stage/"01-install"/"00-run.sh").stat().st_mode & stat.S_IXUSR,
+            "Native pi-gen silently skips 01-install/00-run.sh if not executable"
+        )
         self.assertTrue((stage/"prerun.sh").is_file())
         self.assertTrue((stage/"EXPORT_IMAGE").is_file())
         self.assertIn("stage-audiohub", (ROOT / "build-image.sh").read_text())
