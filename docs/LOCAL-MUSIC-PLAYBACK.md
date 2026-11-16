@@ -84,7 +84,7 @@ audiohub-music /absolute/private/music-folder --library-health
 
 This is a **silent, offline, read-only** operation as the existing
 unprivileged `audiohub` user. It counts bounded *recognized* media
-in the chosen folder (at most 256 directory entries): valid PCM16
+in the chosen folder (at most 256 directory entries): valid PCM16/24
 WAVs, incompatible WAV encoding/channel/rate/duration, damaged or
 inaccessible WAV headers, symlinks/unsafe WAV entries, hidden WAVs,
 recognizable but unsupported audio extensions (such as MP3/FLAC),
@@ -99,7 +99,7 @@ if more than 40 compatible WAVs exist, select a smaller private folder
 first rather than silently omitting tracks. A new SD with **zero** private
 WAVs is a normal initial state. If media encoding is incompatible, use
 your own or licensed original files on your *own computer* to export
-uncompressed 16-bit PCM mono/stereo WAV at 8–96 kHz, at most 64 MiB
+uncompressed 16- or 24-bit PCM mono/stereo WAV at 8–96 kHz, at most 64 MiB
 each. No converter is installed or run by the Pi health check.
 A broken WAV should be re-exported; a symlink, world-writable or
 oversized WAV is intentionally refused. **Do not weaken file permissions
@@ -143,7 +143,7 @@ and distinct exact `PLAY` confirmation; there is no autoplay.
 On an **operator-authorized isolated Pi4** with its existing per-user
 PipeWire graph running, place **your own** valid WAV tracks in a readable
 operator-approved local folder (for example mounted read-only media).
-Supported tracks: uncompressed 16-bit PCM, mono or stereo, sample rate
+Supported tracks: uncompressed 16- or 24-bit PCM, mono or stereo, sample rate
 8–96 kHz, individually at most 64 MiB. A manual queue supports up to
 8 files, max 30 minutes, 15-minute default. No outside URLs or
 filenames are shipped in the image.
@@ -204,6 +204,23 @@ Production release still requires Pi4/Edifier bench acceptance,
 source-rights and nine rootfs copyright notice reviews, secure
 phone ownership onboarding, long-term package archival, and
 explicit operator/CEO release authorization.
+
+## Local 24-bit PCM WAV music without conversion of original media
+
+The bounded local album player now accepts **uncompressed integer PCM
+24-bit WAV** alongside PCM16, mono or stereo at 8–96 kHz. Input files
+must still be regular, non-world-writable, unlinked, no more than 64 MiB
+and within the existing 30-minute limit. The original private WAV stays
+byte-for-byte untouched. In playback only, each bounded RAM chunk is
+reduced from signed 24-bit to 16-bit PCM by dropping the low eight bits
+and sent to the existing private `pw-cat --format=s16` music sink.
+This is **not bit-perfect 24-bit output** or calibrated audio quality.
+LEFT/RIGHT isolation is applied after downconversion so the opposite
+speaker channel remains silent. This adds no codecs or network calls.
+PCM32, float/companded WAV, MP3 and FLAC are not made directly playable;
+export unsupported media offline on a trusted computer. All existing
+explicit PLAY, low starting gain, actual USB route checks, manual
+operator permission, safe power-off and rollback rules still apply.
 
 ## First boot with an empty private WAV folder
 
@@ -609,7 +626,7 @@ After separately approving and flashing the **unverified** ARM64 test
 image to a spare SD card, sign in at a physically trusted Pi4 terminal
 as the existing **unprivileged `audiohub` user**. The new image ships an
 empty, private 0700 folder at `/home/audiohub/PrivateMusic` for the
-operator's own legally playable PCM16 WAV files. Import files into this
+operator's own legally playable PCM16/24 WAV files. Import files into this
 folder through an already-authorized local/manual process. No Wi-Fi,
 SSH, phone owner-claim or media synchronization is enabled by this feature.
 
@@ -703,7 +720,7 @@ audiohub-music-transfer backup /absolute/private/external-folder
 
 The CLI previews a count and total size without filenames and writes
 nothing until you type **exactly `COPY`** on its separate prompt.
-It handles up to 40 valid PCM16 WAV files and at most 512 MiB. It
+It handles up to 40 valid PCM16/24 WAV files and at most 512 MiB. It
 refuses unsafe/unsupported WAVs, symbolic links, hardlinked source
 files, permission problems, insufficient space, collisions and files
 changed during copying. The tool does **not** copy non-WAV items,

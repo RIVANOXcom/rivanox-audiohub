@@ -141,7 +141,7 @@ def inspect_library_health(folder):
                         # Categorize only fixed errors from our parser. Never
                         # print exception text, filenames or private paths.
                         code = str(exc)
-                        if code == "Only bounded 16-bit PCM mono/stereo WAV is supported":
+                        if code == "Only bounded 16/24-bit PCM mono/stereo WAV is supported":
                             counts["unsupported_pcm_wav"] += 1
                         elif code in (
                                 "WAV must be a bounded, non-world-writable regular file",
@@ -181,7 +181,7 @@ def display_library_health(counts):
     count = counts["supported_wav"]
     lines = [
         "OFFLINE MUSIC LIBRARY HEALTH: SILENT READ-ONLY REPORT.",
-        "Supported PCM16 WAVs: " + str(count) +
+        "Supported PCM16/24 WAVs: " + str(count) +
         " (numbered album list can display at most 40).",
         "Unsupported WAV sample/channel/rate/duration: " +
         str(counts["unsupported_pcm_wav"]) + ".",
@@ -206,7 +206,7 @@ def display_library_health(counts):
                      "audiohub-music --list preview; NOT sound-ready.")
     if counts["other_audio_format"] or counts["unsupported_pcm_wav"]:
         lines.append("For OWN or LICENSED media only, convert OFFLINE on "
-                     "your computer to uncompressed 16-bit PCM mono/stereo "
+                     "your computer to uncompressed 16- or 24-bit PCM mono/stereo "
                      "WAV, 8-96 kHz, at most 64 MiB per track. "
                      "This tool never converts or imports music.")
     if counts["damaged_or_unreadable_wav"]:

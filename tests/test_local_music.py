@@ -692,6 +692,51 @@ class LocalMusicTests(unittest.TestCase):
         self.assertNotIn("one.wav", text)
         self.assertNotIn(str(self.root), text)
 
+
+    def test_pcm24_signed_conversion_bounded_and_nonboosting(self):
+        raw = (b"\x00\x00\x00" + b"\xff\xff\x7f" +
+               b"\x00\x00\x80" + b"\x12\x34\x56" +
+               b"\x55\xfe\xff")
+        self.assertEqual(local_music.pcm24_to_pcm16(raw),
+                         b"\x00\x00\xff\x7f\x00\x80\x34\x56\xfe\xff")
+        for invalid in (b"", b"\x01\x02", b"\x00" * 7,
+                        b"\x00" * (local_music.FRAMES_PER_CHUNK * 2 * 3 + 3),
+                        bytearray(b"\x01\x02\x03"), "private-song.wav"):
+            with self.subTest(kind=type(invalid).__name__,
+                              size=len(invalid)), self.assertRaises(ValueError):
+                local_music.pcm24_to_pcm16(invalid)
+
+    def test_pcm24_local_wav_plays_as_pcm16_without_original_data_loss(self):
+        source = self.root / "sensitive-24bit.wav"
+        original = (b"\x00\x00\x80" + b"\xff\xff\x7f" +
+                    b"\x12\x34\x56" + b"\x44\x33\x22") * 8
+        self.make_wav(source, original, channels=2, rate=48000, width=3)
+        untouched = source.read_bytes()
+        meta = local_music._open_wav(source)
+        self.assertEqual((meta["sample_width"], meta["channels"], meta["frames"]),
+                         (3, 2, 16))
+        with mock.patch.object(local_music.os, "geteuid", return_value=1000):
+            self.assertTrue(local_music.play_playlist(
+                [source], max_minutes=1, channel="left",
+                spawn=self.spawn, capture=self.capture, notify=lambda _: None))
+        self.assertEqual(source.read_bytes(), untouched)
+        self.assertEqual(len(self.players), 1)
+        self.assertEqual(self.players[0].stdin.saved,
+                         (b"\x00\x80\x00\x00" + b"\x34\x56\x00\x00") * 8)
+        argv = next(event[1] for event in self.events if event[0] == "spawn")
+        for safe_flag in ("--format=s16", "--target=audiohub.music",
+                          "--volume=0.20"):
+            self.assertIn(safe_flag, argv)
+        self.assertNotIn("sensitive-24bit", repr(self.events))
+        self.assertNotIn(str(self.root), repr(self.events))
+
+    def test_pcm32_wav_is_still_refused_before_any_private_player_spawn(self):
+        bad = self.root / "not-supported-32bit.wav"
+        self.make_wav(bad, b"\x00" * (2 * 4 * 60), channels=2, width=4)
+        with self.assertRaisesRegex(ValueError, "16/24-bit"):
+            local_music.inspect_playlist([bad], max_minutes=1)
+        self.assertEqual(self.events, [])
+
     def test_quieter_gain_is_allowlisted_and_reaches_only_pw_cat(self):
         self.assertEqual(local_music.stream_gain("quiet"), "0.05")
         self.assertEqual(local_music.stream_gain("soft"), "0.10")

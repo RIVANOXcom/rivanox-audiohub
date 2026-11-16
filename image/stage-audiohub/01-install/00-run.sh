@@ -64,7 +64,7 @@ empty_health_output="$(runuser -u audiohub -- /usr/local/bin/audiohub-music --li
 empty_health_status="$?"
 set -e
 test "$empty_health_status" -eq 0
-case "$empty_health_output" in *"OFFLINE MUSIC LIBRARY HEALTH"*"Supported PCM16 WAVs: 0"*"NO SUPPORTED WAV TRACKS"*"No playback, network, file writes or mixer changes"*"UNVERIFIED"*) ;; *) exit 1 ;; esac
+case "$empty_health_output" in *"OFFLINE MUSIC LIBRARY HEALTH"*"Supported PCM16/24 WAVs: 0"*"NO SUPPORTED WAV TRACKS"*"No playback, network, file writes or mixer changes"*"UNVERIFIED"*) ;; *) exit 1 ;; esac
 
 # Actual installed Pi4 stereo channel option must fail closed for invalid
 # names. This cannot play sound or modify user volume or other sinks.
