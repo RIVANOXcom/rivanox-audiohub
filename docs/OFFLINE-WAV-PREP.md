@@ -21,6 +21,32 @@ convert existing music without explicit manual approval.
   absolute `.wav` destination path in an **existing local folder**.
   Files on the original SD are not automatically copied, scanned, or changed.
 
+## One-click Windows start — no installer or command typing
+
+After independently verifying both Windows ZIP checksums and extracting the
+**inner** portable package onto a trusted **local drive**, double-click
+`OPEN-AUDIOHUB-MUSIC-PREP.cmd`. It starts the same local graphical file
+picker with an existing Python 3.11+; no external application is installed,
+no audio is decoded and no network access or Pi action occurs merely on
+launch. This source-transparent `.cmd` file is NOT a signed Windows EXE.
+Do not execute untrusted downloads, scripts or unexpected prompts.
+
+To examine PC readiness **without writing a WAV**, in a terminal inside
+the extracted folder use:
+
+```powershell
+.\OPEN-AUDIOHUB-MUSIC-PREP.cmd --check
+```
+
+The check reports only whether Python 3.11+, Tk and a separately installed
+FFmpeg are detected, not their paths or your filenames. It does not run
+FFmpeg or access music. If FFmpeg is missing, source/destination Preview
+still works in the GUI but conversion is disabled until FFmpeg is installed
+independently on that PC and the launcher restarted. The command below
+remains an equally supported alternative for operators preferring Python.
+If a corporate PC blocks local scripts, follow its security policy; there
+is no approved signed installer to override those restrictions.
+
 ## GUI: choose source and target, then explicitly confirm
 
 On Windows, open a PowerShell terminal in the **extracted inner portable ZIP**
@@ -37,6 +63,8 @@ The GUI provides **Choose source** (owned MP3/FLAC), **Choose new WAV**
 successful preview, the second button requires typing **CONVERT** in a
 modal dialog. Cancel, closing the dialog or changing either path never
 starts FFmpeg; paths changed after Preview must be previewed again.
+External FFmpeg availability is checked before enabling the Convert button;
+if missing the GUI explains what is required without trying to install it.
 While a bounded conversion runs, the fields and file-picker buttons are
 locked, preventing edits and accidental repeat starts. Completion displays
 the new WAV SHA256 without logging your private filenames. Both the

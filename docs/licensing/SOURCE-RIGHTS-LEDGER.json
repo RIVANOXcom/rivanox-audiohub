@@ -130,6 +130,13 @@
       "model_c_eligible": false
     },
     {
+      "path": "scripts/OPEN-AUDIOHUB-MUSIC-PREP.cmd",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
       "path": "scripts/START-OFFLINE-WAV-PREP.py",
       "origin_status": "pending-human-review",
       "rightsholder_verified": false,

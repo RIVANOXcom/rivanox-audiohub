@@ -139,6 +139,29 @@ class OfflineWavPreparationTests(unittest.TestCase):
         self.assertFalse(self.destination.exists())
 
 
+    def test_offline_pc_readiness_is_anonymous_and_never_runs_codec(self):
+        import importlib.util
+        for present in (False, True):
+            with self.subTest(ffmpeg_found=present), \
+                 mock.patch.object(importlib.util, "find_spec", return_value=object()), \
+                 mock.patch.object(prep.shutil, "which",
+                                   return_value="ffmpeg.exe" if present else None), \
+                 mock.patch.object(prep.subprocess, "Popen") as run:
+                out = io.StringIO()
+                with contextlib.redirect_stdout(out):
+                    self.assertEqual(prep.main(["--check-local"]), 0)
+                run.assert_not_called()
+                self.assertIn("Tk file-picker library: DETECTED", out.getvalue())
+                self.assertIn("FFmpeg on PATH: " + (
+                    "DETECTED" if present else "NOT FOUND"), out.getvalue())
+                self.assertNotIn(str(self.root), out.getvalue())
+                self.assertFalse(self.destination.exists())
+        with mock.patch.object(prep.subprocess, "Popen") as proc:
+            with contextlib.redirect_stderr(io.StringIO()), \
+                 self.assertRaises(SystemExit):
+                prep.main(["--check-local", "--convert"])
+            proc.assert_not_called()
+
     def test_gui_only_opt_in_and_never_autostarts_converter(self):
         with mock.patch.object(prep, "launch_gui", return_value=0) as gui, \
              mock.patch.object(prep, "_convert") as converter:

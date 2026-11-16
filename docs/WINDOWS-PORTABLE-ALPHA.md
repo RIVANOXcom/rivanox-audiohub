@@ -9,13 +9,25 @@ included. Nothing starts automatically.
 
 ## Optional offline MP3/FLAC-to-WAV preparation (no Pi changes)
 
-The same **18-member** source-verified portable ALPHA
+The same **19-member** source-verified portable ALPHA
 includes `START-OFFLINE-WAV-PREP.py` and
 `README-OFFLINE-WAV-PREP.md`. They let the operator prepare one
 owned/licensed FLAC or MP3 file as a NEW PCM16 stereo 48-kHz WAV on a
 **trusted local PC**, using a separately installed FFmpeg. The tool
 does **not bundle FFmpeg**, fetch anything, use the Windows Scream driver,
 modify the original music file, overwrite any target, or access the Pi.
+**Simplest Windows start:** extract the inner portable ZIP onto a local
+drive, then double-click `OPEN-AUDIOHUB-MUSIC-PREP.cmd`.
+This is an inspected plaintext Windows launcher (not an installer or EXE);
+it opens the existing local Tk interface with Python 3.11+ from your PC,
+never installs anything or converts media automatically. On a terminal run
+`OPEN-AUDIOHUB-MUSIC-PREP.cmd --check` to see whether Python, Tk and
+an external FFmpeg are available without processing any music. If FFmpeg is
+missing, read-only Preview works; conversion stays disabled until it is
+installed separately and the app restarted. If the launcher or Python is
+untrusted, do not execute it. Command-line alternative:
+`py -3 START-OFFLINE-WAV-PREP.py --gui`.
+
 A read-only preview runs before FFmpeg is needed. For Windows users,
 `py -3 START-OFFLINE-WAV-PREP.py --gui` launches a local file-picker
 with explicit Preview and CONVERT confirmation (no automatic export).

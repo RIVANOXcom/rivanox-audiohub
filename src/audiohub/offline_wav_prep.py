@@ -132,6 +132,23 @@ def _convert(source, output, *, ffmpeg="ffmpeg", timeout=120):
 
 
 
+def check_local_prerequisites():
+    """No-write offline PC readiness; NEVER runs or installs FFmpeg."""
+    import importlib.util
+
+    python_ok = sys.version_info >= (3, 11)
+    tk_available = importlib.util.find_spec("tkinter") is not None
+    decoder_found = shutil.which("ffmpeg") is not None
+    print("AudioHub LOCAL PC setup (check only; no music read, network or writes)")
+    print("Python 3.11+: " + ("DETECTED" if python_ok else "NOT AVAILABLE"))
+    print("Tk file-picker library: " + ("DETECTED" if tk_available else "NOT AVAILABLE"))
+    print("External FFmpeg on PATH: " + ("DETECTED" if decoder_found else
+                                        "NOT FOUND - conversion unavailable"))
+    print("FFmpeg is NOT bundled. If missing, install it independently and"
+          " restart the app; read-only previews still work.")
+    return 0 if python_ok and tk_available else 2
+
+
 def launch_gui():
     """A local, explicitly opted-in Tk file picker. Never auto-starts FFmpeg."""
     import queue
@@ -205,9 +222,14 @@ def launch_gui():
             status.set("PREVIEW REFUSED: check local owned source and UNUSED "
                        "WAV destination. No files changed.")
             return
+        if shutil.which("ffmpeg") is None:
+            status.set("PREVIEW VALID (no writes). External FFmpeg NOT FOUND. "
+                       "Install separately on this trusted PC, restart, then "
+                       "preview again. Conversion stays disabled.")
+            return
         approved[0] = (source.get(), output.get())
         status.set("PREVIEW READY. Output PCM16 stereo 48 kHz, max 64 MiB. "
-                   "No FFmpeg run, no files written. Review then CONVERT.")
+                   "External FFmpeg detected but NOT run. Review then CONVERT.")
         convert_button.configure(state="normal")
 
     def finish():
@@ -309,7 +331,12 @@ def main(argv=None):
     parser.add_argument("--output", help="New absolute .wav path; never overwritten")
     parser.add_argument("--convert", action="store_true", help="Require a local TTY and exact CONVERT")
     parser.add_argument("--gui", action="store_true", help="Local file picker, Preview and exact CONVERT dialog")
+    parser.add_argument("--check-local", action="store_true", help="No-write Python/Tk/FFmpeg readiness check")
     args = parser.parse_args(argv)
+    if args.check_local:
+        if args.gui or args.source is not None or args.output is not None or args.convert:
+            parser.error("--check-local cannot be combined with music paths or conversion")
+        return check_local_prerequisites()
     if args.gui:
         if args.source is not None or args.output is not None or args.convert:
             parser.error("--gui cannot be combined with --source, --output or --convert")

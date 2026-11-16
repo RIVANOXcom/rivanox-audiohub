@@ -73,7 +73,7 @@ jobs:
           assert len(archives) == 1
           with zipfile.ZipFile(archives[0]) as archive:
               assert archive.testzip() is None
-              assert len(archive.namelist()) == 18
+              assert len(archive.namelist()) == 19
           print("Windows portable bridge bundle integrity PASS; NOT released")
           PY
       - name: Upload temporary Windows offline operator alpha
@@ -159,6 +159,9 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw 'Portable GUI CLI failed' }
             python START-OFFLINE-WAV-PREP.py --gui --help
             if ($LASTEXITCODE -ne 0) { throw 'Extracted file picker option unavailable' }
+            & cmd.exe /d /c '.\OPEN-AUDIOHUB-MUSIC-PREP.cmd --check'
+            if ($LASTEXITCODE -ne 0) { throw 'Native Windows one-click launcher offline check failed' }
+            Write-Host 'One-click Windows local music launcher: no-write setup check PASS'
             $owned = Join-Path $env:RUNNER_TEMP 'audiohub-owned-synthetic.flac'
             $newWav = Join-Path $env:RUNNER_TEMP 'audiohub-unused-synthetic.wav'
             [System.IO.File]::WriteAllBytes($owned, [byte[]](0x12,0x34,0x56,0x78))
