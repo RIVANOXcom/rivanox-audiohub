@@ -458,6 +458,103 @@ class MusicSessionTests(unittest.TestCase):
                              [self.paths[1], self.paths[0]])
             self.assertEqual(session.call_args.kwargs, {"max_minutes": 2})
 
+
+    def test_local_sleep_timer_input_allowlist_is_strict(self):
+        with mock.patch.object(music_session.select, "select",
+                               return_value=([1], [], [])):
+            for text, expected in (("t0", "t0"), ("T1", "t1"),
+                                   ("t5", "t5"), ("t10", "t10")):
+                self.assertEqual(music_session.read_terminal_command(
+                    stream=io.StringIO(text + "\n")), expected)
+            for text in ("t2", "t11", "t30", "t999", "t-1",
+                         "t/private.wav", "t5; q", "t0 SECRET"):
+                self.assertEqual(music_session.read_terminal_command(
+                    stream=io.StringIO(text + "\n")), "?")
+
+    def test_sleep_timer_reschedule_pause_and_cancel_never_extend_original_cap(self):
+        ticks = {"now": 100.0}
+        child = FakeChild()
+        ready = threading.Event()
+        events = iter([("t5", 110.0), ("s", 130.0),
+                       ("u", 140.0), ("s", 150.0),
+                       ("t1", 160.0), ("s", 170.0),
+                       ("t10", 180.0), ("l", 185.0),
+                       ("t0", 190.0), ("s", 200.0), ("q", 205.0)])
+
+        def playback(_paths, *, max_minutes, stop, on_player,
+                     session_deadline, notify):
+            self.assertEqual(session_deadline, 700.0)
+            on_player(child)
+            ready.set()
+            while not stop.wait(0.001):
+                pass
+            raise InterruptedError("operator stopped owned player")
+
+        def read(_timeout):
+            self.assertTrue(ready.wait(2))
+            cmd, now = next(events)
+            ticks["now"] = now
+            return cmd
+
+        with mock.patch.object(local_music, "music_sink_available",
+                               return_value=True), \
+             mock.patch.object(local_music.os, "geteuid", return_value=1000):
+            self.assertFalse(music_session.run_session(
+                self.paths, max_minutes=10, clock=lambda: ticks["now"],
+                playback=playback, read_command=read,
+                out=self.out.append, require_tty=False))
+        shown = "\n".join(self.out)
+        for phrase in ("SET for 5 min", "session remaining 280 s",
+                       "session remaining 260 s", "SET for 1 min",
+                       "session remaining 50 s", "SET for 10 min",
+                       "515 s remaining", "CANCELLED; original session",
+                       "session remaining 500 s"):
+            self.assertIn(phrase, shown)
+        self.assertEqual(child.sent_signals, [signal.SIGSTOP, signal.SIGCONT])
+        self.assertTrue(child.terminated)
+        self.assertNotIn(str(self.dir), shown)
+        self.assertNotIn("secret-title", shown)
+
+    def test_sleep_timer_expiry_stops_paused_owned_player_not_next_or_repeat(self):
+        ticks = {"now": 1000.0}
+        child = FakeChild()
+        ready = threading.Event()
+        events = iter([("t1", 1005.0), ("k2", 1010.0),
+                       ("m", 1011.0), ("u", 1012.0),
+                       ("s", 1015.0), (None, 1066.0)])
+
+        def playback(paths, *, max_minutes, stop, on_player,
+                     session_deadline, notify):
+            self.played.append(paths[0])
+            on_player(child)
+            ready.set()
+            while not stop.wait(0.001):
+                pass
+            raise InterruptedError("local sleep expired")
+
+        def read(_timeout):
+            self.assertTrue(ready.wait(2))
+            cmd, now = next(events)
+            ticks["now"] = now
+            return cmd
+
+        with mock.patch.object(local_music, "music_sink_available",
+                               return_value=True), \
+             mock.patch.object(local_music.os, "geteuid", return_value=1000):
+            self.assertFalse(music_session.run_session(
+                self.paths, max_minutes=5, clock=lambda: ticks["now"],
+                playback=playback, read_command=read,
+                out=self.out.append, require_tty=False))
+        shown = "\n".join(self.out)
+        self.assertIn("LOCAL SLEEP TIMER EXPIRED", shown)
+        self.assertIn("session remaining 50 s", shown)
+        self.assertEqual(child.sent_signals, [signal.SIGSTOP, signal.SIGCONT])
+        self.assertTrue(child.terminated)
+        self.assertEqual(self.played, [self.paths[0]])
+        self.assertNotIn("Playing queued NEXT track", shown)
+        self.assertNotIn("Repeating current selected track", shown)
+        self.assertNotIn("secret-title", shown)
+
     def test_terminal_command_input_is_bounded_unknown_and_eof_quits(self):
         with mock.patch.object(music_session.select, "select",
                                return_value=([1], [], [])):

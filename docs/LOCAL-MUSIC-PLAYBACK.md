@@ -336,6 +336,8 @@ During playback, type a command and press **Enter**:
 | Command | Action |
 |---|---|
 | `u` + Enter | Pause or resume only this music session's owned player; session time limit keeps running |
+| `t1`, `t5`, `t10` + Enter | Set a **local sleep timer** for 1, 5 or 10 wall-clock minutes from now, even when paused. Stop only the owned player, before any next/repeated/queued WAV; never extend the original session limit |
+| `t0` + Enter | Cancel only the optional sleep timer, leaving the original session deadline and audio route unchanged |
 | `s` + Enter | Show current track number, elapsed session time, remaining session limit **and** a separate pause-aware approximate elapsed/remaining time for this WAV (no filenames or identifiers) |
 | `l` + Enter | Show anonymous selected queue order and planned WAV lengths (not live playback progress) |
 | `k1`–`k8` + Enter | Queue that **already selected numbered WAV** to play once **after the current track naturally finishes**, without cutting or restarting current audio |
@@ -354,6 +356,22 @@ During playback, type a command and press **Enter**:
 | `q` + Enter | **Stop immediately**; terminate only the current owned player and exit |
 | `h` + Enter | Repeat the short help text |
 | Ctrl+C | Emergency local interruption; owned child stopped in cleanup |
+
+**Opt-in local sleep timer:** While an already explicitly authorized
+`--play --interactive` private WAV is running, enter `t5` then Enter
+to stop the whole current music session within five wall-clock minutes.
+`t1` and `t10` offer one/ten minute alternatives. The timer counts
+while paused, during repeat, and across queued songs. `s` shows the
+earlier of this timer and the immutable original session deadline;
+`l` shows timer state. Rescheduling never extends the original session
+maximum (1–30 min). `t0` cancels only the optional timer. Expiry
+terminates only the existing locally owned player, including a
+paused one, and refuses any next, repeat or queued WAV. Nothing is
+scheduled after the terminal session, and there are no network
+listeners, background services, persistent settings, system power
+operations or speaker loudness changes. This is NOT a Raspberry Pi
+shutdown mechanism and does NOT bypass the separate AH-005 safe
+powerdown prerequisite. `q` still stops immediately.
 
 **Queue a different WAV after the current one finishes:** while playing,
 `l` first shows the anonymous 1–8 track numbers. Enter e.g. `k3` to

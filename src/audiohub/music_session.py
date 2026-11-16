@@ -27,6 +27,7 @@ COMMAND_HELP = ("Enter: [u] pause/resume, [m] repeat off/track/all, [s] status, 
                 "[z] remove last pending, [b] undo last queue edit, [k0] clear pending, "
                 "[d1-d8] delete pending SLOT, [f1-f8] move SLOT to NEXT, "
                 "[n] next, [p] previous, [r] replay, "
+                "[t1/t5/t10] sleep timer, [t0] cancel, "
                 "[1-8] jump, [q] quit now, [h] help.")
 
 
@@ -62,7 +63,8 @@ def read_terminal_command(timeout=POLL_SECONDS, *, stream=None):
                "k0", "k1", "k2", "k3", "k4", "k5", "k6", "k7", "k8",
                "a1", "a2", "a3", "a4", "a5", "a6", "a7", "a8",
                "d1", "d2", "d3", "d4", "d5", "d6", "d7", "d8",
-               "f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8")
+               "f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8",
+               "t0", "t1", "t5", "t10")
     return value if value in allowed else "?"
 
 
@@ -205,6 +207,18 @@ def run_session(paths, *, max_minutes=15, read_command=read_terminal_command,
 
     start = clock()
     deadline = start + max_minutes * 60
+    sleep_until = None  # Monotonic, optional, strictly bounded, volatile.
+
+    def effective_deadline():
+        return min(deadline, sleep_until) if sleep_until is not None else deadline
+
+    def timer_status():
+        if sleep_until is None:
+            return "Local sleep timer OFF; original session limit still applies."
+        remaining = max(0, math.ceil(effective_deadline() - clock()))
+        return ("Local sleep timer ARMED; " + str(remaining) +
+                " s remaining including pause; original limit still applies.")
+
     out("Interactive music session started locally at " + level.upper() +
         " stream level, " + channel.upper() + " stereo channel selection "
         "(not calibrated speaker loudness or actual hardware verification). "
@@ -226,8 +240,11 @@ def run_session(paths, *, max_minutes=15, read_command=read_terminal_command,
         # track, stale selection or an old stop-after-plan setting.
         undo_pending = None
         path = paths[position - 1]
-        if clock() >= deadline:
-            out("Session time limit reached. No new track started.")
+        if clock() >= effective_deadline():
+            if sleep_until is not None and sleep_until < deadline:
+                out("Local sleep timer expired before next WAV; no new track started.")
+            else:
+                out("Session time limit reached. No new track started.")
             break
         cancelled = threading.Event()
         finished = threading.Event()
@@ -284,7 +301,7 @@ def run_session(paths, *, max_minutes=15, read_command=read_terminal_command,
         thread = threading.Thread(target=worker, name="audiohub-local-music",
                                   daemon=True)
         thread.start()
-        out(status_message(position, report["files"], start, deadline,
+        out(status_message(position, report["files"], start, effective_deadline(),
                            clock=clock, repeat_mode=repeat_mode,
                            end_after_track=end_after_track,
                            queued_next=queued_next,
@@ -336,8 +353,9 @@ def run_session(paths, *, max_minutes=15, read_command=read_terminal_command,
         requested = None
         try:
             while not finished.is_set():
-                if clock() >= deadline:
-                    requested = "timeout"
+                if clock() >= effective_deadline():
+                    requested = ("sleep_timeout" if sleep_until is not None and
+                                 sleep_until < deadline else "timeout")
                     break
                 command = read_command(POLL_SECONDS)
                 if command == "s":
@@ -356,7 +374,7 @@ def run_session(paths, *, max_minutes=15, read_command=read_terminal_command,
                         if pause_started[0] is not None:
                             stopped_time += max(0.0, now - pause_started[0])
                     out(status_message(position, report["files"], start,
-                                       deadline, clock=clock, paused=is_paused,
+                                       effective_deadline(), clock=clock, paused=is_paused,
                                        repeat_mode=repeat_mode,
                                        end_after_track=end_after_track,
                                        queued_next=queued_next,
@@ -374,6 +392,21 @@ def run_session(paths, *, max_minutes=15, read_command=read_terminal_command,
                         out(track_progress_message(
                             report["tracks"][position - 1]["duration_ms"],
                             seconds, paused=is_paused))
+                    out(timer_status())
+                elif command in ("t0", "t1", "t5", "t10"):
+                    # The worker enforces the immutable original cap, while
+                    # this loop can only stop its owned player even earlier.
+                    if command == "t0":
+                        sleep_until = None
+                        out("Local sleep timer CANCELLED; original session "
+                            "limit unchanged, current WAV uninterrupted.")
+                    else:
+                        minutes = int(command[1:])
+                        sleep_until = min(deadline, clock() + 60 * minutes)
+                        out("Local sleep timer SET for " + str(minutes) +
+                            " min from now; capped by original session limit. "
+                            "Current WAV uninterrupted; pause does not stop it.")
+                    out(timer_status())
                 elif command == "u":
                     result = toggle_pause()
                     if result is None:
@@ -550,6 +583,7 @@ def run_session(paths, *, max_minutes=15, read_command=read_terminal_command,
                                       queued_next=queued_next,
                                       queued_after=queued_after,
                                       end_after_plan=end_after_plan))
+                    out(timer_status())
                 elif command in ("n", "p", "r", "q"):
                     requested = command
                     break
@@ -580,6 +614,11 @@ def run_session(paths, *, max_minutes=15, read_command=read_terminal_command,
             return False
         if requested == "timeout":
             out("Music session time limit reached. Playback stopped.")
+            return False
+        if requested == "sleep_timeout":
+            out("LOCAL SLEEP TIMER EXPIRED: only owned music player stopped; "
+                "no queued, repeated or next WAV started. No hardware sound "
+                "or Pi poweroff verified.")
             return False
         if failures:
             # A route disappearing in the middle of a long WAV has its own
@@ -656,7 +695,7 @@ def run_session(paths, *, max_minutes=15, read_command=read_terminal_command,
             out("Repeating current selected track until mode or deadline changes.")
             continue
         position += 1
-        if position > report["files"] and repeat_mode == "all" and clock() < deadline:
+        if position > report["files"] and repeat_mode == "all" and clock() < effective_deadline():
             position = 1
             out("Repeating selected queue; no settings or private names saved.")
 
