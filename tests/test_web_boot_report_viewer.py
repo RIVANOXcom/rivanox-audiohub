@@ -23,6 +23,8 @@ class OfflineBootViewerTests(unittest.TestCase):
         self.assertIn('type="file"', source)
         self.assertIn('id="report-file"', source)
         self.assertIn('id="expected-sha"', source)
+        self.assertIn('id="manifest-file"', source)
+        self.assertIn('id="preflight-shutdown"', source)
         self.assertIn('id="identity-value"', source)
         self.assertIn('role="status"', source)
         self.assertIn('id="language"', source)
@@ -131,6 +133,53 @@ const file = raw => ({size:Buffer.byteLength(raw,"utf8"),text:async()=>raw});
   assert.match(el("identity-value").textContent,/40-character/);
   el("expected-sha").value="";
   listeners["expected-sha:input"]();
+  // Real manifest picked from the SAME SHA-verified ZIP: auto-populate source
+  // without retyping 40 hexadecimal characters; no network/persistence.
+  const manifest = {
+    schema:"rivanox-audiohub-preview-bundle/2",
+    source_commit_sha:observedSha,pi_gen_commit_sha:"b".repeat(40),
+    image_sha256:"d".repeat(64),github_actions_run_id:"43817391610",
+    hardware_verified:false,release_approved:false,
+    scope:"Temporary alpha test only, not a release",
+    offline_viewer:{file:"AUDIOHUB-OFFLINE-REPORT-VIEWER.html",
+      bytes:38648,sha256:"e".repeat(64)}
+  };
+  const manifestRaw = JSON.stringify(manifest);
+  const manifestFile = raw => ({...file(raw),name:"PREVIEW-MANIFEST.json"});
+  el("manifest-file").files=[manifestFile(manifestRaw)];
+  await listeners["manifest-file:change"]();
+  assert.equal(el("expected-sha").value,observedSha);
+  assert.match(el("manifest-feedback").textContent,/loaded locally/);
+  assert.match(el("identity-value").textContent,/MATCH/);
+  // Fail closed on wrong filename, forged release, malformed schema or SHA.
+  for(const [reason,badFile] of [
+    ["wrong filename",{...manifestFile(manifestRaw),name:"other.json"}],
+    ["release flag",manifestFile(JSON.stringify({...manifest,release_approved:true}))],
+    ["wrong schema",manifestFile(JSON.stringify({...manifest,schema:"APPROVED"}))],
+    ["invalid SHA",manifestFile(JSON.stringify({...manifest,source_commit_sha:"SECRET-WIFI"}))],
+    ["missing viewer",manifestFile(JSON.stringify({...manifest,offline_viewer:null}))],
+    ["oversized",manifestFile("a".repeat(9000))]
+  ]) {
+    el("manifest-file").files=[badFile];
+    await listeners["manifest-file:change"]();
+    assert.equal(el("expected-sha").value,"",reason);
+    assert.match(el("manifest-feedback").textContent,/Invalid manifest/,reason);
+  }
+  // Manual input must win a concurrent pending asynchronous file read.
+  let resolveManifest;
+  el("manifest-file").files=[{name:"PREVIEW-MANIFEST.json",size:manifestRaw.length,
+    text:()=>new Promise(resolve=>{resolveManifest=resolve;})}];
+  const pendingManifest = listeners["manifest-file:change"]();
+  el("expected-sha").value="f".repeat(40);
+  listeners["expected-sha:input"]();
+  resolveManifest(manifestRaw);
+  await pendingManifest;
+  assert.equal(el("expected-sha").value,"f".repeat(40));
+  assert.match(el("manifest-feedback").textContent,/entered manually/);
+  // Load a valid manifest once more; resetting clears its source status.
+  el("manifest-file").files=[manifestFile(manifestRaw)];
+  await listeners["manifest-file:change"]();
+  assert.equal(el("expected-sha").value,observedSha);
   assert.match(el("advice").textContent,/Reconnect/);
   assert.equal(el("report-file").value,"");
   let seen = Object.values(nodes).map(e=>e.textContent).join("\n");
@@ -262,6 +311,7 @@ const file = raw => ({size:Buffer.byteLength(raw,"utf8"),text:async()=>raw});
   assert.equal(el("pairing-value").textContent,"—");
   assert.equal(el("feedback").textContent,"No file opened.");
   assert.equal(el("expected-sha").value,"");
+  assert.equal(el("manifest-feedback").textContent,"No manifest selected; manual SHA entry is available.");
   console.log("offline SD viewer browser integration PASS");
 })().catch(error => { console.error(error); process.exitCode=1; });
 '''

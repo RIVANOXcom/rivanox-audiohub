@@ -91,7 +91,13 @@ the bounded operator access/shutdown procedure with that mission.
    `AUDIOHUB-OFFLINE-REPORT-VIEWER.html` file and manually select the
    report in the local picker. Compare last reported direct USB route
    with **sampled USB-presence history** (late detection, disappearance,
-   intermittent observation). A USB route reported in JSON is NOT
+   intermittent observation). Instead of manually transcribing 40
+   hexadecimal digits, the same bundled offline HTML viewer can now
+   open the small `PREVIEW-MANIFEST.json` from the SAME independently
+   SHA256-verified ZIP and populate the expected source SHA locally.
+   It validates the expected test-only schema and never sends the
+   manifest, but it does NOT independently verify package integrity or
+   authenticate the SD report. Manual SHA entry remains an alternative. A USB route reported in JSON is NOT
    a human stereo or actual-audibility test. The report is unsigned and
    mutable; never upload its raw contents or share identifiers.
    The **unmodified original SD** is the rollback option after shutdown.

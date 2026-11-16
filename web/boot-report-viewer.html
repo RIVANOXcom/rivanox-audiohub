@@ -42,6 +42,14 @@
     <h2 id="privacy-title">Private by design</h2>
     <p id="privacy-text">This viewer is self-contained. It never uploads, saves or sends the selected report; only a fixed anonymous summary appears on screen. A boot report is not ownership, hardware or release approval.</p>
   </section>
+  <section class="card" aria-labelledby="preflight-title">
+    <h2 id="preflight-title">Before any physical Pi4 test</h2>
+    <ol class="steps">
+      <li id="preflight-backup">Back up the untouched original SD and ALL WAV/EQ/MP3/FLAC files. Flash a disposable spare SD only with explicit approval.</li>
+      <li id="preflight-shutdown">STOP unless the operator has approved a safe Pi4 shutdown method BEFORE booting. No SSH, shared passwords or trusted home network.</li>
+      <li id="preflight-verify">Verify the downloaded ZIP SHA256 and inner IMG.XZ/manifest/viewer checksums independently before extraction or flashing. This viewer never verifies the ZIP.</li>
+    </ol>
+  </section>
   <section class="card" aria-labelledby="choose-title">
     <h2 id="choose-title">1 · Choose your SD report</h2>
     <p class="small" id="choose-note">Choose only AUDIOHUB-TEST-REPORT.json. Maximum 4 KiB. The file remains on your computer.</p>
@@ -50,6 +58,12 @@
       <input id="report-file" type="file" accept=".json,application/json" aria-describedby="choose-note feedback">
       <button type="button" id="clear">Clear result</button>
     </div>
+    <div class="fields" style="margin-top:12px">
+      <label for="manifest-file" id="manifest-label">Manifest from verified ZIP (optional)</label>
+      <input id="manifest-file" type="file" accept=".json,application/json" aria-describedby="manifest-note manifest-feedback">
+    </div>
+    <p class="small" id="manifest-note">Open PREVIEW-MANIFEST.json from the SAME already verified ZIP. Read locally only; not an image checksum or proof of authenticity.</p>
+    <p id="manifest-feedback" role="status" aria-live="polite">No manifest selected; manual SHA entry is available.</p>
     <div class="fields" style="margin-top:12px">
       <label for="expected-sha" id="expected-sha-label">Expected source SHA from package</label>
       <input type="text" id="expected-sha" maxlength="40" size="40" autocomplete="off" spellcheck="false" aria-describedby="choose-note" placeholder="40 hexadecimal characters">
@@ -86,7 +100,7 @@
       intro:"Open AUDIOHUB-TEST-REPORT.json from the boot partition of a safely powered-off Raspberry Pi SD card. No connection or Python installation required.",
       privacyTitle:"Private by design",privacy:"This self-contained viewer never uploads, saves or sends the report. Only a fixed anonymous summary appears. A boot report is not ownership, hardware or release approval.",
       choose:"1 · Choose your SD report",chooseNote:"Choose AUDIOHUB-TEST-REPORT.json, maximum 4 KiB. The file stays on your computer.",
-      file:"Boot report",expectedSha:"Expected source SHA from package",identity:"Image source vs package",sourceMissing:"Image identity unavailable",sourceExpected:"Paste package SHA to compare",sourceMatch:"MATCH (not authenticity)",sourceMismatch:"MISMATCH — check SD and package",sourceInvalid:"Enter the complete 40-character SHA",mismatchTip:"STOP: the report does not match this source. Check the SD card before further testing.",clear:"Clear result",empty:"No file opened.",bad:"Unsupported, incomplete or invalid report. Nothing was uploaded.",
+      file:"Boot report",preflightTitle:"Before any physical Pi4 test",preflightBackup:"Back up the untouched original SD and ALL WAV/EQ/MP3/FLAC files. Flash a disposable spare SD only with explicit approval.",preflightShutdown:"STOP unless the operator has approved a safe Pi4 shutdown method BEFORE booting. No SSH, shared passwords or trusted home network.",preflightVerify:"Verify downloaded ZIP SHA256, inner IMG.XZ, manifest and viewer checksums independently. This viewer cannot validate the ZIP.",manifestLabel:"Manifest from verified ZIP (optional)",manifestNote:"Open PREVIEW-MANIFEST.json from the SAME verified ZIP. Read locally; not an authenticity check.",manifestEmpty:"No manifest selected; manual SHA entry is available.",manifestLoading:"Reading manifest locally…",manifestReady:"Manifest source SHA loaded locally; not an authenticity proof.",manifestBad:"Invalid manifest or wrong filename. SHA cleared; nothing uploaded.",manifestManual:"SHA entered manually.",expectedSha:"Expected source SHA from package",identity:"Image source vs package",sourceMissing:"Image identity unavailable",sourceExpected:"Paste package SHA to compare",sourceMatch:"MATCH (not authenticity)",sourceMismatch:"MISMATCH — check SD and package",sourceInvalid:"Enter the complete 40-character SHA",mismatchTip:"STOP: the report does not match this source. Check the SD card before further testing.",clear:"Clear result",empty:"No file opened.",bad:"Unsupported, incomplete or invalid report. Nothing was uploaded.",
       loading:"Reading locally…",ready:"Read-only summary of the last recorded boot observation. No approval granted.",
       results:"2 · Offline findings",pairing:"Bluetooth pairing state",paired:"Paired devices (anonymous count)",
       controller:"Bluetooth controller observed",usb:"USB output and direct audio link",
@@ -118,7 +132,7 @@
       intro:"AUDIOHUB-TEST-REPORT.json von der Bootpartition einer sicher heruntergefahrenen Raspberry-Pi-SD-Karte öffnen. Keine Verbindung oder Python-Installation nötig.",
       privacyTitle:"Privat statt Datenübertragung",privacy:"Dieser eigenständige Betrachter lädt die Datei niemals hoch, speichert oder sendet sie nicht. Er zeigt nur eine feste anonyme Zusammenfassung. Kein Eigentums-, Hardware- oder Release-Nachweis.",
       choose:"1 · SD-Bericht auswählen",chooseNote:"AUDIOHUB-TEST-REPORT.json auswählen, maximal 4 KiB. Die Datei bleibt lokal.",
-      file:"Startbericht",expectedSha:"Erwarteter Quell-SHA aus dem Paket",identity:"Image-Quelle und Paket",sourceMissing:"Image-Kennung fehlt",sourceExpected:"Paket-SHA zum Vergleich einfügen",sourceMatch:"GLEICH (kein Echtheitsbeweis)",sourceMismatch:"ABWEICHUNG – SD und Paket prüfen",sourceInvalid:"Vollständigen 40-stelligen SHA eingeben",mismatchTip:"STOPP: Der Bericht passt nicht zur Quellversion. SD-Karte vor weiteren Tests prüfen.",clear:"Ergebnis löschen",empty:"Noch keine Datei geöffnet.",bad:"Nicht unterstützter, unvollständiger oder ungültiger Bericht. Nichts wurde übertragen.",
+      file:"Startbericht",preflightTitle:"Vor dem physischen Pi4-Test",preflightBackup:"Unveränderte Original-SD und ALLE WAV-/EQ-/MP3-/FLAC-Dateien sichern. Nur freigegebene Ersatz-SD beschreiben.",preflightShutdown:"STOPP ohne VORHER freigegebene sichere Pi4-Abschaltung. Kein SSH, Standardpasswort oder Heimnetz.",preflightVerify:"ZIP-SHA256, IMG.XZ, Manifest und Viewer-Prüfsummen unabhängig prüfen. Dieser Betrachter prüft nicht das ZIP.",manifestLabel:"Manifest aus geprüftem ZIP (optional)",manifestNote:"PREVIEW-MANIFEST.json aus DEMSELBEN geprüften ZIP lokal öffnen. Kein Echtheitsbeweis.",manifestEmpty:"Kein Manifest ausgewählt; SHA-Eingabe von Hand möglich.",manifestLoading:"Manifest wird lokal gelesen…",manifestReady:"Quell-SHA aus Manifest geladen; kein Echtheitsbeweis.",manifestBad:"Ungültiges Manifest oder falscher Dateiname. SHA gelöscht; kein Upload.",manifestManual:"SHA manuell eingegeben.",expectedSha:"Erwarteter Quell-SHA aus dem Paket",identity:"Image-Quelle und Paket",sourceMissing:"Image-Kennung fehlt",sourceExpected:"Paket-SHA zum Vergleich einfügen",sourceMatch:"GLEICH (kein Echtheitsbeweis)",sourceMismatch:"ABWEICHUNG – SD und Paket prüfen",sourceInvalid:"Vollständigen 40-stelligen SHA eingeben",mismatchTip:"STOPP: Der Bericht passt nicht zur Quellversion. SD-Karte vor weiteren Tests prüfen.",clear:"Ergebnis löschen",empty:"Noch keine Datei geöffnet.",bad:"Nicht unterstützter, unvollständiger oder ungültiger Bericht. Nichts wurde übertragen.",
       loading:"Lese nur lokal…",ready:"Anonyme Auswertung des letzten aufgezeichneten Startzustands. Keine Freigabe.",
       results:"2 · Offline-Ergebnis",pairing:"Bluetooth-Kopplungsstatus",paired:"Gekoppelte Geräte (nur Anzahl)",
       controller:"Bluetooth-Controller erkannt",usb:"USB-Ausgang und Audioverbindung",
@@ -150,7 +164,7 @@
       intro:"Abre AUDIOHUB-TEST-REPORT.json de la partición de arranque de una tarjeta SD del Pi apagado correctamente. Sin conexión ni Python.",
       privacyTitle:"Privacidad local",privacy:"Este visor no sube, guarda ni envía el informe. Solo muestra datos anónimos predefinidos. No confirma propiedad, hardware ni lanzamiento.",
       choose:"1 · Seleccionar informe SD",chooseNote:"Selecciona AUDIOHUB-TEST-REPORT.json, máximo 4 KiB. El archivo permanece en tu equipo.",
-      file:"Informe de arranque",expectedSha:"SHA esperado del paquete",identity:"Origen de imagen frente al paquete",sourceMissing:"Identidad de imagen no disponible",sourceExpected:"Pega el SHA del paquete para comparar",sourceMatch:"COINCIDE (no autentica)",sourceMismatch:"NO COINCIDE: revisa SD y paquete",sourceInvalid:"Introduce el SHA completo de 40 caracteres",mismatchTip:"ALTO: el informe no coincide con el código seleccionado. Comprueba la tarjeta SD.",clear:"Borrar resultado",empty:"Ningún archivo abierto.",bad:"Informe no válido, incompleto o incompatible. No se transfirió nada.",
+      file:"Informe de arranque",preflightTitle:"Antes de probar físicamente el Pi4",preflightBackup:"Guarda la SD original intacta y TODOS los WAV/EQ/MP3/FLAC. Solo graba una SD de repuesto con permiso explícito.",preflightShutdown:"ALTO sin un método de apagado seguro aprobado ANTES del arranque. Sin SSH, contraseña común ni red doméstica.",preflightVerify:"Verifica de forma independiente SHA256 del ZIP, IMG.XZ, manifiesto y visor. El visor no valida el ZIP.",manifestLabel:"Manifiesto del ZIP verificado (opcional)",manifestNote:"Abre PREVIEW-MANIFEST.json del MISMO ZIP ya verificado. Lectura local, no autenticación.",manifestEmpty:"Sin manifiesto; puedes introducir el SHA manualmente.",manifestLoading:"Leyendo manifiesto localmente…",manifestReady:"SHA de origen leído localmente; no prueba autenticidad.",manifestBad:"Manifiesto inválido o nombre incorrecto. SHA borrado; no se envió nada.",manifestManual:"SHA introducido manualmente.",expectedSha:"SHA esperado del paquete",identity:"Origen de imagen frente al paquete",sourceMissing:"Identidad de imagen no disponible",sourceExpected:"Pega el SHA del paquete para comparar",sourceMatch:"COINCIDE (no autentica)",sourceMismatch:"NO COINCIDE: revisa SD y paquete",sourceInvalid:"Introduce el SHA completo de 40 caracteres",mismatchTip:"ALTO: el informe no coincide con el código seleccionado. Comprueba la tarjeta SD.",clear:"Borrar resultado",empty:"Ningún archivo abierto.",bad:"Informe no válido, incompleto o incompatible. No se transfirió nada.",
       loading:"Lectura local…",ready:"Resumen de la última observación registrada. Sin aprobación.",
       results:"2 · Resultados sin conexión",pairing:"Estado de emparejamiento Bluetooth",paired:"Dispositivos emparejados (cantidad)",
       controller:"Controlador Bluetooth detectado",usb:"Salida USB y enlace de audio",
@@ -182,7 +196,7 @@
       intro:"Ouvrez AUDIOHUB-TEST-REPORT.json depuis la partition de démarrage d'une carte SD après arrêt correct du Pi. Sans connexion ni Python.",
       privacyTitle:"Lecture privée",privacy:"Cette visionneuse ne transmet, n'enregistre et n'envoie aucun rapport. Seul un résumé anonyme apparaît. Aucune preuve de propriété, de matériel ou de version.",
       choose:"1 · Choisir le rapport SD",chooseNote:"Sélectionnez AUDIOHUB-TEST-REPORT.json, 4 Kio maximum. Le fichier reste sur votre ordinateur.",
-      file:"Rapport de démarrage",expectedSha:"SHA source attendu du paquet",identity:"Source image et paquet",sourceMissing:"Identité image indisponible",sourceExpected:"Collez le SHA du paquet pour comparer",sourceMatch:"IDENTIQUE (pas une authentification)",sourceMismatch:"DIFFÉRENT : vérifier SD et paquet",sourceInvalid:"Saisissez le SHA complet de 40 caractères",mismatchTip:"ARRÊT : le rapport ne correspond pas au code choisi. Vérifiez la carte SD.",clear:"Effacer le résultat",empty:"Aucun fichier ouvert.",bad:"Rapport invalide, incomplet ou non pris en charge. Aucun envoi.",
+      file:"Rapport de démarrage",preflightTitle:"Avant tout essai physique du Pi4",preflightBackup:"Sauvegardez la SD d'origine intacte et TOUS les WAV/EQ/MP3/FLAC. Flashez uniquement une SD de rechange autorisée.",preflightShutdown:"ARRÊT sans méthode sûre d'extinction approuvée AVANT le démarrage. Aucun SSH, mot de passe partagé ou réseau domestique.",preflightVerify:"Vérifiez séparément les SHA256 du ZIP, IMG.XZ, manifeste et visionneuse. Cette page ne vérifie pas le ZIP.",manifestLabel:"Manifeste du ZIP vérifié (facultatif)",manifestNote:"Ouvrez PREVIEW-MANIFEST.json du MÊME ZIP déjà vérifié. Lecture locale, sans preuve d'authenticité.",manifestEmpty:"Aucun manifeste ; SHA manuel possible.",manifestLoading:"Lecture locale du manifeste…",manifestReady:"SHA source chargé localement ; aucune preuve d'authenticité.",manifestBad:"Manifeste invalide ou nom erroné. SHA effacé ; aucun envoi.",manifestManual:"SHA saisi manuellement.",expectedSha:"SHA source attendu du paquet",identity:"Source image et paquet",sourceMissing:"Identité image indisponible",sourceExpected:"Collez le SHA du paquet pour comparer",sourceMatch:"IDENTIQUE (pas une authentification)",sourceMismatch:"DIFFÉRENT : vérifier SD et paquet",sourceInvalid:"Saisissez le SHA complet de 40 caractères",mismatchTip:"ARRÊT : le rapport ne correspond pas au code choisi. Vérifiez la carte SD.",clear:"Effacer le résultat",empty:"Aucun fichier ouvert.",bad:"Rapport invalide, incomplet ou non pris en charge. Aucun envoi.",
       loading:"Lecture locale…",ready:"Résumé de la dernière observation enregistrée. Aucune validation.",
       results:"2 · Résultats hors ligne",pairing:"État de l'appairage Bluetooth",paired:"Appareils appairés (nombre)",
       controller:"Contrôleur Bluetooth détecté",usb:"Sortie USB et liaison audio",
@@ -214,7 +228,7 @@
       intro:"Apri AUDIOHUB-TEST-REPORT.json dalla partizione di avvio della scheda SD dopo aver spento correttamente il Pi. Nessuna rete o Python.",
       privacyTitle:"Privacy locale",privacy:"Questo visualizzatore non carica, salva o invia il rapporto. Mostra solo dati anonimi prestabiliti. Non prova proprietà, hardware o rilascio.",
       choose:"1 · Scegli il rapporto SD",chooseNote:"Seleziona AUDIOHUB-TEST-REPORT.json, massimo 4 KiB. Il file resta sul computer.",
-      file:"Rapporto di avvio",expectedSha:"SHA sorgente atteso dal pacchetto",identity:"Sorgente immagine e pacchetto",sourceMissing:"Identità immagine non disponibile",sourceExpected:"Incolla lo SHA del pacchetto per confrontare",sourceMatch:"COINCIDE (non autentica)",sourceMismatch:"DIVERSO: controlla SD e pacchetto",sourceInvalid:"Inserisci lo SHA completo di 40 caratteri",mismatchTip:"STOP: il rapporto non corrisponde al codice scelto. Controlla la scheda SD.",clear:"Cancella risultato",empty:"Nessun file aperto.",bad:"Rapporto non valido, incompleto o incompatibile. Nessun invio.",
+      file:"Rapporto di avvio",preflightTitle:"Prima della prova fisica del Pi4",preflightBackup:"Salva la SD originale intatta e TUTTI i WAV/EQ/MP3/FLAC. Scrivi solo una SD sostitutiva autorizzata.",preflightShutdown:"STOP senza una procedura di spegnimento sicuro approvata PRIMA dell'avvio. No SSH, password comuni o rete domestica.",preflightVerify:"Controlla separatamente SHA256 di ZIP, IMG.XZ, manifesto e visualizzatore. La pagina non verifica lo ZIP.",manifestLabel:"Manifesto dello ZIP verificato (facoltativo)",manifestNote:"Apri PREVIEW-MANIFEST.json dello STESSO ZIP verificato. Solo locale, non prova autenticità.",manifestEmpty:"Nessun manifesto; puoi inserire lo SHA manualmente.",manifestLoading:"Lettura locale del manifesto…",manifestReady:"SHA sorgente caricato localmente; non prova autenticità.",manifestBad:"Manifesto non valido o nome errato. SHA cancellato; nessun invio.",manifestManual:"SHA inserito manualmente.",expectedSha:"SHA sorgente atteso dal pacchetto",identity:"Sorgente immagine e pacchetto",sourceMissing:"Identità immagine non disponibile",sourceExpected:"Incolla lo SHA del pacchetto per confrontare",sourceMatch:"COINCIDE (non autentica)",sourceMismatch:"DIVERSO: controlla SD e pacchetto",sourceInvalid:"Inserisci lo SHA completo di 40 caratteri",mismatchTip:"STOP: il rapporto non corrisponde al codice scelto. Controlla la scheda SD.",clear:"Cancella risultato",empty:"Nessun file aperto.",bad:"Rapporto non valido, incompleto o incompatibile. Nessun invio.",
       loading:"Lettura locale…",ready:"Riepilogo dell'ultima osservazione registrata. Nessuna approvazione.",
       results:"2 · Risultati offline",pairing:"Stato associazione Bluetooth",paired:"Dispositivi associati (numero)",
       controller:"Controller Bluetooth rilevato",usb:"Uscita USB e collegamento audio",
@@ -246,6 +260,8 @@
   let current = null;
   let status = "empty";
   let serial = 0;
+  let manifestStatus = "manifestEmpty";
+  let manifestSerial = 0;
   const plain = value => value !== null && typeof value === "object" &&
     !Array.isArray(value) && Object.getPrototypeOf(value) === Object.prototype;
   // BEGIN_BOOT_REPORT_PARSE
@@ -340,6 +356,36 @@
     });
   }
   // END_BOOT_REPORT_PARSE
+  // Only the public source SHA escapes a selected, strictly bounded local
+  // manifest. No credentials, device IDs or untrusted strings are retained.
+  // This does NOT verify ZIP integrity, provenance or report authenticity.
+  function summarizeManifest(raw) {
+    if (typeof raw !== "string" || raw.length === 0 || raw.length > 8192) return null;
+    let m;
+    try { m = JSON.parse(raw); } catch (_) { return null; }
+    if (!plain(m) ||
+        m.schema !== "rivanox-audiohub-preview-bundle/2" ||
+        typeof m.source_commit_sha !== "string" ||
+        !/^[a-f0-9]{40}$/.test(m.source_commit_sha) ||
+        typeof m.pi_gen_commit_sha !== "string" ||
+        !/^[a-f0-9]{40}$/.test(m.pi_gen_commit_sha) ||
+        typeof m.image_sha256 !== "string" ||
+        !/^[a-f0-9]{64}$/.test(m.image_sha256) ||
+        typeof m.github_actions_run_id !== "string" ||
+        !/^[1-9][0-9]{0,19}$/.test(m.github_actions_run_id) ||
+        m.hardware_verified !== false ||
+        m.release_approved !== false ||
+        typeof m.scope !== "string" ||
+        !m.scope.toLowerCase().includes("not a release") ||
+        !plain(m.offline_viewer) ||
+        m.offline_viewer.file !== "AUDIOHUB-OFFLINE-REPORT-VIEWER.html" ||
+        !Number.isSafeInteger(m.offline_viewer.bytes) ||
+        m.offline_viewer.bytes < 1 ||
+        m.offline_viewer.bytes > 128 * 1024 ||
+        typeof m.offline_viewer.sha256 !== "string" ||
+        !/^[a-f0-9]{64}$/.test(m.offline_viewer.sha256)) return null;
+    return m.source_commit_sha;
+  }
   function render() {
     const language = byId("language").value;
     const t = texts[language] || texts.en;
@@ -347,7 +393,12 @@
     const nodes = {
       "language-label":t.language,"title":t.title,"intro":t.intro,
       "privacy-title":t.privacyTitle,"privacy-text":t.privacy,
+      "preflight-title":t.preflightTitle,
+      "preflight-backup":t.preflightBackup,
+      "preflight-shutdown":t.preflightShutdown,
+      "preflight-verify":t.preflightVerify,
       "choose-title":t.choose,"choose-note":t.chooseNote,"file-label":t.file,
+      "manifest-label":t.manifestLabel,"manifest-note":t.manifestNote,
       "expected-sha-label":t.expectedSha,
       "clear":t.clear,"results-title":t.results,
       "pairing-label":t.pairing,"paired-label":t.paired,
@@ -358,6 +409,7 @@
     };
     Object.keys(nodes).forEach(id => { byId(id).textContent = nodes[id]; });
     byId("feedback").textContent = t[status];
+    byId("manifest-feedback").textContent = t[manifestStatus];
     const label = id => byId(id);
     if (!current) {
       for (const id of ["pairing-value","paired-value","controller-value","usb-value",
@@ -401,9 +453,47 @@
         ? " " + t.mismatchTip : "");
   }
   function clear() {
-    serial += 1; current = null; status = "empty";
+    serial += 1; manifestSerial += 1;
+    current = null; status = "empty"; manifestStatus = "manifestEmpty";
     byId("report-file").value = "";
+    byId("manifest-file").value = "";
     byId("expected-sha").value = "";
+    render();
+  }
+  function manualSource() {
+    // Cancel a pending local manifest read before using a manually typed SHA.
+    manifestSerial += 1;
+    manifestStatus = "manifestManual";
+    byId("manifest-file").value = "";
+    render();
+  }
+  async function openManifest() {
+    const request = ++manifestSerial;
+    const input = byId("manifest-file");
+    const file = input.files && input.files[0];
+    byId("expected-sha").value = "";
+    manifestStatus = "manifestBad";
+    if (!file || file.name !== "PREVIEW-MANIFEST.json" ||
+        !Number.isInteger(file.size) || file.size <= 0 || file.size > 8192) {
+      input.value = "";
+      render();
+      return;
+    }
+    manifestStatus = "manifestLoading";
+    render();
+    try {
+      const raw = await file.text();
+      if (request !== manifestSerial) return;
+      const sourceSha = summarizeManifest(raw);
+      if (sourceSha !== null) {
+        byId("expected-sha").value = sourceSha;
+        manifestStatus = "manifestReady";
+      } else manifestStatus = "manifestBad";
+    } catch (_) {
+      if (request !== manifestSerial) return;
+      manifestStatus = "manifestBad";
+    }
+    input.value = "";
     render();
   }
   async function openReport() {
@@ -434,7 +524,8 @@
   }
   byId("language").addEventListener("change", render);
   byId("report-file").addEventListener("change", openReport);
-  byId("expected-sha").addEventListener("input", render);
+  byId("manifest-file").addEventListener("change", openManifest);
+  byId("expected-sha").addEventListener("input", manualSource);
   byId("clear").addEventListener("click", clear);
   render();
 })();

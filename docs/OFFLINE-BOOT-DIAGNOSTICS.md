@@ -1,8 +1,9 @@
 # Offline SD-card diagnostic for the first Raspberry Pi 4 audio test
 
-**Status:** Source-only proposed alpha feature until a successful ARM64 image
-build and a real Pi4 test prove it runs. It is NOT a release, a hardware pass,
-a secure owner login, or a test of speaker sound quality.
+**Status:** Operator-only S2 native Pi4 test package is built and available
+for the exact successful GitHub source/native CI SHA. No real Pi4 test has
+yet proven it boots or produces Edifier sound. It is NOT a production release,
+a hardware pass or an approved secure owner login.
 
 ## Why it exists
 
@@ -188,3 +189,20 @@ external report upload. Older valid reports without identity still load.
 neither authentic boot, real stereo output, S3 nor release authorization.
 The original ZIP and image integrity and real human observations are
 separate acceptance requirements.
+
+## Choose the matching package manifest directly in the offline viewer
+
+For S2 packages including the updated local viewer, the operator can open
+`PREVIEW-MANIFEST.json` from the **same independently SHA256-verified ZIP**
+in a second file picker. The viewer checks the alpha schema, test-only
+flags, bounded public source SHA and viewer provenance, then fills the
+expected source SHA without manual transcription. Invalid, renamed or
+oversized manifests clear the source field; a manual override cancels any
+pending asynchronous manifest read. This avoids accidental manual SHA
+mistypes while leaving older reports and manual typing supported.
+
+The offline viewer also presents three localized **before-flashing gates**:
+original SD and all owned media backups, advance approval of a safe
+power-down method (AH-005 separate owner), and host-verified ZIP/image/
+viewer hashes. None is approval to flash. **The viewer does not hash the
+archive, attest to a boot, prove Edifier sound or grant device access.**
