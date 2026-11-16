@@ -22,6 +22,8 @@ class OfflineBootViewerTests(unittest.TestCase):
         self.assertIn("default-src 'none'", source)
         self.assertIn('type="file"', source)
         self.assertIn('id="report-file"', source)
+        self.assertIn('id="previous-report-file"', source)
+        self.assertIn('id="compare-result"', source)
         self.assertIn('id="expected-sha"', source)
         self.assertIn('id="manifest-file"', source)
         self.assertIn('id="preflight-shutdown"', source)
@@ -182,6 +184,57 @@ const file = raw => ({size:Buffer.byteLength(raw,"utf8"),text:async()=>raw});
   assert.equal(el("expected-sha").value,observedSha);
   assert.match(el("advice").textContent,/Reconnect/);
   assert.equal(el("report-file").value,"");
+  // An earlier archived FAT report compares only anonymized local data.
+  const earlier = JSON.stringify({...report,snapshots:[{
+    ...report.snapshots[1],seconds_since_probe_start:0,
+    usb_audio_detected:true,usb_audio_route_ready:true,eq_usb_direct_links:1
+  }]});
+  el("previous-report-file").files=[file(earlier)];
+  await listeners["previous-report-file:change"]();
+  assert.match(el("previous-feedback").textContent,/loaded locally/);
+  assert.match(el("compare-result").textContent,/changed between/);
+  assert.match(el("compare-result").textContent,/Direct link reported/);
+  assert.match(el("compare-result").textContent,/USB found; route not checked/);
+  const differentSource = JSON.stringify({...report,
+    image_identity:{...report.image_identity,source_sha:"c".repeat(40)}});
+  el("previous-report-file").files=[file(differentSource)];
+  await listeners["previous-report-file:change"]();
+  assert.match(el("compare-result").textContent,/DIFFERENT source SHAs/);
+  const legacyPrevious = {...report};
+  delete legacyPrevious.image_identity;
+  el("previous-report-file").files=[file(JSON.stringify(legacyPrevious))];
+  await listeners["previous-report-file:change"]();
+  assert.match(el("compare-result").textContent,/lack a public source identity/);
+  el("previous-report-file").files=[file(JSON.stringify({
+    ...report,owner_authenticated:true,ssid:"SECRET-PRIVATE-WIFI"
+  }))];
+  await listeners["previous-report-file:change"]();
+  assert.match(el("previous-feedback").textContent,/Invalid earlier/);
+  assert.match(el("compare-result").textContent,/Choose an earlier/);
+  el("previous-report-file").files=[file(earlier)];
+  await listeners["previous-report-file:change"]();
+  el("expected-sha").value="f".repeat(40);
+  listeners["expected-sha:input"]();
+  assert.match(el("compare-result").textContent,/expected package source SHA/);
+  el("expected-sha").value=observedSha;
+  listeners["expected-sha:input"]();
+  assert.match(el("compare-result").textContent,/changed between/);
+  el("previous-report-file").files=[file(good)];
+  await listeners["previous-report-file:change"]();
+  assert.match(el("compare-result").textContent,/unchanged between/);
+  let resolveOldRead;
+  el("previous-report-file").files=[{size:earlier.length,
+    text:()=>new Promise(resolve=>{resolveOldRead=resolve;})}];
+  const pendingOld = listeners["previous-report-file:change"]();
+  listeners["clear:click"]();
+  resolveOldRead(earlier);
+  await pendingOld;
+  assert.match(el("compare-result").textContent,/Choose an earlier/);
+  assert.equal(el("previous-feedback").textContent,"No earlier report selected.");
+  el("report-file").files=[file(good)];
+  await listeners["report-file:change"]();
+  el("manifest-file").files=[manifestFile(manifestRaw)];
+  await listeners["manifest-file:change"]();
   let seen = Object.values(nodes).map(e=>e.textContent).join("\n");
   for(const privateText of ["SECRET-PRIVATE-PHONE","SECRET-PRIVATE-WIFI","DO-NOT-DISPLAY","AA:BB:CC"])
     assert.equal(seen.includes(privateText),false);
@@ -262,6 +315,7 @@ const file = raw => ({size:Buffer.byteLength(raw,"utf8"),text:async()=>raw});
     assert.notEqual(el("usb-value").textContent, "undefined");
     assert.ok(el("snapshots-value").textContent.includes("2 · "));
     assert.ok(!el("snapshots-value").textContent.includes("undefined"));
+    assert.ok(!el("compare-result").textContent.includes("undefined"));
   }
   // Malicious or unsupported files must clear stale rendered result.
   for(const [reason,bad] of [
@@ -312,6 +366,7 @@ const file = raw => ({size:Buffer.byteLength(raw,"utf8"),text:async()=>raw});
   assert.equal(el("feedback").textContent,"No file opened.");
   assert.equal(el("expected-sha").value,"");
   assert.equal(el("manifest-feedback").textContent,"No manifest selected; manual SHA entry is available.");
+  assert.equal(el("previous-feedback").textContent,"No earlier report selected.");
   console.log("offline SD viewer browser integration PASS");
 })().catch(error => { console.error(error); process.exitCode=1; });
 '''

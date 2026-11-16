@@ -206,3 +206,14 @@ original SD and all owned media backups, advance approval of a safe
 power-down method (AH-005 separate owner), and host-verified ZIP/image/
 viewer hashes. None is approval to flash. **The viewer does not hash the
 archive, attest to a boot, prove Edifier sound or grant device access.**
+
+## Optional two-boot USB troubleshooting on a trusted PC
+
+For later owner-authorized physical investigations, archive the earlier
+AUDIOHUB-TEST-REPORT.json before a subsequent boot overwrites it.
+The bundled offline HTML viewer can locally compare two such files using
+the exact same strict parser. It reports only source-matched, anonymous
+USB direct-link and sampled USB-presence changes, or refuses to imply
+comparability for missing/mismatched source SHA or package identity.
+This feature does NOT authorize reboot, bypass the AH-005 safe shutdown
+dependency, prove audible sound or treat unsigned FAT data as attestation.

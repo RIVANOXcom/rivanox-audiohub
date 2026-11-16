@@ -158,3 +158,19 @@ merge, or GO without complete hardware, ownership, licensing and operator
 signoff.
 Tracking: PAPA `PJ2611-0001:R001`, AH-001 #3267, AH-002 #3268,
 AH-006 #3272, AH-009 #3275.
+
+## Optional earlier-vs-later boot comparison (not a request to restart)
+
+After **authorized safe shutdown**, an operator may privately copy the
+FAT AUDIOHUB-TEST-REPORT.json to their trusted PC. The Pi overwrites the
+report on its next boot, so save any earlier copy *before* a separately
+authorized later run. Do not reboot merely to generate a comparison.
+
+The same offline HTML viewer accepts an earlier saved report in a second
+file picker alongside the current report and exact verified-ZIP manifest.
+It strictly sanitizes both reports, shows only anonymous USB direct-link
+and sampled USB-presence before/after findings, and refuses comparisons
+when the public source SHA differs, is missing or conflicts with the
+expected package SHA. No network, persistence, credentials or Pi writes.
+Both reports are unsigned/mutable observations, never proof of continuous
+or audible Edifier sound or automatic S3 acceptance.
