@@ -66,7 +66,7 @@ mutation is performed, and production/legal/hardware GO remains blocked.
 See [release distribution](RELEASE-DISTRIBUTION.md).
 
 
-**Status:** Alpha / pre-release. No hardware-verified or operator-approved public Pi4 image has been published. Real **S2 ARM64 operator-only test ZIPs** have been built in GitHub Actions; always select the most recent exact-source completed native run via [active Draft PR304](https://github.com/RIVANOXcom/rivanox-audiohub/pull/304), not historical test run IDs. The current bundle includes the SHA-bound offline viewer. **No real Pi4/Edifier playback, secure initial ownership, safe shutdown or production Release is verified.**
+**Status:** Alpha / pre-release. No verified ready-to-flash **production** Pi4 image has been published or approved by an operator. Real **S2 ARM64 operator-only test ZIPs** have been built in GitHub Actions; always select the most recent exact-source completed native run via [active Draft PR304](https://github.com/RIVANOXcom/rivanox-audiohub/pull/304), not historical test run IDs. The current bundle includes the SHA-bound offline viewer. **No real Pi4/Edifier playback, secure initial ownership, safe shutdown or production Release is verified.**
 
 ## Offline SD report identifies the actual test image build (unverified alpha)
 
