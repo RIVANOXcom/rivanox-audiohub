@@ -174,3 +174,22 @@ when the public source SHA differs, is missing or conflicts with the
 expected package SHA. No network, persistence, credentials or Pi writes.
 Both reports are unsigned/mutable observations, never proof of continuous
 or audible Edifier sound or automatic S3 acceptance.
+
+## Sanitized operator evidence handoff (read-only, no upload)
+
+The same verified ZIP's offline HTML viewer now includes a readonly
+English canonical evidence note for PAPA/Workbench. After opening a
+valid local FAT report, it contains only whitelisted public source SHA,
+fixed USB/Bluetooth/runtime enums and anonymous counts, plus the
+source-compatible earlier-report comparison status. No raw JSON,
+MAC/IP/SSID/device names, credentials, WAV filenames or arbitrary
+imported strings enter the note.
+
+On a trusted PC, the operator should review and manually select/copy
+this readonly text into an approved test record. The viewer has no
+automatic clipboard action, file export, network upload or persistence.
+Actual physical Pi4 boot, L/R/BOTH audible Edifier sound, authorized
+safe shutdown and independent ZIP/IMG checksum checks remain marked
+NOT VERIFIED BY VIEWER. This note never grants S3, owner or release
+approval, and real observations/authorization must be documented
+separately. Do not share unredacted FAT files.

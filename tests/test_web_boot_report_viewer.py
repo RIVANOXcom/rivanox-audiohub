@@ -24,6 +24,8 @@ class OfflineBootViewerTests(unittest.TestCase):
         self.assertIn('id="report-file"', source)
         self.assertIn('id="previous-report-file"', source)
         self.assertIn('id="compare-result"', source)
+        self.assertIn('id="handoff-text"', source)
+        self.assertIn('readonly rows="13"', source)
         self.assertIn('id="expected-sha"', source)
         self.assertIn('id="manifest-file"', source)
         self.assertIn('id="preflight-shutdown"', source)
@@ -123,13 +125,18 @@ const file = raw => ({size:Buffer.byteLength(raw,"utf8"),text:async()=>raw});
   assert.equal(el("runtime-value").textContent, "Reported recently");
   assert.ok(el("identity-value").textContent.startsWith(observedSha));
   assert.match(el("identity-value").textContent,/Paste package SHA/);
+  assert.match(el("handoff-text").value,/NOT VERIFIED BY VIEWER/);
+  assert.match(el("handoff-text").value,/EXPECTED_SHA_NOT_PROVIDED/);
+  assert.match(el("handoff-text").value,/USB last reported route: unknown/);
   el("expected-sha").value=observedSha.toUpperCase();
   listeners["expected-sha:input"]();
   assert.match(el("identity-value").textContent,/MATCH/);
+  assert.match(el("handoff-text").value,/TEXT_MATCH_NOT_ATTESTATION/);
   el("expected-sha").value="c".repeat(40);
   listeners["expected-sha:input"]();
   assert.match(el("identity-value").textContent,/MISMATCH/);
   assert.match(el("advice").textContent,/STOP/);
+  assert.match(el("handoff-text").value,/STOP_SOURCE_MISMATCH/);
   el("expected-sha").value="wrong";
   listeners["expected-sha:input"]();
   assert.match(el("identity-value").textContent,/40-character/);
@@ -193,6 +200,7 @@ const file = raw => ({size:Buffer.byteLength(raw,"utf8"),text:async()=>raw});
   await listeners["previous-report-file:change"]();
   assert.match(el("previous-feedback").textContent,/loaded locally/);
   assert.match(el("compare-result").textContent,/changed between/);
+  assert.match(el("handoff-text").value,/SAMPLED_USB_CHANGED/);
   assert.match(el("compare-result").textContent,/Direct link reported/);
   assert.match(el("compare-result").textContent,/USB found; route not checked/);
   const differentSource = JSON.stringify({...report,
@@ -200,6 +208,7 @@ const file = raw => ({size:Buffer.byteLength(raw,"utf8"),text:async()=>raw});
   el("previous-report-file").files=[file(differentSource)];
   await listeners["previous-report-file:change"]();
   assert.match(el("compare-result").textContent,/DIFFERENT source SHAs/);
+  assert.match(el("handoff-text").value,/STOP_DIFFERENT_SOURCE/);
   const legacyPrevious = {...report};
   delete legacyPrevious.image_identity;
   el("previous-report-file").files=[file(JSON.stringify(legacyPrevious))];
@@ -222,6 +231,7 @@ const file = raw => ({size:Buffer.byteLength(raw,"utf8"),text:async()=>raw});
   el("previous-report-file").files=[file(good)];
   await listeners["previous-report-file:change"]();
   assert.match(el("compare-result").textContent,/unchanged between/);
+  assert.match(el("handoff-text").value,/SAMPLED_USB_UNCHANGED/);
   let resolveOldRead;
   el("previous-report-file").files=[{size:earlier.length,
     text:()=>new Promise(resolve=>{resolveOldRead=resolve;})}];
@@ -231,13 +241,17 @@ const file = raw => ({size:Buffer.byteLength(raw,"utf8"),text:async()=>raw});
   await pendingOld;
   assert.match(el("compare-result").textContent,/Choose an earlier/);
   assert.equal(el("previous-feedback").textContent,"No earlier report selected.");
+  assert.equal(el("handoff-text").value,"");
   el("report-file").files=[file(good)];
   await listeners["report-file:change"]();
   el("manifest-file").files=[manifestFile(manifestRaw)];
   await listeners["manifest-file:change"]();
   let seen = Object.values(nodes).map(e=>e.textContent).join("\n");
-  for(const privateText of ["SECRET-PRIVATE-PHONE","SECRET-PRIVATE-WIFI","DO-NOT-DISPLAY","AA:BB:CC"])
+  for(const privateText of ["SECRET-PRIVATE-PHONE","SECRET-PRIVATE-WIFI","DO-NOT-DISPLAY","AA:BB:CC"]) {
     assert.equal(seen.includes(privateText),false);
+    assert.equal(el("handoff-text").value.includes(privateText),false);
+  }
+  assert.ok(el("handoff-text").value.length < 2048);
   // Actual viewer detects a transient USB loss hidden by final-only display.
   const history = values => JSON.stringify({
     ...report,snapshots:values.map((v,i)=>({
@@ -355,6 +369,7 @@ const file = raw => ({size:Buffer.byteLength(raw,"utf8"),text:async()=>raw});
   assert.equal(el("pairing-value").textContent,"Unavailable");
   assert.match(el("advice").textContent,/older report/);
   assert.equal(el("identity-value").textContent,"Image identity unavailable");
+  assert.match(el("handoff-text").value,/SOURCE_UNAVAILABLE/);
   // A manual reset revokes a pending async selection, no ghost results.
   let resolveRead;
   el("report-file").files=[{size:good.length,text:()=>new Promise(r=>resolveRead=r)}];
@@ -367,6 +382,7 @@ const file = raw => ({size:Buffer.byteLength(raw,"utf8"),text:async()=>raw});
   assert.equal(el("expected-sha").value,"");
   assert.equal(el("manifest-feedback").textContent,"No manifest selected; manual SHA entry is available.");
   assert.equal(el("previous-feedback").textContent,"No earlier report selected.");
+  assert.equal(el("handoff-text").value,"");
   console.log("offline SD viewer browser integration PASS");
 })().catch(error => { console.error(error); process.exitCode=1; });
 '''

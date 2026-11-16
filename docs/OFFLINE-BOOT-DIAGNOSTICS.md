@@ -217,3 +217,18 @@ USB direct-link and sampled USB-presence changes, or refuses to imply
 comparability for missing/mismatched source SHA or package identity.
 This feature does NOT authorize reboot, bypass the AH-005 safe shutdown
 dependency, prove audible sound or treat unsigned FAT data as attestation.
+
+## Safe offline operator evidence handoff
+
+The viewer produces an optional readonly, copyable English canonical
+test-handoff text from its existing sanitized fields only: source-SHA
+string comparison, USB route/trend, anonymous pairing counts and optional
+earlier-report comparison. It never transfers raw FAT JSON, device
+identifiers, credentials or private filenames. The operator must
+manually select/copy and review the text on their trusted PC: no
+automatic clipboard write, download, network request or local storage.
+
+The output explicitly labels human physical boot, audible Edifier L/R,
+safe shutdown, independent ZIP/image verification and S3/release status
+NOT VERIFIED BY VIEWER. Raw or mutable report data remains unsigned
+and cannot be treated as proof of hardware acceptance or device identity.
