@@ -7,6 +7,22 @@ authenticated TCP audio bridge. It runs using Python's standard library.
 There is no installer, Windows driver, certificate, password or shared key
 included. Nothing starts automatically.
 
+## Optional offline MP3/FLAC-to-WAV preparation (no Pi changes)
+
+The same **15-file? no: currently 18-member** source-verified portable ALPHA
+includes \`START-OFFLINE-WAV-PREP.py\` and
+\`README-OFFLINE-WAV-PREP.md\`. They let the operator prepare one
+owned/licensed FLAC or MP3 file as a NEW PCM16 stereo 48-kHz WAV on a
+**trusted local PC**, using a separately installed FFmpeg. The tool
+does **not bundle FFmpeg**, fetch anything, use the Windows Scream driver,
+modify the original music file, overwrite any target, or access the Pi.
+A read-only preview runs before FFmpeg is needed; actual conversion requires
+\`--convert\`, a local TTY and typing exact uppercase \`CONVERT\`.
+The output is bounded to 64 MiB and printed with its SHA256 but never a
+private filename. Use the included preparation README for exact commands,
+limitations and independent media backup requirements. This is a
+separate utility, not an authenticated audio sender or release.
+
 ## Offline certificate cross-check (recommended before any audio test)
 
 The Windows GUI now has a **Choose public cert…** file picker. A copied

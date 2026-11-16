@@ -130,6 +130,13 @@
       "model_c_eligible": false
     },
     {
+      "path": "scripts/START-OFFLINE-WAV-PREP.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
       "path": "scripts/START-WINDOWS-BRIDGE.py",
       "origin_status": "pending-human-review",
       "rightsholder_verified": false,
@@ -348,6 +355,13 @@
     },
     {
       "path": "src/audiohub/network_laptop.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "src/audiohub/offline_wav_prep.py",
       "origin_status": "pending-human-review",
       "rightsholder_verified": false,
       "third_party_origin_checked": false,
@@ -593,6 +607,13 @@
     },
     {
       "path": "tests/test_network_laptop.py",
+      "origin_status": "pending-human-review",
+      "rightsholder_verified": false,
+      "third_party_origin_checked": false,
+      "model_c_eligible": false
+    },
+    {
+      "path": "tests/test_offline_wav_prep.py",
       "origin_status": "pending-human-review",
       "rightsholder_verified": false,
       "third_party_origin_checked": false,

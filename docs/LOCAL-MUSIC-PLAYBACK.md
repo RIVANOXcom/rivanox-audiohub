@@ -100,7 +100,13 @@ first rather than silently omitting tracks. A new SD with **zero** private
 WAVs is a normal initial state. If media encoding is incompatible, use
 your own or licensed original files on your *own computer* to export
 uncompressed 16- or 24-bit PCM mono/stereo WAV at 8–96 kHz, at most 64 MiB
-each. No converter is installed or run by the Pi health check.
+each. No converter is installed or run by the Pi health check. The
+separately packaged Windows operator ALPHA now includes an **optional,
+explicitly confirmed PC-only MP3/FLAC-to-PCM16 WAV preparation helper**;
+see `README-OFFLINE-WAV-PREP.md` in the source-SHA-matched Windows ZIP.
+It requires an existing, independently installed FFmpeg on the trusted PC,
+never installs a codec on Pi, never changes source media, and refuses
+existing WAV target names. Complete SD/media backup remains separate.
 A broken WAV should be re-exported; a symlink, world-writable or
 oversized WAV is intentionally refused. **Do not weaken file permissions
 to bypass a safety check.**
