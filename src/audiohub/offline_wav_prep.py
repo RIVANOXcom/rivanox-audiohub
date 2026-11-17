@@ -45,6 +45,30 @@ def _plan(source, output):
     return src, dst, info, FORMATS[src.suffix.lower()]
 
 
+def suggest_unused_wav(source):
+    """Suggest a nearby new WAV name, without creating/reserving a file.
+
+    Only a convenience hint. Preview and conversion MUST revalidate it, and
+    the final writer still uses O_EXCL to avoid overwriting a racing creator.
+    """
+    src = Path(source)
+    if not src.is_absolute() or src.suffix.lower() not in FORMATS:
+        raise ValueError("Select an owned local MP3/FLAC first")
+    for number in range(1, 101):
+        suffix = "-AudioHub" if number == 1 else f"-AudioHub-{number}"
+        name = src.stem + suffix + ".wav"
+        # Keep enough room for filesystem encoding differences; users can
+        # choose a shorter filename manually if the original is very long.
+        if len(name.encode("utf-8")) > 240:
+            raise ValueError("Choose a shorter unused WAV name manually")
+        candidate = src.with_name(name)
+        if candidate.exists() or candidate.is_symlink():
+            continue
+        _plan(src, candidate)  # No writes; refuse linked/network/unsafe paths.
+        return candidate
+    raise ValueError("No unused local WAV name in the bounded search")
+
+
 def _convert(source, output, *, ffmpeg="ffmpeg", timeout=120):
     """Create ONLY a new WAV after complete bounded conversion and validation."""
     src, dst, before, source_format = _plan(source, output)
@@ -171,6 +195,7 @@ def launch_gui():
     status = tk.StringVar(master=root, value=(
         "Offline only: select your owned music and an UNUSED WAV destination."))
     approved = [None]
+    automatic_output = [None]
     working = [False]
     results = queue.Queue(maxsize=1)
 
@@ -187,12 +212,32 @@ def launch_gui():
             parent=root, title="Select local owned MP3 or FLAC",
             filetypes=[("Music", "*.flac *.mp3"), ("All files", "*.*")])
         if chosen:
+            old_output = output.get()
             source.set(chosen)
+            if not old_output or old_output == automatic_output[0]:
+                try:
+                    candidate = suggest_unused_wav(chosen)
+                except (OSError, ValueError, UnicodeError):
+                    automatic_output[0] = None
+                    output.set("")
+                    status.set("Choose an UNUSED WAV name in an existing local folder; "
+                               "then Preview. No files created.")
+                else:
+                    automatic_output[0] = str(candidate)
+                    output.set(str(candidate))
+                    status.set("Unused local WAV name SUGGESTED (not reserved). "
+                               "Review or change it, then Preview before Convert.")
+            else:
+                # The operator explicitly chose/typed a destination. Do not
+                # silently replace it when selecting a different source.
+                status.set("Source selected; your manual WAV destination kept. "
+                           "Review both paths, then Preview again.")
     def pick_destination():
         chosen = filedialog.asksaveasfilename(
             parent=root, title="Choose NEW (unused) WAV filename",
             defaultextension=".wav", filetypes=[("WAV", "*.wav")])
         if chosen:
+            automatic_output[0] = None
             output.set(chosen)
 
     ttk.Label(body, text="Owned/licensed local MP3 or FLAC").grid(

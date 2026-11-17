@@ -17,7 +17,12 @@ owned/licensed FLAC or MP3 file as a NEW PCM16 stereo 48-kHz WAV on a
 does **not bundle FFmpeg**, fetch anything, use the Windows Scream driver,
 modify the original music file, overwrite any target, or access the Pi.
 **Simplest Windows start:** extract the inner portable ZIP onto a local
-drive, then double-click `OPEN-AUDIOHUB-MUSIC-PREP.cmd`.
+drive, then double-click `OPEN-AUDIOHUB-MUSIC-PREP.cmd`. Choosing one owned
+MP3/FLAC automatically suggests a FREE local `-AudioHub.wav` filename
+(with bounded numeric suffix if occupied), avoiding a second picker for
+normal local conversion; nothing is created or reserved until a fresh
+read-only Preview and manually confirmed CONVERT. Change the suggested
+output before Preview if you need a different existing local folder.
 This is an inspected plaintext Windows launcher (not an installer or EXE);
 it opens the existing local Tk interface with Python 3.11+ from your PC,
 never installs anything or converts media automatically. On a terminal run

@@ -59,7 +59,14 @@ py -3 START-OFFLINE-WAV-PREP.py --gui
 
 The GUI provides **Choose source** (owned MP3/FLAC), **Choose new WAV**
 (an unused filename in an existing LOCAL folder), **1. Preview** and
-**2. Convert**. Preview has NO decoder and creates nothing. After a
+**2. Convert**. After **Choose source**, the GUI automatically SUGGESTS
+an unused local sibling filename ending `-AudioHub.wav` (or
+`-AudioHub-2.wav` and so on when occupied). It creates/reserves NOTHING
+until separate confirmation; check the suggestion before Preview. A
+manually chosen/typed target is preserved, and **Choose new WAV** can
+always select a different existing local folder. If no safe short name
+is available, choose the unused target manually. Existing targets are
+never overwritten, even if a suggested name becomes occupied later. Preview has NO decoder and creates nothing. After a
 successful preview, the second button requires typing **CONVERT** in a
 modal dialog. Cancel, closing the dialog or changing either path never
 starts FFmpeg; paths changed after Preview must be previewed again.

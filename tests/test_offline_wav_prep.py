@@ -55,6 +55,40 @@ class OfflineWavPreparationTests(unittest.TestCase):
         self.assertNotIn(str(self.root), stdout.getvalue())
         self.assertIn('OFFLINE AUDIO PREVIEW', stdout.getvalue())
 
+    def test_unused_wav_hint_suggests_new_filename_without_writes(self):
+        before = self.source.read_bytes()
+        first = prep.suggest_unused_wav(self.source)
+        self.assertEqual(first, self.root / 'private-original-AudioHub.wav')
+        self.assertFalse(first.exists())
+        self.assertEqual(self.source.read_bytes(), before)
+        # Never overwrite an existing suggestion; use a bounded suffix.
+        first.write_bytes(b'already-existing-private-file')
+        second = prep.suggest_unused_wav(self.source)
+        self.assertEqual(second, self.root / 'private-original-AudioHub-2.wav')
+        self.assertFalse(second.exists())
+        prep._plan(self.source, second)
+        self.assertEqual(first.read_bytes(), b'already-existing-private-file')
+        self.assertFalse(self.destination.exists())
+
+    def test_unused_wav_hint_rejects_unsafe_and_exhausted_sources(self):
+        for invalid in ('private.mp3', self.root / 'unexpected.txt'):
+            with self.subTest(path=str(invalid)), self.assertRaises(ValueError):
+                prep.suggest_unused_wav(invalid)
+        alias = self.root / 'linked.flac'
+        try:
+            alias.symlink_to(self.source)
+        except (OSError, NotImplementedError):
+            pass
+        else:
+            with self.assertRaises(ValueError):
+                prep.suggest_unused_wav(alias)
+        for number in range(1, 101):
+            suffix = '-AudioHub' if number == 1 else '-AudioHub-' + str(number)
+            (self.root / ('private-original' + suffix + '.wav')).write_bytes(b'occupied')
+        with self.assertRaises(ValueError):
+            prep.suggest_unused_wav(self.source)
+        self.assertFalse(self.destination.exists())
+
     def test_pcm16_wav_export_uses_only_private_ffmpeg_and_no_overwrite(self):
         old = self.source.read_bytes()
         captured = []
