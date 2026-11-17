@@ -79,6 +79,22 @@ def isolate_stereo_pcm16(data, channel):
 
 
 
+def pcm24_to_pcm16(data):
+    """Downconvert one bounded signed integer PCM24 LE block to PCM16.
+
+    The upper two bytes are exactly the signed 16-bit sample when the
+    least-significant source byte is dropped. No file writes, gain,
+    resampling, decoder or change to the USB/private PipeWire target.
+    """
+    if (type(data) is not bytes or not data or len(data) % 3
+            or len(data) > FRAMES_PER_CHUNK * 2 * 3):
+        raise ValueError("Invalid bounded PCM24 block")
+    samples = bytearray((len(data) // 3) * 2)
+    samples[0::2] = data[1::3]
+    samples[1::2] = data[2::3]
+    return bytes(samples)
+
+
 def _open_wav(path):
     path = Path(path)
     if not path.is_absolute() or ".." in path.parts or path.suffix.lower() != ".wav":
@@ -102,13 +118,15 @@ def _open_wav(path):
             channels = info.getnchannels()
             rate = info.getframerate()
             frames = info.getnframes()
-            if (channels not in (1, 2) or info.getsampwidth() != 2
+            width = info.getsampwidth()
+            if (channels not in (1, 2) or width not in (2, 3)
                     or not 8000 <= rate <= 96000
                     or info.getcomptype() != "NONE"
                     or not 1 <= frames <= MAX_SECONDS * rate
-                    or frames * channels * 2 > st.st_size):
-                raise ValueError("Only bounded 16-bit PCM mono/stereo WAV is supported")
+                    or frames * channels * width > st.st_size):
+                raise ValueError("Only bounded 16/24-bit PCM mono/stereo WAV is supported")
             return {"channels": channels, "rate": rate, "frames": frames,
+                    "sample_width": width,
                     "duration_ms": (frames * 1000 + rate - 1) // rate}
     except (EOFError, wave.Error, OSError) as exc:
         raise ValueError("Invalid or inaccessible WAV") from exc
@@ -209,7 +227,8 @@ def _play_one(path, metadata, *, deadline, spawn, stop=None, on_player=None,
             if (reader.getnchannels() != metadata["channels"]
                     or reader.getframerate() != metadata["rate"]
                     or reader.getnframes() != metadata["frames"]
-                    or reader.getsampwidth() != 2 or reader.getcomptype() != "NONE"):
+                    or reader.getsampwidth() != metadata["sample_width"]
+                    or reader.getcomptype() != "NONE"):
                 raise ValueError("Audio file metadata changed")
             command = [
                 "pw-cat", "--playback", "--raw", "--target=" + TARGET,
@@ -235,9 +254,13 @@ def _play_one(path, metadata, *, deadline, spawn, stop=None, on_player=None,
                     raise InterruptedError("Operator playback stopped or timed out")
                 frames = min(FRAMES_PER_CHUNK, metadata["frames"] - sent)
                 data = reader.readframes(frames)
-                if len(data) != frames * metadata["channels"] * 2:
+                if len(data) != frames * metadata["channels"] * metadata["sample_width"]:
                     raise ValueError("WAV data ended early")
-                child.stdin.write(isolate_stereo_pcm16(data, channel))
+                # Keep pw-cat on the existing fixed s16 format. Convert
+                # PCM24 only in bounded RAM chunks before stereo isolation.
+                pcm = (pcm24_to_pcm16(data)
+                       if metadata["sample_width"] == 3 else data)
+                child.stdin.write(isolate_stereo_pcm16(pcm, channel))
                 sent += frames
             child.stdin.close()
             # A 30-minute track cannot finish within the old fixed 10s
@@ -836,7 +859,7 @@ def guided_first_use(folder, *, read_line=None, out=print,
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("wav", nargs="*", help="1–8 absolute local 16-bit PCM WAV files")
+    parser.add_argument("wav", nargs="*", help="1–8 absolute local 16/24-bit PCM WAV files")
     parser.add_argument("--library", metavar="FOLDER",
                         help="Browse a private local WAV folder without playback")
     parser.add_argument("--first-use", action="store_true",

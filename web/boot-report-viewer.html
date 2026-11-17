@@ -15,7 +15,7 @@
     .card{border:1px solid #385475;border-radius:16px;background:#15243c;padding:20px;margin-top:18px}
     .notice{background:#2f291c;border-color:#866e33;color:#f8e2ad}
     .notice p{color:#f8e2ad;margin:4px 0}.fields{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
-    label{font-weight:650}select,input[type=file],button{font:inherit;color:inherit;background:#203956;border:1px solid #7395be;border-radius:9px;padding:10px;max-width:100%}
+    label{font-weight:650}select,input[type=file],input[type=text],button{font:inherit;color:inherit;background:#203956;border:1px solid #7395be;border-radius:9px;padding:10px;max-width:100%}
     input[type=file]{flex:1;min-width:240px}button{cursor:pointer;min-height:44px}
     button:hover{background:#35577d}button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #dba5ff;outline-offset:3px}
     .results{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:14px}
@@ -23,6 +23,8 @@
     dt{color:#bed0eb;font-size:.88rem}dd{font-weight:750;font-size:1.05rem;margin:7px 0 0;overflow-wrap:anywhere}
     .steps{padding-left:22px}.steps li{padding:4px 0}.small{font-size:.86rem}
     #feedback{min-height:1.5em;font-weight:600}#advice{line-height:1.6;color:#e0edff}
+     #handoff-text{display:block;width:100%;min-height:230px;resize:vertical;font:0.85rem/1.45 ui-monospace,Consolas,monospace;color:#eaf2ff;background:#0d1d33;border:1px solid #55799a;border-radius:9px;padding:12px;overflow-wrap:anywhere}
+     #handoff-text:focus-visible{outline:3px solid #dba5ff;outline-offset:3px}
     @media(max-width:540px){.results{grid-template-columns:1fr}.card{padding:16px}.fields{align-items:stretch;flex-direction:column}.fields>*{width:100%}}
   </style>
 </head>
@@ -42,6 +44,14 @@
     <h2 id="privacy-title">Private by design</h2>
     <p id="privacy-text">This viewer is self-contained. It never uploads, saves or sends the selected report; only a fixed anonymous summary appears on screen. A boot report is not ownership, hardware or release approval.</p>
   </section>
+  <section class="card" aria-labelledby="preflight-title">
+    <h2 id="preflight-title">Before any physical Pi4 test</h2>
+    <ol class="steps">
+      <li id="preflight-backup">Back up the untouched original SD and ALL WAV/EQ/MP3/FLAC files. Flash a disposable spare SD only with explicit approval.</li>
+      <li id="preflight-shutdown">STOP unless the operator has approved a safe Pi4 shutdown method BEFORE booting. No SSH, shared passwords or trusted home network.</li>
+      <li id="preflight-verify">Verify the downloaded ZIP SHA256 and inner IMG.XZ/manifest/viewer checksums independently before extraction or flashing. This viewer never verifies the ZIP.</li>
+    </ol>
+  </section>
   <section class="card" aria-labelledby="choose-title">
     <h2 id="choose-title">1 · Choose your SD report</h2>
     <p class="small" id="choose-note">Choose only AUDIOHUB-TEST-REPORT.json. Maximum 4 KiB. The file remains on your computer.</p>
@@ -50,7 +60,23 @@
       <input id="report-file" type="file" accept=".json,application/json" aria-describedby="choose-note feedback">
       <button type="button" id="clear">Clear result</button>
     </div>
+    <div class="fields" style="margin-top:12px">
+      <label for="manifest-file" id="manifest-label">Manifest from verified ZIP (optional)</label>
+      <input id="manifest-file" type="file" accept=".json,application/json" aria-describedby="manifest-note manifest-feedback">
+    </div>
+    <p class="small" id="manifest-note">Open PREVIEW-MANIFEST.json from the SAME already verified ZIP. Read locally only; not an image checksum or proof of authenticity.</p>
+    <p id="manifest-feedback" role="status" aria-live="polite">No manifest selected; manual SHA entry is available.</p>
+    <div class="fields" style="margin-top:12px">
+      <label for="expected-sha" id="expected-sha-label">Expected source SHA from package</label>
+      <input type="text" id="expected-sha" maxlength="40" size="40" autocomplete="off" spellcheck="false" aria-describedby="choose-note" placeholder="40 hexadecimal characters">
+    </div>
     <p id="feedback" role="status" aria-live="polite">No file opened.</p>
+    <div class="fields" style="margin-top:12px">
+      <label for="previous-report-file" id="previous-label">Earlier saved boot report (optional)</label>
+      <input id="previous-report-file" type="file" accept=".json,application/json" aria-describedby="previous-note previous-feedback">
+    </div>
+    <p class="small" id="previous-note">The Pi overwrites this report on the next boot. Compare only a privately saved earlier copy; never restart just to create a comparison.</p>
+    <p id="previous-feedback" role="status" aria-live="polite">No earlier report selected.</p>
   </section>
   <section class="card" aria-labelledby="results-title">
     <h2 id="results-title">2 · Offline findings</h2>
@@ -61,7 +87,19 @@
       <div class="metric"><dt id="usb-label">USB audio device observed</dt><dd id="usb-value">—</dd></div>
       <div class="metric"><dt id="snapshots-label">First-boot observations</dt><dd id="snapshots-value">—</dd></div>
       <div class="metric"><dt id="runtime-label">Last audio-runtime status</dt><dd id="runtime-value">—</dd></div>
+      <div class="metric"><dt id="identity-label">Image source vs package</dt><dd id="identity-value">—</dd></div>
     </dl>
+  </section>
+  <section class="card" aria-labelledby="compare-title">
+    <h2 id="compare-title">Compare two saved boot observations (optional)</h2>
+    <p id="compare-result" role="status" aria-live="polite">Choose an earlier report to compare USB observations.</p>
+    <p id="compare-disclaimer" class="small">Only unsigned and anonymous sampled observations on the same public source version can be compared. This does not prove continuous or audible sound.</p>
+  </section>
+  <section class="card" aria-labelledby="handoff-title">
+    <h2 id="handoff-title">Sanitized operator handoff (read-only)</h2>
+    <p id="handoff-note" class="small">Select a valid report. Review the English-only note, then select and copy its text manually. No raw reports, device names, passwords or audio filenames are included. All physical observations remain NOT VERIFIED BY VIEWER.</p>
+    <label for="handoff-text" id="handoff-label">Safe evidence note</label>
+    <textarea id="handoff-text" readonly rows="13" spellcheck="false" aria-describedby="handoff-note"></textarea>
   </section>
   <section class="card" aria-labelledby="next-title">
     <h2 id="next-title">3 · What to do next</h2>
@@ -81,13 +119,14 @@
       intro:"Open AUDIOHUB-TEST-REPORT.json from the boot partition of a safely powered-off Raspberry Pi SD card. No connection or Python installation required.",
       privacyTitle:"Private by design",privacy:"This self-contained viewer never uploads, saves or sends the report. Only a fixed anonymous summary appears. A boot report is not ownership, hardware or release approval.",
       choose:"1 · Choose your SD report",chooseNote:"Choose AUDIOHUB-TEST-REPORT.json, maximum 4 KiB. The file stays on your computer.",
-      file:"Boot report",clear:"Clear result",empty:"No file opened.",bad:"Unsupported, incomplete or invalid report. Nothing was uploaded.",
+      file:"Boot report",handoffTitle:"Sanitized operator handoff (read-only)",handoffNote:"Select a valid report. Review the English-only note, then select and copy it manually. No raw data or device identifiers. Physical observations are NOT VERIFIED BY VIEWER.",handoffLabel:"Safe evidence note",previousLabel:"Earlier saved boot report (optional)",previousNote:"The Pi overwrites this report at the next boot. Use an earlier private copy; never restart just to compare.",previousEmpty:"No earlier report selected.",previousLoading:"Reading earlier report locally…",previousReady:"Earlier report loaded locally.",previousBad:"Invalid earlier report; comparison cleared.",compareTitle:"Compare two saved boot observations (optional)",compareEmpty:"Choose an earlier report to compare USB observations.",compareNoCurrent:"Choose a current report before comparing.",compareNoIdentity:"Cannot compare: one or both reports lack a public source identity.",compareDifferentSource:"STOP: DIFFERENT source SHAs; reports cannot be compared as the same image.",compareWrongPackage:"STOP: expected package source SHA is invalid or disagrees with reports.",compareSame:"Reported USB route and samples were unchanged between these files.",compareChanged:"Reported USB route or samples changed between these files.",compareEarlier:"Earlier",compareNow:"Now",compareRoute:"USB route",compareSamples:"USB samples",compareLimit:"Unsigned local observations only, not continuous sound, authentic boot or hardware approval.",preflightTitle:"Before any physical Pi4 test",preflightBackup:"Back up the untouched original SD and ALL WAV/EQ/MP3/FLAC files. Flash a disposable spare SD only with explicit approval.",preflightShutdown:"STOP unless the operator has approved a safe Pi4 shutdown method BEFORE booting. No SSH, shared passwords or trusted home network.",preflightVerify:"Verify downloaded ZIP SHA256, inner IMG.XZ, manifest and viewer checksums independently. This viewer cannot validate the ZIP.",manifestLabel:"Manifest from verified ZIP (optional)",manifestNote:"Open PREVIEW-MANIFEST.json from the SAME verified ZIP. Read locally; not an authenticity check.",manifestEmpty:"No manifest selected; manual SHA entry is available.",manifestLoading:"Reading manifest locally…",manifestReady:"Manifest source SHA loaded locally; not an authenticity proof.",manifestBad:"Invalid manifest or wrong filename. SHA cleared; nothing uploaded.",manifestManual:"SHA entered manually.",expectedSha:"Expected source SHA from package",identity:"Image source vs package",sourceMissing:"Image identity unavailable",sourceExpected:"Paste package SHA to compare",sourceMatch:"MATCH (not authenticity)",sourceMismatch:"MISMATCH — check SD and package",sourceInvalid:"Enter the complete 40-character SHA",mismatchTip:"STOP: the report does not match this source. Check the SD card before further testing.",clear:"Clear result",empty:"No file opened.",bad:"Unsupported, incomplete or invalid report. Nothing was uploaded.",
       loading:"Reading locally…",ready:"Read-only summary of the last recorded boot observation. No approval granted.",
       results:"2 · Offline findings",pairing:"Bluetooth pairing state",paired:"Paired devices (anonymous count)",
       controller:"Bluetooth controller observed",usb:"USB output and direct audio link",
       usbLinked:"Direct link reported (not sound)",usbBroken:"USB found; route needs attention",usbUnknown:"USB found; route not checked",usbAbsent:"USB device not reported",
       routeTipLinked:"A direct USB output link is reported, but speaker sound is NOT verified. Listen only during an authorized low-volume physical test.",routeTipBroken:"USB hardware was detected but no working direct audio link was reported. Do not assume sound or change routing without authorized access.",routeTipUnknown:"USB was detected, but its direct audio route cannot be verified from this report. Do not assume sound.",routeTipAbsent:"No USB audio output was reported; check the Edifier USB connection on an isolated bench, without changing network or owner access.",
       snapshots:"First-boot observations",runtime:"Last audio-runtime status",
+      trendOne:"One USB check; no trend",trendAlways:"USB reported in every sampled check",trendNever:"USB absent in all sampled checks",trendAppeared:"USB appeared after the first check",trendLost:"USB disappeared after detection",trendIntermittent:"USB appeared and disappeared",tipAppeared:"USB was missing in an earlier check and appeared later. This does not prove continuous USB routing or sound.",tipLost:"USB was detected earlier but absent in a later check. Inspect Edifier cable and power only on an isolated test bench; do not assume sound.",tipIntermittent:"USB presence changed in both directions across boot checks. Record this instability; request an authorized cable/power check before sound acceptance.",
       next:"3 · What to do next",chooseFirst:"Choose a report to see the next safe step.",
       disclaimer:"This SD report is not live telemetry, proof of audio or ownership, or permission to pair. No settings can be changed here.",
       yes:"Detected",no:"Not detected",unknown:"Unavailable",recent:"Reported recently",stale:"Missing or stale",
@@ -112,13 +151,14 @@
       intro:"AUDIOHUB-TEST-REPORT.json von der Bootpartition einer sicher heruntergefahrenen Raspberry-Pi-SD-Karte öffnen. Keine Verbindung oder Python-Installation nötig.",
       privacyTitle:"Privat statt Datenübertragung",privacy:"Dieser eigenständige Betrachter lädt die Datei niemals hoch, speichert oder sendet sie nicht. Er zeigt nur eine feste anonyme Zusammenfassung. Kein Eigentums-, Hardware- oder Release-Nachweis.",
       choose:"1 · SD-Bericht auswählen",chooseNote:"AUDIOHUB-TEST-REPORT.json auswählen, maximal 4 KiB. Die Datei bleibt lokal.",
-      file:"Startbericht",clear:"Ergebnis löschen",empty:"Noch keine Datei geöffnet.",bad:"Nicht unterstützter, unvollständiger oder ungültiger Bericht. Nichts wurde übertragen.",
+      file:"Startbericht",handoffTitle:"Bereinigte Betreiberübergabe (nur lesbar)",handoffNote:"Gültigen Bericht öffnen. Englischen Nachweistext prüfen und manuell markieren/kopieren. Keine Rohdaten oder Gerätekennungen. Physische Beobachtungen sind NICHT DURCH DEN VIEWER BESTÄTIGT.",handoffLabel:"Bereinigter Nachweistext",previousLabel:"Früher gesicherter Startbericht (optional)",previousNote:"Der Pi überschreibt den Bericht beim nächsten Start. Nur frühere lokale Kopie verwenden; nicht zum Vergleichen neu starten.",previousEmpty:"Kein früherer Bericht ausgewählt.",previousLoading:"Früherer Bericht wird lokal gelesen…",previousReady:"Früherer Bericht lokal geladen.",previousBad:"Ungültiger früherer Bericht; Vergleich gelöscht.",compareTitle:"Zwei gesicherte Startberichte vergleichen (optional)",compareEmpty:"Früheren Bericht auswählen, um USB zu vergleichen.",compareNoCurrent:"Zum Vergleich aktuellen Bericht auswählen.",compareNoIdentity:"Kein Vergleich: Bei einem Bericht fehlt die Quellkennung.",compareDifferentSource:"STOPP: UNTERSCHIEDLICHE Quellversionen; Berichte nicht als gleiches Image vergleichen.",compareWrongPackage:"STOPP: Erwarteter Paket-SHA ungültig oder abweichend.",compareSame:"Gemeldete USB-Verbindung und Stichproben in beiden Dateien unverändert.",compareChanged:"Gemeldete USB-Verbindung oder Stichproben zwischen Dateien geändert.",compareEarlier:"Vorher",compareNow:"Jetzt",compareRoute:"USB-Verbindung",compareSamples:"USB-Stichproben",compareLimit:"Nur unsignierte lokale Beobachtungen, kein Ton-, Echtheits- oder Hardwarebeweis.",preflightTitle:"Vor dem physischen Pi4-Test",preflightBackup:"Unveränderte Original-SD und ALLE WAV-/EQ-/MP3-/FLAC-Dateien sichern. Nur freigegebene Ersatz-SD beschreiben.",preflightShutdown:"STOPP ohne VORHER freigegebene sichere Pi4-Abschaltung. Kein SSH, Standardpasswort oder Heimnetz.",preflightVerify:"ZIP-SHA256, IMG.XZ, Manifest und Viewer-Prüfsummen unabhängig prüfen. Dieser Betrachter prüft nicht das ZIP.",manifestLabel:"Manifest aus geprüftem ZIP (optional)",manifestNote:"PREVIEW-MANIFEST.json aus DEMSELBEN geprüften ZIP lokal öffnen. Kein Echtheitsbeweis.",manifestEmpty:"Kein Manifest ausgewählt; SHA-Eingabe von Hand möglich.",manifestLoading:"Manifest wird lokal gelesen…",manifestReady:"Quell-SHA aus Manifest geladen; kein Echtheitsbeweis.",manifestBad:"Ungültiges Manifest oder falscher Dateiname. SHA gelöscht; kein Upload.",manifestManual:"SHA manuell eingegeben.",expectedSha:"Erwarteter Quell-SHA aus dem Paket",identity:"Image-Quelle und Paket",sourceMissing:"Image-Kennung fehlt",sourceExpected:"Paket-SHA zum Vergleich einfügen",sourceMatch:"GLEICH (kein Echtheitsbeweis)",sourceMismatch:"ABWEICHUNG – SD und Paket prüfen",sourceInvalid:"Vollständigen 40-stelligen SHA eingeben",mismatchTip:"STOPP: Der Bericht passt nicht zur Quellversion. SD-Karte vor weiteren Tests prüfen.",clear:"Ergebnis löschen",empty:"Noch keine Datei geöffnet.",bad:"Nicht unterstützter, unvollständiger oder ungültiger Bericht. Nichts wurde übertragen.",
       loading:"Lese nur lokal…",ready:"Anonyme Auswertung des letzten aufgezeichneten Startzustands. Keine Freigabe.",
       results:"2 · Offline-Ergebnis",pairing:"Bluetooth-Kopplungsstatus",paired:"Gekoppelte Geräte (nur Anzahl)",
       controller:"Bluetooth-Controller erkannt",usb:"USB-Ausgang und Audioverbindung",
       usbLinked:"Direkte Verbindung gemeldet (kein Tonbeweis)",usbBroken:"USB erkannt; Verbindung prüfen",usbUnknown:"USB erkannt; Verbindung nicht geprüft",usbAbsent:"USB-Gerät nicht gemeldet",
       routeTipLinked:"Eine direkte USB-Audioverbindung wurde gemeldet; hörbarer Ton ist NICHT nachgewiesen. Nur im freigegebenen Hardwaretest bei niedrigem Pegel hören.",routeTipBroken:"USB-Hardware wurde erkannt, aber keine funktionsbereite direkte Audioverbindung gemeldet. Ton nicht annehmen oder Routing ohne Freigabe ändern.",routeTipUnknown:"USB wurde erkannt, die direkte Audioverbindung ist in diesem Bericht aber nicht prüfbar. Keinen hörbaren Ton annehmen.",routeTipAbsent:"Kein USB-Audioausgang gemeldet. Edifier-USB-Verbindung nur am isolierten Testgerät prüfen, ohne Besitzer- oder Netzwerkeinstellungen zu ändern.",
       snapshots:"Erststart-Beobachtungen",runtime:"Letzter Audio-Laufzeitstatus",
+      trendOne:"Eine USB-Prüfung; kein Verlauf",trendAlways:"USB bei jeder Stichprobe gemeldet",trendNever:"USB bei keiner Stichprobe gemeldet",trendAppeared:"USB nach erster Prüfung aufgetaucht",trendLost:"USB nach Erkennung verschwunden",trendIntermittent:"USB aufgetaucht und verschwunden",tipAppeared:"USB wurde erst später erkannt. Das beweist keine dauerhaft stabile Verbindung oder hörbaren Ton.",tipLost:"USB wurde erst erkannt, später aber nicht mehr. Edifier-Kabel und Stromversorgung nur am isolierten Testgerät prüfen; Ton nicht annehmen.",tipIntermittent:"USB erschien und verschwand bei den Startprüfungen. Verlauf dokumentieren und Kabel/Stromversorgung nur berechtigt prüfen lassen.",
       next:"3 · Nächster Schritt",chooseFirst:"Bericht auswählen, um sichere nächste Schritte zu sehen.",
       disclaimer:"SD-Bericht, kein Live-Zustand oder Nachweis von Ton, Besitz oder Kopplungsberechtigung. Hier werden keine Einstellungen geändert.",
       yes:"Erkannt",no:"Nicht erkannt",unknown:"Nicht verfügbar",recent:"Zuletzt aktuell",stale:"Fehlt oder veraltet",
@@ -143,13 +183,14 @@
       intro:"Abre AUDIOHUB-TEST-REPORT.json de la partición de arranque de una tarjeta SD del Pi apagado correctamente. Sin conexión ni Python.",
       privacyTitle:"Privacidad local",privacy:"Este visor no sube, guarda ni envía el informe. Solo muestra datos anónimos predefinidos. No confirma propiedad, hardware ni lanzamiento.",
       choose:"1 · Seleccionar informe SD",chooseNote:"Selecciona AUDIOHUB-TEST-REPORT.json, máximo 4 KiB. El archivo permanece en tu equipo.",
-      file:"Informe de arranque",clear:"Borrar resultado",empty:"Ningún archivo abierto.",bad:"Informe no válido, incompleto o incompatible. No se transfirió nada.",
+      file:"Informe de arranque",handoffTitle:"Entrega anónima al operador (solo lectura)",handoffNote:"Abre un informe válido. Revisa la nota en inglés y cópiala manualmente. Sin datos brutos ni identificadores; las pruebas físicas NO ESTÁN VERIFICADAS.",handoffLabel:"Nota de evidencia anónima",previousLabel:"Informe anterior guardado (opcional)",previousNote:"El Pi sobrescribe el informe al reiniciar. Usa una copia privada anterior; no reinicies solo para comparar.",previousEmpty:"Ningún informe anterior.",previousLoading:"Lectura local del informe anterior…",previousReady:"Informe anterior leído localmente.",previousBad:"Informe anterior no válido; comparación borrada.",compareTitle:"Comparar dos informes guardados (opcional)",compareEmpty:"Elige un informe anterior para comparar USB.",compareNoCurrent:"Elige un informe actual para comparar.",compareNoIdentity:"No se puede comparar: falta la identidad de origen en un informe.",compareDifferentSource:"ALTO: SHA de origen DIFERENTE; no son la misma imagen.",compareWrongPackage:"ALTO: SHA de paquete inválido o diferente.",compareSame:"Ruta y muestras USB sin cambios entre archivos.",compareChanged:"Ruta USB o muestras cambiadas entre archivos.",compareEarlier:"Antes",compareNow:"Ahora",compareRoute:"Ruta USB",compareSamples:"Muestras USB",compareLimit:"Solo datos locales sin firmar, no prueba de sonido o aprobación.",preflightTitle:"Antes de probar físicamente el Pi4",preflightBackup:"Guarda la SD original intacta y TODOS los WAV/EQ/MP3/FLAC. Solo graba una SD de repuesto con permiso explícito.",preflightShutdown:"ALTO sin un método de apagado seguro aprobado ANTES del arranque. Sin SSH, contraseña común ni red doméstica.",preflightVerify:"Verifica de forma independiente SHA256 del ZIP, IMG.XZ, manifiesto y visor. El visor no valida el ZIP.",manifestLabel:"Manifiesto del ZIP verificado (opcional)",manifestNote:"Abre PREVIEW-MANIFEST.json del MISMO ZIP ya verificado. Lectura local, no autenticación.",manifestEmpty:"Sin manifiesto; puedes introducir el SHA manualmente.",manifestLoading:"Leyendo manifiesto localmente…",manifestReady:"SHA de origen leído localmente; no prueba autenticidad.",manifestBad:"Manifiesto inválido o nombre incorrecto. SHA borrado; no se envió nada.",manifestManual:"SHA introducido manualmente.",expectedSha:"SHA esperado del paquete",identity:"Origen de imagen frente al paquete",sourceMissing:"Identidad de imagen no disponible",sourceExpected:"Pega el SHA del paquete para comparar",sourceMatch:"COINCIDE (no autentica)",sourceMismatch:"NO COINCIDE: revisa SD y paquete",sourceInvalid:"Introduce el SHA completo de 40 caracteres",mismatchTip:"ALTO: el informe no coincide con el código seleccionado. Comprueba la tarjeta SD.",clear:"Borrar resultado",empty:"Ningún archivo abierto.",bad:"Informe no válido, incompleto o incompatible. No se transfirió nada.",
       loading:"Lectura local…",ready:"Resumen de la última observación registrada. Sin aprobación.",
       results:"2 · Resultados sin conexión",pairing:"Estado de emparejamiento Bluetooth",paired:"Dispositivos emparejados (cantidad)",
       controller:"Controlador Bluetooth detectado",usb:"Salida USB y enlace de audio",
       usbLinked:"Enlace directo informado (no prueba sonido)",usbBroken:"USB detectado; revisar enlace",usbUnknown:"USB detectado; enlace no comprobado",usbAbsent:"Dispositivo USB no informado",
       routeTipLinked:"Se informa un enlace directo USB, pero NO se ha comprobado sonido audible. Escucha solo en una prueba física autorizada a volumen bajo.",routeTipBroken:"Se detectó USB, pero no se informó un enlace de audio directo funcional. No supongas sonido ni cambies rutas sin autorización.",routeTipUnknown:"Se detectó USB, pero este informe no permite verificar el enlace directo. No supongas sonido.",routeTipAbsent:"No se informó salida de audio USB. Comprueba el cable Edifier solo en un entorno aislado y sin cambiar red o propietario.",
       snapshots:"Observaciones del arranque",runtime:"Estado del motor de audio",
+      trendOne:"Una revisión USB; sin tendencia",trendAlways:"USB presente en todas las muestras",trendNever:"USB ausente en todas las muestras",trendAppeared:"USB apareció después del primer control",trendLost:"USB desapareció tras detectarse",trendIntermittent:"USB apareció y desapareció",tipAppeared:"USB apareció después de una muestra sin USB. No demuestra estabilidad ni sonido.",tipLost:"USB fue detectado antes y faltó después. Revisa cable y alimentación Edifier solo en un banco aislado; no supongas sonido.",tipIntermittent:"USB apareció y desapareció durante el arranque. Registra el problema y pide al operador revisar cable y alimentación.",
       next:"3 · Próximo paso",chooseFirst:"Selecciona un informe para ver el siguiente paso seguro.",
       disclaimer:"No son datos en vivo ni prueba de sonido, propiedad o permiso para emparejar. No modifica ajustes.",
       yes:"Detectado",no:"No detectado",unknown:"No disponible",recent:"Reciente",stale:"Ausente o antiguo",
@@ -174,13 +215,14 @@
       intro:"Ouvrez AUDIOHUB-TEST-REPORT.json depuis la partition de démarrage d'une carte SD après arrêt correct du Pi. Sans connexion ni Python.",
       privacyTitle:"Lecture privée",privacy:"Cette visionneuse ne transmet, n'enregistre et n'envoie aucun rapport. Seul un résumé anonyme apparaît. Aucune preuve de propriété, de matériel ou de version.",
       choose:"1 · Choisir le rapport SD",chooseNote:"Sélectionnez AUDIOHUB-TEST-REPORT.json, 4 Kio maximum. Le fichier reste sur votre ordinateur.",
-      file:"Rapport de démarrage",clear:"Effacer le résultat",empty:"Aucun fichier ouvert.",bad:"Rapport invalide, incomplet ou non pris en charge. Aucun envoi.",
+      file:"Rapport de démarrage",handoffTitle:"Transmission anonymisée (lecture seule)",handoffNote:"Ouvrez un rapport valide, relisez la note en anglais et copiez-la manuellement. Aucun contenu brut ni identifiant ; les essais physiques ne sont PAS VÉRIFIÉS.",handoffLabel:"Note de preuve anonymisée",previousLabel:"Rapport précédent sauvegardé (facultatif)",previousNote:"Le Pi écrase son rapport au redémarrage. Utilisez une copie privée ; ne redémarrez pas juste pour comparer.",previousEmpty:"Aucun rapport précédent.",previousLoading:"Lecture locale de l'ancien rapport…",previousReady:"Ancien rapport chargé localement.",previousBad:"Ancien rapport invalide ; comparaison effacée.",compareTitle:"Comparer deux rapports enregistrés (facultatif)",compareEmpty:"Choisissez un ancien rapport pour comparer USB.",compareNoCurrent:"Choisissez un rapport actuel à comparer.",compareNoIdentity:"Comparaison impossible : identité source manquante.",compareDifferentSource:"ARRÊT : SHA source DIFFÉRENTS ; images non comparables.",compareWrongPackage:"ARRÊT : SHA du paquet invalide ou différent.",compareSame:"Routage USB et mesures inchangés entre ces fichiers.",compareChanged:"Routage USB ou mesures changés entre ces fichiers.",compareEarlier:"Avant",compareNow:"Maintenant",compareRoute:"Routage USB",compareSamples:"Mesures USB",compareLimit:"Observations locales non signées, pas de preuve de son ni d'approbation.",preflightTitle:"Avant tout essai physique du Pi4",preflightBackup:"Sauvegardez la SD d'origine intacte et TOUS les WAV/EQ/MP3/FLAC. Flashez uniquement une SD de rechange autorisée.",preflightShutdown:"ARRÊT sans méthode sûre d'extinction approuvée AVANT le démarrage. Aucun SSH, mot de passe partagé ou réseau domestique.",preflightVerify:"Vérifiez séparément les SHA256 du ZIP, IMG.XZ, manifeste et visionneuse. Cette page ne vérifie pas le ZIP.",manifestLabel:"Manifeste du ZIP vérifié (facultatif)",manifestNote:"Ouvrez PREVIEW-MANIFEST.json du MÊME ZIP déjà vérifié. Lecture locale, sans preuve d'authenticité.",manifestEmpty:"Aucun manifeste ; SHA manuel possible.",manifestLoading:"Lecture locale du manifeste…",manifestReady:"SHA source chargé localement ; aucune preuve d'authenticité.",manifestBad:"Manifeste invalide ou nom erroné. SHA effacé ; aucun envoi.",manifestManual:"SHA saisi manuellement.",expectedSha:"SHA source attendu du paquet",identity:"Source image et paquet",sourceMissing:"Identité image indisponible",sourceExpected:"Collez le SHA du paquet pour comparer",sourceMatch:"IDENTIQUE (pas une authentification)",sourceMismatch:"DIFFÉRENT : vérifier SD et paquet",sourceInvalid:"Saisissez le SHA complet de 40 caractères",mismatchTip:"ARRÊT : le rapport ne correspond pas au code choisi. Vérifiez la carte SD.",clear:"Effacer le résultat",empty:"Aucun fichier ouvert.",bad:"Rapport invalide, incomplet ou non pris en charge. Aucun envoi.",
       loading:"Lecture locale…",ready:"Résumé de la dernière observation enregistrée. Aucune validation.",
       results:"2 · Résultats hors ligne",pairing:"État de l'appairage Bluetooth",paired:"Appareils appairés (nombre)",
       controller:"Contrôleur Bluetooth détecté",usb:"Sortie USB et liaison audio",
       usbLinked:"Liaison directe signalée (pas de preuve sonore)",usbBroken:"USB détecté ; liaison à vérifier",usbUnknown:"USB détecté ; liaison non vérifiée",usbAbsent:"Aucun périphérique USB signalé",
       routeTipLinked:"Une liaison USB directe est signalée, mais aucun son audible n'est prouvé. Écouter uniquement lors d'un test matériel autorisé à faible volume.",routeTipBroken:"L'USB est détecté, mais aucune liaison audio directe fonctionnelle n'est signalée. Ne présumez pas du son et ne modifiez pas le routage sans autorisation.",routeTipUnknown:"L'USB est détecté, mais la liaison directe ne peut être vérifiée dans ce rapport. Aucun son n'est prouvé.",routeTipAbsent:"Aucune sortie audio USB signalée. Vérifiez le câble Edifier uniquement en environnement isolé, sans changer le réseau ou le propriétaire.",
       snapshots:"Observations de démarrage",runtime:"Dernier état audio",
+      trendOne:"Un contrôle USB ; pas de tendance",trendAlways:"USB vu à chaque mesure",trendNever:"USB absent de chaque mesure",trendAppeared:"USB apparu après la première mesure",trendLost:"USB disparu après détection",trendIntermittent:"USB apparu et disparu",tipAppeared:"USB est apparu après une mesure sans USB. Cela ne prouve ni stabilité ni son.",tipLost:"USB détecté auparavant puis absent plus tard. Vérifiez câble et alimentation Edifier uniquement sur banc isolé, sans présumer du son.",tipIntermittent:"USB est apparu et a disparu pendant le démarrage. Notez le problème et faites vérifier câble et alimentation par un opérateur autorisé.",
       next:"3 · Étape suivante",chooseFirst:"Choisissez un rapport pour afficher la prochaine étape sûre.",
       disclaimer:"Ce rapport n'est pas une mesure en direct ni une preuve de son, propriété ou autorisation. Aucun paramètre modifié.",
       yes:"Détecté",no:"Non détecté",unknown:"Indisponible",recent:"Récent",stale:"Absent ou périmé",
@@ -205,13 +247,14 @@
       intro:"Apri AUDIOHUB-TEST-REPORT.json dalla partizione di avvio della scheda SD dopo aver spento correttamente il Pi. Nessuna rete o Python.",
       privacyTitle:"Privacy locale",privacy:"Questo visualizzatore non carica, salva o invia il rapporto. Mostra solo dati anonimi prestabiliti. Non prova proprietà, hardware o rilascio.",
       choose:"1 · Scegli il rapporto SD",chooseNote:"Seleziona AUDIOHUB-TEST-REPORT.json, massimo 4 KiB. Il file resta sul computer.",
-      file:"Rapporto di avvio",clear:"Cancella risultato",empty:"Nessun file aperto.",bad:"Rapporto non valido, incompleto o incompatibile. Nessun invio.",
+      file:"Rapporto di avvio",handoffTitle:"Consegna anonima all'operatore (sola lettura)",handoffNote:"Apri un rapporto valido, controlla la nota in inglese e copiala manualmente. Nessun dato grezzo o identificativo; i test fisici NON SONO VERIFICATI.",handoffLabel:"Nota di prova anonimizzata",previousLabel:"Rapporto precedente salvato (facoltativo)",previousNote:"Il Pi sovrascrive il rapporto al riavvio. Usa una copia privata precedente; non riavviare solo per confrontare.",previousEmpty:"Nessun rapporto precedente.",previousLoading:"Lettura locale del rapporto precedente…",previousReady:"Rapporto precedente caricato localmente.",previousBad:"Rapporto precedente non valido; confronto cancellato.",compareTitle:"Confronta due rapporti salvati (facoltativo)",compareEmpty:"Seleziona un rapporto precedente per confrontare USB.",compareNoCurrent:"Seleziona il rapporto attuale per confrontare.",compareNoIdentity:"Impossibile confrontare: manca l'identità sorgente.",compareDifferentSource:"STOP: SHA sorgente DIVERSI; immagini non confrontabili.",compareWrongPackage:"STOP: SHA atteso del pacchetto non valido o diverso.",compareSame:"Percorso e campioni USB invariati tra i file.",compareChanged:"Percorso USB o campioni cambiati tra i file.",compareEarlier:"Prima",compareNow:"Adesso",compareRoute:"Percorso USB",compareSamples:"Campioni USB",compareLimit:"Solo osservazioni locali non firmate, non prova audio o approvazione.",preflightTitle:"Prima della prova fisica del Pi4",preflightBackup:"Salva la SD originale intatta e TUTTI i WAV/EQ/MP3/FLAC. Scrivi solo una SD sostitutiva autorizzata.",preflightShutdown:"STOP senza una procedura di spegnimento sicuro approvata PRIMA dell'avvio. No SSH, password comuni o rete domestica.",preflightVerify:"Controlla separatamente SHA256 di ZIP, IMG.XZ, manifesto e visualizzatore. La pagina non verifica lo ZIP.",manifestLabel:"Manifesto dello ZIP verificato (facoltativo)",manifestNote:"Apri PREVIEW-MANIFEST.json dello STESSO ZIP verificato. Solo locale, non prova autenticità.",manifestEmpty:"Nessun manifesto; puoi inserire lo SHA manualmente.",manifestLoading:"Lettura locale del manifesto…",manifestReady:"SHA sorgente caricato localmente; non prova autenticità.",manifestBad:"Manifesto non valido o nome errato. SHA cancellato; nessun invio.",manifestManual:"SHA inserito manualmente.",expectedSha:"SHA sorgente atteso dal pacchetto",identity:"Sorgente immagine e pacchetto",sourceMissing:"Identità immagine non disponibile",sourceExpected:"Incolla lo SHA del pacchetto per confrontare",sourceMatch:"COINCIDE (non autentica)",sourceMismatch:"DIVERSO: controlla SD e pacchetto",sourceInvalid:"Inserisci lo SHA completo di 40 caratteri",mismatchTip:"STOP: il rapporto non corrisponde al codice scelto. Controlla la scheda SD.",clear:"Cancella risultato",empty:"Nessun file aperto.",bad:"Rapporto non valido, incompleto o incompatibile. Nessun invio.",
       loading:"Lettura locale…",ready:"Riepilogo dell'ultima osservazione registrata. Nessuna approvazione.",
       results:"2 · Risultati offline",pairing:"Stato associazione Bluetooth",paired:"Dispositivi associati (numero)",
       controller:"Controller Bluetooth rilevato",usb:"Uscita USB e collegamento audio",
       usbLinked:"Collegamento diretto segnalato (non prova audio)",usbBroken:"USB rilevato; collegamento da controllare",usbUnknown:"USB rilevato; collegamento non verificato",usbAbsent:"Dispositivo USB non segnalato",
       routeTipLinked:"È segnalato un collegamento USB diretto, ma NON è provato alcun suono udibile. Ascoltare solo in un test fisico autorizzato a basso volume.",routeTipBroken:"USB rilevato, ma nessun collegamento audio diretto funzionante segnalato. Non presumere audio e non modificare i percorsi senza autorizzazione.",routeTipUnknown:"USB rilevato, ma il collegamento diretto non è verificabile da questo rapporto. Non presumere audio.",routeTipAbsent:"Nessuna uscita audio USB segnalata. Controllare il cavo Edifier solo in laboratorio isolato senza cambiare rete o proprietario.",
       snapshots:"Osservazioni del primo avvio",runtime:"Ultimo stato audio",
+      trendOne:"Un controllo USB; nessuna tendenza",trendAlways:"USB visto in ogni rilevamento",trendNever:"USB assente in ogni rilevamento",trendAppeared:"USB comparso dopo il primo controllo",trendLost:"USB scomparso dopo il rilevamento",trendIntermittent:"USB comparso e scomparso",tipAppeared:"USB è apparso dopo una verifica negativa. Non prova stabilità né audio.",tipLost:"USB prima presente, poi assente. Verifica cavo e alimentazione Edifier solo sul banco isolato; non presumere audio.",tipIntermittent:"USB è apparso e scomparso all'avvio. Registra il problema e fai controllare cavo e alimentazione da un operatore autorizzato.",
       next:"3 · Passo successivo",chooseFirst:"Scegli un rapporto per vedere i prossimi passi sicuri.",
       disclaimer:"Non è uno stato in tempo reale né una prova di audio, proprietà o autorizzazione. Nessuna impostazione modificata.",
       yes:"Rilevato",no:"Non rilevato",unknown:"Non disponibile",recent:"Recente",stale:"Assente o obsoleto",
@@ -236,6 +279,11 @@
   let current = null;
   let status = "empty";
   let serial = 0;
+  let manifestStatus = "manifestEmpty";
+  let manifestSerial = 0;
+  let previous = null; // Strictly sanitized fixed fields, never raw JSON.
+  let previousStatus = "previousEmpty";
+  let previousSerial = 0;
   const plain = value => value !== null && typeof value === "object" &&
     !Array.isArray(value) && Object.getPrototypeOf(value) === Object.prototype;
   // BEGIN_BOOT_REPORT_PARSE
@@ -263,6 +311,37 @@
           !["recent","unavailable_or_stale"].includes(s.runtime_status)) return null;
       before = s.seconds_since_probe_start;
     }
+    // The SD report is unsigned. This is a comparison of PUBLIC SHAs,
+    // not proof of authentic boot, hardware, sound or operator approval.
+    let imageSha = null;
+    if (Object.prototype.hasOwnProperty.call(obj, "image_identity")) {
+      const id = obj.image_identity;
+      if (!plain(id)) return null;
+      if (id.status === "unavailable") {
+        if (Object.keys(id).length !== 1) return null;
+      } else if (id.status === "embedded_unverified_alpha") {
+        if (Object.keys(id).sort().join(",") !== "ci_run_id,pi_gen_sha,source_sha,status" ||
+            typeof id.source_sha !== "string" ||
+            !/^[0-9a-f]{40}$/.test(id.source_sha) ||
+            typeof id.pi_gen_sha !== "string" ||
+            !/^[0-9a-f]{40}$/.test(id.pi_gen_sha) ||
+            !(id.ci_run_id === null ||
+              (Number.isSafeInteger(id.ci_run_id) && id.ci_run_id > 0))) return null;
+        imageSha = id.source_sha;
+      } else return null;
+    }
+    // Analyze only whitelisted sampled USB presence; not device identity.
+    // Samples do not certify continuity, audibility or hardware approval.
+    let seenYes = false, seenNo = false, appeared = false, lost = false;
+    for (const sample of obj.snapshots) {
+      if (sample.usb_audio_detected && seenNo) appeared = true;
+      if (!sample.usb_audio_detected && seenYes) lost = true;
+      if (sample.usb_audio_detected) seenYes = true;
+      else seenNo = true;
+    }
+    const usbTrend = obj.snapshots.length === 1 ? "one" :
+      appeared && lost ? "intermittent" : lost ? "lost" :
+      appeared ? "appeared" : seenYes ? "always" : "never";
     const last = obj.snapshots[obj.snapshots.length - 1];
     let pairing = "older";
     let paired = null;
@@ -290,15 +369,91 @@
       (!routeFieldsPresent || last.runtime_status !== "recent") ? "unknown" :
       (last.usb_audio_route_ready && last.eq_usb_direct_links > 0)
         ? "linked" : "broken";
-    // Only fixed enums, counts and strict booleans escape this function.
-    // Never retain the untrusted object, raw strings, names or other keys.
+    // Only fixed enums, counts, booleans and strictly validated public SHA escape.
+    // Do not retain arbitrary untrusted strings or private device identifiers.
     return Object.freeze({
       pairing, paired, controller: last.bluetooth_controller_present,
-      usbRoute, runtime: last.runtime_status,
+      usbRoute, usbTrend, runtime: last.runtime_status, imageSha,
       snapshots: obj.snapshots.length
     });
   }
   // END_BOOT_REPORT_PARSE
+  // Only the public source SHA escapes a selected, strictly bounded local
+  // manifest. No credentials, device IDs or untrusted strings are retained.
+  // This does NOT verify ZIP integrity, provenance or report authenticity.
+  function summarizeManifest(raw) {
+    if (typeof raw !== "string" || raw.length === 0 || raw.length > 8192) return null;
+    let m;
+    try { m = JSON.parse(raw); } catch (_) { return null; }
+    if (!plain(m) ||
+        m.schema !== "rivanox-audiohub-preview-bundle/2" ||
+        typeof m.source_commit_sha !== "string" ||
+        !/^[a-f0-9]{40}$/.test(m.source_commit_sha) ||
+        typeof m.pi_gen_commit_sha !== "string" ||
+        !/^[a-f0-9]{40}$/.test(m.pi_gen_commit_sha) ||
+        typeof m.image_sha256 !== "string" ||
+        !/^[a-f0-9]{64}$/.test(m.image_sha256) ||
+        typeof m.github_actions_run_id !== "string" ||
+        !/^[1-9][0-9]{0,19}$/.test(m.github_actions_run_id) ||
+        m.hardware_verified !== false ||
+        m.release_approved !== false ||
+        typeof m.scope !== "string" ||
+        !m.scope.toLowerCase().includes("not a release") ||
+        !plain(m.offline_viewer) ||
+        m.offline_viewer.file !== "AUDIOHUB-OFFLINE-REPORT-VIEWER.html" ||
+        !Number.isSafeInteger(m.offline_viewer.bytes) ||
+        m.offline_viewer.bytes < 1 ||
+        m.offline_viewer.bytes > 128 * 1024 ||
+        typeof m.offline_viewer.sha256 !== "string" ||
+        !/^[a-f0-9]{64}$/.test(m.offline_viewer.sha256)) return null;
+    return m.source_commit_sha;
+  }
+  // Only sanitized fixed enums/counts and public commit identifiers enter
+  // this text. The raw SD JSON is never copied, stored or transmitted.
+  function safeHandoff(summary, earlier, expected) {
+    if (!summary) return "";
+    const valid = /^[a-f0-9]{40}$/.test(expected);
+    const sourceCheck = !summary.imageSha ? "SOURCE_UNAVAILABLE" :
+      expected === "" ? "EXPECTED_SHA_NOT_PROVIDED" :
+      !valid ? "INVALID_EXPECTED_SHA" :
+      expected === summary.imageSha ? "TEXT_MATCH_NOT_ATTESTATION" :
+      "STOP_SOURCE_MISMATCH";
+    const earlierCheck = !earlier ? "NOT_PROVIDED" :
+      !earlier.imageSha || !summary.imageSha ? "NO_SOURCE_IDENTITY" :
+      earlier.imageSha !== summary.imageSha ? "STOP_DIFFERENT_SOURCE" :
+      expected && (!valid || expected !== summary.imageSha) ?
+        "STOP_EXPECTED_SOURCE_MISMATCH" :
+      earlier.usbRoute === summary.usbRoute &&
+      earlier.usbTrend === summary.usbTrend ? "SAMPLED_USB_UNCHANGED" :
+      "SAMPLED_USB_CHANGED";
+    const publicSha = value => /^[a-f0-9]{40}$/.test(value || "") ?
+      value : "UNAVAILABLE";
+    return [
+      "RIVANOX AudioHub / operator diagnostic handoff (UNVERIFIED ALPHA)",
+      "Report: UNSIGNED, MUTABLE, LOCAL, NOT A HARDWARE ACCEPTANCE",
+      "Image source SHA: " + publicSha(summary.imageSha),
+      "Expected source SHA: " + (valid ? expected : "NOT VERIFIED"),
+      "Source comparison: " + sourceCheck,
+      "USB last reported route: " + summary.usbRoute,
+      "USB sampled trend: " + summary.usbTrend,
+      "USB observation count: " + summary.snapshots,
+      "Audio runtime last report: " + summary.runtime,
+      "Bluetooth controller observed: " + (summary.controller ? "YES" : "NO"),
+      "Bluetooth pairing state: " + summary.pairing,
+      "Bluetooth paired anonymous count: " +
+        (summary.paired === null ? "UNAVAILABLE" : String(summary.paired)),
+      "Earlier report comparison: " + earlierCheck,
+      "Earlier USB reported route: " + (earlier ? earlier.usbRoute : "NOT PROVIDED"),
+      "Earlier USB sampled trend: " + (earlier ? earlier.usbTrend : "NOT PROVIDED"),
+      "Actual Pi4 boot observed by human: NOT VERIFIED BY VIEWER",
+      "Actual Edifier L/R/BOTH audible sound: NOT VERIFIED BY VIEWER",
+      "Safe shutdown method and completion: NOT VERIFIED BY VIEWER",
+      "Downloaded ZIP and IMG.XZ hashes independently checked: NOT VERIFIED BY VIEWER",
+      "Hardware S3, owner authentication, public release: NOT APPROVED BY VIEWER",
+      "Operator must separately record observations and authorization.",
+      "Do not include raw FAT files or private device identifiers."
+    ].join("\n");
+  }
   function render() {
     const language = byId("language").value;
     const t = texts[language] || texts.en;
@@ -306,22 +461,71 @@
     const nodes = {
       "language-label":t.language,"title":t.title,"intro":t.intro,
       "privacy-title":t.privacyTitle,"privacy-text":t.privacy,
+      "preflight-title":t.preflightTitle,
+      "preflight-backup":t.preflightBackup,
+      "preflight-shutdown":t.preflightShutdown,
+      "preflight-verify":t.preflightVerify,
       "choose-title":t.choose,"choose-note":t.chooseNote,"file-label":t.file,
+      "manifest-label":t.manifestLabel,"manifest-note":t.manifestNote,
+      "previous-label":t.previousLabel,"previous-note":t.previousNote,
+      "compare-title":t.compareTitle,"compare-disclaimer":t.compareLimit,
+      "handoff-title":t.handoffTitle,"handoff-note":t.handoffNote,
+      "handoff-label":t.handoffLabel,
+      "expected-sha-label":t.expectedSha,
       "clear":t.clear,"results-title":t.results,
       "pairing-label":t.pairing,"paired-label":t.paired,
       "controller-label":t.controller,"usb-label":t.usb,
       "snapshots-label":t.snapshots,"runtime-label":t.runtime,
+      "identity-label":t.identity,
       "next-title":t.next,"disclaimer":t.disclaimer
     };
     Object.keys(nodes).forEach(id => { byId(id).textContent = nodes[id]; });
     byId("feedback").textContent = t[status];
+    byId("manifest-feedback").textContent = t[manifestStatus];
+    byId("previous-feedback").textContent = t[previousStatus];
     const label = id => byId(id);
+    const expectedSha = byId("expected-sha").value.trim().toLowerCase();
+    const validExpected = /^[0-9a-f]{40}$/.test(expectedSha);
+    byId("handoff-text").value = safeHandoff(current, previous, expectedSha);
+    const routeText = route => t[{
+      linked:"usbLinked",broken:"usbBroken",
+      unknown:"usbUnknown",absent:"usbAbsent"
+    }[route]];
+    const trendText = trend => t[{
+      one:"trendOne",always:"trendAlways",never:"trendNever",
+      appeared:"trendAppeared",lost:"trendLost",intermittent:"trendIntermittent"
+    }[trend]];
+    if (!previous) label("compare-result").textContent = t.compareEmpty;
+    else if (!current) label("compare-result").textContent = t.compareNoCurrent;
+    else if (!previous.imageSha || !current.imageSha)
+      label("compare-result").textContent = t.compareNoIdentity;
+    else if (previous.imageSha !== current.imageSha)
+      label("compare-result").textContent = t.compareDifferentSource;
+    else if (expectedSha && (!validExpected || current.imageSha !== expectedSha))
+      label("compare-result").textContent = t.compareWrongPackage;
+    else {
+      const changed = previous.usbRoute !== current.usbRoute ||
+        previous.usbTrend !== current.usbTrend;
+      label("compare-result").textContent =
+        (changed ? t.compareChanged : t.compareSame) + " " +
+        t.compareRoute + ": " + t.compareEarlier + " " +
+        routeText(previous.usbRoute) + " → " +
+        t.compareNow + " " + routeText(current.usbRoute) + ". " +
+        t.compareSamples + ": " + t.compareEarlier + " " +
+        trendText(previous.usbTrend) + " → " +
+        t.compareNow + " " + trendText(current.usbTrend) + ".";
+    }
     if (!current) {
       for (const id of ["pairing-value","paired-value","controller-value","usb-value",
-                         "snapshots-value","runtime-value"]) label(id).textContent = "—";
+                         "snapshots-value","runtime-value","identity-value"]) label(id).textContent = "—";
       label("advice").textContent = t.chooseFirst;
       return;
     }
+    const comparison = expectedSha === "" ? t.sourceExpected :
+      !validExpected ? t.sourceInvalid :
+      expectedSha === current.imageSha ? t.sourceMatch : t.sourceMismatch;
+    label("identity-value").textContent = current.imageSha === null ?
+      t.sourceMissing : current.imageSha + " · " + comparison;
     const index = states.indexOf(current.pairing);
     label("pairing-value").textContent = index < 0 ? t.unknown : t.states[index];
     label("paired-value").textContent = current.paired === null ? t.unknown : String(current.paired);
@@ -330,7 +534,11 @@
       linked:"usbLinked",broken:"usbBroken",
       unknown:"usbUnknown",absent:"usbAbsent"
     }[current.usbRoute]];
-    label("snapshots-value").textContent = String(current.snapshots);
+    const trendKey = {
+      one:"trendOne",always:"trendAlways",never:"trendNever",
+      appeared:"trendAppeared",lost:"trendLost",intermittent:"trendIntermittent"
+    }[current.usbTrend];
+    label("snapshots-value").textContent = String(current.snapshots) + " · " + t[trendKey];
     label("runtime-value").textContent = current.runtime === "recent" ? t.recent : t.stale;
     // Keep existing pairing guidance, and always explain USB routing
     // separately. The status report is NOT a speaker audibility test.
@@ -338,12 +546,84 @@
       linked:t.routeTipLinked,broken:t.routeTipBroken,
       unknown:t.routeTipUnknown,absent:t.routeTipAbsent
     }[current.usbRoute];
+    const trendTip = {
+      appeared:t.tipAppeared,lost:t.tipLost,intermittent:t.tipIntermittent
+    }[current.usbTrend];
     label("advice").textContent = (index < 0 ? t.older : t.tips[index]) +
-      " " + usbTip;
+      " " + usbTip + (trendTip ? " " + trendTip : "") +
+      (current.imageSha && validExpected && expectedSha !== current.imageSha
+        ? " " + t.mismatchTip : "");
   }
   function clear() {
-    serial += 1; current = null; status = "empty";
+    serial += 1; manifestSerial += 1; previousSerial += 1;
+    current = null; previous = null;
+    status = "empty"; manifestStatus = "manifestEmpty";
+    previousStatus = "previousEmpty";
     byId("report-file").value = "";
+    byId("previous-report-file").value = "";
+    byId("manifest-file").value = "";
+    byId("expected-sha").value = "";
+    render();
+  }
+  function manualSource() {
+    // Cancel a pending local manifest read before using a manually typed SHA.
+    manifestSerial += 1;
+    manifestStatus = "manifestManual";
+    byId("manifest-file").value = "";
+    render();
+  }
+  async function openManifest() {
+    const request = ++manifestSerial;
+    const input = byId("manifest-file");
+    const file = input.files && input.files[0];
+    byId("expected-sha").value = "";
+    manifestStatus = "manifestBad";
+    if (!file || file.name !== "PREVIEW-MANIFEST.json" ||
+        !Number.isInteger(file.size) || file.size <= 0 || file.size > 8192) {
+      input.value = "";
+      render();
+      return;
+    }
+    manifestStatus = "manifestLoading";
+    render();
+    try {
+      const raw = await file.text();
+      if (request !== manifestSerial) return;
+      const sourceSha = summarizeManifest(raw);
+      if (sourceSha !== null) {
+        byId("expected-sha").value = sourceSha;
+        manifestStatus = "manifestReady";
+      } else manifestStatus = "manifestBad";
+    } catch (_) {
+      if (request !== manifestSerial) return;
+      manifestStatus = "manifestBad";
+    }
+    input.value = "";
+    render();
+  }
+  async function openPreviousReport() {
+    const request = ++previousSerial;
+    const input = byId("previous-report-file");
+    const file = input.files && input.files[0];
+    previous = null;
+    previousStatus = "previousBad";
+    if (!file || !Number.isInteger(file.size) || file.size <= 0 || file.size > 4096) {
+      input.value = "";
+      render();
+      return;
+    }
+    previousStatus = "previousLoading";
+    render();
+    try {
+      const raw = await file.text();
+      if (request !== previousSerial) return;
+      previous = summarizeReport(raw);
+      previousStatus = previous ? "previousReady" : "previousBad";
+    } catch (_) {
+      if (request !== previousSerial) return;
+      previousStatus = "previousBad";
+    }
+    input.value = "";
     render();
   }
   async function openReport() {
@@ -374,6 +654,9 @@
   }
   byId("language").addEventListener("change", render);
   byId("report-file").addEventListener("change", openReport);
+  byId("previous-report-file").addEventListener("change", openPreviousReport);
+  byId("manifest-file").addEventListener("change", openManifest);
+  byId("expected-sha").addEventListener("input", manualSource);
   byId("clear").addEventListener("click", clear);
   render();
 })();

@@ -1,8 +1,9 @@
 # Offline SD-card diagnostic for the first Raspberry Pi 4 audio test
 
-**Status:** Source-only proposed alpha feature until a successful ARM64 image
-build and a real Pi4 test prove it runs. It is NOT a release, a hardware pass,
-a secure owner login, or a test of speaker sound quality.
+**Status:** Operator-only S2 native Pi4 test package is built and available
+for the exact successful GitHub source/native CI SHA. No real Pi4 test has
+yet proven it boots or produces Edifier sound. It is NOT a production release,
+a hardware pass or an approved secure owner login.
 
 ## Why it exists
 
@@ -109,8 +110,15 @@ distinguishes four outcomes:
   at least one direct EQ-to-USB link; this is **NOT** evidence of audible
   left/right stereo, exactly the music link, or a safe sound level
 
-Only the most recent snapshot is summarized; no device IDs, USB identifiers,
-private WAV names or arbitrary source JSON text are shown. Strict boolean
+The last snapshot still supplies current USB route, Bluetooth and runtime status.
+To reveal intermittent first-boot faults without a Pi login, the existing
+observation count now also summarizes all one to seven validated USB presence
+samples: always present/absent in samples, appeared late, disappeared, or
+changed in both directions. A single sample is insufficient for a trend.
+Five-language guidance recommends only isolated authorized cable/power checks.
+The sampled observations do NOT prove continuous sound or S3 acceptance; no
+device IDs, USB identifiers, private WAV names or arbitrary source JSON
+text are shown. Strict boolean
 and bounded direct-link count validation prevents fabricated ready states;
 older compatible observations remain labelled **not checked**. The viewer
 offers relevant next steps in all five existing languages, never owner,
@@ -164,3 +172,63 @@ or WLAN provisioning. Release gates G2/G3/G4/G7/G8 and G10 remain open.
 
 Project: `PJ2611-0001:R001`; AH-009 requirement 3275 and
 AH-001 requirement 3267. No physical test signoff or official release.
+
+## Compare a removable-SD report with the chosen package (offline)
+
+The offline HTML viewer now shows the strictly validated **public source
+commit SHA** in current Pi4 FAT first-boot reports. After independently
+verifying the authenticated test ZIP and inner IMG.XZ checksums, paste the
+`source_commit_sha` from that ZIP's `PREVIEW-MANIFEST.json` into the
+viewer's expected-source field. MATCH, MISMATCH, invalid input, or missing
+image identity is shown in all five languages. On **MISMATCH: STOP** and
+check which spare SD booted before any physical acceptance step. The
+comparison performs no network request, credential action, Pi write or
+external report upload. Older valid reports without identity still load.
+
+**The FAT report is mutable and unsigned:** even a matching SHA proves
+neither authentic boot, real stereo output, S3 nor release authorization.
+The original ZIP and image integrity and real human observations are
+separate acceptance requirements.
+
+## Choose the matching package manifest directly in the offline viewer
+
+For S2 packages including the updated local viewer, the operator can open
+`PREVIEW-MANIFEST.json` from the **same independently SHA256-verified ZIP**
+in a second file picker. The viewer checks the alpha schema, test-only
+flags, bounded public source SHA and viewer provenance, then fills the
+expected source SHA without manual transcription. Invalid, renamed or
+oversized manifests clear the source field; a manual override cancels any
+pending asynchronous manifest read. This avoids accidental manual SHA
+mistypes while leaving older reports and manual typing supported.
+
+The offline viewer also presents three localized **before-flashing gates**:
+original SD and all owned media backups, advance approval of a safe
+power-down method (AH-005 separate owner), and host-verified ZIP/image/
+viewer hashes. None is approval to flash. **The viewer does not hash the
+archive, attest to a boot, prove Edifier sound or grant device access.**
+
+## Optional two-boot USB troubleshooting on a trusted PC
+
+For later owner-authorized physical investigations, archive the earlier
+AUDIOHUB-TEST-REPORT.json before a subsequent boot overwrites it.
+The bundled offline HTML viewer can locally compare two such files using
+the exact same strict parser. It reports only source-matched, anonymous
+USB direct-link and sampled USB-presence changes, or refuses to imply
+comparability for missing/mismatched source SHA or package identity.
+This feature does NOT authorize reboot, bypass the AH-005 safe shutdown
+dependency, prove audible sound or treat unsigned FAT data as attestation.
+
+## Safe offline operator evidence handoff
+
+The viewer produces an optional readonly, copyable English canonical
+test-handoff text from its existing sanitized fields only: source-SHA
+string comparison, USB route/trend, anonymous pairing counts and optional
+earlier-report comparison. It never transfers raw FAT JSON, device
+identifiers, credentials or private filenames. The operator must
+manually select/copy and review the text on their trusted PC: no
+automatic clipboard write, download, network request or local storage.
+
+The output explicitly labels human physical boot, audible Edifier L/R,
+safe shutdown, independent ZIP/image verification and S3/release status
+NOT VERIFIED BY VIEWER. Raw or mutable report data remains unsigned
+and cannot be treated as proof of hardware acceptance or device identity.

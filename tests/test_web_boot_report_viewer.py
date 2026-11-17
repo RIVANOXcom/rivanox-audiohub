@@ -22,6 +22,14 @@ class OfflineBootViewerTests(unittest.TestCase):
         self.assertIn("default-src 'none'", source)
         self.assertIn('type="file"', source)
         self.assertIn('id="report-file"', source)
+        self.assertIn('id="previous-report-file"', source)
+        self.assertIn('id="compare-result"', source)
+        self.assertIn('id="handoff-text"', source)
+        self.assertIn('readonly rows="13"', source)
+        self.assertIn('id="expected-sha"', source)
+        self.assertIn('id="manifest-file"', source)
+        self.assertIn('id="preflight-shutdown"', source)
+        self.assertIn('id="identity-value"', source)
         self.assertIn('role="status"', source)
         self.assertIn('id="language"', source)
         self.assertIn('href="./boot-report-viewer.html"',
@@ -80,11 +88,14 @@ const document = {
 const ctx = vm.createContext({document});
 vm.runInContext(found[1], ctx, {timeout: 3000});
 const el = id => document.getElementById(id);
+const observedSha = "a".repeat(40);
 const report = {
   schema:"rivanox-audiohub-offline-boot-diagnostic/1",
   classification:"UNVERIFIED_ALPHA_OFFLINE_TEST_ONLY",
   owner_authenticated:false,hardware_accepted:false,
   phone_wifi_provisioned:false,network_configuration:"not_inspected",
+  image_identity:{status:"embedded_unverified_alpha",source_sha:observedSha,
+    pi_gen_sha:"b".repeat(40),ci_run_id:43764602858},
   bluetooth_pairing_state:"known_devices",bluetooth_paired_devices:1,
   device_name:"SECRET-PRIVATE-PHONE",
   ssid:"SECRET-PRIVATE-WIFI",
@@ -110,13 +121,159 @@ const file = raw => ({size:Buffer.byteLength(raw,"utf8"),text:async()=>raw});
   assert.equal(el("usb-value").textContent, "USB found; route not checked");
   assert.match(el("advice").textContent,/cannot be verified/);
   assert.equal(el("controller-value").textContent, "Detected");
-  assert.equal(el("snapshots-value").textContent, "2");
+  assert.equal(el("snapshots-value").textContent, "2 · USB appeared after the first check");
   assert.equal(el("runtime-value").textContent, "Reported recently");
+  assert.ok(el("identity-value").textContent.startsWith(observedSha));
+  assert.match(el("identity-value").textContent,/Paste package SHA/);
+  assert.match(el("handoff-text").value,/NOT VERIFIED BY VIEWER/);
+  assert.match(el("handoff-text").value,/EXPECTED_SHA_NOT_PROVIDED/);
+  assert.match(el("handoff-text").value,/USB last reported route: unknown/);
+  el("expected-sha").value=observedSha.toUpperCase();
+  listeners["expected-sha:input"]();
+  assert.match(el("identity-value").textContent,/MATCH/);
+  assert.match(el("handoff-text").value,/TEXT_MATCH_NOT_ATTESTATION/);
+  el("expected-sha").value="c".repeat(40);
+  listeners["expected-sha:input"]();
+  assert.match(el("identity-value").textContent,/MISMATCH/);
+  assert.match(el("advice").textContent,/STOP/);
+  assert.match(el("handoff-text").value,/STOP_SOURCE_MISMATCH/);
+  el("expected-sha").value="wrong";
+  listeners["expected-sha:input"]();
+  assert.match(el("identity-value").textContent,/40-character/);
+  el("expected-sha").value="";
+  listeners["expected-sha:input"]();
+  // Real manifest picked from the SAME SHA-verified ZIP: auto-populate source
+  // without retyping 40 hexadecimal characters; no network/persistence.
+  const manifest = {
+    schema:"rivanox-audiohub-preview-bundle/2",
+    source_commit_sha:observedSha,pi_gen_commit_sha:"b".repeat(40),
+    image_sha256:"d".repeat(64),github_actions_run_id:"43817391610",
+    hardware_verified:false,release_approved:false,
+    scope:"Temporary alpha test only, not a release",
+    offline_viewer:{file:"AUDIOHUB-OFFLINE-REPORT-VIEWER.html",
+      bytes:38648,sha256:"e".repeat(64)}
+  };
+  const manifestRaw = JSON.stringify(manifest);
+  const manifestFile = raw => ({...file(raw),name:"PREVIEW-MANIFEST.json"});
+  el("manifest-file").files=[manifestFile(manifestRaw)];
+  await listeners["manifest-file:change"]();
+  assert.equal(el("expected-sha").value,observedSha);
+  assert.match(el("manifest-feedback").textContent,/loaded locally/);
+  assert.match(el("identity-value").textContent,/MATCH/);
+  // Fail closed on wrong filename, forged release, malformed schema or SHA.
+  for(const [reason,badFile] of [
+    ["wrong filename",{...manifestFile(manifestRaw),name:"other.json"}],
+    ["release flag",manifestFile(JSON.stringify({...manifest,release_approved:true}))],
+    ["wrong schema",manifestFile(JSON.stringify({...manifest,schema:"APPROVED"}))],
+    ["invalid SHA",manifestFile(JSON.stringify({...manifest,source_commit_sha:"SECRET-WIFI"}))],
+    ["missing viewer",manifestFile(JSON.stringify({...manifest,offline_viewer:null}))],
+    ["oversized",manifestFile("a".repeat(9000))]
+  ]) {
+    el("manifest-file").files=[badFile];
+    await listeners["manifest-file:change"]();
+    assert.equal(el("expected-sha").value,"",reason);
+    assert.match(el("manifest-feedback").textContent,/Invalid manifest/,reason);
+  }
+  // Manual input must win a concurrent pending asynchronous file read.
+  let resolveManifest;
+  el("manifest-file").files=[{name:"PREVIEW-MANIFEST.json",size:manifestRaw.length,
+    text:()=>new Promise(resolve=>{resolveManifest=resolve;})}];
+  const pendingManifest = listeners["manifest-file:change"]();
+  el("expected-sha").value="f".repeat(40);
+  listeners["expected-sha:input"]();
+  resolveManifest(manifestRaw);
+  await pendingManifest;
+  assert.equal(el("expected-sha").value,"f".repeat(40));
+  assert.match(el("manifest-feedback").textContent,/entered manually/);
+  // Load a valid manifest once more; resetting clears its source status.
+  el("manifest-file").files=[manifestFile(manifestRaw)];
+  await listeners["manifest-file:change"]();
+  assert.equal(el("expected-sha").value,observedSha);
   assert.match(el("advice").textContent,/Reconnect/);
   assert.equal(el("report-file").value,"");
+  // An earlier archived FAT report compares only anonymized local data.
+  const earlier = JSON.stringify({...report,snapshots:[{
+    ...report.snapshots[1],seconds_since_probe_start:0,
+    usb_audio_detected:true,usb_audio_route_ready:true,eq_usb_direct_links:1
+  }]});
+  el("previous-report-file").files=[file(earlier)];
+  await listeners["previous-report-file:change"]();
+  assert.match(el("previous-feedback").textContent,/loaded locally/);
+  assert.match(el("compare-result").textContent,/changed between/);
+  assert.match(el("handoff-text").value,/SAMPLED_USB_CHANGED/);
+  assert.match(el("compare-result").textContent,/Direct link reported/);
+  assert.match(el("compare-result").textContent,/USB found; route not checked/);
+  const differentSource = JSON.stringify({...report,
+    image_identity:{...report.image_identity,source_sha:"c".repeat(40)}});
+  el("previous-report-file").files=[file(differentSource)];
+  await listeners["previous-report-file:change"]();
+  assert.match(el("compare-result").textContent,/DIFFERENT source SHAs/);
+  assert.match(el("handoff-text").value,/STOP_DIFFERENT_SOURCE/);
+  const legacyPrevious = {...report};
+  delete legacyPrevious.image_identity;
+  el("previous-report-file").files=[file(JSON.stringify(legacyPrevious))];
+  await listeners["previous-report-file:change"]();
+  assert.match(el("compare-result").textContent,/lack a public source identity/);
+  el("previous-report-file").files=[file(JSON.stringify({
+    ...report,owner_authenticated:true,ssid:"SECRET-PRIVATE-WIFI"
+  }))];
+  await listeners["previous-report-file:change"]();
+  assert.match(el("previous-feedback").textContent,/Invalid earlier/);
+  assert.match(el("compare-result").textContent,/Choose an earlier/);
+  el("previous-report-file").files=[file(earlier)];
+  await listeners["previous-report-file:change"]();
+  el("expected-sha").value="f".repeat(40);
+  listeners["expected-sha:input"]();
+  assert.match(el("compare-result").textContent,/expected package source SHA/);
+  el("expected-sha").value=observedSha;
+  listeners["expected-sha:input"]();
+  assert.match(el("compare-result").textContent,/changed between/);
+  el("previous-report-file").files=[file(good)];
+  await listeners["previous-report-file:change"]();
+  assert.match(el("compare-result").textContent,/unchanged between/);
+  assert.match(el("handoff-text").value,/SAMPLED_USB_UNCHANGED/);
+  let resolveOldRead;
+  el("previous-report-file").files=[{size:earlier.length,
+    text:()=>new Promise(resolve=>{resolveOldRead=resolve;})}];
+  const pendingOld = listeners["previous-report-file:change"]();
+  listeners["clear:click"]();
+  resolveOldRead(earlier);
+  await pendingOld;
+  assert.match(el("compare-result").textContent,/Choose an earlier/);
+  assert.equal(el("previous-feedback").textContent,"No earlier report selected.");
+  assert.equal(el("handoff-text").value,"");
+  el("report-file").files=[file(good)];
+  await listeners["report-file:change"]();
+  el("manifest-file").files=[manifestFile(manifestRaw)];
+  await listeners["manifest-file:change"]();
   let seen = Object.values(nodes).map(e=>e.textContent).join("\n");
-  for(const privateText of ["SECRET-PRIVATE-PHONE","SECRET-PRIVATE-WIFI","DO-NOT-DISPLAY","AA:BB:CC"])
+  for(const privateText of ["SECRET-PRIVATE-PHONE","SECRET-PRIVATE-WIFI","DO-NOT-DISPLAY","AA:BB:CC"]) {
     assert.equal(seen.includes(privateText),false);
+    assert.equal(el("handoff-text").value.includes(privateText),false);
+  }
+  assert.ok(el("handoff-text").value.length < 2048);
+  // Actual viewer detects a transient USB loss hidden by final-only display.
+  const history = values => JSON.stringify({
+    ...report,snapshots:values.map((v,i)=>({
+      ...report.snapshots[1],usb_audio_detected:v,seconds_since_probe_start:i*30
+    }))
+  });
+  for (const [checks,want] of [
+    [[true],"1 · One USB check; no trend"],
+    [[true,true],"2 · USB reported in every sampled check"],
+    [[false,false],"2 · USB absent in all sampled checks"],
+    [[false,true],"2 · USB appeared after the first check"],
+    [[true,false],"2 · USB disappeared after detection"],
+    [[false,true,false],"3 · USB appeared and disappeared"],
+    [[true,false,true],"3 · USB appeared and disappeared"]
+  ]) {
+    el("report-file").files=[file(history(checks))];
+    await listeners["report-file:change"]();
+    assert.equal(el("snapshots-value").textContent,want);
+    assert.ok(!el("advice").textContent.includes("SECRET-PRIVATE-PHONE"));
+  }
+  el("report-file").files=[file(good)];
+  await listeners["report-file:change"]();
   // Real Pi4 report carries BOTH physical USB detection and direct link
   // status. A visible device alone must not be presented as a usable
   // route or audible speaker. No additional cards/buttons are needed.
@@ -170,6 +327,9 @@ const file = raw => ({size:Buffer.byteLength(raw,"utf8"),text:async()=>raw});
     assert.equal(document.documentElement.lang,language);
     assert.notEqual(el("pairing-value").textContent,"—");
     assert.notEqual(el("usb-value").textContent, "undefined");
+    assert.ok(el("snapshots-value").textContent.includes("2 · "));
+    assert.ok(!el("snapshots-value").textContent.includes("undefined"));
+    assert.ok(!el("compare-result").textContent.includes("undefined"));
   }
   // Malicious or unsupported files must clear stale rendered result.
   for(const [reason,bad] of [
@@ -186,6 +346,9 @@ const file = raw => ({size:Buffer.byteLength(raw,"utf8"),text:async()=>raw});
     ["huge direct count",withLast({usb_audio_route_ready:true,eq_usb_direct_links:999})],
     ["negative direct count",withLast({usb_audio_route_ready:true,eq_usb_direct_links:-1})],
     ["false Wi-Fi status", JSON.stringify({...report,phone_wifi_provisioned:true})],
+    ["forged identity", JSON.stringify({...report,image_identity:{status:"verified"}})],
+    ["invalid image SHA", JSON.stringify({...report,image_identity:{...report.image_identity,source_sha:"SECRET"}})],
+    ["extra identity data", JSON.stringify({...report,image_identity:{...report.image_identity,ssid:"SECRET-PRIVATE-WIFI"}})],
     ["oversized", "x".repeat(5000)]
   ]){
     el("report-file").files = [file(bad)];
@@ -198,12 +361,15 @@ const file = raw => ({size:Buffer.byteLength(raw,"utf8"),text:async()=>raw});
   const older = {...report};
   delete older.bluetooth_pairing_state;
   delete older.bluetooth_paired_devices;
+  delete older.image_identity;
   el("language").value = "en";
   listeners["language:change"]();
   el("report-file").files = [file(JSON.stringify(older))];
   await listeners["report-file:change"]();
   assert.equal(el("pairing-value").textContent,"Unavailable");
   assert.match(el("advice").textContent,/older report/);
+  assert.equal(el("identity-value").textContent,"Image identity unavailable");
+  assert.match(el("handoff-text").value,/SOURCE_UNAVAILABLE/);
   // A manual reset revokes a pending async selection, no ghost results.
   let resolveRead;
   el("report-file").files=[{size:good.length,text:()=>new Promise(r=>resolveRead=r)}];
@@ -213,6 +379,10 @@ const file = raw => ({size:Buffer.byteLength(raw,"utf8"),text:async()=>raw});
   await pending;
   assert.equal(el("pairing-value").textContent,"—");
   assert.equal(el("feedback").textContent,"No file opened.");
+  assert.equal(el("expected-sha").value,"");
+  assert.equal(el("manifest-feedback").textContent,"No manifest selected; manual SHA entry is available.");
+  assert.equal(el("previous-feedback").textContent,"No earlier report selected.");
+  assert.equal(el("handoff-text").value,"");
   console.log("offline SD viewer browser integration PASS");
 })().catch(error => { console.error(error); process.exitCode=1; });
 '''

@@ -1,94 +1,114 @@
-# Raspberry Pi 4 first-boot alpha test — isolated development only
+# Raspberry Pi 4 first-boot alpha test — isolated operator bench only
 
-**NOT A PRODUCT RELEASE.** This procedure is for an explicitly authorized
-operator using a physically isolated development bench, a disposable
-microSD and NO home/workplace network or real credentials. CI validates
-source and image packaging, **not** Pi boot, Edifier sound, secure device
-ownership or safe installation. Nothing in this guide grants release GO.
+**NOT A PRODUCT RELEASE.** These instructions describe a manually approved
+operator-only test of an explicitly identified Pi 4 development image. A
+successful source CI, image build or package audit does NOT demonstrate that
+a real Pi booted, the Edifier speaker produced sound, a secure operator login
+exists, or that redistribution/release has been approved.
 
-## Verified image snapshot — 6 November 2026
+## Choose one exact native build (avoid historical, expired previews)
 
-This deliberately pinned, independently verified ARM64 Pi4 preview is
-**Draft PR75**, for an expressly authorized isolated operator experiment
-only. Newer development previews exist; they are not automatically
-substitutes for this specific reference image. Verify ALL commit, test,
-artifact and checksum data again before any human decision to test.
+This is the **version-independent operator procedure**. Do not rely on
+previously pinned PR numbers, filenames, ZIP hashes or run IDs in an old
+copy of a test guide. For this development series, consult the current
+[Draft PR304 evidence](https://github.com/RIVANOXcom/rivanox-audiohub/pull/304)
+for its immutable source commit, native ARM64 run and actual uploaded
+test ZIP. Subsequent isolated source revisions need their **own** completed
+native build and artifact; an older ZIP is never proof of a newer commit.
 
-| Proof | Exact value |
-| --- | --- |
-| Development PR | [PR75](https://github.com/RIVANOXcom/rivanox-audiohub/pull/75), Draft and unmerged |
-| Source commit | `2b02bb4968467cd1033b47ddeaccaba092b96db0` |
-| Source checks | [GitHub Actions #42305591855](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42305591855), **709/709 PASS** |
-| Native ARM64 | [GitHub Actions #42305548510](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42305548510), **92/92** real installed-rootfs gates PASS |
-| Test-only artifact | [#13546207449](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42305548510/artifacts/13546207449) — `AUDIOHUB-ALPHA-UNVERIFIED-DO-NOT-DISTRIBUTE` |
-| ZIP SHA-256 (GitHub upload) | `b6bc5175fdee8f7c89aa0e041ec5521e7881ec2f1bd1d658156237434e1b9ad5` |
-| Compressed Pi image SHA-256 (CI manifest) | `7b1adf94685ffe2cdbe1e86e83e11839da0fcd814d78bca0818e362f24167c95` |
-| Artifact expiry (server reported) | 6 December 2026, 22:41 UTC |
-| Classification | `UNVERIFIED_ALPHA_TEST_ONLY`; `public_release_ready=false` |
+1. Open the chosen GitHub Actions **Build unverified Pi 4 image** run in
+   [repository Actions](https://github.com/RIVANOXcom/rivanox-audiohub/actions).
+   Require `completed / success` on the **exact intended source SHA**.
+   Record the source commit, run ID, Pi image filename and artifact ID.
+   Only select the `AUDIOHUB-ALPHA-UNVERIFIED-DO-NOT-DISTRIBUTE` artifact
+   belonging to this run. This is an expiring authenticated test attachment,
+   **not a GitHub Release**. Missing, expired or inaccessible: **STOP**.
+2. From GitHub's artifact details/API for that exact artifact, independently
+   record its reported **outer ZIP SHA256** and size. Save the ZIP on a
+   trusted local PC; confirm the downloaded ZIP SHA256 matches the provider
+   digest before extraction. On Windows use PowerShell:
+   `Get-FileHash -Algorithm SHA256 .\downloaded-artifact.zip`.
+   On Linux use `sha256sum downloaded-artifact.zip`; on macOS use
+   `shasum -a 256 downloaded-artifact.zip`. A missing reported digest
+   or mismatch means **STOP**. The GitHub-hosted digest itself is
+   **not** evidence that this procedure was run by a human operator.
+3. With Python 3, the exact matching repository source and a verified
+   downloaded ZIP, an offline audit can be run without flashing hardware:
+   `python3 scripts/release_bundle_audit.py --zip downloaded-artifact.zip
+   --expected-source-sha SOURCE_COMMIT_SHA
+   --expected-zip-sha256 PROVIDER_ZIP_SHA256`
+   (enter as one shell command with the actual recorded values).
+   The audit always reports `public_release_ready=false`; this is expected.
+   Where Python/tools are unavailable, do the following manual checks
+   rather than claiming the audit ran.
+4. Extract the ZIP **only after outer digest verification**. The current
+   five-file preview bundle must contain exactly one `*.img.xz`,
+   `SHA256SUMS.txt`, `PREVIEW-MANIFEST.json`, `ROOTFS-PACKAGES.json`,
+   and `AUDIOHUB-OFFLINE-REPORT-VIEWER.html`. Check
+   `PREVIEW-MANIFEST.json` binds the intended `source_sha`, native run ID,
+   image SHA256 and exact offline viewer size/SHA256. Compare the image
+   against `SHA256SUMS.txt` (`sha256sum -c SHA256SUMS.txt` when available)
+   and `xz --test <image-filename>.img.xz` when available. Confirm the
+   viewer SHA256 from the **same ZIP**. Refuse inconsistent filenames,
+   missing files, image digest mismatch, corrupt XZ or stale manifest.
+   Older four-file previews have no bundled viewer and are not equivalent
+   to the new operator test bundle.
 
-CI also reported `sha256sum -c` success, `xz --test` success, manifest provenance
-verification and `bundle_integrity=passed`. These are **CI readbacks**,
-not independent checks of any ZIP downloaded to the operator's computer.
-The repository Releases tab does **not** contain this artifact.
+## Three-step isolated bench test — operator authorization required
 
-### Retrieve and verify the exact test ZIP — operator only
+**Before any flashing, agree on a safe shutdown method.** The preview image
+does not expose an approved/default local operator password and has SSH
+disabled. The secure first-login/ownership flow is owned separately by
+AH-005 / PAPA-5B2E6939 (Workbench #3427). Do not guess credentials, enable
+autologin or SSH, enable a trusted LAN, bypass pairing authorization, or
+assume that unplugging a running Pi safely unmounts the SD filesystem.
+If a separately approved safe way to power down the isolated test device
+does not exist, **do not begin the physical flash/boot test**; coordinate
+the bounded operator access/shutdown procedure with that mission.
 
-1. Sign in to GitHub with access to this repo. Open the exact
-   [ARM64 job #42305548510](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42305548510)
-   and download **artifact #13546207449** under **Artifacts**. Do not
-   take an old or similarly named ZIP from another build. If it expired
-   or the account cannot access it, record **NOT AVAILABLE** and stop.
-2. Compare the locally downloaded **ZIP** SHA-256 with
-   `b6bc5175fdee8f7c89aa0e041ec5521e7881ec2f1bd1d658156237434e1b9ad5`.
-   Windows PowerShell: `Get-FileHash -Algorithm SHA256 .\downloaded-artifact.zip`.
-   Linux/macOS with the required tools: `sha256sum downloaded-artifact.zip`.
-   Stop on any mismatch.
-3. Extract the ZIP locally. Confirm it contains precisely one compressed
-   `*.img.xz` image and the expected `SHA256SUMS.txt`,
-   `PREVIEW-MANIFEST.json` and `ROOTFS-PACKAGES.json`.
-   Check the manifest source commit matches the exact PR75 SHA above,
-   and its native image-build run ID is #42305548510.
-4. Check the image digest against the **manifest, SHA256SUMS.txt and**
-   `7b1adf94685ffe2cdbe1e86e83e11839da0fcd814d78bca0818e362f24167c95`.
-   Linux: run `sha256sum -c SHA256SUMS.txt` in the extracted directory.
-   Windows: `Get-FileHash -Algorithm SHA256 .\image_2026-11-06-AudioHub-Pi4-UNVERIFIED.img.xz`.
-   If available, run `xz --test image_2026-11-06-AudioHub-Pi4-UNVERIFIED.img.xz`.
-   Any mismatch or corrupt XZ means **STOP**.
-5. Only after these checks and a specific operator decision for an
-   **isolated experiment**, use Raspberry Pi Imager **Use custom** with
-   the `.img.xz` image and a **spare** card of at least 16 GB,
-   preferably 32 GB. Flashing **erases the selected storage**.
-   This document is not approval to flash, deploy or install anything.
-   Do not substitute production cards or connect trusted systems.
+1. **Prepare without losing data.** Confirm explicit operator permission
+   for the exact source SHA/image hash, a disposable microSD (at least
+   16 GB; 32 GB recommended), intended Raspberry Pi 4, suitable power
+   and Edifier R600USB over USB. Preserve the original SD untouched and
+   independently preserve all owned WAV/EQ as well as unsupported
+   MP3/FLAC/other files; do not interpret a partial WAV backup as a full
+   SD migration. Manually flash **only the spare card** using Raspberry Pi
+   Imager 'Use custom'. Flashing erases the selected storage.
+2. **Observe the actual device on an isolated bench.** With no Ethernet,
+   home Wi-Fi credentials, SSH, shared passwords or trusted network,
+   boot the Pi/Edifier at low initial volume. Note visible boot indications
+   and whether the test Bluetooth sender pairs or real sound is heard;
+   silence is not evidence of success. The one-time FAT boot diagnostic
+   samples for about ten minutes; it does not certify sound, secure
+   ownership, complete routing or continuously stable USB. Audio testing
+   requiring a local privileged console must await AH-005 authorized
+   access. The optional unauthenticated Windows LAN sender requires a
+   **separate** isolated-LAN authorization and is disabled by default.
+3. **Safely power down, then inspect locally.** Use only the approved
+   shutdown procedure. After the Pi is completely off, read
+   `AUDIOHUB-TEST-REPORT.json` from the *spare SD boot partition* on a
+   trusted PC. Open the same ZIP's offline
+   `AUDIOHUB-OFFLINE-REPORT-VIEWER.html` file and manually select the
+   report in the local picker. Compare last reported direct USB route
+   with **sampled USB-presence history** (late detection, disappearance,
+   intermittent observation). Instead of manually transcribing 40
+   hexadecimal digits, the same bundled offline HTML viewer can now
+   open the small `PREVIEW-MANIFEST.json` from the SAME independently
+   SHA256-verified ZIP and populate the expected source SHA locally.
+   It validates the expected test-only schema and never sends the
+   manifest, but it does NOT independently verify package integrity or
+   authenticate the SD report. Manual SHA entry remains an alternative. A USB route reported in JSON is NOT
+   a human stereo or actual-audibility test. The report is unsigned and
+   mutable; never upload its raw contents or share identifiers.
+   The **unmodified original SD** is the rollback option after shutdown.
 
-### Isolated physical first-boot protocol
-
-- Use the intended **Raspberry Pi 4**, suitable power, Edifier R600USB
-  over USB, and a test-only Bluetooth sender at **low initial volume**.
-  Disable Ethernet and do **not** provision WLAN, SSH, real passwords,
-  administrative credentials, shared networks, firewalls or services.
-- Power the Pi with the disposable image and observe boot indicators.
-  The tentative initial Bluetooth discovery/pairing window is about
-  ten minutes in the source; this has **not** been proven on a real Pi.
-  Record whether a Bluetooth device is actually discovered and pairs.
-- Record whether music is genuinely **audible** on the USB Edifier, not
-  merely present in PipeWire graph metadata. If no audio is heard,
-  do not infer a working path from process or status output.
-- Observe reboot and reconnection separately. A FAT partition
-  `AUDIOHUB-TEST-REPORT.json` may exist; it is unsigned and mutable
-  and is **not physical acceptance**. Never disclose MACs, IPs, SSIDs,
-  device IDs or private credentials in uploaded evidence.
-- The optional Windows Scream LAN receiver remains **unauthenticated,
-  disabled by default and IP-spoofable**. The three-source experiment
-  in [THREE-SOURCE-LAB-ACCEPTANCE.md](THREE-SOURCE-LAB-ACCEPTANCE.md)
-  requires a *separately authorized isolated test LAN*, manual
-  `--unsafe-lan-test` and a permitted Windows sender. Do not expose
-  it to a trusted/home/public network or enable it automatically.
-- Two independent Bluetooth streams, three-source mix and EQ isolation,
-  clipped waveform measurement, USB hotplug and true 24-hour endurance
-  have **NOT** been verified, irrespective of CI status. Do not claim a
-  physical result without a real operator test and evidence.
-
+Capture the selected image SHA, ZIP SHA, source SHA, native run ID,
+actual Pi/Edifier observations, powerdown method, and result as
+PASS/FAIL/NOT TESTED, redacting private details. Do not claim S3 on CI
+or a synthetic browser report. Reboot/reconnection, two simultaneous
+Bluetooth sources, a third LAN source, independent EQ, USB hotplug and
+24-hour endurance are *separate physical tests* requiring explicit
+permission. See [three-source test protocol](THREE-SOURCE-LAB-ACCEPTANCE.md).
 ## Blank bench evidence form (not yet executed)
 
 Every result starts as **NOT TESTED**. An operator must explicitly observe
@@ -132,7 +152,44 @@ as signed physical acceptance.
   Windows sender security and operator/CEO release authorization remain
   unverified.
 
-Neither this test-only image nor this guide is installable release
-evidence. No public release, no automated deployment, no merge or GO.
+Neither this operator-only test image nor this procedure proves an approved
+installable **production** release. No public release, automated deployment,
+merge, or GO without complete hardware, ownership, licensing and operator
+signoff.
 Tracking: PAPA `PJ2611-0001:R001`, AH-001 #3267, AH-002 #3268,
 AH-006 #3272, AH-009 #3275.
+
+## Optional earlier-vs-later boot comparison (not a request to restart)
+
+After **authorized safe shutdown**, an operator may privately copy the
+FAT AUDIOHUB-TEST-REPORT.json to their trusted PC. The Pi overwrites the
+report on its next boot, so save any earlier copy *before* a separately
+authorized later run. Do not reboot merely to generate a comparison.
+
+The same offline HTML viewer accepts an earlier saved report in a second
+file picker alongside the current report and exact verified-ZIP manifest.
+It strictly sanitizes both reports, shows only anonymous USB direct-link
+and sampled USB-presence before/after findings, and refuses comparisons
+when the public source SHA differs, is missing or conflicts with the
+expected package SHA. No network, persistence, credentials or Pi writes.
+Both reports are unsigned/mutable observations, never proof of continuous
+or audible Edifier sound or automatic S3 acceptance.
+
+## Sanitized operator evidence handoff (read-only, no upload)
+
+The same verified ZIP's offline HTML viewer now includes a readonly
+English canonical evidence note for PAPA/Workbench. After opening a
+valid local FAT report, it contains only whitelisted public source SHA,
+fixed USB/Bluetooth/runtime enums and anonymous counts, plus the
+source-compatible earlier-report comparison status. No raw JSON,
+MAC/IP/SSID/device names, credentials, WAV filenames or arbitrary
+imported strings enter the note.
+
+On a trusted PC, the operator should review and manually select/copy
+this readonly text into an approved test record. The viewer has no
+automatic clipboard action, file export, network upload or persistence.
+Actual physical Pi4 boot, L/R/BOTH audible Edifier sound, authorized
+safe shutdown and independent ZIP/IMG checksum checks remain marked
+NOT VERIFIED BY VIEWER. This note never grants S3, owner or release
+approval, and real observations/authorization must be documented
+separately. Do not share unredacted FAT files.

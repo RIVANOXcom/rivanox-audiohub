@@ -84,7 +84,7 @@ audiohub-music /absolute/private/music-folder --library-health
 
 This is a **silent, offline, read-only** operation as the existing
 unprivileged `audiohub` user. It counts bounded *recognized* media
-in the chosen folder (at most 256 directory entries): valid PCM16
+in the chosen folder (at most 256 directory entries): valid PCM16/24
 WAVs, incompatible WAV encoding/channel/rate/duration, damaged or
 inaccessible WAV headers, symlinks/unsafe WAV entries, hidden WAVs,
 recognizable but unsupported audio extensions (such as MP3/FLAC),
@@ -99,8 +99,14 @@ if more than 40 compatible WAVs exist, select a smaller private folder
 first rather than silently omitting tracks. A new SD with **zero** private
 WAVs is a normal initial state. If media encoding is incompatible, use
 your own or licensed original files on your *own computer* to export
-uncompressed 16-bit PCM mono/stereo WAV at 8–96 kHz, at most 64 MiB
-each. No converter is installed or run by the Pi health check.
+uncompressed 16- or 24-bit PCM mono/stereo WAV at 8–96 kHz, at most 64 MiB
+each. No converter is installed or run by the Pi health check. The
+separately packaged Windows operator ALPHA now includes an **optional,
+explicitly confirmed PC-only MP3/FLAC-to-PCM16 WAV preparation helper**;
+see `README-OFFLINE-WAV-PREP.md` in the source-SHA-matched Windows ZIP.
+It requires an existing, independently installed FFmpeg on the trusted PC,
+never installs a codec on Pi, never changes source media, and refuses
+existing WAV target names. Complete SD/media backup remains separate.
 A broken WAV should be re-exported; a symlink, world-writable or
 oversized WAV is intentionally refused. **Do not weaken file permissions
 to bypass a safety check.**
@@ -143,7 +149,7 @@ and distinct exact `PLAY` confirmation; there is no autoplay.
 On an **operator-authorized isolated Pi4** with its existing per-user
 PipeWire graph running, place **your own** valid WAV tracks in a readable
 operator-approved local folder (for example mounted read-only media).
-Supported tracks: uncompressed 16-bit PCM, mono or stereo, sample rate
+Supported tracks: uncompressed 16- or 24-bit PCM, mono or stereo, sample rate
 8–96 kHz, individually at most 64 MiB. A manual queue supports up to
 8 files, max 30 minutes, 15-minute default. No outside URLs or
 filenames are shipped in the image.
@@ -204,6 +210,23 @@ Production release still requires Pi4/Edifier bench acceptance,
 source-rights and nine rootfs copyright notice reviews, secure
 phone ownership onboarding, long-term package archival, and
 explicit operator/CEO release authorization.
+
+## Local 24-bit PCM WAV music without conversion of original media
+
+The bounded local album player now accepts **uncompressed integer PCM
+24-bit WAV** alongside PCM16, mono or stereo at 8–96 kHz. Input files
+must still be regular, non-world-writable, unlinked, no more than 64 MiB
+and within the existing 30-minute limit. The original private WAV stays
+byte-for-byte untouched. In playback only, each bounded RAM chunk is
+reduced from signed 24-bit to 16-bit PCM by dropping the low eight bits
+and sent to the existing private `pw-cat --format=s16` music sink.
+This is **not bit-perfect 24-bit output** or calibrated audio quality.
+LEFT/RIGHT isolation is applied after downconversion so the opposite
+speaker channel remains silent. This adds no codecs or network calls.
+PCM32, float/companded WAV, MP3 and FLAC are not made directly playable;
+export unsupported media offline on a trusted computer. All existing
+explicit PLAY, low starting gain, actual USB route checks, manual
+operator permission, safe power-off and rollback rules still apply.
 
 ## First boot with an empty private WAV folder
 
@@ -336,6 +359,8 @@ During playback, type a command and press **Enter**:
 | Command | Action |
 |---|---|
 | `u` + Enter | Pause or resume only this music session's owned player; session time limit keeps running |
+| `t1`, `t5`, `t10` + Enter | Set a **local sleep timer** for 1, 5 or 10 wall-clock minutes from now, even when paused. Stop only the owned player, before any next/repeated/queued WAV; never extend the original session limit |
+| `t0` + Enter | Cancel only the optional sleep timer, leaving the original session deadline and audio route unchanged |
 | `s` + Enter | Show current track number, elapsed session time, remaining session limit **and** a separate pause-aware approximate elapsed/remaining time for this WAV (no filenames or identifiers) |
 | `l` + Enter | Show anonymous selected queue order and planned WAV lengths (not live playback progress) |
 | `k1`–`k8` + Enter | Queue that **already selected numbered WAV** to play once **after the current track naturally finishes**, without cutting or restarting current audio |
@@ -354,6 +379,22 @@ During playback, type a command and press **Enter**:
 | `q` + Enter | **Stop immediately**; terminate only the current owned player and exit |
 | `h` + Enter | Repeat the short help text |
 | Ctrl+C | Emergency local interruption; owned child stopped in cleanup |
+
+**Opt-in local sleep timer:** While an already explicitly authorized
+`--play --interactive` private WAV is running, enter `t5` then Enter
+to stop the whole current music session within five wall-clock minutes.
+`t1` and `t10` offer one/ten minute alternatives. The timer counts
+while paused, during repeat, and across queued songs. `s` shows the
+earlier of this timer and the immutable original session deadline;
+`l` shows timer state. Rescheduling never extends the original session
+maximum (1–30 min). `t0` cancels only the optional timer. Expiry
+terminates only the existing locally owned player, including a
+paused one, and refuses any next, repeat or queued WAV. Nothing is
+scheduled after the terminal session, and there are no network
+listeners, background services, persistent settings, system power
+operations or speaker loudness changes. This is NOT a Raspberry Pi
+shutdown mechanism and does NOT bypass the separate AH-005 safe
+powerdown prerequisite. `q` still stops immediately.
 
 **Queue a different WAV after the current one finishes:** while playing,
 `l` first shows the anonymous 1–8 track numbers. Enter e.g. `k3` to
@@ -591,7 +632,7 @@ After separately approving and flashing the **unverified** ARM64 test
 image to a spare SD card, sign in at a physically trusted Pi4 terminal
 as the existing **unprivileged `audiohub` user**. The new image ships an
 empty, private 0700 folder at `/home/audiohub/PrivateMusic` for the
-operator's own legally playable PCM16 WAV files. Import files into this
+operator's own legally playable PCM16/24 WAV files. Import files into this
 folder through an already-authorized local/manual process. No Wi-Fi,
 SSH, phone owner-claim or media synchronization is enabled by this feature.
 
@@ -685,7 +726,7 @@ audiohub-music-transfer backup /absolute/private/external-folder
 
 The CLI previews a count and total size without filenames and writes
 nothing until you type **exactly `COPY`** on its separate prompt.
-It handles up to 40 valid PCM16 WAV files and at most 512 MiB. It
+It handles up to 40 valid PCM16/24 WAV files and at most 512 MiB. It
 refuses unsafe/unsupported WAVs, symbolic links, hardlinked source
 files, permission problems, insufficient space, collisions and files
 changed during copying. The tool does **not** copy non-WAV items,

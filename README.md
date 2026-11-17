@@ -151,26 +151,48 @@ No display, keyboard, SSH session, shell commands, or Linux administration shoul
 
 > ⚠️ **Alpha development – no verified, ready-to-flash SD image has been published yet.** Source snapshots and preview builds are **not stable releases**. Do not assume they are suitable for an unattended device.
 
-The **latest CI-validated experimental Pi4 image** is from
-[Draft PR #30](https://github.com/RIVANOXcom/rivanox-audiohub/pull/30),
-commit `8ab26da637604723e4c29f114cc93a478e0d02f0`:
+**Current operator-only Pi4 test image (S2, not a public Release):**
+use the [active Draft PR304 exact-HEAD operator evidence](https://github.com/RIVANOXcom/rivanox-audiohub/pull/304).
+Its first section records the **latest completed native ARM64 run, uploaded
+Actions artifact, unexpired download URL, matching source SHA, provider ZIP
+SHA256 and compressed IMG.XZ SHA256**. Never copy a ZIP SHA from an older PR
+or mistake a source-only edit for a matching built image. GitHub sign-in may
+be needed. If the PR does not show a completed/successful **native run on
+the exact source SHA**, or its artifact has expired, **STOP** rather than
+download a historical image. Unmerged Draft PR code is not the released
+public main branch.
 
-**[Download temporary Pi4 Alpha Test ZIP (Actions artifact #13443339137)](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42086909475/artifacts/13443339137)**
+The internally downloadable **five-file** S2 test ZIP contains one
+`image_*-AudioHub-Pi4-UNVERIFIED.img.xz`, `SHA256SUMS.txt`,
+`PREVIEW-MANIFEST.json`, `ROOTFS-PACKAGES.json`, and the local offline
+`AUDIOHUB-OFFLINE-REPORT-VIEWER.html`. An older four-file ZIP lacks the
+viewer and is not equivalent to the active test package. The exact version
+and both hashes must come from the same GitHub Actions build.
 
-- [Source CI 42086920486](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42086920486): **226 Python tests passed**.
-- [Native ARM64 image CI 42086909475](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42086909475): **SUCCESS**, **55/55 real rootfs checks**, image SHA256 / XZ integrity and preview provenance verified.
-- ZIP size 606,222,225 bytes. **Expires 5 December 2026**.
-  GitHub sign-in may be required for Actions artifacts, even though the
-  source repository is public. Extract the ZIP for the `.img.xz`,
-  `SHA256SUMS.txt` and `PREVIEW-MANIFEST.json`.
-- **Not a GitHub Release and not hardware certified.** Flash only to a
-  spare microSD and use an isolated test bench. No secure phone-first
-  ownership or Wi-Fi provisioning yet. The manually gated Windows UDP
-  input is **untrusted**, disabled by default. Do not connect it to a
-  trusted LAN.
-- [How to test the Pi safely](./docs/FIRST-PI-ALPHA-TEST.md) ·
-  [Offline integrity preflight](./docs/RELEASE-DISTRIBUTION.md) ·
-  [Observed PipeWire links and diagnostics](./docs/PIPEWIRE-LINK-OBSERVABILITY.md).
+**Three operator-only steps — all require explicit bench permission:**
+
+1. **Verify and protect existing data:** on a trusted PC download the
+   authenticated exact-run ZIP; independently hash the actual ZIP and
+   contained IMG.XZ and verify XZ, manifest source, viewer SHA and package
+   inventory using the [offline ZIP audit](./docs/RELEASE-DISTRIBUTION.md).
+   Preserve the untouched original SD and separately back up **all** owned
+   WAV, EQ, MP3, FLAC and other files; WAV-only transfer is not complete
+   SD migration. Agree on a safe shutdown method **before** any physical
+   Pi test, coordinating separately owned AH-005 access. Without one STOP.
+2. **Test only an approved spare SD:** write the verified IMG.XZ to a
+   disposable spare microSD (never the original). Test an isolated Pi 4
+   with Edifier R600USB at a low physical speaker volume and **no trusted
+   LAN/Wi-Fi, shared password or insecure SSH**. Real audible left/right
+   sound has to be judged by a human; CI or an SD report cannot prove it.
+3. **Safely inspect and roll back:** after the approved safe power-down,
+   open the spare SD boot-partition `AUDIOHUB-TEST-REPORT.json` and the
+   exact same ZIP's `PREVIEW-MANIFEST.json` using its offline HTML viewer.
+   You may manually copy a sanitized, clearly *unverified* observation
+   note. Reuse the unchanged original SD for rollback. No automatic SD
+   migration, ownership setup or public-release approval is implied.
+
+See the [Pi4 operator runbook](./docs/FIRST-PI-ALPHA-TEST.md) and
+[release/distribution gate](./docs/RELEASE-DISTRIBUTION.md).
 
 Once hardware tests and security acceptance are complete, download images from:
 

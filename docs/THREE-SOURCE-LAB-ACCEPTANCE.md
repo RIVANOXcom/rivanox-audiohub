@@ -16,35 +16,54 @@ plus Edifier R600USB speaker tests. No official release or claim of a
 working three-source appliance exists.
 
 
-## Verified image selection for this lab plan
+## Exact-image selection for this lab plan
 
-Before physical tests, follow the
-[isolated first-boot guide](FIRST-PI-ALPHA-TEST.md) and verify **the exact**
-Draft PR75 source `2b02bb4968467cd1033b47ddeaccaba092b96db0` and the independent
-[ARM64 run #42305548510](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42305548510)
-with **92/92** rootfs gates. Its only proven non-release test image is
-[artifact #13546207449](https://github.com/RIVANOXcom/rivanox-audiohub/actions/runs/42305548510/artifacts/13546207449),
-image SHA256 `7b1adf94685ffe2cdbe1e86e83e11839da0fcd814d78bca0818e362f24167c95`.
-Check ZIP, manifest and image locally; do not reuse older PRs or assume that
-a later Source CI run proves a corresponding image. Physical test result:
-**NOT TESTED** until an operator observes it. The Windows LAN test is
-still OFF by default and requires an isolated manual opt-in.
+This laboratory plan is **not** an image approval or a pinned download.
+Before any physical test, use the
+[version-independent first-boot operator guide](FIRST-PI-ALPHA-TEST.md)
+to identify ONE exact source SHA, successful native ARM64 run ID and
+same-SHA, non-expired authenticated five-file ZIP. [Draft PR304](https://github.com/RIVANOXcom/rivanox-audiohub/pull/304)
+records a current operator-only S2 series; all hashes and run IDs must be
+read from that exact completed run and provider artifact, then independently
+verified on the operator PC. The older PR75/2026-11-06 ZIP is a historical
+snapshot, **not** the currently selected operator download. Never combine
+new source code with a different image hash or assume successful Source CI
+implies a native image. Check the outer ZIP SHA256, inner IMG.XZ SHA256,
+`PREVIEW-MANIFEST.json` source/run binding, and the offline HTML viewer
+SHA256 against that manifest. Without a verified corresponding upload,
+classification remains SOURCE_ONLY for the new commit and the physical test
+must not proceed.
+
+The safe power-down procedure must be agreed **before** any physical Pi
+start. The preview does NOT provide an approved operator password or SSH;
+an AH-005 owner-approved secure local access and shutdown method is a
+separate mission (Workbench #3427). **Do not start the hardware test**
+without that procedure; do not cut power to a writing microSD by assumption.
+The Windows LAN test stays **OFF** until independently authorized in an
+isolated bench, and **NOT TESTED** until observed by a human.
 
 ## Test 1: no-network flash/boot baseline (operator)
 
-1. Download a **specific** proven GitHub Actions image ZIP for the
-   integration branch, sign in if asked, verify the image SHA256 against
-   the accompanying `SHA256SUMS.txt`, then flash the `.img.xz` to a
-   **spare** SD using Raspberry Pi Imager **Use custom**. This erases
-   the selected SD; do not overwrite personal storage.
+1. After explicit authorization and safe-shutdown agreement, download
+   the exact native GitHub Actions ZIP for the intended source SHA.
+   Independently check the provider outer ZIP digest, image SHA256 via
+   `SHA256SUMS.txt`, five-file manifest and viewer SHA256. Preserve the
+   untouched original SD and privately back up WAV/EQ **and** owned
+   MP3/FLAC/other unsupported audio; a WAV-only backup is NOT complete.
+   Flash the `.img.xz` **only to a spare SD** using Raspberry Pi Imager
+   **Use custom**. This erases the selected SD.
 2. With no Ethernet or provisioned WLAN, connect Edifier R600USB by USB
    and power on the Pi4. Discover/pair phone `AudioHub` via Bluetooth
    during the first pairing window. Start quiet test music; note whether
    any real sound comes from Edifier.
-3. Keep the device running for 10 minutes, power off fully, remove SD,
-   and read `AUDIOHUB-TEST-REPORT.json` from the FAT boot partition.
-   The report contains bounded aggregate metrics only and is mutable,
-   not signed or acceptance proof.
+3. Keep the device running for around 10 minutes, then use ONLY the
+   previously approved safe shutdown procedure. After complete shutdown,
+   remove the spare SD. On a trusted PC open the HTML viewer from the
+   **same validated ZIP** and select `AUDIOHUB-TEST-REPORT.json` from
+   its FAT boot partition; compare current direct-USB route with sampled
+   USB-presence history. The bounded unsigned report is NOT evidence of
+   actual audible sound or physical acceptance. The original SD remains
+   untouched for rollback.
 4. Record actual device model, yes/no for pair and audible output,
    USB present/ready, audio route counts and any failure counters.
    **No report** means missing evidence, not necessarily a failed boot.

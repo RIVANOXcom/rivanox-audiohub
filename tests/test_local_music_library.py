@@ -703,12 +703,18 @@ class LocalMusicLibraryTests(unittest.TestCase):
 
     def test_offline_library_health_counts_exact_reasons_without_private_names(self):
         # Normal valid tracks already in setUp.
-        unsupported = self.root / "secret-24bit.wav"
-        with wave.open(str(unsupported), "wb") as track:
+        playable_24 = self.root / "secret-24bit.wav"
+        with wave.open(str(playable_24), "wb") as track:
             track.setnchannels(2)
             track.setsampwidth(3)
             track.setframerate(48000)
             track.writeframes(b"\x01\x02\x03\x04\x05\x06" * 30)
+        unsupported = self.root / "secret-32bit.wav"
+        with wave.open(str(unsupported), "wb") as track:
+            track.setnchannels(2)
+            track.setsampwidth(4)
+            track.setframerate(48000)
+            track.writeframes(b"\x01\x02\x03\x04\x05\x06\x07\x08" * 30)
         (self.root / "private-damaged.wav").write_bytes(b"bad RIFF data" + b"x" * 80)
         (self.root / "secret-link.wav").symlink_to(self.a)
         unsafe = self.root / "private-world-write.wav"
@@ -720,7 +726,7 @@ class LocalMusicLibraryTests(unittest.TestCase):
         if hasattr(os, "mkfifo"):
             os.mkfifo(self.root / "named-pipe.wav")
         counts = music_library.inspect_library_health(self.root)
-        self.assertEqual(counts["supported_wav"], 2)
+        self.assertEqual(counts["supported_wav"], 3)
         self.assertEqual(counts["unsupported_pcm_wav"], 1)
         self.assertEqual(counts["damaged_or_unreadable_wav"], 1)
         self.assertEqual(counts["unsafe_wav"], 3 if hasattr(os, "mkfifo") else 2)
@@ -728,7 +734,7 @@ class LocalMusicLibraryTests(unittest.TestCase):
         self.assertEqual(counts["other_audio_format"], 1)
         self.assertEqual(counts["other_entries"], 1)
         output = music_library.display_library_health(counts)
-        for label in ("OFFLINE MUSIC LIBRARY HEALTH", "Supported PCM16 WAVs: 2",
+        for label in ("OFFLINE MUSIC LIBRARY HEALTH", "Supported PCM16/24 WAVs: 3",
                       "Unsupported WAV sample/channel/rate/duration: 1",
                       "Other recognized audio formats (not playable here): 1",
                       "convert OFFLINE", "No playback", "UNVERIFIED"):
@@ -802,7 +808,7 @@ class LocalMusicLibraryTests(unittest.TestCase):
                 "--library-health", "--library", str(self.root)]), 0)
         rendered = "\n".join(
             " ".join(map(str, x.args)) for x in output.call_args_list)
-        self.assertIn("Supported PCM16 WAVs: 2", rendered)
+        self.assertIn("Supported PCM16/24 WAVs: 2", rendered)
         self.assertNotIn(str(self.root), rendered)
         self.assertNotIn(self.a.name, rendered)
         self.assertNotIn(self.b.name, rendered)

@@ -22,7 +22,10 @@ SCHEMA = "rivanox-audiohub-windows-portable-alpha/1"
 CLASSIFICATION = "UNVERIFIED_ALPHA_TEST_ONLY"
 FILES = (
     ("scripts/START-WINDOWS-BRIDGE.py", "START-WINDOWS-BRIDGE.py"),
+    ("scripts/START-OFFLINE-WAV-PREP.py", "START-OFFLINE-WAV-PREP.py"),
+    ("scripts/OPEN-AUDIOHUB-MUSIC-PREP.cmd", "OPEN-AUDIOHUB-MUSIC-PREP.cmd"),
     ("src/audiohub/__init__.py", "audiohub/__init__.py"),
+    ("src/audiohub/offline_wav_prep.py", "audiohub/offline_wav_prep.py"),
     ("src/audiohub/secure_lan.py", "audiohub/secure_lan.py"),
     ("src/audiohub/windows_bridge_setup.py", "audiohub/windows_bridge_setup.py"),
     ("src/audiohub/windows_bridge_gui.py", "audiohub/windows_bridge_gui.py"),
@@ -32,6 +35,7 @@ FILES = (
     ("src/audiohub/key_rotation.py", "audiohub/key_rotation.py"),
     ("web/boot-report-viewer.html", "AUDIOHUB-BOOT-REPORT-VIEWER.html"),
     ("docs/WINDOWS-PORTABLE-ALPHA.md", "README-WINDOWS-FIRST.md"),
+    ("docs/OFFLINE-WAV-PREP.md", "README-OFFLINE-WAV-PREP.md"),
     ("docs/SECURE-WINDOWS-LAN-LAB.md", "README-ISOLATED-LAB.md"),
     ("LICENSE", "LICENSE"),
     ("THIRD_PARTY_NOTICES.md", "THIRD_PARTY_NOTICES.md"),
@@ -65,6 +69,10 @@ def _source_data(root, rel):
     if b"\r" in data:
         raise ValueError("Unexpected carriage return in text package input")
     data.decode("utf-8")
+    if rel.lower().endswith(".cmd"):
+        # Native Windows cmd.exe is safest with CRLF, but archive bytes must
+        # remain byte-identical on Linux/Windows regardless of Git checkout.
+        data = data.replace(b"\n", b"\r\n")
     return data
 
 
@@ -130,6 +138,14 @@ def build(root, directory, sha):
         "offline_sd_viewer_no_network_and_no_approval": True,
         "local_operator_observation_json": True,
         "manual_observation_not_hardware_approval": True,
+        "optional_offline_pcm16_media_prep": True,
+        "offline_media_prep_local_file_picker": True,
+        "offline_media_prep_double_click_local_launcher": True,
+        "offline_media_prep_dependency_check_no_install": True,
+        "offline_media_prep_preview_before_gui_export": True,
+        "external_ffmpeg_required_for_prep": True,
+        "ffmpeg_included": False,
+        "original_music_overwrite_permitted": False,
         "windows_scream_driver_required_for_soundcheck": False,
         "source_files": inventory,
     }
