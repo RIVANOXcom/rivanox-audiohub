@@ -48,6 +48,10 @@ local PCM16 stereo 48-kHz WAV file and prints SHA256 without FFmpeg, writes,
 Pi access or sound playback. Terminal alternative: `py -3
 START-OFFLINE-WAV-PREP.py --verify-wav "C:\\Private\\Prepared\\song.wav"`.
 It is a local file-format/integrity check, not a Pi/Edifier sound approval.
+The same portable GUI now also checks an entire local folder of 1-40
+prepared WAV files using **4. Check WAV folder (read-only)**, including a
+collection content SHA256 without private names or any write. Terminal:
+`py -3 START-OFFLINE-WAV-PREP.py --verify-folder "C:\\Private\\Prepared"`.
 See `docs/OFFLINE-WAV-PREP.md` for constraints.
 
 ## Offline certificate cross-check (recommended before any audio test)

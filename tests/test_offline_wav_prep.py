@@ -246,6 +246,65 @@ class OfflineWavPreparationTests(unittest.TestCase):
                 prep.main(["--verify-wav", str(self.destination), "--convert"])
         self.assertEqual(self.destination.read_bytes(), complete)
 
+
+    def test_local_wav_folder_checks_multiple_owned_tracks_without_writes(self):
+        originals = {}
+        for name in ("private-song-b.wav", "private-song-a.wav"):
+            path = self.root / name
+            with wave.open(str(path), "wb") as writer:
+                writer.setnchannels(2)
+                writer.setsampwidth(2)
+                writer.setframerate(48000)
+                writer.writeframes(self.pcm)
+            originals[name] = path.read_bytes()
+        output = io.StringIO()
+        with mock.patch.object(prep.subprocess, "Popen") as decoder, \
+             contextlib.redirect_stdout(output):
+            self.assertEqual(prep.main(["--verify-folder", str(self.root)]), 0)
+            first = prep.verify_local_wav_folder(self.root)
+            self.assertEqual(first, prep.verify_local_wav_folder(self.root))
+            decoder.assert_not_called()
+        self.assertEqual(first["files"], 2)
+        self.assertEqual(first["bytes"], sum(map(len, originals.values())))
+        self.assertIn(first["collection_sha256"], output.getvalue())
+        self.assertNotIn("private-song", output.getvalue())
+        self.assertNotIn(str(self.root), output.getvalue())
+        for name, before in originals.items():
+            self.assertEqual((self.root / name).read_bytes(), before)
+
+    def test_local_wav_folder_rejects_corrupt_links_empty_and_excess(self):
+        with self.assertRaises(ValueError):
+            prep.verify_local_wav_folder(self.root)
+        bad = self.root / "private-bad.wav"
+        bad.write_bytes(b"not-a-wav")
+        with self.assertRaises(ValueError):
+            prep.verify_local_wav_folder(self.root)
+        with contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(prep.main(["--verify-folder", str(self.root)]), 2)
+            with self.assertRaises(SystemExit):
+                prep.main(["--verify-folder", str(self.root), "--convert"])
+        bad.unlink()
+        good = self.root / "valid.wav"
+        with wave.open(str(good), "wb") as writer:
+            writer.setnchannels(2)
+            writer.setsampwidth(2)
+            writer.setframerate(48000)
+            writer.writeframes(self.pcm)
+        alias = self.root / "private-linked.wav"
+        try:
+            alias.symlink_to(good)
+        except (OSError, NotImplementedError):
+            pass
+        else:
+            with self.assertRaises(ValueError):
+                prep.verify_local_wav_folder(self.root)
+            alias.unlink()
+        for index in range(40):
+            (self.root / ("extra-" + str(index) + ".wav")).write_bytes(b"invalid")
+        with self.assertRaises(ValueError):
+            prep.verify_local_wav_folder(self.root)
+        self.assertEqual(good.read_bytes()[:4], b"RIFF")
+
     def test_gui_only_opt_in_and_never_autostarts_converter(self):
         with mock.patch.object(prep, "launch_gui", return_value=0) as gui, \
              mock.patch.object(prep, "_convert") as converter:

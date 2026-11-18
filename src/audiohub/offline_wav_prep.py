@@ -210,6 +210,54 @@ def verify_local_wav(path):
             "duration_seconds": round(frames / 48000, 2)}
 
 
+def verify_local_wav_folder(path):
+    """Read-only, bounded check of the direct WAV files in one local folder.
+
+    The collection digest represents ordered audio contents, not filenames.
+    It is not a playlist export or physical speaker/SD verification.
+    """
+    folder = Path(path)
+    if (not folder.is_absolute() or ".." in folder.parts
+            or str(folder).startswith("\\\\") or folder.is_symlink()
+            or any(parent.is_symlink() for parent in folder.parents)):
+        raise ValueError("Expected an ordinary local WAV folder")
+    before = folder.stat(follow_symlinks=False)
+    if not stat.S_ISDIR(before.st_mode):
+        raise ValueError("Expected an ordinary local folder")
+    targets = []
+    seen_names = set()
+    with os.scandir(folder) as listing:
+        for count, entry in enumerate(listing):
+            if count >= 256:
+                raise ValueError("Folder has more than 256 direct entries")
+            if entry.name.lower().endswith(".wav"):
+                folded = entry.name.casefold()
+                if (folded in seen_names or entry.is_symlink()
+                        or not entry.is_file(follow_symlinks=False)):
+                    raise ValueError("Ambiguous or unsafe WAV folder entry")
+                seen_names.add(folded)
+                targets.append(folder / entry.name)
+                if len(targets) > 40:
+                    raise ValueError("At most 40 direct WAV tracks per check")
+    if not targets:
+        raise ValueError("No direct WAV tracks found in selected folder")
+    digest = hashlib.sha256(b"AudioHub private WAV collection v1\n")
+    total = 0
+    for index, target in enumerate(sorted(targets, key=lambda p: p.name.casefold()), 1):
+        details = verify_local_wav(target)
+        total += details["bytes"]
+        # Include ordered audio hashes and byte counts without leaking names.
+        digest.update(index.to_bytes(2, "big"))
+        digest.update(bytes.fromhex(details["sha256"]))
+        digest.update(details["bytes"].to_bytes(8, "big"))
+    after = folder.stat(follow_symlinks=False)
+    if (after.st_dev, after.st_ino, after.st_mtime_ns) != (
+            before.st_dev, before.st_ino, before.st_mtime_ns):
+        raise ValueError("WAV folder changed during inspection")
+    return {"files": len(targets), "bytes": total,
+            "collection_sha256": digest.hexdigest()}
+
+
 def check_local_prerequisites():
     """No-write offline PC readiness; NEVER runs or installs FFmpeg."""
     import importlib.util
@@ -240,7 +288,7 @@ def launch_gui():
     except tk.TclError as exc:
         raise RuntimeError("No trusted local desktop session") from exc
     root.title("AudioHub - Offline WAV preparation")
-    root.minsize(640, 400)
+    root.minsize(640, 430)
     root.columnconfigure(0, weight=1)
     body = ttk.Frame(root, padding=16)
     body.grid(sticky="nsew")
@@ -251,6 +299,7 @@ def launch_gui():
     approved = [None]
     automatic_output = [None]
     working = [False]
+    work_kind = ["convert"]
     results = queue.Queue(maxsize=1)
 
     def invalidate(*_):
@@ -366,6 +415,26 @@ def launch_gui():
         output_entry.configure(state="normal")
         convert_button.configure(state="disabled")
         verify_button.configure(state="normal")
+        verify_folder_button.configure(state="normal")
+        if work_kind[0] == "folder":
+            if ok:
+                status.set("READ-ONLY FOLDER VERIFIED: "
+                           + str(value["files"]) + " WAV tracks. Collection SHA256: "
+                           + value["collection_sha256"])
+                messagebox.showinfo("Private WAV folder checked",
+                                    str(value["files"]) + " compatible WAV files.\n"
+                                    + "Collection content SHA256:\n"
+                                    + value["collection_sha256"]
+                                    + "\nNo files changed. NOT a Pi sound test.",
+                                    parent=root)
+            else:
+                status.set("FOLDER CHECK REFUSED: empty, unsafe, changed, too large "
+                           "or incompatible WAV. No files changed.")
+                messagebox.showwarning("WAV folder not verified",
+                                       "Use a local folder with 1-40 compatible "
+                                       "direct WAV files. No files changed.",
+                                       parent=root)
+            return
         if ok:
             status.set("NEW WAV created; original untouched. "
                        "SHA256: " + value["sha256"])
@@ -401,6 +470,7 @@ def launch_gui():
             status.set("CANCELLED: no audio decoder started, no files created.")
             return
         chosen_source, chosen_output = approved[0]
+        work_kind[0] = "convert"
         working[0] = True
         source_button.configure(state="disabled")
         destination_button.configure(state="disabled")
@@ -409,6 +479,7 @@ def launch_gui():
         preview_button.configure(state="disabled")
         convert_button.configure(state="disabled")
         verify_button.configure(state="disabled")
+        verify_folder_button.configure(state="disabled")
         status.set("Converting locally. No WAV is published until complete.")
         def worker():
             try:
@@ -419,6 +490,35 @@ def launch_gui():
                 results.put((False, None))
         threading.Thread(target=worker, daemon=True,
                          name="audiohub-local-wav-prep").start()
+        root.after(150, finish)
+
+
+    def verify_folder():
+        if working[0]:
+            return
+        chosen = filedialog.askdirectory(
+            parent=root, title="Select local folder of owned PCM16 WAVs")
+        if not chosen:
+            return
+        working[0] = True
+        work_kind[0] = "folder"
+        source_button.configure(state="disabled")
+        destination_button.configure(state="disabled")
+        source_entry.configure(state="disabled")
+        output_entry.configure(state="disabled")
+        preview_button.configure(state="disabled")
+        convert_button.configure(state="disabled")
+        verify_button.configure(state="disabled")
+        verify_folder_button.configure(state="disabled")
+        status.set("Checking up to 40 WAV files without writing or playing audio.")
+        def worker():
+            try:
+                result = verify_local_wav_folder(chosen)
+                results.put((True, result))
+            except (OSError, ValueError, RuntimeError):
+                results.put((False, None))
+        threading.Thread(target=worker, daemon=True,
+                         name="audiohub-private-wav-folder-check").start()
         root.after(150, finish)
 
     controls = ttk.Frame(body)
@@ -433,6 +533,10 @@ def launch_gui():
                                command=verify_wav)
     verify_button.grid(row=1, column=0, columnspan=2, sticky="w",
                        pady=(10, 0))
+    verify_folder_button = ttk.Button(controls, text="4. Check WAV folder (read-only)",
+                                      command=verify_folder)
+    verify_folder_button.grid(row=2, column=0, columnspan=2, sticky="w",
+                              pady=(10, 0))
     ttk.Label(body, textvariable=status, wraplength=510, justify="left").grid(
         row=5, column=0, columnspan=3, sticky="w", pady=(4, 8))
     ttk.Label(body, text="External FFmpeg required for conversion; no network, "
@@ -441,7 +545,7 @@ def launch_gui():
     def close():
         if working[0]:
             messagebox.showwarning("Conversion in progress",
-                                   "Wait for the bounded local conversion to finish.",
+                                   "Wait for the bounded local operation to finish.",
                                    parent=root)
         else:
             root.destroy()
@@ -458,7 +562,25 @@ def main(argv=None):
     parser.add_argument("--gui", action="store_true", help="Local file picker, Preview and exact CONVERT dialog")
     parser.add_argument("--check-local", action="store_true", help="No-write Python/Tk/FFmpeg readiness check")
     parser.add_argument("--verify-wav", help="Read-only check existing local PCM16 stereo 48 kHz WAV")
+    parser.add_argument("--verify-folder", help="Read-only check 1-40 local PCM16 stereo WAVs in a folder")
     args = parser.parse_args(argv)
+    if args.verify_folder is not None:
+        if (args.gui or args.check_local or args.convert
+                or args.source is not None or args.output is not None
+                or args.verify_wav is not None):
+            parser.error("--verify-folder is a standalone read-only check")
+        try:
+            report = verify_local_wav_folder(args.verify_folder)
+        except (OSError, ValueError, RuntimeError):
+            print("LOCAL WAV FOLDER REFUSED: empty, unsafe, changed, too large "
+                  "or incompatible tracks. No files changed.", file=sys.stderr)
+            return 2
+        print("LOCAL WAV FOLDER VERIFIED: " + str(report["files"])
+              + " PCM16 stereo 48 kHz files; no writes.")
+        print("Total WAV bytes: " + str(report["bytes"]))
+        print("Collection content SHA256: " + report["collection_sha256"])
+        print("No filename disclosure. NOT a Pi/Edifier audio test.")
+        return 0
     if args.verify_wav is not None:
         if (args.gui or args.check_local or args.convert or
                 args.source is not None or args.output is not None):
