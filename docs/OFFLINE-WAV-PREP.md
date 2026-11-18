@@ -122,6 +122,33 @@ the Pi4 USB speaker, owner permissions, music copyright, free SD space, or
 the success of a later USB copy. Recheck the selected folder after any
 manual transfer and keep all original files and the previous SD card.
 
+## Check an existing WAV copy against the original (no writes)
+
+In the existing Windows GUI use **5. Compare WAV copy (read-only)**, then
+select the original local prepared WAV folder and the second local folder
+you copied it into manually. Both folders must contain 1–40 direct PCM16
+stereo 48-kHz WAV files and pass the existing folder safety checks. The
+background check does not copy, rename, decode with FFmpeg, upload, or edit
+anything; it compares the complete ordered-content fingerprints.
+
+The same operation is available in the extracted portable ZIP, without
+FFmpeg:
+
+```powershell
+py -3 START-OFFLINE-WAV-PREP.py --compare-folders "C:\Private\Prepared" "D:\MyCopiedWavs"
+```
+
+Exit 0 = matching ordered WAV content, exit 1 = valid but different
+contents, exit 2 = refused because of missing, same, unsafe, corrupt or
+unsupported folders. No private filenames or paths are printed. Because
+the content hash is calculated in case-folded filename order, it does
+**not prove matching filenames**, folder layout, audio playback,
+permissions or an authorized Pi/SD transfer. Copying different filenames
+may alter the order even if the audio files are otherwise identical.
+Keep the original files and old SD; do not automatically overwrite or
+erase anything after a mismatch. This is two separate read-only snapshots,
+not an atomic cross-device filesystem transaction.
+
 ## Step 1 — no-write preview (FFmpeg not required)
 
 From a trusted Windows terminal in the extracted portable alpha folder:
