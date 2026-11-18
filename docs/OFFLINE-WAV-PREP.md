@@ -47,6 +47,41 @@ remains an equally supported alternative for operators preferring Python.
 If a corporate PC blocks local scripts, follow its security policy; there
 is no approved signed installer to override those restrictions.
 
+## New one-click startup gate and single-command first-run smoke
+
+The existing Windows `OPEN-AUDIOHUB-MUSIC-PREP.cmd` now checks
+**Python 3.11+ and Tk readiness** and the **entire extracted portable
+source file inventory** before opening its GUI on double-click.
+An incomplete or accidentally changed package, unsupported Python,
+missing Tk or unsafe local extraction causes a clear **START REFUSED**
+message. It never downloads, installs, overwrites or converts anything
+while starting. External FFmpeg remains optional for this check; it
+is needed only for a separate explicitly confirmed MP3/FLAC conversion.
+
+To test the **whole** operator first-run path before opening the GUI,
+use this ONE command in the extracted INNER ZIP folder:
+
+```powershell
+.\OPEN-AUDIOHUB-MUSIC-PREP.cmd --smoke
+```
+
+It first checks Python/Tk (no writes), then the extracted package
+manifest (read-only), and finally creates and cleans its own short
+**synthetic WAV demonstration** in the ordinary local OS temporary
+folder. Successful output includes `AudioHub FIRST-RUN SMOKE PASS`
+and exit code 0. A failed prerequisite, package self-check or demo
+returns exit 2 and does **not** open the GUI or read personal music.
+The previous `--check` (dependencies only) and
+`--package-check` (file inventory only) remain available.
+
+**Security limit:** The package self-check is not an origin proof,
+signature or substitute for verifying OUTER and INNER GitHub ZIP
+SHA256 **before** executing this launcher. Never point it at a
+private music directory; extract the verified portable ZIP to a NEW
+empty local directory and preserve your previous version and Pi SD
+for rollback. The smoke uses no Pi, Edifier, actual music, Scream
+driver or FFmpeg and does not certify them.
+
 ## Identify the installed portable source SHA and check its files
 
 The Windows GUI shows the self-reported 12-character source label in its

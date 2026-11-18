@@ -57,6 +57,38 @@ collection content SHA256 without private names or any write. Terminal:
 `py -3 START-OFFLINE-WAV-PREP.py --verify-folder "C:\\Private\\Prepared"`.
 See `docs/OFFLINE-WAV-PREP.md` for constraints.
 
+## First-run: guarded double-click and one-command smoke
+
+After independently verifying the GitHub OUTER and INNER ZIP SHA256 and
+extracting the inner portable to a **NEW empty LOCAL folder**,
+double-click `OPEN-AUDIOHUB-MUSIC-PREP.cmd`. Before showing the
+graphical WAV interface, this existing launcher now checks:
+
+- Python 3.11+ with Tk is available (FFmpeg is OPTIONAL for startup);
+- all 18 packaged source files match the included source manifest.
+
+The GUI is launched only if both steps succeed. A failure reports
+**START REFUSED** and leaves all existing WAVs and the previous
+portable folder untouched. No automatic update, codec installation,
+network, Pi connection or music conversion takes place.
+
+For an end-to-end no-personal-media trial from the same extracted
+folder, use:
+
+```powershell
+.\OPEN-AUDIOHUB-MUSIC-PREP.cmd --smoke
+```
+
+A successful `AudioHub FIRST-RUN SMOKE PASS` (exit 0) means
+dependencies, self-described portable contents and the built-in
+short synthetic WAV demo all passed. A refusal exits 2 before the
+next step, and never starts the GUI. `--check` and
+`--package-check` continue to run their respective subchecks
+alone. **CI may run --smoke on native Windows without human GUI
+clicks**; only real operator use can advance S2 to S3. The manifest
+is not signed, so always verify original ZIP hashes separately.
+Retain the last working portable ZIP and original SD for rollback.
+
 ## Know exactly which portable version is running (no writes)
 
 After verifying and extracting the **inner** ZIP into a new local folder,

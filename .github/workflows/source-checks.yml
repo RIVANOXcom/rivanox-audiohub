@@ -258,6 +258,16 @@ jobs:
               throw 'Portable reports a source SHA differing from build commit'
             }
             Write-Host 'Extracted Windows package contents and exact source commit MATCH'
+            # New operator journey: ONE script checks prerequisites, exact
+            # extracted package and synthetic WAV demo without any user media.
+            $firstRun = & cmd.exe /d /c '.\OPEN-AUDIOHUB-MUSIC-PREP.cmd --smoke'
+            if ($LASTEXITCODE -ne 0 -or -not (($firstRun -join "`n").Contains('AudioHub FIRST-RUN SMOKE PASS'))) {
+              throw 'One-click operator first-run smoke did not pass'
+            }
+            if (-not (($firstRun -join "`n").Contains($env:SOURCE_COMMIT))) {
+              throw 'One-click smoke did not verify exact package source SHA'
+            }
+            Write-Host 'One-click Windows first-run dependency/package/demo smoke PASS (synthetic)'
             # Only alter a disposable extracted README after all positive tests.
             # Never modify the build ZIP, real operator files, or repo checkout.
             $tamperTestReadme = Join-Path (Get-Location) 'README-OFFLINE-WAV-PREP.md'
@@ -268,6 +278,17 @@ jobs:
             }
             $global:LASTEXITCODE = 0
             Write-Host 'Extracted Windows package tampering REFUSED (synthetic, no protected changes)'
+            # After tampering, the launcher MUST block --smoke before --demo,
+            # and must not misrepresent a corrupt package as a successful run.
+            $blockedStart = & cmd.exe /d /c '.\OPEN-AUDIOHUB-MUSIC-PREP.cmd --smoke' 2>&1
+            if ($LASTEXITCODE -ne 2 -or -not (($blockedStart -join "`n").Contains('START REFUSED'))) {
+              throw 'One-click smoke failed to block altered extracted package'
+            }
+            if (($blockedStart -join "`n").Contains('SYNTHETIC WAV DEMO PASS')) {
+              throw 'Tampered portable incorrectly executed the synthetic demo'
+            }
+            $global:LASTEXITCODE = 0
+            Write-Host 'One-click launcher refuses altered extracted package before demo PASS (synthetic)'
 
           } finally { Pop-Location }
           Write-Host "Windows operator ALPHA source-only smoke PASS. No GUI launched or hardware claim."
