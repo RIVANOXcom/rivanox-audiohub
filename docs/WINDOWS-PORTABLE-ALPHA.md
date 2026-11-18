@@ -165,6 +165,35 @@ Failure exits 2, without claiming success. This is an accessible GUI
 performed by CI or any Pi4/Edifier sound certification. Keep the older
 verified portable ZIP and Pi SD for rollback.
 
+## Album preparation without repetitive file picking
+
+GUI **11. Convert up to 10 owned files (batch)** takes the operator from
+one existing local MP3/FLAC folder to a **different existing local WAV
+folder** without repeating filename selection and the CONVERT dialog
+for every song. The read-only plan refuses links, network folders,
+existing/colliding `*-AudioHub.wav` names, duplicate stems and more
+than 10 supported tracks (or 256 direct entries). The operator explicitly
+types **BATCH** once, then locally installed external FFmpeg converts each
+file using the already verified single-track path with exclusive
+O_EXCL output, 64-MiB cap, source stability and final SHA256 readback.
+
+The progress display reveals **counts only**. The **Stop batch after
+current WAV** button requests an orderly stop between tracks. On any
+cancellation or later failure, already fully verified new WAVs remain;
+no existing WAVs or originals are deleted, modified or overwritten.
+To attempt a complete fresh batch after partial success, choose another
+**empty** destination folder or move confirmed outputs manually using
+your existing backup procedure; no implicit overwrite or resume.
+Do not run this with material you lack rights to use. The physical
+Pi/Edifier playback remains separately unverified.
+
+Terminal `--batch-plan SOURCE_FOLDER WAV_FOLDER` is strictly read-only;
+`--batch-convert SOURCE_FOLDER WAV_FOLDER` requires an interactive
+terminal and typed **BATCH**. Neither prints filenames in the status
+report, transfers data remotely or starts without explicit confirmation.
+The new option is included in the same portable Windows S2 ZIP and
+existing GitHub CI path – not an auto-updater or new installer.
+
 ## Operator PC sound check without any files or FFmpeg
 
 **10. Hear 1s synthetic PC tone** in the existing Windows GUI gives
