@@ -50,6 +50,81 @@ def _plan(source, output):
     return src, dst, info, FORMATS[src.suffix.lower()]
 
 
+BATCH_FILES_MAX = 10  # Deliberately bounded, no recursive scanning or uploads.
+
+
+def plan_local_wav_batch(source_folder, destination_folder):
+    """Read-only plan: up to ten owned MP3/FLAC -> NEW WAVs in another folder.
+
+    No recursive traversal, destination creation, overwrites or FFmpeg calls.
+    Output names are derived in memory; never print private filenames.
+    """
+    srcdir, dstdir = Path(source_folder), Path(destination_folder)
+    for folder in (srcdir, dstdir):
+        if (not folder.is_absolute() or ".." in folder.parts
+                or str(folder).startswith("\\\\") or folder.is_symlink()
+                or any(parent.is_symlink() for parent in folder.parents)
+                or not folder.is_dir()):
+            raise ValueError("Batch needs two ordinary existing local folders")
+    if srcdir.samefile(dstdir):
+        raise ValueError("Choose separate source and destination folders")
+    items, used_names, total_bytes = [], set(), 0
+    with os.scandir(srcdir) as entries:
+        for count, entry in enumerate(entries):
+            if count >= 256:
+                raise ValueError("Too many direct entries in source folder")
+            if Path(entry.name).suffix.lower() not in FORMATS:
+                continue
+            if entry.is_symlink() or not entry.is_file(follow_symlinks=False):
+                raise ValueError("Unsafe batch audio source")
+            output_name = Path(entry.name).stem + "-AudioHub.wav"
+            if len(output_name.encode("utf-8")) > 240:
+                raise ValueError("Batch output name too long")
+            folded = output_name.casefold()
+            if folded in used_names:
+                raise ValueError("Two sources would create the same WAV name")
+            used_names.add(folded)
+            output = dstdir / output_name
+            src, dst, info, _ = _plan(srcdir / entry.name, output)
+            items.append((src, dst))
+            total_bytes += info.st_size
+            if len(items) > BATCH_FILES_MAX:
+                raise ValueError("Batch limit is ten source tracks")
+    if not items:
+        raise ValueError("No directly contained MP3/FLAC files")
+    items.sort(key=lambda pair: pair[0].name.casefold())
+    return {"items": tuple(items), "files": len(items),
+            "source_bytes": total_bytes}
+
+
+def convert_local_wav_batch(source_folder, destination_folder, *,
+                            cancel=None, progress=None, ffmpeg="ffmpeg"):
+    """Run a confirmed batch, retaining only individually VERIFIED new WAVs.
+
+    Stop is honored between tracks. A failure stops the batch, and any
+    previously completed WAVs remain; the operator is told the count.
+    The existing exclusive O_EXCL / SHA-readback _convert handles each
+    file safely. No automatic cleanup of any user WAV.
+    """
+    plan = plan_local_wav_batch(source_folder, destination_folder)
+    completed, total_bytes = 0, 0
+    for src, dst in plan["items"]:
+        if cancel is not None and cancel.is_set():
+            return {"status": "stopped", "converted": completed,
+                    "planned": plan["files"], "bytes": total_bytes}
+        try:
+            result = _convert(src, dst, ffmpeg=ffmpeg)
+        except (OSError, ValueError, RuntimeError, subprocess.SubprocessError):
+            return {"status": "refused", "converted": completed,
+                    "planned": plan["files"], "bytes": total_bytes}
+        completed += 1
+        total_bytes += result["bytes"]
+        if progress is not None:
+            progress(completed, plan["files"])
+    return {"status": "complete", "converted": completed,
+            "planned": plan["files"], "bytes": total_bytes}
+
+
 def suggest_unused_wav(source):
     """Suggest a nearby new WAV name, without creating/reserving a file.
 
@@ -699,7 +774,7 @@ def launch_gui():
     except (OSError, ValueError, RuntimeError, UnicodeError):
         source_label = "UNPACKAGED SOURCE"
     root.title("AudioHub WAV - " + source_label + " (unverified)")
-    root.minsize(700, 710)
+    root.minsize(700, 745)
     root.columnconfigure(0, weight=1)
     body = ttk.Frame(root, padding=16)
     body.grid(sticky="nsew")
@@ -716,6 +791,7 @@ def launch_gui():
     results = queue.Queue(maxsize=1)
     scan_updates = queue.Queue(maxsize=1)
     scan_cancel = threading.Event()
+    batch_cancel = threading.Event()
     audition_cancel = threading.Event()
 
     def scan_progress(phase, done, total):
@@ -732,6 +808,13 @@ def launch_gui():
                 scan_updates.put_nowait(note)
             except queue.Full:
                 pass
+
+    def cancel_batch():
+        if working[0] and work_kind[0] == "batch":
+            batch_cancel.set()
+            batch_stop_button.configure(state="disabled")
+            status.set("BATCH STOP REQUESTED: finish only current WAV. "
+                       "Verified finished WAVs remain; originals untouched.")
 
     def cancel_scan():
         if working[0] and work_kind[0] in ("folder", "compare"):
@@ -855,16 +938,21 @@ def launch_gui():
         try:
             ok, value = results.get_nowait()
         except queue.Empty:
-            if working[0] and work_kind[0] in ("folder", "compare"):
+            if working[0] and work_kind[0] in ("folder", "compare", "batch"):
                 try:
                     phase, done, total = scan_updates.get_nowait()
                 except queue.Empty:
                     pass
                 else:
                     if not scan_cancel.is_set():
-                        status.set("READ-ONLY " + phase.upper() + " FOLDER: "
-                                   + str(done) + "/" + str(total)
-                                   + " WAVs inspected. No writes.")
+                        if work_kind[0] == "batch":
+                            status.set("BATCH WAV EXPORT: " + str(done) + "/"
+                                       + str(total) + " verified NEW WAVs; "
+                                       "no originals overwritten.")
+                        else:
+                            status.set("READ-ONLY " + phase.upper() + " FOLDER: "
+                                       + str(done) + "/" + str(total)
+                                       + " WAVs inspected. No writes.")
             root.after(150, finish)
             return
         if scan_cancel.is_set() and work_kind[0] in ("folder", "compare"):
@@ -888,6 +976,29 @@ def launch_gui():
         audition_last_button.configure(state=("normal" if last_verified_export[0]
                                               else "disabled"))
         audition_stop_button.configure(state="disabled")
+        batch_button.configure(state="normal")
+        batch_stop_button.configure(state="disabled")
+        if work_kind[0] == "batch":
+            if not isinstance(value, dict):
+                status.set("BATCH REFUSED before completion. No existing WAV overwritten.")
+                messagebox.showwarning("Batch WAV export refused",
+                                       "Cannot use unsafe folders, collisions, "
+                                       "unsupported tracks or FFmpeg. "
+                                       "Previously verified WAVs, if any, stay.",
+                                       parent=root)
+            else:
+                label = value["status"].upper()
+                status.set("BATCH " + label + ": " + str(value["converted"])
+                           + "/" + str(value["planned"]) + " WAV files verified. "
+                           "All originals unchanged.")
+                messagebox.showinfo("Batch WAV export " + label,
+                                    str(value["converted"]) + " of "
+                                    + str(value["planned"]) + " WAV tracks "
+                                    "completed and hash-verified. No original "
+                                    "music modified. Any completed NEW WAVs "
+                                    "remain after Stop or failure. No Pi tested.",
+                                    parent=root)
+            return
         if work_kind[0] in ("audition", "testtone"):
             is_tone = work_kind[0] == "testtone"
             if audition_cancel.is_set():
@@ -1076,6 +1187,7 @@ def launch_gui():
         compare_button.configure(state="disabled")
         demo_button.configure(state="disabled")
         package_button.configure(state="disabled")
+        batch_button.configure(state="disabled")
         audition_button.configure(state="disabled")
         tone_button.configure(state="disabled")
         audition_last_button.configure(state="disabled")
@@ -1114,6 +1226,7 @@ def launch_gui():
         compare_button.configure(state="disabled")
         demo_button.configure(state="disabled")
         package_button.configure(state="disabled")
+        batch_button.configure(state="disabled")
         audition_button.configure(state="disabled")
         tone_button.configure(state="disabled")
         status.set("Checking up to 40 WAV files without writing or playing audio.")
@@ -1161,6 +1274,7 @@ def launch_gui():
         compare_button.configure(state="disabled")
         demo_button.configure(state="disabled")
         package_button.configure(state="disabled")
+        batch_button.configure(state="disabled")
         audition_button.configure(state="disabled")
         tone_button.configure(state="disabled")
         status.set("Comparing two existing WAV folders locally. No writes or transfers.")
@@ -1196,6 +1310,7 @@ def launch_gui():
         compare_button.configure(state="disabled")
         demo_button.configure(state="disabled")
         package_button.configure(state="disabled")
+        batch_button.configure(state="disabled")
         audition_button.configure(state="disabled")
         tone_button.configure(state="disabled")
         status.set("Running a disposable local synthetic WAV demo. "
@@ -1227,6 +1342,7 @@ def launch_gui():
         compare_button.configure(state="disabled")
         demo_button.configure(state="disabled")
         package_button.configure(state="disabled")
+        batch_button.configure(state="disabled")
         audition_button.configure(state="disabled")
         tone_button.configure(state="disabled")
         status.set("Checking source files in this extracted local ALPHA "
@@ -1280,6 +1396,7 @@ def launch_gui():
         compare_button.configure(state="disabled")
         demo_button.configure(state="disabled")
         package_button.configure(state="disabled")
+        batch_button.configure(state="disabled")
         audition_button.configure(state="disabled")
         tone_button.configure(state="disabled")
         audition_last_button.configure(state="disabled")
@@ -1355,6 +1472,80 @@ def launch_gui():
         # helper must revalidate the original before ANY sound.
         audition_wav(recent[0], expected_sha256=recent[1])
 
+    def batch_convert():
+        if working[0]:
+            return
+        chosen_source = filedialog.askdirectory(
+            parent=root, title="Choose local folder with owned MP3/FLAC files")
+        if not chosen_source:
+            return
+        chosen_dest = filedialog.askdirectory(
+            parent=root, title="Choose OTHER existing local folder for NEW WAVs")
+        if not chosen_dest:
+            return
+        try:
+            planned = plan_local_wav_batch(chosen_source, chosen_dest)
+            if hasattr(os, "geteuid") and os.geteuid() == 0:
+                raise PermissionError("No privileged conversions")
+        except (OSError, ValueError, PermissionError, UnicodeError):
+            status.set("BATCH PREVIEW REFUSED: choose separate safe local folders; "
+                       "max 10 MP3/FLAC files, no destination collisions.")
+            messagebox.showwarning(
+                "No safe batch plan",
+                "Choose two different ordinary local folders containing "
+                "1-10 owned/licensed MP3/FLAC tracks. All proposed NEW WAV "
+                "names must be unused and unique. Nothing was changed.",
+                parent=root)
+            return
+        answer = simpledialog.askstring(
+            "Confirm private batch WAV export",
+            "Read-only plan: " + str(planned["files"])
+            + " MP3/FLAC sources (max 10).\n"
+            "Output: only NEW *-AudioHub.wav files in the separate "
+            "folder, each hash-verified. Existing originals and WAVs "
+            "NEVER overwritten. FFmpeg must already be on this PC.\n"
+            "Stop acts after the current track. If a later track fails, "
+            "earlier verified NEW WAVs remain. No Pi/network changes.\n"
+            "Use only music you own or may legally use.\n"
+            "Type EXACT uppercase BATCH to proceed:", parent=root)
+        if answer != "BATCH":
+            status.set("BATCH CANCELLED before FFmpeg or new files.")
+            return
+        # Revalidate entire plan immediately before any conversion.
+        try:
+            plan_local_wav_batch(chosen_source, chosen_dest)
+        except (OSError, ValueError, UnicodeError):
+            status.set("BATCH PLAN EXPIRED: source or destination changed.")
+            return
+        batch_cancel.clear()
+        working[0] = True
+        work_kind[0] = "batch"
+        approved[0] = None
+        last_verified_export[0] = None
+        pending_export_path[0] = None
+        for control in (source_button, destination_button, source_entry,
+                        output_entry, preview_button, convert_button,
+                        verify_button, verify_folder_button, compare_button,
+                        demo_button, package_button, audition_button,
+                        audition_last_button, tone_button, batch_button):
+            control.configure(state="disabled")
+        batch_stop_button.configure(state="normal")
+        status.set("BATCH STARTED: only new verified WAVs will be published. "
+                   "Stop after current track available.")
+        def worker():
+            try:
+                report = convert_local_wav_batch(
+                    chosen_source, chosen_dest, cancel=batch_cancel,
+                    progress=lambda done, total:
+                        scan_progress("batch", done, total))
+                results.put((True, report))
+            except (OSError, ValueError, RuntimeError, UnicodeError,
+                    subprocess.SubprocessError):
+                results.put((False, None))
+        threading.Thread(target=worker, daemon=True,
+                         name="audiohub-private-bounded-batch-export").start()
+        root.after(150, finish)
+
     controls = ttk.Frame(body)
     controls.grid(row=4, column=0, columnspan=3, sticky="w", pady=(18, 12))
     preview_button = ttk.Button(controls, text="1. Preview (no writes)",
@@ -1409,6 +1600,15 @@ def launch_gui():
         state="disabled", command=audition_last_export)
     audition_last_button.grid(row=7, column=1, sticky="w",
                               pady=(10, 0))
+    batch_button = ttk.Button(
+        controls, text="11. Convert up to 10 owned files (batch)",
+        command=batch_convert)
+    batch_button.grid(row=9, column=0, sticky="w",
+                      padx=(0, 8), pady=(10, 0))
+    batch_stop_button = ttk.Button(
+        controls, text="Stop batch after current WAV", state="disabled",
+        command=cancel_batch)
+    batch_stop_button.grid(row=9, column=1, sticky="w", pady=(10, 0))
     ttk.Label(body, textvariable=status, wraplength=510, justify="left").grid(
         row=5, column=0, columnspan=3, sticky="w", pady=(4, 8))
     ttk.Label(body, text="Source label: " + source_label +
@@ -1422,6 +1622,8 @@ def launch_gui():
         if working[0]:
             if work_kind[0] in ("folder", "compare"):
                 cancel_scan()
+            elif work_kind[0] == "batch":
+                cancel_batch()
             elif work_kind[0] in ("audition", "testtone"):
                 stop_audition()
                 status.set("PC sound stop requested; the bounded preview "
@@ -1462,7 +1664,55 @@ def main(argv=None):
                         help="Explicit Windows-only 3-second audible WAV sample; no file writes")
     parser.add_argument("--test-pc-tone", action="store_true",
                         help="Explicit Windows-only one-second quiet synthetic PC audio test")
+    parser.add_argument("--batch-plan", nargs=2, metavar=("SOURCE_FOLDER", "WAV_FOLDER"),
+                        help="Read-only preview of up to 10 local MP3/FLAC exports")
+    parser.add_argument("--batch-convert", nargs=2, metavar=("SOURCE_FOLDER", "WAV_FOLDER"),
+                        help="Confirm exactly BATCH on local TTY; create only new verified WAVs")
     args = parser.parse_args(argv)
+    if args.batch_plan is not None or args.batch_convert is not None:
+        if (args.batch_plan is not None and args.batch_convert is not None
+                or args.test_pc_tone or args.audition_wav is not None
+                or args.gui or args.demo or args.convert or args.check_local
+                or args.package_check or args.source is not None
+                or args.output is not None or args.verify_wav is not None
+                or args.verify_folder is not None
+                or args.compare_folders is not None):
+            parser.error("Batch modes are exclusive; no other media actions")
+        folders = args.batch_plan or args.batch_convert
+        try:
+            plan = plan_local_wav_batch(*folders)
+        except (OSError, ValueError, UnicodeError):
+            print("BATCH PLAN REFUSED: unsafe sources, linked folders, "
+                  "colliding/existing outputs, empty folder or over 10 tracks. "
+                  "Nothing modified.", file=sys.stderr)
+            return 2
+        print("BATCH PLAN: " + str(plan["files"]) + " owned/licensed MP3/FLAC "
+              "files -> NEW verified WAVs in separate existing local folder. "
+              "No filename disclosure. No writes in plan.")
+        if args.batch_plan is not None:
+            return 0
+        if not sys.stdin.isatty():
+            print("BATCH REFUSED: interactive local terminal required. "
+                  "No files created.", file=sys.stderr)
+            return 2
+        print("Up to 10 exports, existing files never overwritten. "
+              "Earlier completed WAVs remain after a later failure. "
+              "Requires local FFmpeg. Type EXACT BATCH to proceed:")
+        if input().strip() != "BATCH":
+            print("BATCH CANCELLED before conversion.")
+            return 2
+        try:
+            report = convert_local_wav_batch(*folders)
+        except (OSError, ValueError, RuntimeError, UnicodeError):
+            print("BATCH REFUSED: unsafe source/destination changed. "
+                  "No existing files altered.", file=sys.stderr)
+            return 2
+        print("BATCH " + report["status"].upper() + ": "
+              + str(report["converted"]) + "/" + str(report["planned"])
+              + " individually verified NEW WAVs. No original files overwritten.")
+        print("Previously completed NEW WAVs remain on partial failure. "
+              "No Pi/Edifier sound verified.")
+        return 0 if report["status"] == "complete" else 2
     if args.test_pc_tone:
         if (args.audition_wav is not None or args.gui or args.demo
                 or args.convert or args.check_local or args.package_check
