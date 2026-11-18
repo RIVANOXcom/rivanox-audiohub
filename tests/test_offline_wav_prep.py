@@ -769,7 +769,7 @@ class OfflineWavPreparationTests(unittest.TestCase):
             self.assertEqual((reader.getnchannels(), reader.getsampwidth(),
                               reader.getframerate(), reader.getnframes()),
                              (2, 2, 48000, 3 * 48000))
-            self.assertEqual(reader.readframes(2), b"\x01\x02\x03\x04" * 2)
+            self.assertEqual(reader.readframes(2), b"\x80\x00\x00\x01" * 2)  # -12 dB
         self.assertEqual(target.read_bytes(), original)
         self.assertEqual(self.source.read_bytes(), b"private-owned-audio-bytes")
         self.assertFalse(self.destination.exists())
