@@ -182,5 +182,19 @@ jobs:
               throw 'Read-only portable WAV verifier changed its input'
             }
             Write-Host 'Extracted portable WAV structure and SHA256 verification PASS (synthetic)'
+            $library = Join-Path $env:RUNNER_TEMP 'audiohub-private-synthetic-library'
+            New-Item -ItemType Directory -Path $library -ErrorAction Stop | Out-Null
+            $libraryWav = Join-Path $library 'owned-synthetic.wav'
+            Copy-Item -LiteralPath $verifyWav -Destination $libraryWav -ErrorAction Stop
+            $originalHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $libraryWav).Hash.ToLowerInvariant()
+            $folderReport = & python START-OFFLINE-WAV-PREP.py --verify-folder $library
+            if ($LASTEXITCODE -ne 0) { throw 'Portable private WAV folder check failed' }
+            if (-not (($folderReport -join "`n").Contains('LOCAL WAV FOLDER VERIFIED: 1'))) {
+              throw 'Missing portable folder verification result'
+            }
+            if ((Get-FileHash -Algorithm SHA256 -LiteralPath $libraryWav).Hash.ToLowerInvariant() -ne $originalHash) {
+              throw 'Private folder check modified synthetic WAV'
+            }
+            Write-Host 'Extracted portable 1-folder WAV verification PASS (synthetic, no writes)'
           } finally { Pop-Location }
           Write-Host "Windows operator ALPHA source-only smoke PASS. No GUI launched or hardware claim."
