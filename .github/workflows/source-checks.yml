@@ -240,6 +240,30 @@ jobs:
               throw 'Read-only audible WAV preview altered original'
             }
             Write-Host 'Extracted Windows WAV audition and generated 1-second PC tone PASS (stubbed, no speaker or private music)'
+            # Batch preparation must work in the ACTUAL EXTRACTED Windows
+            # S2 package, without any personal audio or external FFmpeg.
+            $batchMusic = Join-Path $env:RUNNER_TEMP 'audiohub-batch-fixture-in'
+            $batchWavs = Join-Path $env:RUNNER_TEMP 'audiohub-batch-fixture-out'
+            New-Item -ItemType Directory -Path $batchMusic -Force | Out-Null
+            New-Item -ItemType Directory -Path $batchWavs -Force | Out-Null
+            [IO.File]::WriteAllBytes((Join-Path $batchMusic 'synthetic-one.flac'), [byte[]](1, 2, 3, 4))
+            [IO.File]::WriteAllBytes((Join-Path $batchMusic 'synthetic-two.mp3'), [byte[]](5, 6, 7, 8))
+            $planOutput = & python 'START-OFFLINE-WAV-PREP.py' --batch-plan $batchMusic $batchWavs 2>&1
+            if ($LASTEXITCODE -ne 0 -or -not (($planOutput -join "`n").Contains('BATCH PLAN: 2'))) {
+              throw 'Extracted private batch plan failed'
+            }
+            if ((Get-ChildItem -LiteralPath $batchWavs -Force | Measure-Object).Count -ne 0) {
+              throw 'Read-only batch plan created a destination unexpectedly'
+            }
+            [IO.File]::WriteAllBytes((Join-Path $batchWavs 'synthetic-one-AudioHub.wav'), [byte[]](22, 33))
+            $collisionOutput = & python 'START-OFFLINE-WAV-PREP.py' --batch-plan $batchMusic $batchWavs 2>&1
+            if ($LASTEXITCODE -ne 2 -or -not (($collisionOutput -join "`n").Contains('BATCH PLAN REFUSED'))) {
+              throw 'Batch plan failed to refuse a preexisting WAV'
+            }
+            if ((Get-Item -LiteralPath (Join-Path $batchWavs 'synthetic-one-AudioHub.wav')).Length -ne 2) {
+              throw 'Batch planning altered an existing WAV'
+            }
+            Write-Host 'Extracted Windows 2-file batch plan and existing WAV collision refusal PASS (no FFmpeg or music)'
 
             $library = Join-Path $env:RUNNER_TEMP 'audiohub-private-synthetic-library'
             New-Item -ItemType Directory -Path $library -ErrorAction Stop | Out-Null
