@@ -163,8 +163,19 @@ def _convert(source, output, *, ffmpeg="ffmpeg", timeout=120):
 
 
 
-def verify_local_wav(path):
+
+class ScanCancelled(RuntimeError):
+    """The operator stopped a read-only WAV inspection (never a file write)."""
+
+
+def _abort_if_requested(cancel):
+    if cancel is not None and cancel.is_set():
+        raise ScanCancelled("Private read-only WAV check cancelled")
+
+
+def verify_local_wav(path, *, cancel=None):
     """Inspect a finished PCM16 stereo 48-kHz WAV without FFmpeg or writes."""
+    _abort_if_requested(cancel)
     target = Path(path)
     if (not target.is_absolute() or ".." in target.parts
             or target.suffix.lower() != ".wav"
@@ -192,6 +203,7 @@ def verify_local_wav(path):
                     raise ValueError("Invalid or truncated WAV")
                 count = 0
                 while count < frames * 4:
+                    _abort_if_requested(cancel)
                     data = reader.readframes(min(4096, frames - count // 4))
                     if not data or len(data) % 4:
                         raise ValueError("Truncated WAV data")
@@ -204,10 +216,12 @@ def verify_local_wav(path):
         digest = hashlib.sha256()
         total = 0
         while data := stream.read(CHUNK):
+            _abort_if_requested(cancel)
             total += len(data)
             if total > OUTPUT_BYTES_MAX:
                 raise ValueError("Oversized WAV")
             digest.update(data)
+        _abort_if_requested(cancel)
         after = os.fstat(stream.fileno())
         if total != before.st_size or (
                 after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns) != (
@@ -217,12 +231,13 @@ def verify_local_wav(path):
             "duration_seconds": round(frames / 48000, 2)}
 
 
-def verify_local_wav_folder(path):
+def verify_local_wav_folder(path, *, cancel=None, progress=None):
     """Read-only, bounded check of the direct WAV files in one local folder.
 
     The collection digest represents ordered audio contents, not filenames.
     It is not a playlist export or physical speaker/SD verification.
     """
+    _abort_if_requested(cancel)
     folder = Path(path)
     if (not folder.is_absolute() or ".." in folder.parts
             or str(folder).startswith("\\\\") or folder.is_symlink()
@@ -235,6 +250,7 @@ def verify_local_wav_folder(path):
     seen_names = set()
     with os.scandir(folder) as listing:
         for count, entry in enumerate(listing):
+            _abort_if_requested(cancel)
             if count >= 256:
                 raise ValueError("Folder has more than 256 direct entries")
             if entry.name.lower().endswith(".wav"):
@@ -252,7 +268,15 @@ def verify_local_wav_folder(path):
     total = 0
     content_items = []
     for index, target in enumerate(sorted(targets, key=lambda p: p.name.casefold()), 1):
-        details = verify_local_wav(target)
+        _abort_if_requested(cancel)
+        if cancel is None:
+            details = verify_local_wav(target)
+        else:
+            details = verify_local_wav(target, cancel=cancel)
+        _abort_if_requested(cancel)
+        if progress is not None:
+            progress(index, len(targets))
+        _abort_if_requested(cancel)
         # Separate canonical copy identity from the historic ordered
         # collection digest; preserve old folder-check output unchanged.
         content_items.append((details["bytes"], bytes.fromhex(details["sha256"])))
@@ -261,6 +285,7 @@ def verify_local_wav_folder(path):
         digest.update(index.to_bytes(2, "big"))
         digest.update(bytes.fromhex(details["sha256"]))
         digest.update(details["bytes"].to_bytes(8, "big"))
+    _abort_if_requested(cancel)
     after = folder.stat(follow_symlinks=False)
     if (after.st_dev, after.st_ino, after.st_mtime_ns) != (
             before.st_dev, before.st_ino, before.st_mtime_ns):
@@ -278,7 +303,8 @@ def verify_local_wav_folder(path):
 
 
 
-def compare_local_wav_folders(source_folder, copied_folder):
+def compare_local_wav_folders(source_folder, copied_folder, *, cancel=None,
+                              progress=None):
     """Verify two existing local WAV folders without reading private filenames aloud.
 
     Match means identical complete PCM16 WAV file contents, including duplicate
@@ -286,10 +312,23 @@ def compare_local_wav_folders(source_folder, copied_folder):
     or proof of SD/Pi hardware playback. Both sides are fully and independently
     validated using the same bounded no-write folder verifier.
     """
+    _abort_if_requested(cancel)
     if os.path.samefile(source_folder, copied_folder):
         raise ValueError("Select two different local WAV folders")
-    left = verify_local_wav_folder(source_folder)
-    right = verify_local_wav_folder(copied_folder)
+    if cancel is None and progress is None:
+        left = verify_local_wav_folder(source_folder)
+        right = verify_local_wav_folder(copied_folder)
+    else:
+        left = verify_local_wav_folder(
+            source_folder, cancel=cancel,
+            progress=(None if progress is None else
+                      lambda done, total: progress("original", done, total)))
+        _abort_if_requested(cancel)
+        right = verify_local_wav_folder(
+            copied_folder, cancel=cancel,
+            progress=(None if progress is None else
+                      lambda done, total: progress("copy", done, total)))
+    _abort_if_requested(cancel)
     return {
         "matched": (left["files"] == right["files"]
                     and left["bytes"] == right["bytes"]
@@ -328,7 +367,7 @@ def launch_gui():
     except tk.TclError as exc:
         raise RuntimeError("No trusted local desktop session") from exc
     root.title("AudioHub - Offline WAV preparation")
-    root.minsize(640, 470)
+    root.minsize(640, 510)
     root.columnconfigure(0, weight=1)
     body = ttk.Frame(root, padding=16)
     body.grid(sticky="nsew")
@@ -341,6 +380,30 @@ def launch_gui():
     working = [False]
     work_kind = ["convert"]
     results = queue.Queue(maxsize=1)
+    scan_updates = queue.Queue(maxsize=1)
+    scan_cancel = threading.Event()
+
+    def scan_progress(phase, done, total):
+        """Worker thread can publish only anonymous counts; no Tk calls."""
+        note = (phase, done, total)
+        try:
+            scan_updates.put_nowait(note)
+        except queue.Full:
+            try:
+                scan_updates.get_nowait()
+            except queue.Empty:
+                pass
+            try:
+                scan_updates.put_nowait(note)
+            except queue.Full:
+                pass
+
+    def cancel_scan():
+        if working[0] and work_kind[0] in ("folder", "compare"):
+            scan_cancel.set()
+            cancel_button.configure(state="disabled")
+            status.set("STOP REQUESTED: finishing current read chunk. "
+                       "No audio has been changed.")
 
     def invalidate(*_):
         approved[0] = None
@@ -444,10 +507,23 @@ def launch_gui():
         try:
             ok, value = results.get_nowait()
         except queue.Empty:
+            if working[0] and work_kind[0] in ("folder", "compare"):
+                try:
+                    phase, done, total = scan_updates.get_nowait()
+                except queue.Empty:
+                    pass
+                else:
+                    if not scan_cancel.is_set():
+                        status.set("READ-ONLY " + phase.upper() + " FOLDER: "
+                                   + str(done) + "/" + str(total)
+                                   + " WAVs inspected. No writes.")
             root.after(150, finish)
             return
+        if scan_cancel.is_set() and work_kind[0] in ("folder", "compare"):
+            ok, value = False, "cancelled"
         working[0] = False
         approved[0] = None
+        cancel_button.configure(state="disabled")
         preview_button.configure(state="normal")
         source_button.configure(state="normal")
         destination_button.configure(state="normal")
@@ -457,6 +533,12 @@ def launch_gui():
         verify_button.configure(state="normal")
         verify_folder_button.configure(state="normal")
         compare_button.configure(state="normal")
+        if value == "cancelled" and work_kind[0] in ("folder", "compare"):
+            status.set("STOPPED: read-only scan cancelled. No WAVs changed.")
+            messagebox.showinfo("WAV check stopped",
+                                "Read-only scan stopped; no audio changed. "
+                                "No verification result was issued.", parent=root)
+            return
         if work_kind[0] == "compare":
             if ok:
                 left, right = value["source"], value["copy"]
@@ -575,6 +657,8 @@ def launch_gui():
             return
         working[0] = True
         work_kind[0] = "folder"
+        scan_cancel.clear()
+        cancel_button.configure(state="normal")
         source_button.configure(state="disabled")
         destination_button.configure(state="disabled")
         source_entry.configure(state="disabled")
@@ -587,8 +671,14 @@ def launch_gui():
         status.set("Checking up to 40 WAV files without writing or playing audio.")
         def worker():
             try:
-                result = verify_local_wav_folder(chosen)
+                result = verify_local_wav_folder(
+                    chosen, cancel=scan_cancel,
+                    progress=lambda done, total:
+                        scan_progress("selected", done, total))
+                _abort_if_requested(scan_cancel)
                 results.put((True, result))
+            except ScanCancelled:
+                results.put((False, "cancelled"))
             except (OSError, ValueError, RuntimeError):
                 results.put((False, None))
         threading.Thread(target=worker, daemon=True,
@@ -610,6 +700,8 @@ def launch_gui():
             return
         working[0] = True
         work_kind[0] = "compare"
+        scan_cancel.clear()
+        cancel_button.configure(state="normal")
         source_button.configure(state="disabled")
         destination_button.configure(state="disabled")
         source_entry.configure(state="disabled")
@@ -622,8 +714,12 @@ def launch_gui():
         status.set("Comparing two existing WAV folders locally. No writes or transfers.")
         def worker():
             try:
-                result = compare_local_wav_folders(first, second)
+                result = compare_local_wav_folders(
+                    first, second, cancel=scan_cancel, progress=scan_progress)
+                _abort_if_requested(scan_cancel)
                 results.put((True, result))
+            except ScanCancelled:
+                results.put((False, "cancelled"))
             except (OSError, ValueError, RuntimeError):
                 results.put((False, None))
         threading.Thread(target=worker, daemon=True,
@@ -650,6 +746,11 @@ def launch_gui():
                                 command=compare_folders)
     compare_button.grid(row=3, column=0, columnspan=2, sticky="w",
                         pady=(10, 0))
+    cancel_button = ttk.Button(
+        controls, text="Stop read-only check", state="disabled",
+        command=cancel_scan)
+    cancel_button.grid(row=4, column=0, columnspan=2, sticky="w",
+                       pady=(10, 0))
     ttk.Label(body, textvariable=status, wraplength=510, justify="left").grid(
         row=5, column=0, columnspan=3, sticky="w", pady=(4, 8))
     ttk.Label(body, text="External FFmpeg required for conversion; no network, "
@@ -657,9 +758,13 @@ def launch_gui():
         row=6, column=0, columnspan=3, sticky="w")
     def close():
         if working[0]:
-            messagebox.showwarning("Conversion in progress",
-                                   "Wait for the bounded local operation to finish.",
-                                   parent=root)
+            if work_kind[0] in ("folder", "compare"):
+                cancel_scan()
+            else:
+                messagebox.showwarning(
+                    "Conversion in progress",
+                    "Wait for the bounded local operation to finish.",
+                    parent=root)
         else:
             root.destroy()
     root.protocol("WM_DELETE_WINDOW", close)
@@ -677,7 +782,7 @@ def main(argv=None):
     parser.add_argument("--verify-wav", help="Read-only check existing local PCM16 stereo 48 kHz WAV")
     parser.add_argument("--verify-folder", help="Read-only check 1-40 local PCM16 stereo WAVs in a folder")
     parser.add_argument("--compare-folders", nargs=2, metavar=("ORIGINAL", "COPY"),
-                        help="Read-only compare two local WAV folders by ordered content")
+                        help="Read-only compare WAV folder contents, independent of names/order")
     args = parser.parse_args(argv)
     if args.compare_folders is not None:
         if (args.gui or args.check_local or args.convert or args.source is not None
