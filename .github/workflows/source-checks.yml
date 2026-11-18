@@ -208,6 +208,23 @@ jobs:
             if ((Get-FileHash -Algorithm SHA256 -LiteralPath $copiedWav).Hash.ToLowerInvariant() -ne $originalHash) {
               throw 'Read-only copy check changed original copy'
             }
+            # Two original files with reversed name-based order in copy must
+            # still match by complete file content. No decoder/network/Pi.
+            $secondSource = Join-Path $library 'z-source-other.wav'
+            $secondCopy = Join-Path $copyDir 'a-copy-other.wav'
+            python -c "import sys,wave;f=wave.open(sys.argv[1],'wb');f.setnchannels(2);f.setsampwidth(2);f.setframerate(48000);f.writeframes(bytes([2,4,6,8])*480);f.close()" $secondSource
+            if ($LASTEXITCODE -ne 0) { throw 'Second synthetic WAV creation failed' }
+            Copy-Item -LiteralPath $secondSource -Destination $secondCopy -ErrorAction Stop
+            $secondOriginalHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $secondSource).Hash.ToLowerInvariant()
+            $renamedReport = & python START-OFFLINE-WAV-PREP.py --compare-folders $library $copyDir
+            if ($LASTEXITCODE -ne 0 -or -not (($renamedReport -join "`n").Contains('LOCAL WAV COPY MATCH: 2'))) {
+              throw 'Renamed and reversed WAV order falsely rejected'
+            }
+            if ((Get-FileHash -Algorithm SHA256 -LiteralPath $secondSource).Hash.ToLowerInvariant() -ne $secondOriginalHash) {
+              throw 'Order-independent compare modified second source'
+            }
+            Write-Host 'Renamed/reordered two-file WAV copy MATCH (synthetic, no writes)'
+
             python -c "import sys,wave;f=wave.open(sys.argv[1],'wb');f.setnchannels(2);f.setsampwidth(2);f.setframerate(48000);f.writeframes(bytes([1,2,3,4])*480);f.close()" $copiedWav
             if ($LASTEXITCODE -ne 0) { throw 'Synthetic changed WAV generation failed' }
             $differentOutput = & python START-OFFLINE-WAV-PREP.py --compare-folders $library $copyDir
