@@ -47,6 +47,26 @@ remains an equally supported alternative for operators preferring Python.
 If a corporate PC blocks local scripts, follow its security policy; there
 is no approved signed installer to override those restrictions.
 
+## Multiple Python installations: safe startup fallback
+
+If both the Windows Python launcher `py.exe` and a separate
+`python.exe` are on PATH, this portable launcher no longer assumes
+that `py.exe -3` points to a usable Python. It first performs a
+**no-music** Python 3.11+/Tk import probe; if `py.exe -3` is old,
+broken or lacks Tk, it tests `python.exe` separately and uses the
+first compatible interpreter for **all** later steps (dependency
+report, package self-check, WAV demo and GUI). The active choice is
+shown as `compatible py.exe -3 runtime` or
+`compatible python.exe fallback runtime`, without displaying your
+private PATH. No executable is downloaded or installed.
+
+The standalone `--package-check` only needs Python 3.11+, **not Tk
+or a desktop**. `--check`, `--smoke`, and GUI launch still require
+Tk; external FFmpeg remains optional except for a separately approved
+conversion. If neither installed Python works, the launcher refuses
+with exit 2 and instructions to use a trusted independently installed
+Python; it never falls back to an unsupported Python.
+
 ## New one-click startup gate and single-command first-run smoke
 
 The existing Windows `OPEN-AUDIOHUB-MUSIC-PREP.cmd` now checks
