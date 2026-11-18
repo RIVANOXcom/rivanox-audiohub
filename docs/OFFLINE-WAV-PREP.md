@@ -164,7 +164,7 @@ Keep the previously checked portable ZIP for rollback.
 
 After an explicitly confirmed, successful conversion that has already
 passed final read-back verification, the Windows GUI now enables
-**9. Hear last verified export (no file picker)**. This button is disabled
+**9. Hear last verified export**. This button is disabled
 until a conversion actually succeeds; it never starts playback automatically.
 It uses only the filename and full SHA256 captured from that exact completed
 conversion, not an editable path in a later file-picker dialog. A change to
