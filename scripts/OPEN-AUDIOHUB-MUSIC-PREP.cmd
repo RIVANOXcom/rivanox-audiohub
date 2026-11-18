@@ -8,8 +8,9 @@ if "%AUDIOHUB_DIR:~0,2%"=="\\" goto refuse_network
 pushd "%AUDIOHUB_DIR%" || goto error
 set "MODE=--gui"
 if /I "%~1"=="--check" set "MODE=--check-local"
+if /I "%~1"=="--package-check" set "MODE=--package-check"
 if not "%~2"=="" goto error_pushed
-if not "%~1"=="" if /I not "%~1"=="--check" goto error_pushed
+if not "%~1"=="" if /I not "%~1"=="--check" if /I not "%~1"=="--package-check" goto error_pushed
 where py.exe >nul 2>&1
 if not errorlevel 1 goto use_py
 where python.exe >nul 2>&1
@@ -27,7 +28,7 @@ echo Install Python separately from a trusted source; this file does not downloa
 set "RC=2"
 goto finish
 :error_pushed
-echo AudioHub: double-click for GUI, or use --check for a no-write dependency check.
+echo AudioHub: double-click for GUI, --check for dependencies, or --package-check for version and package files.
 set "RC=2"
 :finish
 popd
