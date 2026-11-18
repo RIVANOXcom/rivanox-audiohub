@@ -214,6 +214,9 @@ jobs:
             if ($LASTEXITCODE -ne 1 -or -not (($differentOutput -join "`n").Contains('LOCAL WAV COPY DIFFERS'))) {
               throw 'Extracted Windows WAV copy mismatch detection failed'
             }
+            # Return code 1 means the expected valid mismatch, not a failed
+            # test. Reset the shell's last native command exit status.
+            $global:LASTEXITCODE = 0
             if ((Get-FileHash -Algorithm SHA256 -LiteralPath $libraryWav).Hash.ToLowerInvariant() -ne $originalHash) {
               throw 'Copy comparison modified the original'
             }
