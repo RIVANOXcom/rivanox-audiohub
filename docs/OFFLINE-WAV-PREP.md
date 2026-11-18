@@ -168,7 +168,9 @@ Windows PC** and **Stop PC sound preview**. Select a previously prepared,
 explicitly for audible playback and reminds you to adjust your speaker
 or headphone volume. Only after you confirm does it perform a complete
 read-only WAV format and SHA256 check and play the **first 3 seconds at
-most** through the default **Windows PC sound device**. The GUI remains
+most** through the default **Windows PC sound device**, with a fixed
+**12 dB digital attenuation** in the temporary memory clip. Original WAV
+and system mixer volume are unchanged. Lower your PC volume before trying. The GUI remains
 responsive while the sample plays. Stop requests interrupt Windows
 PlaySound where supported; any already-running sample is limited to
 3 seconds.
