@@ -20,6 +20,7 @@ if errorlevel 1 goto try_python
 py.exe -3 -c "%AUDIOHUB_PROBE%" >nul 2>&1
 if errorlevel 1 goto try_python
 set "AUDIOHUB_PY=py.exe -3"
+echo AudioHub: using compatible py.exe -3 runtime.
 goto dispatch
 :try_python
 where python.exe >nul 2>&1
@@ -27,6 +28,7 @@ if errorlevel 1 goto python_missing
 python.exe -c "%AUDIOHUB_PROBE%" >nul 2>&1
 if errorlevel 1 goto dependency_failed
 set "AUDIOHUB_PY=python.exe"
+echo AudioHub: using compatible python.exe fallback runtime.
 :dispatch
 if /I "%~1"=="--package-check" goto package_only
 rem Normal double-click, --smoke and --check use selected Python/Tk.
@@ -65,7 +67,7 @@ exit /b %errorlevel%
 %AUDIOHUB_PY% "START-OFFLINE-WAV-PREP.py" --package-check
 exit /b %errorlevel%
 :dependency_failed
-echo AudioHub START REFUSED: installed Python could not pass 3.11+/Tk readiness.
+echo AudioHub START REFUSED: installed Python could not pass the required runtime probe.
 echo This launcher installs NOTHING; resolve the dependency on a trusted PC.
 set "RC=2"
 goto finish
