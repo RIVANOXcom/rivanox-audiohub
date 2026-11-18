@@ -658,7 +658,7 @@ def launch_gui():
     except (OSError, ValueError, RuntimeError, UnicodeError):
         source_label = "UNPACKAGED SOURCE"
     root.title("AudioHub WAV - " + source_label + " (unverified)")
-    root.minsize(700, 775)
+    root.minsize(700, 710)
     root.columnconfigure(0, weight=1)
     body = ttk.Frame(root, padding=16)
     body.grid(sticky="nsew")
@@ -1299,19 +1299,19 @@ def launch_gui():
     package_button.grid(row=6, column=0, columnspan=2, sticky="w",
                         pady=(10, 0))
     audition_button = ttk.Button(
-        controls, text="8. Hear 3-second owned WAV on this Windows PC",
+        controls, text="8. Hear selected WAV on Windows PC",
         command=audition_wav)
-    audition_button.grid(row=7, column=0, columnspan=2, sticky="w",
-                         pady=(10, 0))
+    audition_button.grid(row=7, column=0, sticky="w",
+                         padx=(0, 8), pady=(10, 0))
     audition_stop_button = ttk.Button(
         controls, text="Stop PC sound preview", state="disabled",
         command=stop_audition)
     audition_stop_button.grid(row=8, column=0, columnspan=2, sticky="w",
                               pady=(10, 0))
     audition_last_button = ttk.Button(
-        controls, text="9. Hear last verified export (no file picker)",
+        controls, text="9. Hear last verified export",
         state="disabled", command=audition_last_export)
-    audition_last_button.grid(row=9, column=0, columnspan=2, sticky="w",
+    audition_last_button.grid(row=7, column=1, sticky="w",
                               pady=(10, 0))
     ttk.Label(body, textvariable=status, wraplength=510, justify="left").grid(
         row=5, column=0, columnspan=3, sticky="w", pady=(4, 8))
