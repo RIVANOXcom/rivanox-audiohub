@@ -11,11 +11,13 @@ from array import array
 import hashlib
 import io
 import json
+import math
 import os
 from pathlib import Path
 import shutil
 import stat
 import subprocess
+import struct
 import sys
 import tempfile
 import threading
@@ -615,6 +617,45 @@ def play_local_wav_audition(path, *, cancelled=None, sound_module=None,
             "source_sha256": report["source_sha256"]}
 
 
+def generate_pc_test_tone():
+    """One second of original quiet 440-Hz stereo PCM16, memory only.
+
+    No user audio, filesystem, FFmpeg, Pi, network, device setting or write.
+    The 10-ms fades suppress clicks; amplitude <=1000/32767 (-30 dBFS).
+    """
+    frames = 48000
+    pcm = bytearray(frames * 4)
+    for index in range(frames):
+        fade = min(1.0, index / 480, (frames - 1 - index) / 480)
+        sample = round(1000 * fade * math.sin(2 * math.pi * 440 * index / 48000))
+        struct.pack_into("<hh", pcm, 4 * index, sample, sample)
+    memory = io.BytesIO()
+    with wave.open(memory, "wb") as writer:
+        writer.setnchannels(2)
+        writer.setsampwidth(2)
+        writer.setframerate(48000)
+        writer.writeframes(pcm)
+    return memory.getvalue()
+
+
+def play_pc_test_tone(*, cancelled=None, sound_module=None):
+    """Explicit Windows speaker test with no private media or WAV files."""
+    if cancelled is not None and cancelled.is_set():
+        raise ScanCancelled("PC test tone cancelled before sound")
+    if sys.platform != "win32" and sound_module is None:
+        raise RuntimeError("PC test tone requires Windows")
+    sample = generate_pc_test_tone()
+    if cancelled is not None and cancelled.is_set():
+        raise ScanCancelled("PC test tone stopped before sound")
+    if sound_module is None:
+        import winsound as sound_module
+    sound_module.PlaySound(sample,
+                           sound_module.SND_MEMORY | sound_module.SND_NODEFAULT)
+    if cancelled is not None and cancelled.is_set():
+        raise ScanCancelled("PC test tone stopped")
+    return {"seconds": 1.0, "synthetic": True}
+
+
 def stop_local_wav_audition(*, sound_module=None):
     """Request Windows to stop a currently playing PlaySound sample."""
     if sys.platform != "win32" and sound_module is None:
@@ -700,10 +741,10 @@ def launch_gui():
                        "No audio has been changed.")
 
     def stop_audition():
-        if working[0] and work_kind[0] == "audition":
+        if working[0] and work_kind[0] in ("audition", "testtone"):
             audition_cancel.set()
             audition_stop_button.configure(state="disabled")
-            status.set("PC WAV PREVIEW STOP requested. At most 3 seconds; "
+            status.set("PC sound STOP requested. At most 3 seconds; "
                        "no private media changed.")
             try:
                 stop_local_wav_audition()
@@ -843,10 +884,12 @@ def launch_gui():
         demo_button.configure(state="normal")
         package_button.configure(state="normal")
         audition_button.configure(state="normal")
+        tone_button.configure(state="normal")
         audition_last_button.configure(state=("normal" if last_verified_export[0]
                                               else "disabled"))
         audition_stop_button.configure(state="disabled")
-        if work_kind[0] == "audition":
+        if work_kind[0] in ("audition", "testtone"):
+            is_tone = work_kind[0] == "testtone"
             if audition_cancel.is_set():
                 status.set("PC WAV PREVIEW STOPPED; no files changed.")
                 messagebox.showinfo("PC WAV preview stopped",
@@ -854,17 +897,20 @@ def launch_gui():
                                     "This is not a Pi/Edifier sound test.",
                                     parent=root)
             elif ok:
-                status.set("PC WAV SAMPLE FINISHED: " + str(value["seconds"])
-                           + " seconds, Windows local speakers only. "
-                           "No files changed.")
-                messagebox.showinfo("Windows PC WAV sample finished",
-                                    str(value["seconds"])
-                                    + " seconds requested through the default "
-                                    "Windows sound device. Not a verified "
-                                    "Pi4/Edifier sound result. Original "
-                                    "WAV unchanged.", parent=root)
+                status.set(("SYNTHETIC PC TEST TONE FINISHED: " if is_tone
+                            else "PC WAV SAMPLE FINISHED: ")
+                           + str(value["seconds"]) + " seconds; "
+                           "Windows device API returned. No files changed.")
+                messagebox.showinfo(
+                    "Windows PC sound request finished",
+                    str(value["seconds"]) + " seconds of "
+                    + ("generated quiet 440-Hz tone; no private music used. "
+                       if is_tone else "verified owned WAV sample. ")
+                    + "Windows sound API returned; YOU must confirm audible "
+                    "output. NOT Pi4/Edifier verified. No files changed.",
+                    parent=root)
             else:
-                status.set("PC WAV PREVIEW REFUSED or playback failed. "
+                status.set("PC SOUND REFUSED or playback failed. "
                            "No music file changed.")
                 messagebox.showwarning("PC WAV preview not completed",
                                        "Choose a valid local PCM16 stereo 48 kHz "
@@ -1031,6 +1077,7 @@ def launch_gui():
         demo_button.configure(state="disabled")
         package_button.configure(state="disabled")
         audition_button.configure(state="disabled")
+        tone_button.configure(state="disabled")
         audition_last_button.configure(state="disabled")
         status.set("Converting locally. No WAV is published until complete.")
         def worker():
@@ -1068,6 +1115,7 @@ def launch_gui():
         demo_button.configure(state="disabled")
         package_button.configure(state="disabled")
         audition_button.configure(state="disabled")
+        tone_button.configure(state="disabled")
         status.set("Checking up to 40 WAV files without writing or playing audio.")
         def worker():
             try:
@@ -1114,6 +1162,7 @@ def launch_gui():
         demo_button.configure(state="disabled")
         package_button.configure(state="disabled")
         audition_button.configure(state="disabled")
+        tone_button.configure(state="disabled")
         status.set("Comparing two existing WAV folders locally. No writes or transfers.")
         def worker():
             try:
@@ -1148,6 +1197,7 @@ def launch_gui():
         demo_button.configure(state="disabled")
         package_button.configure(state="disabled")
         audition_button.configure(state="disabled")
+        tone_button.configure(state="disabled")
         status.set("Running a disposable local synthetic WAV demo. "
                    "No real music files, FFmpeg, network or Pi.")
         def worker():
@@ -1178,6 +1228,7 @@ def launch_gui():
         demo_button.configure(state="disabled")
         package_button.configure(state="disabled")
         audition_button.configure(state="disabled")
+        tone_button.configure(state="disabled")
         status.set("Checking source files in this extracted local ALPHA "
                    "folder against its own manifest. No user media read.")
         def worker():
@@ -1230,6 +1281,7 @@ def launch_gui():
         demo_button.configure(state="disabled")
         package_button.configure(state="disabled")
         audition_button.configure(state="disabled")
+        tone_button.configure(state="disabled")
         audition_last_button.configure(state="disabled")
         audition_stop_button.configure(state="normal")
         status.set("Verifying WAV before audible sample; up to 3 seconds "
@@ -1248,6 +1300,46 @@ def launch_gui():
                 results.put((False, None))
         threading.Thread(target=worker, daemon=True,
                          name="audiohub-owned-wav-pc-audition").start()
+        root.after(150, finish)
+
+    def synthetic_pc_tone():
+        if working[0]:
+            return
+        if sys.platform != "win32":
+            status.set("A PC sound test requires Windows. No sound played.")
+            return
+        consent = messagebox.askyesno(
+            "Hear a short PC sound test?",
+            "Generate and play one quiet 440-Hz tone for 1 second "
+            "(peak below -30 dBFS) on the DEFAULT WINDOWS PC sound "
+            "device. Adjust your volume first. NO personal music, FFmpeg, "
+            "files, network or Pi access. NOT an Edifier/Pi sound test. "
+            "Listen now?", parent=root)
+        if not consent:
+            status.set("Synthetic PC tone cancelled before audio.")
+            return
+        audition_cancel.clear()
+        working[0] = True
+        work_kind[0] = "testtone"
+        approved[0] = None
+        for control in (source_button, destination_button, source_entry,
+                        output_entry, preview_button, convert_button,
+                        verify_button, verify_folder_button, compare_button,
+                        demo_button, package_button, audition_button,
+                        audition_last_button, tone_button):
+            control.configure(state="disabled")
+        audition_stop_button.configure(state="normal")
+        status.set("Playing one-second low-level synthetic tone on Windows PC. "
+                   "No personal music touched. Stop available.")
+        def worker():
+            try:
+                report = play_pc_test_tone(cancelled=audition_cancel)
+                results.put((True, report))
+            except (OSError, ValueError, RuntimeError, ScanCancelled,
+                    wave.Error):
+                results.put((False, None))
+        threading.Thread(target=worker, daemon=True,
+                         name="audiohub-synthetic-pc-test-tone").start()
         root.after(150, finish)
 
     def audition_last_export():
@@ -1306,8 +1398,12 @@ def launch_gui():
     audition_stop_button = ttk.Button(
         controls, text="Stop PC sound preview", state="disabled",
         command=stop_audition)
-    audition_stop_button.grid(row=8, column=0, columnspan=2, sticky="w",
-                              pady=(10, 0))
+    audition_stop_button.grid(row=8, column=0, sticky="w",
+                              padx=(0, 8), pady=(10, 0))
+    tone_button = ttk.Button(
+        controls, text="10. Hear 1s synthetic PC tone",
+        command=synthetic_pc_tone)
+    tone_button.grid(row=8, column=1, sticky="w", pady=(10, 0))
     audition_last_button = ttk.Button(
         controls, text="9. Hear last verified export",
         state="disabled", command=audition_last_export)
@@ -1326,7 +1422,7 @@ def launch_gui():
         if working[0]:
             if work_kind[0] in ("folder", "compare"):
                 cancel_scan()
-            elif work_kind[0] == "audition":
+            elif work_kind[0] in ("audition", "testtone"):
                 stop_audition()
                 status.set("PC sound stop requested; the bounded preview "
                            "will finish before closing.")
@@ -1364,7 +1460,28 @@ def main(argv=None):
                         help="Read-only source SHA and portable file self-consistency check")
     parser.add_argument("--audition-wav", metavar="OWNED_WAV",
                         help="Explicit Windows-only 3-second audible WAV sample; no file writes")
+    parser.add_argument("--test-pc-tone", action="store_true",
+                        help="Explicit Windows-only one-second quiet synthetic PC audio test")
     args = parser.parse_args(argv)
+    if args.test_pc_tone:
+        if (args.audition_wav is not None or args.gui or args.demo
+                or args.convert or args.check_local or args.package_check
+                or args.source is not None or args.output is not None
+                or args.verify_wav is not None or args.verify_folder is not None
+                or args.compare_folders is not None):
+            parser.error("--test-pc-tone is a standalone audible Windows action")
+        print("WINDOWS PC TEST TONE REQUESTED: 1s quiet synthetic 440 Hz. "
+              "Adjust volume. No music, files, FFmpeg, network or Pi.")
+        try:
+            play_pc_test_tone()
+        except (OSError, ValueError, RuntimeError, ScanCancelled, wave.Error):
+            print("SYNTHETIC PC TONE REFUSED: Windows sound output unavailable "
+                  "or test cancelled. No personal files accessed.",
+                  file=sys.stderr)
+            return 2
+        print("SYNTHETIC PC TONE FINISHED: Windows sound API returned. "
+              "Operator must confirm audible sound; NOT Pi/Edifier accepted.")
+        return 0
     if args.audition_wav is not None:
         if (args.gui or args.demo or args.convert or args.check_local
                 or args.package_check or args.source is not None
