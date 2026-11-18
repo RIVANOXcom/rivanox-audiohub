@@ -561,9 +561,9 @@ class OfflineWavPreparationTests(unittest.TestCase):
                 ["--check-local"]):
             with self.subTest(option=incompatible), \
                  mock.patch.object(prep, "run_offline_wav_demo") as demo, \
-                 contextlib.redirect_stderr(io.StringIO()), \
-                 self.assertRaises(SystemExit):
-                prep.main(["--demo", *incompatible])
+                 contextlib.redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit):
+                    prep.main(["--demo", *incompatible])
                 demo.assert_not_called()
         self.assertFalse(self.destination.exists())
 
