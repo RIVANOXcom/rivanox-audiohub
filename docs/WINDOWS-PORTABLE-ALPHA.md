@@ -165,6 +165,33 @@ Failure exits 2, without claiming success. This is an accessible GUI
 performed by CI or any Pi4/Edifier sound certification. Keep the older
 verified portable ZIP and Pi SD for rollback.
 
+## Local PC audition before manually copying a WAV to Pi SD
+
+The Windows portable operator GUI now includes **8. Hear 3-second
+owned WAV on this Windows PC** and a separate **Stop PC sound preview**
+button. After selecting a local owned/licensed PCM16 stereo 48-kHz WAV,
+the operator is asked to confirm **audible sound on the default WINDOWS
+PC device** and to lower speaker/headphone volume if needed. The
+utility verifies the WAV in full, then plays a bounded maximum
+3-second in-memory clip using Windows `winsound` (Python standard
+library). Its source is never converted, overwritten or copied; no
+temporary audio file, FFmpeg, network or Pi access is used. The GUI
+remains responsive while this short sample plays and offers Stop.
+
+Run the optional CLI `py -3 START-OFFLINE-WAV-PREP.py --audition-wav
+"C:\Private\Prepared\owned-song.wav"` for explicit PC sound
+playback without the GUI. Failed format or playback exits 2, success
+exits 0 but is **not a validated audible hardware test**. Automated
+CI uses a stubbed Windows audio API with a synthetic compatible WAV
+to test that the correct bounded bytes and format would be submitted;
+CI does not emit sound or represent that any listener heard it.
+
+**This does not test Raspberry Pi, Edifier, SD transfer, Scream driver,
+sound quality, level matching, media rights or actual PC speaker
+functionality.** Those require real human/hardware S3 acceptance.
+Always check output level manually and keep the prior portable ZIP for
+rollback. No auto-update or install.
+
 ## Long WAV checks: anonymous progress and safe Stop
 
 On the portable Windows GUI, **4. Check WAV folder** and **5. Compare WAV
