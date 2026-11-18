@@ -160,6 +160,43 @@ but not proof of real music compatibility, FFmpeg conversion,
 Edifier sound, secure Pi login, SD transfers, licenses or production GO.
 Keep the previously checked portable ZIP for rollback.
 
+## Hear a prepared WAV on the Windows PC (new, opt-in)
+
+The portable **Windows GUI** now has **8. Hear 3-second owned WAV on this
+Windows PC** and **Stop PC sound preview**. Select a previously prepared,
+**owned or licensed local PCM16 stereo 48-kHz WAV**. AudioHub asks
+explicitly for audible playback and reminds you to adjust your speaker
+or headphone volume. Only after you confirm does it perform a complete
+read-only WAV format and SHA256 check and play the **first 3 seconds at
+most** through the default **Windows PC sound device**. The GUI remains
+responsive while the sample plays. Stop requests interrupt Windows
+PlaySound where supported; any already-running sample is limited to
+3 seconds.
+
+The sample is assembled as a bounded in-memory WAV (maximum 576,044
+bytes) and passed to Windows built-in `winsound.PlaySound`. Nothing is
+exported, converted, copied, uploaded or written to a temporary file:
+the original WAV remains unchanged. No FFmpeg, extra sound library,
+Pi4, Edifier, Scream driver, Bluetooth connection or network is
+required. It uses **the Windows PC's default speaker/headphone output**
+and neither selects nor controls a remote device. A WAV that does not
+meet the existing strict local verification requirements is refused
+**before audio playback**. No sound begins from opening the GUI.
+
+Explicit Windows terminal alternative:
+
+```powershell
+py -3 START-OFFLINE-WAV-PREP.py --audition-wav "C:\Private\Prepared\owned-song.wav"
+```
+
+This is an explicitly audible action. Exit 0 means the Windows sound
+API completed its call, **not** that the operator heard audio or Pi/
+Edifier speakers worked. Exit 2 means missing, unsafe, changed, wrong
+format or unavailable Windows sound output. No private filename is
+written in the tool's report. A genuine audible Windows test requires
+the operator to listen and note whether it played, including any
+wrong-channel/silence issue. Keep the volume low for a first test.
+
 ## GUI: choose source and target, then explicitly confirm
 
 On Windows, open a PowerShell terminal in the **extracted inner portable ZIP**
