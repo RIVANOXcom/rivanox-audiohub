@@ -160,6 +160,25 @@ but not proof of real music compatibility, FFmpeg conversion,
 Edifier sound, secure Pi login, SD transfers, licenses or production GO.
 Keep the previously checked portable ZIP for rollback.
 
+## Hear the WAV you JUST converted, without picking it again
+
+After an explicitly confirmed, successful conversion that has already
+passed final read-back verification, the Windows GUI now enables
+**9. Hear last verified export (no file picker)**. This button is disabled
+until a conversion actually succeeds; it never starts playback automatically.
+It uses only the filename and full SHA256 captured from that exact completed
+conversion, not an editable path in a later file-picker dialog. A change to
+the source/destination selection or a new conversion attempt clears this
+one-click shortcut.
+
+Clicking button 9 asks for audible **Windows PC** playback and volume consent
+exactly like button 8, and plays the first three seconds at **-12 dB**
+only after rechecking the current WAV against the original SHA256.
+If another process changes or replaces the WAV after conversion, the replay
+is **REFUSED before sound**. Original WAV and system volume remain unchanged.
+The existing button **8** still lets you explicitly pick *any* owned local
+compatible WAV. This is not a Pi4/Edifier audio test.
+
 ## Hear a prepared WAV on the Windows PC (new, opt-in)
 
 The portable **Windows GUI** now has **8. Hear 3-second owned WAV on this
