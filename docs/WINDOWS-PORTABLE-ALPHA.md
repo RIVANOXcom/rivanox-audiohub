@@ -57,6 +57,30 @@ collection content SHA256 without private names or any write. Terminal:
 `py -3 START-OFFLINE-WAV-PREP.py --verify-folder "C:\\Private\\Prepared"`.
 See `docs/OFFLINE-WAV-PREP.md` for constraints.
 
+## No-personal-music first-run demo (new)
+
+After verifying and extracting this exact-source Windows ZIP, double-click
+`OPEN-AUDIOHUB-MUSIC-PREP.cmd` and click **6. Run offline demo (synthetic;
+no music needed)**. The program creates two short PCM16 WAVs in a fresh
+private OS temporary folder, compares renamed/reordered copies as MATCH,
+detects a deliberately changed/duplicated WAV as DIFFERS and checks its
+read-only cancellation behavior. The temporary synthetic files are
+automatically cleaned; no private music, FFmpeg, network, Pi or speaker
+device is accessed. A real local filesystem is required (no UNC/links).
+
+Equivalent offline CLI command:
+
+```powershell
+py -3 START-OFFLINE-WAV-PREP.py --demo
+```
+
+Exit 0 and `SYNTHETIC WAV DEMO PASS: 2` prove only that the portable
+PC-side WAV verifier runs and the isolated synthetic cases pass.
+Failure exits 2, without claiming success. This is an accessible GUI
+**operator acceptance starting point**, not a human Windows test
+performed by CI or any Pi4/Edifier sound certification. Keep the older
+verified portable ZIP and Pi SD for rollback.
+
 ## Long WAV checks: anonymous progress and safe Stop
 
 On the portable Windows GUI, **4. Check WAV folder** and **5. Compare WAV

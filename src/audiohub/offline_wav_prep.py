@@ -337,6 +337,83 @@ def compare_local_wav_folders(source_folder, copied_folder, *, cancel=None,
     }
 
 
+def run_offline_wav_demo():
+    """Demonstrate real local WAV validation without any operator media.
+
+    ONLY generated, bounded, very short synthetic audio is written under one
+    fresh private OS temporary folder; the temporary folder is removed on
+    exit. Never scans personal music folders, executes codecs or uses Pi/network.
+    """
+    base = Path(tempfile.gettempdir())
+    if (not base.is_absolute() or str(base).startswith("\\\\")
+            or base.is_symlink()
+            or any(parent.is_symlink() for parent in base.parents)):
+        raise ValueError("An ordinary local temp folder is required")
+
+    def make_synthetic_wav(target, pcm):
+        # The target is an exclusive file inside OUR newly created temp folder.
+        with target.open("xb") as stream:
+            with wave.open(stream, "wb") as writer:
+                writer.setnchannels(2)
+                writer.setsampwidth(2)
+                writer.setframerate(48000)
+                writer.writeframes(pcm)
+
+    silence = b"\x00\x00\x00\x00" * 480  # 10 ms of two-channel PCM16
+    signal = b"\x01\x00\xff\xff" * 480
+    with tempfile.TemporaryDirectory(
+            prefix="audiohub-synthetic-demo-", dir=base) as temporary:
+        root = Path(temporary)
+        source, copy, changed = (
+            root / "original", root / "copy", root / "different")
+        for folder in (source, copy, changed):
+            folder.mkdir(mode=0o700)
+        first = source / "a-original.wav"
+        second = source / "z-original.wav"
+        make_synthetic_wav(first, silence)
+        make_synthetic_wav(second, signal)
+        originals_before = tuple(
+            hashlib.sha256(path.read_bytes()).digest()
+            for path in (first, second))
+
+        # Identical bytes, but completely different, reverse-sorted filenames.
+        make_synthetic_wav(copy / "a-renamed.wav", signal)
+        make_synthetic_wav(copy / "z-renamed.wav", silence)
+        matching = compare_local_wav_folders(source, copy)
+        if not matching["matched"] or matching["source"]["files"] != 2:
+            raise ValueError("Synthetic renamed WAV copy mismatch")
+
+        # Same number of tracks, but one missing, replaced by a duplicate:
+        # a successful demo MUST detect this as different audio content.
+        make_synthetic_wav(changed / "a-duplicate.wav", silence)
+        make_synthetic_wav(changed / "z-duplicate.wav", silence)
+        altered = compare_local_wav_folders(source, changed)
+        if altered["matched"] or altered["copy"]["files"] != 2:
+            raise ValueError("Synthetic missing-track difference not found")
+
+        # Exercise real cooperative cancellation in the read-only comparator.
+        cancel = threading.Event()
+        def stop_after_one(phase, done, total):
+            if phase == "original" and done == 1 and total == 2:
+                cancel.set()
+        try:
+            compare_local_wav_folders(
+                source, copy, cancel=cancel, progress=stop_after_one)
+        except ScanCancelled:
+            if not cancel.is_set():
+                raise ValueError("Synthetic scan stopped unexpectedly")
+        else:
+            raise ValueError("Synthetic scan cancellation was not honored")
+        originals_after = tuple(
+            hashlib.sha256(path.read_bytes()).digest()
+            for path in (first, second))
+        if originals_before != originals_after:
+            raise ValueError("Synthetic demo altered an original")
+    # TemporaryDirectory cleans ONLY the synthetic demo folder it created.
+    return {"tracks": 2, "match": True, "difference": True,
+            "cancel": True, "private_media_used": False}
+
+
 def check_local_prerequisites():
     """No-write offline PC readiness; NEVER runs or installs FFmpeg."""
     import importlib.util
@@ -367,7 +444,7 @@ def launch_gui():
     except tk.TclError as exc:
         raise RuntimeError("No trusted local desktop session") from exc
     root.title("AudioHub - Offline WAV preparation")
-    root.minsize(640, 510)
+    root.minsize(640, 545)
     root.columnconfigure(0, weight=1)
     body = ttk.Frame(root, padding=16)
     body.grid(sticky="nsew")
@@ -533,6 +610,28 @@ def launch_gui():
         verify_button.configure(state="normal")
         verify_folder_button.configure(state="normal")
         compare_button.configure(state="normal")
+        demo_button.configure(state="normal")
+        if work_kind[0] == "demo":
+            if ok:
+                status.set("SYNTHETIC OFFLINE DEMO PASS: 2 WAV tracks; "
+                           "match, difference and Stop verified. "
+                           "No personal music opened.")
+                messagebox.showinfo(
+                    "Local synthetic WAV demo passed",
+                    "Two short synthetic WAVs were compared in renamed order; "
+                    "a missing track and a requested Stop were detected. "
+                    "Temporary demo files cleaned automatically.\n"
+                    "No real music, FFmpeg, network, Pi or sound tested.",
+                    parent=root)
+            else:
+                status.set("SYNTHETIC OFFLINE DEMO FAILED: no real music opened. "
+                           "Do not treat this package as verified.")
+                messagebox.showwarning(
+                    "Synthetic demo failed",
+                    "The local temporary WAV demonstration did not pass. "
+                    "No personal music was selected. No Pi/hardware was tested.",
+                    parent=root)
+            return
         if value == "cancelled" and work_kind[0] in ("folder", "compare"):
             status.set("STOPPED: read-only scan cancelled. No WAVs changed.")
             messagebox.showinfo("WAV check stopped",
@@ -635,6 +734,7 @@ def launch_gui():
         verify_button.configure(state="disabled")
         verify_folder_button.configure(state="disabled")
         compare_button.configure(state="disabled")
+        demo_button.configure(state="disabled")
         status.set("Converting locally. No WAV is published until complete.")
         def worker():
             try:
@@ -668,6 +768,7 @@ def launch_gui():
         verify_button.configure(state="disabled")
         verify_folder_button.configure(state="disabled")
         compare_button.configure(state="disabled")
+        demo_button.configure(state="disabled")
         status.set("Checking up to 40 WAV files without writing or playing audio.")
         def worker():
             try:
@@ -711,6 +812,7 @@ def launch_gui():
         verify_button.configure(state="disabled")
         verify_folder_button.configure(state="disabled")
         compare_button.configure(state="disabled")
+        demo_button.configure(state="disabled")
         status.set("Comparing two existing WAV folders locally. No writes or transfers.")
         def worker():
             try:
@@ -724,6 +826,35 @@ def launch_gui():
                 results.put((False, None))
         threading.Thread(target=worker, daemon=True,
                          name="audiohub-local-wav-copy-compare").start()
+        root.after(150, finish)
+
+
+    def demo_synthetic():
+        if working[0]:
+            return
+        working[0] = True
+        work_kind[0] = "demo"
+        approved[0] = None
+        source_button.configure(state="disabled")
+        destination_button.configure(state="disabled")
+        source_entry.configure(state="disabled")
+        output_entry.configure(state="disabled")
+        preview_button.configure(state="disabled")
+        convert_button.configure(state="disabled")
+        verify_button.configure(state="disabled")
+        verify_folder_button.configure(state="disabled")
+        compare_button.configure(state="disabled")
+        demo_button.configure(state="disabled")
+        status.set("Running a disposable local synthetic WAV demo. "
+                   "No real music files, FFmpeg, network or Pi.")
+        def worker():
+            try:
+                report = run_offline_wav_demo()
+                results.put((True, report))
+            except (OSError, ValueError, RuntimeError, wave.Error):
+                results.put((False, None))
+        threading.Thread(target=worker, daemon=True,
+                         name="audiohub-synthetic-offline-demo").start()
         root.after(150, finish)
 
     controls = ttk.Frame(body)
@@ -751,6 +882,11 @@ def launch_gui():
         command=cancel_scan)
     cancel_button.grid(row=4, column=0, columnspan=2, sticky="w",
                        pady=(10, 0))
+    demo_button = ttk.Button(
+        controls, text="6. Run offline demo (synthetic; no music needed)",
+        command=demo_synthetic)
+    demo_button.grid(row=5, column=0, columnspan=2, sticky="w",
+                     pady=(10, 0))
     ttk.Label(body, textvariable=status, wraplength=510, justify="left").grid(
         row=5, column=0, columnspan=3, sticky="w", pady=(4, 8))
     ttk.Label(body, text="External FFmpeg required for conversion; no network, "
@@ -760,6 +896,11 @@ def launch_gui():
         if working[0]:
             if work_kind[0] in ("folder", "compare"):
                 cancel_scan()
+            elif work_kind[0] == "demo":
+                messagebox.showinfo(
+                    "Synthetic demo in progress",
+                    "The short disposable synthetic demo is still running.",
+                    parent=root)
             else:
                 messagebox.showwarning(
                     "Conversion in progress",
@@ -783,7 +924,27 @@ def main(argv=None):
     parser.add_argument("--verify-folder", help="Read-only check 1-40 local PCM16 stereo WAVs in a folder")
     parser.add_argument("--compare-folders", nargs=2, metavar=("ORIGINAL", "COPY"),
                         help="Read-only compare WAV folder contents, independent of names/order")
+    parser.add_argument("--demo", action="store_true",
+                        help="Local synthetic WAV check; temporary files only, no private music/FFmpeg/Pi")
     args = parser.parse_args(argv)
+    if args.demo:
+        if (args.gui or args.check_local or args.convert
+                or args.source is not None or args.output is not None
+                or args.verify_wav is not None or args.verify_folder is not None
+                or args.compare_folders is not None):
+            parser.error("--demo is standalone and never reads supplied music paths")
+        try:
+            report = run_offline_wav_demo()
+        except (OSError, ValueError, RuntimeError, wave.Error):
+            print("SYNTHETIC WAV DEMO FAILED: local temporary check refused. "
+                  "No personal music or Pi accessed.", file=sys.stderr)
+            return 2
+        print("SYNTHETIC WAV DEMO PASS: " + str(report["tracks"])
+              + " disposable WAVs; renamed copy MATCH, changed content "
+              "DIFFERS and requested Stop confirmed.")
+        print("Demo temporary files removed; no user music, FFmpeg, network, "
+              "Pi or audible hardware validated.")
+        return 0
     if args.compare_folders is not None:
         if (args.gui or args.check_local or args.convert or args.source is not None
                 or args.output is not None or args.verify_wav is not None

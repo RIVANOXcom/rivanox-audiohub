@@ -504,6 +504,69 @@ class OfflineWavPreparationTests(unittest.TestCase):
             hash_func.assert_not_called()
         self.assertEqual(self.destination.read_bytes(), original)
 
+    def test_synthetic_offline_demo_works_from_cli_without_user_music_or_codecs(self):
+        original = self.source.read_bytes()
+        out = io.StringIO()
+        with mock.patch.object(prep.subprocess, "Popen") as decoder, \
+             mock.patch.object(prep.shutil, "which",
+                               side_effect=AssertionError("No FFmpeg check in demo")), \
+             contextlib.redirect_stdout(out):
+            code = prep.main(["--demo"])
+        self.assertEqual(code, 0)
+        self.assertIn("SYNTHETIC WAV DEMO PASS: 2", out.getvalue())
+        self.assertIn("DIFFERS", out.getvalue())
+        self.assertIn("Stop", out.getvalue())
+        self.assertNotIn("private-original", out.getvalue())
+        self.assertNotIn(str(self.root), out.getvalue())
+        decoder.assert_not_called()
+        self.assertEqual(self.source.read_bytes(), original)
+        self.assertFalse(self.destination.exists())
+
+    def test_synthetic_demo_only_creates_and_cleans_its_private_temp_folder(self):
+        real_temp = tempfile.TemporaryDirectory
+        used = []
+        def capture_directory(*args, **kwargs):
+            instance = real_temp(*args, **kwargs)
+            used.append(instance.name)
+            return instance
+        with mock.patch.object(prep.tempfile, "TemporaryDirectory",
+                               side_effect=capture_directory):
+            report = prep.run_offline_wav_demo()
+        self.assertEqual(report["tracks"], 2)
+        self.assertTrue(report["match"])
+        self.assertTrue(report["difference"])
+        self.assertTrue(report["cancel"])
+        self.assertIs(report["private_media_used"], False)
+        self.assertEqual(len(used), 1)
+        self.assertFalse(Path(used[0]).exists())
+        self.assertEqual(self.source.read_bytes(), b'private-owned-audio-bytes')
+
+    def test_synthetic_demo_rejects_false_match_and_does_not_claim_pass(self):
+        fake = {"matched": False, "source": {"files": 2}}
+        out = io.StringIO()
+        with mock.patch.object(prep, "compare_local_wav_folders",
+                               return_value=fake), \
+             contextlib.redirect_stderr(out):
+            self.assertEqual(prep.main(["--demo"]), 2)
+        self.assertIn("SYNTHETIC WAV DEMO FAILED", out.getvalue())
+        self.assertNotIn(str(self.root), out.getvalue())
+        self.assertFalse(self.destination.exists())
+
+    def test_synthetic_demo_disallows_combining_with_file_selection_or_gui(self):
+        for incompatible in (
+                ["--source", str(self.source)],
+                ["--output", str(self.destination)],
+                ["--gui"], ["--convert"], ["--verify-folder", str(self.root)],
+                ["--compare-folders", str(self.root), str(self.root)],
+                ["--check-local"]):
+            with self.subTest(option=incompatible), \
+                 mock.patch.object(prep, "run_offline_wav_demo") as demo, \
+                 contextlib.redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit):
+                    prep.main(["--demo", *incompatible])
+                demo.assert_not_called()
+        self.assertFalse(self.destination.exists())
+
     def test_local_wav_folder_rejects_corrupt_links_empty_and_excess(self):
         with self.assertRaises(ValueError):
             prep.verify_local_wav_folder(self.root)

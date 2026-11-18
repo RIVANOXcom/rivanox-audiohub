@@ -238,6 +238,16 @@ jobs:
               throw 'Copy comparison modified the original'
             }
             Write-Host 'Extracted WAV copy match/mismatch/no-write checks PASS (synthetic)'
+            # Exercise zero-private-media operator self-demo from extracted ZIP.
+            # The program writes and removes only its disposable generated WAVs.
+            $demoReport = & python START-OFFLINE-WAV-PREP.py --demo
+            if ($LASTEXITCODE -ne 0 -or -not (($demoReport -join "`n").Contains("SYNTHETIC WAV DEMO PASS: 2"))) {
+              throw 'Extracted portable synthetic WAV demo failed'
+            }
+            if (-not (($demoReport -join "`n").Contains("changed content DIFFERS"))) {
+              throw 'Portable demo did not exercise deliberate content difference'
+            }
+            Write-Host 'Extracted zero-personal-media WAV demo PASS (synthetic)'
 
           } finally { Pop-Location }
           Write-Host "Windows operator ALPHA source-only smoke PASS. No GUI launched or hardware claim."
