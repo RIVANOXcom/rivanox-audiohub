@@ -59,24 +59,25 @@ See `docs/OFFLINE-WAV-PREP.md` for constraints.
 
 ## Compare manually copied WAV folders (optional, read-only)
 
-The existing **OPEN-AUDIOHUB-MUSIC-PREP.cmd** GUI also provides
-**5. Compare WAV copy (read-only)**. Select the original prepared local
-folder and a different manually copied local folder. The new step checks
-up to 40 complete compatible WAVs in each folder without FFmpeg or
-network access. The equivalent offline terminal check is:
+The **OPEN-AUDIOHUB-MUSIC-PREP.cmd** GUI provides **5. Compare WAV copy
+(read-only)**. Select the original prepared local folder and a different
+manually copied local folder. It checks up to 40 complete PCM16 stereo
+48-kHz WAVs per folder. Equivalent offline terminal command:
 
 ```powershell
 py -3 START-OFFLINE-WAV-PREP.py --compare-folders "C:\Private\Prepared" "D:\MyCopiedWavs"
 ```
 
-Result **MATCH** (exit 0) means identical ordered-content fingerprints
-and file counts; **DIFFERS** (exit 1) means valid folders with different
-fingerprints; unsafe/invalid/same folders are **REFUSED** (exit 2).
-This operation NEVER copies, replaces, deletes or uploads audio and prints
-no filenames or private paths. It is not proof of matching filenames,
-file order independent of naming, licenses, permissions, Pi/Edifier
-sound or an SD restore. Inspect mismatches manually; retain original WAVs
-and the old SD.
+**MATCH** (exit 0) means equal complete WAV file contents, including repeated
+identical tracks, *independent of filename and file order*. **DIFFERS**
+(exit 1) means valid folders with changed/missing/extra content.
+Unsafe/invalid/same folders are **REFUSED** (exit 2). The copy comparator
+uses an order-independent copy-content SHA256, while the existing
+single-folder ordered collection SHA256 stays unchanged. Comparison neither
+runs FFmpeg nor transfers, replaces, deletes or uploads files, and does
+not reveal private names or paths. Matching content does not guarantee
+matching filenames, permissions, licenses, Pi/Edifier playback or SD
+restore. Keep original WAVs and the prior SD for rollback.
 
 ## Offline certificate cross-check (recommended before any audio test)
 
