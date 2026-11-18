@@ -47,6 +47,32 @@ remains an equally supported alternative for operators preferring Python.
 If a corporate PC blocks local scripts, follow its security policy; there
 is no approved signed installer to override those restrictions.
 
+## Identify the installed portable source SHA and check its files
+
+The Windows GUI shows the self-reported 12-character source label in its
+title. Click **7. Show version and check package files (read-only)** to
+display the **full source Git commit SHA** and check all 18 packaged
+source files against `SOURCE-MANIFEST.json`. In PowerShell, in the
+**inner extracted ZIP folder**, run:
+
+```powershell
+.\OPEN-AUDIOHUB-MUSIC-PREP.cmd --package-check
+```
+
+Equivalent: `py -3 START-OFFLINE-WAV-PREP.py --package-check`.
+Exit 0 / MATCH means the source files agree with the bundled manifest,
+exit 2 / REFUSED means something is missing or different. This check
+does not read private music, contact a network or alter your WAVs.
+
+**This is a local self-check only, NOT authentication.** Both code and
+manifest come from the same archive. Independently verify the actual
+GitHub outer ZIP SHA256 and contained inner ZIP SHA256 BEFORE running
+them. For each upgrade, extract a verified ZIP into a **new folder**,
+leave the previous installed version and Pi SD untouched, and only
+discard an older folder after actual Windows acceptance and backup.
+If the check fails, do not continue using that folder: re-download and
+hash a trusted copy. There is no automatic update or installer.
+
 ## First-run local WAV demonstration — no personal audio needed
 
 In the extracted Windows portable ALPHA, double-click
