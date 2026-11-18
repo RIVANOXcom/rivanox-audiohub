@@ -354,6 +354,50 @@ class OfflineWavPreparationTests(unittest.TestCase):
         self.assertEqual(original_path.read_bytes(), original_bytes)
         self.assertEqual(copied_path.read_bytes(), changed_bytes)
 
+    def test_copy_comparison_ignores_filename_order_and_preserves_duplicate_counts(self):
+        first = self.root / "original-private"
+        second = self.root / "renamed-private"
+        first.mkdir()
+        second.mkdir()
+        sound_a = self.pcm
+        sound_b = b"\x10\x20\x30\x40" * 480
+
+        def write_wav(folder, name, frames):
+            target = folder / name
+            with wave.open(str(target), "wb") as writer:
+                writer.setnchannels(2)
+                writer.setsampwidth(2)
+                writer.setframerate(48000)
+                writer.writeframes(frames)
+            return target
+
+        a = write_wav(first, "a-original.wav", sound_a)
+        b = write_wav(first, "b-original.wav", sound_b)
+        # Filename sorting gives B,A on copy but A,B on source.
+        other_b = write_wav(second, "a-copy-renamed.wav", sound_b)
+        other_a = write_wav(second, "z-copy-renamed.wav", sound_a)
+        first_bytes = {p.name: p.read_bytes() for p in (a, b)}
+        copy_bytes = {p.name: p.read_bytes() for p in (other_b, other_a)}
+        report = prep.compare_local_wav_folders(first, second)
+        self.assertTrue(report["matched"])
+        self.assertNotEqual(report["source"]["collection_sha256"],
+                            report["copy"]["collection_sha256"])
+        self.assertEqual(report["source"]["copy_content_sha256"],
+                         report["copy"]["copy_content_sha256"])
+        self.assertEqual(prep.main(["--compare-folders", str(first), str(second)]), 0)
+        self.assertEqual({p.name: p.read_bytes() for p in (a, b)}, first_bytes)
+        self.assertEqual({p.name: p.read_bytes() for p in (other_b, other_a)},
+                         copy_bytes)
+
+        # Same file count, but one missing track replaced by a duplicate:
+        # a set-based checker would miss this, a multiset must refuse.
+        write_wav(second, "a-copy-renamed.wav", sound_a)
+        changed = prep.compare_local_wav_folders(first, second)
+        self.assertFalse(changed["matched"])
+        self.assertEqual(changed["source"]["files"], changed["copy"]["files"])
+        self.assertEqual(prep.main(["--compare-folders", str(first), str(second)]), 1)
+        self.assertEqual({p.name: p.read_bytes() for p in (a, b)}, first_bytes)
+
     def test_compare_wav_folders_refuses_same_folder_and_unsafe_copy(self):
         first = self.root / "original-folder"
         second = self.root / "copy-folder"
