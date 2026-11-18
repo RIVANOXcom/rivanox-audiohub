@@ -98,6 +98,30 @@ local WAV structure only, **not audible Edifier playback** or permission
 to transfer copyrighted music. Use the independently checked SHA256 after
 any manual transfer; retain old SD and all original media.
 
+## Check a private WAV folder in one step (no writes, no FFmpeg)
+
+For a manually prepared music folder, choose **4. Check WAV folder (read-only)**
+in the same GUI. This checks **1 to 40 direct .wav tracks**, each PCM16 stereo
+48 kHz, fully reads their content and reports a collection SHA256. The folder
+may contain unrelated files; only direct .wav files are inspected. The scan
+refuses symlinks, corrupt/truncated WAVs, ambiguous case-colliding names,
+folders with over 256 direct entries, and changes during the check. It runs
+on a background worker so the GUI remains responsive, with editing locked
+until completion. No files are created, played, transferred or modified.
+
+Offline terminal equivalent, also available in the extracted Windows ZIP:
+
+```powershell
+py -3 START-OFFLINE-WAV-PREP.py --verify-folder "C:\Private\Prepared"
+```
+
+The result is a deterministic **ordered-content fingerprint**, not a
+filename-preserving backup manifest. It never prints the private filenames
+or paths; use single-file Verify for individual hashes. It does not verify
+the Pi4 USB speaker, owner permissions, music copyright, free SD space, or
+the success of a later USB copy. Recheck the selected folder after any
+manual transfer and keep all original files and the previous SD card.
+
 ## Step 1 — no-write preview (FFmpeg not required)
 
 From a trusted Windows terminal in the extracted portable alpha folder:
