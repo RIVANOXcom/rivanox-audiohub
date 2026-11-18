@@ -343,7 +343,7 @@ class OfflineWavPreparationTests(unittest.TestCase):
             writer.setnchannels(2)
             writer.setsampwidth(2)
             writer.setframerate(48000)
-            writer.writeframes(b"\\x01\\x02\\x03\\x04" * 480)
+            writer.writeframes(b"\x01\x02\x03\x04" * 480)
         changed_bytes = copied_path.read_bytes()
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
