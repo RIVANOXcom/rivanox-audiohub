@@ -160,6 +160,49 @@ but not proof of real music compatibility, FFmpeg conversion,
 Edifier sound, secure Pi login, SD transfers, licenses or production GO.
 Keep the previously checked portable ZIP for rollback.
 
+## Batch conversion: up to 10 owned MP3/FLAC files, one consent
+
+**11. Convert up to 10 owned files (batch)** offers a complete Windows GUI
+journey when preparing a small album rather than just one track. Choose an
+existing **local source folder** containing 1–10 directly contained MP3/FLAC
+files you own or are licensed to use; choose a **different existing local
+destination folder**. The preflight is read-only: it checks bounded file
+sizes, ordinary local paths, source count, unique proposed
+`*-AudioHub.wav` names and refuses every preexisting destination before
+anything starts. Nested subdirectories are not traversed; if the source
+folder has more than 256 direct entries or more than 10 audio tracks,
+the entire plan is refused. Two files with the same stem (e.g. MP3 and
+FLAC) collide and the batch is refused, rather than guessing a name.
+
+The operator must type exactly **BATCH** after seeing the anonymous file
+count and conditions. A separately installed local FFmpeg is required for
+**actual conversion**, not for read-only preflight. Each track uses the
+existing single-track bounded PCM16 stereo 48-kHz conversion, exclusive
+new-file creation and complete source and output SHA256 verification.
+The GUI reports anonymous completed counts and includes **Stop batch
+after current WAV**; cancellation never abandons an incomplete published
+WAV and doesn't delete finished output. No originals or existing files
+are overwritten, no network/Pi/SD operation, and no hidden background
+queue. In a partial failure, previously **completed new verified WAVs
+remain intentionally**; the operator sees completed/total counts and
+can inspect the destination, but must choose a fresh unused destination
+for a full retry. A single file remains at most 64 MiB output and each
+conversion has its existing time limit.
+
+Optional CLI read-only preview:
+```powershell
+py -3 START-OFFLINE-WAV-PREP.py --batch-plan "C:\Private\OwnedAlbum" "C:\Private\NewWavs"
+```
+Optional CLI actual export in an **interactive local terminal**:
+```powershell
+py -3 START-OFFLINE-WAV-PREP.py --batch-convert "C:\Private\OwnedAlbum" "C:\Private\NewWavs"
+```
+The CLI requires interactive confirmation **BATCH**, never prints
+private filenames, and refuses unattended/non-TTY conversion. Reported
+complete/partial statuses refer to verified local files, not heard Pi
+speaker audio. No batch overwrite, recursive scanning, auto-retrofit or
+automatic retry. Keep the old Windows portable folder for rollback.
+
 ## New: hear a generated Windows PC test tone without music
 
 For an even simpler **real Windows audio-output test**, the GUI now
