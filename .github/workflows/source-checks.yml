@@ -203,6 +203,19 @@ jobs:
           fake.PlaySound = check_memory_sound
           sys.modules["winsound"] = fake
           from audiohub import offline_wav_prep as prep
+          # Audible S3 test without ANY music/FFmpeg: verify generated 1s
+          # PC tone with a substituted Windows audio module, no real sound.
+          generated = prep.generate_pc_test_tone()
+          if len(generated) != 192044:
+              raise RuntimeError("Synthetic PC tone must be bounded to 1s")
+          with wave.open(io.BytesIO(generated), "rb") as sample:
+              if sample.getnframes() != 48000:
+                  raise RuntimeError("Expected generated 48k-frame PC tone")
+          played = prep.play_pc_test_tone(sound_module=fake)
+          if played != {"seconds": 1.0, "synthetic": True}:
+              raise RuntimeError("PC tone did not submit expected sample")
+          if prep.main(["--test-pc-tone"]) != 0:
+              raise RuntimeError("Synthetic PC tone CLI did not finish")
           # The one-click replay of an exported file must refuse if the
           # previously confirmed SHA256 does not match BEFORE any sound.
           current_sha = prep.verify_local_wav(sys.argv[1])["sha256"]
@@ -220,13 +233,13 @@ jobs:
           raise SystemExit(prep.main(["--audition-wav", sys.argv[1]]))
           '@
             $auditionReport = & python -c $auditionProbe $verifyWav
-            if ($LASTEXITCODE -ne 0 -or -not (($auditionReport -join "`n").Contains('LOCAL PC WAV AUDITION FINISHED'))) {
+            if ($LASTEXITCODE -ne 0 -or -not (($auditionReport -join "`n").Contains('LOCAL PC WAV AUDITION FINISHED')) -or -not (($auditionReport -join "`n").Contains('SYNTHETIC PC TONE FINISHED'))) {
               throw 'Extracted PC WAV audition did not exercise Windows memory audio path'
             }
             if ((Get-FileHash -Algorithm SHA256 -LiteralPath $verifyWav).Hash.ToLowerInvariant() -ne $wavHash) {
               throw 'Read-only audible WAV preview altered original'
             }
-            Write-Host 'Extracted Windows WAV PC audition memory path PASS (stubbed, no real audio hardware)'
+            Write-Host 'Extracted Windows WAV audition and generated 1-second PC tone PASS (stubbed, no speaker or private music)'
 
             $library = Join-Path $env:RUNNER_TEMP 'audiohub-private-synthetic-library'
             New-Item -ItemType Directory -Path $library -ErrorAction Stop | Out-Null
