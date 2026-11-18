@@ -452,9 +452,9 @@ def launch_gui():
                                + " ordered tracks. SHA256: " + left["collection_sha256"])
                     messagebox.showinfo(
                         "WAV copy contents match",
-                        str(left["files"]) + " WAVs match in content order.\\n"
-                        + "Collection SHA256:\\n" + left["collection_sha256"]
-                        + "\\nNo writes. Names and Pi sound NOT verified.", parent=root)
+                        str(left["files"]) + " WAVs match in content order.\n"
+                        + "Collection SHA256:\n" + left["collection_sha256"]
+                        + "\nNo writes. Names and Pi sound NOT verified.", parent=root)
                 else:
                     status.set("WAV COPY DIFFERS: ordered audio contents do NOT match. "
                                "No files changed.")
