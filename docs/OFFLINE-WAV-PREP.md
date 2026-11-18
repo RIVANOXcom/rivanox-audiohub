@@ -124,30 +124,32 @@ manual transfer and keep all original files and the previous SD card.
 
 ## Check an existing WAV copy against the original (no writes)
 
-In the existing Windows GUI use **5. Compare WAV copy (read-only)**, then
-select the original local prepared WAV folder and the second local folder
-you copied it into manually. Both folders must contain 1–40 direct PCM16
-stereo 48-kHz WAV files and pass the existing folder safety checks. The
-background check does not copy, rename, decode with FFmpeg, upload, or edit
-anything; it compares the complete ordered-content fingerprints.
+In the Windows GUI use **5. Compare WAV copy (read-only)**, then select the
+original local prepared WAV folder and the different local folder you copied
+it into manually. Each folder must contain 1–40 direct PCM16 stereo 48-kHz
+WAVs and pass the bounded safety checks. The worker performs no writes,
+transfers, uploads or FFmpeg calls, and does not show private file names.
 
-The same operation is available in the extracted portable ZIP, without
-FFmpeg:
+The equivalent command from the extracted portable Windows package is:
 
 ```powershell
 py -3 START-OFFLINE-WAV-PREP.py --compare-folders "C:\Private\Prepared" "D:\MyCopiedWavs"
 ```
 
-Exit 0 = matching ordered WAV content, exit 1 = valid but different
-contents, exit 2 = refused because of missing, same, unsafe, corrupt or
-unsupported folders. No private filenames or paths are printed. Because
-the content hash is calculated in case-folded filename order, it does
-**not prove matching filenames**, folder layout, audio playback,
-permissions or an authorized Pi/SD transfer. Copying different filenames
-may alter the order even if the audio files are otherwise identical.
-Keep the original files and old SD; do not automatically overwrite or
-erase anything after a mismatch. This is two separate read-only snapshots,
-not an atomic cross-device filesystem transaction.
+Exit 0 means **MATCH**: exactly the same complete WAV file contents, including
+duplicate-file counts, regardless of names or filename sorting. Exit 1 means
+**DIFFERS**: both folders are valid, but some contents or their multiplicities
+differ. Exit 2 means **REFUSED**: identical/invalid/missing/unsafe folders.
+Results use an order-independent **copy-content SHA256** computed from the
+sorted multiset of each fully verified file's size and hash. The existing
+`--verify-folder` ordered collection SHA256 remains unchanged and is
+deliberately distinct. Renaming/reordering copied files no longer creates a
+false mismatch; repeated identical tracks are not silently discarded.
+
+A MATCH does not prove matching filenames, folder layout, timestamps,
+permissions, licenses, Pi/Edifier sound, an SD restore, or a durable
+cross-device transaction. Do not automatically erase or overwrite anything
+on DIFFERS. Preserve your originals and old Pi SD.
 
 ## Step 1 — no-write preview (FFmpeg not required)
 
