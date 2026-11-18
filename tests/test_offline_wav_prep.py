@@ -820,7 +820,7 @@ class OfflineWavPreparationTests(unittest.TestCase):
         # A replaced or edited same-length output must NOT play as last export.
         with target.open("r+b") as dest:
             dest.seek(44)
-            dest.write(b"\\xff\\xfe\\xfd\\xfc")
+            dest.write(bytes([255, 254, 253, 252]))
         sound.calls = 0
         before_failure = target.read_bytes()
         with self.assertRaisesRegex(ValueError, "Previously verified"):
