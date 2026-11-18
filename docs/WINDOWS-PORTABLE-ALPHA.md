@@ -165,6 +165,21 @@ Failure exits 2, without claiming success. This is an accessible GUI
 performed by CI or any Pi4/Edifier sound certification. Keep the older
 verified portable ZIP and Pi SD for rollback.
 
+## One-click post-conversion audition
+
+After converting a legally usable local MP3/FLAC to a **new** WAV and
+passing the existing final read-back check, the GUI enables
+**9. Hear last verified export (no file picker)**. This removes another
+filename selection from the common **Choose source → Preview → Convert →
+Listen** path. The button is unavailable until a conversion succeeds;
+changing selected source/output or starting another conversion clears it.
+Playback is always separately confirmed, PC-only, max 3 seconds at reduced
+-12 dB digital amplitude and may be stopped. The last exported WAV's stored
+full SHA256 must still match immediately before any sound – a replaced or
+changed file fails closed. No original files are overwritten or re-encoded,
+no Pi/network used, and there is no implicit loud sound on successful export.
+The existing button 8 remains available for other owned WAVs.
+
 ## Local PC audition before manually copying a WAV to Pi SD
 
 The Windows portable operator GUI now includes **8. Hear 3-second
