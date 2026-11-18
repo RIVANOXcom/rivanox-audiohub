@@ -770,8 +770,8 @@ class OfflineWavPreparationTests(unittest.TestCase):
                               reader.getframerate(), reader.getnframes()),
                              (2, 2, 48000, 48000))
             pcm = reader.readframes(48000)
-        self.assertEqual(pcm[:4], b"\\x00\\x00\\x00\\x00")
-        self.assertEqual(pcm[-4:], b"\\x00\\x00\\x00\\x00")
+        self.assertEqual(pcm[:4], b"\x00\x00\x00\x00")
+        self.assertEqual(pcm[-4:], b"\x00\x00\x00\x00")
         peaks = [int.from_bytes(pcm[i:i + 2], "little", signed=True)
                  for i in range(0, len(pcm), 2)]
         self.assertGreater(max(peaks), 400)
