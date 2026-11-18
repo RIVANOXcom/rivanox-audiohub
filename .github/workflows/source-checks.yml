@@ -268,6 +268,32 @@ jobs:
               throw 'One-click smoke did not verify exact package source SHA'
             }
             Write-Host 'One-click Windows first-run dependency/package/demo smoke PASS (synthetic)'
+            # Reproduce a real operator environment: py.exe is present but
+            # unsuitable; a separate compatible python.exe is on PATH.
+            # The decoy is only a copy of Microsoft's own where.exe inside
+            # the disposable GitHub runner temp directory; no real Python
+            # installation, published ZIP or operator machine is modified.
+            $fakePythonFolder = Join-Path $env:RUNNER_TEMP 'audiohub-incompatible-py'
+            New-Item -ItemType Directory -Path $fakePythonFolder -Force | Out-Null
+            Copy-Item -LiteralPath (Join-Path $env:SystemRoot 'System32\where.exe') -Destination (Join-Path $fakePythonFolder 'py.exe') -Force
+            $originalPath = $env:PATH
+            try {
+              $env:PATH = "$fakePythonFolder;$originalPath"
+              $fallbackReport = & cmd.exe /d /c '.\OPEN-AUDIOHUB-MUSIC-PREP.cmd --smoke' 2>&1
+              if ($LASTEXITCODE -ne 0 -or -not (($fallbackReport -join "`n").Contains('AudioHub FIRST-RUN SMOKE PASS'))) {
+                throw 'Compatible python.exe was not selected after stale py.exe failed'
+              }
+              if (-not (($fallbackReport -join "`n").Contains('compatible python.exe fallback runtime'))) {
+                throw 'Fallback runner not actually selected'
+              }
+              $fallbackPackage = & cmd.exe /d /c '.\OPEN-AUDIOHUB-MUSIC-PREP.cmd --package-check' 2>&1
+              if ($LASTEXITCODE -ne 0 -or -not (($fallbackPackage -join "`n").Contains($env:SOURCE_COMMIT))) {
+                throw 'Standalone no-Tk package check did not use fallback Python'
+              }
+            } finally {
+              $env:PATH = $originalPath
+            }
+            Write-Host 'Native Windows stale py.exe -> compatible python.exe fallback PASS (synthetic)'
             # Only alter a disposable extracted README after all positive tests.
             # Never modify the build ZIP, real operator files, or repo checkout.
             $tamperTestReadme = Join-Path (Get-Location) 'README-OFFLINE-WAV-PREP.md'
