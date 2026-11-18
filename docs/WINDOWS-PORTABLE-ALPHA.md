@@ -169,7 +169,7 @@ verified portable ZIP and Pi SD for rollback.
 
 After converting a legally usable local MP3/FLAC to a **new** WAV and
 passing the existing final read-back check, the GUI enables
-**9. Hear last verified export (no file picker)**. This removes another
+**9. Hear last verified export**. This removes another
 filename selection from the common **Choose source → Preview → Convert →
 Listen** path. The button is unavailable until a conversion succeeds;
 changing selected source/output or starting another conversion clears it.
