@@ -182,6 +182,38 @@ jobs:
               throw 'Read-only portable WAV verifier changed its input'
             }
             Write-Host 'Extracted portable WAV structure and SHA256 verification PASS (synthetic)'
+            # Exercise the NEW audible audition CLI using a REAL extracted
+            # portable Python file, with in-memory winsound stub. NO Windows
+            # speaker, Pi, user music, mixer setting or hardware audio touched.
+            $auditionProbe = @'
+import io
+import sys
+import types
+import wave
+
+fake = types.ModuleType("winsound")
+fake.SND_MEMORY = 4
+fake.SND_NODEFAULT = 2
+def check_memory_sound(data, flags):
+    if not isinstance(data, bytes) or flags != 6:
+        raise RuntimeError("PC WAV audition must use synchronous memory audio")
+    with wave.open(io.BytesIO(data), "rb") as sample:
+        if (sample.getnchannels(), sample.getsampwidth(), sample.getframerate()) != (2, 2, 48000):
+            raise RuntimeError("Audition supplied unexpected WAV format")
+fake.PlaySound = check_memory_sound
+sys.modules["winsound"] = fake
+from audiohub import offline_wav_prep as prep
+raise SystemExit(prep.main(["--audition-wav", sys.argv[1]]))
+'@
+            $auditionReport = & python -c $auditionProbe $verifyWav
+            if ($LASTEXITCODE -ne 0 -or -not (($auditionReport -join "`n").Contains('LOCAL PC WAV AUDITION FINISHED'))) {
+              throw 'Extracted PC WAV audition did not exercise Windows memory audio path'
+            }
+            if ((Get-FileHash -Algorithm SHA256 -LiteralPath $verifyWav).Hash.ToLowerInvariant() -ne $wavHash) {
+              throw 'Read-only audible WAV preview altered original'
+            }
+            Write-Host 'Extracted Windows WAV PC audition memory path PASS (stubbed, no real audio hardware)'
+
             $library = Join-Path $env:RUNNER_TEMP 'audiohub-private-synthetic-library'
             New-Item -ItemType Directory -Path $library -ErrorAction Stop | Out-Null
             $libraryWav = Join-Path $library 'owned-synthetic.wav'
