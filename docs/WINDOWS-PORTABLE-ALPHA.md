@@ -39,7 +39,10 @@ with explicit Preview and CONVERT confirmation (no automatic export).
 The terminal `--convert` alternative still requires a local TTY and
 typing exact uppercase `CONVERT`.
 The output is bounded to 64 MiB and printed with its SHA256 but never a
-private filename. Use the included preparation README for exact commands,
+private filename. Every completed conversion reopens and verifies the actual
+new file's PCM16 stereo 48-kHz format, complete data, byte count and SHA256
+before reporting success. An invalid read-back safely removes only the
+unchanged new file created by that conversion. No human sound test is implied. Use the included preparation README for exact commands,
 limitations and independent media backup requirements. This is a
 separate utility, not an authenticated audio sender or release.
 

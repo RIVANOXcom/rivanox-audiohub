@@ -121,6 +121,39 @@ class OfflineWavPreparationTests(unittest.TestCase):
             p.assert_not_called()
         self.assertEqual(self.source.read_bytes(), old)
 
+    def test_completed_wav_requires_final_readback_and_safe_failure_cleanup(self):
+        original = self.source.read_bytes()
+        inspect_final = prep.verify_local_wav
+        with mock.patch.object(prep.shutil, 'which', return_value='ffmpeg'), \
+             mock.patch.object(prep.subprocess, 'Popen',
+                               side_effect=lambda *a, **k: FakeProcess(self.pcm)), \
+             mock.patch.object(prep, 'verify_local_wav', wraps=inspect_final) as inspect:
+            result = prep._convert(self.source, self.destination)
+            inspect.assert_called_once_with(self.destination)
+        self.assertEqual(result['sha256'], inspect_final(self.destination)['sha256'])
+        self.destination.unlink()
+
+        for failure in ('hash_mismatch', 'size_mismatch', 'unreadable'):
+            with self.subTest(failure=failure):
+                def bad_readback(path):
+                    if failure == 'unreadable':
+                        raise ValueError('Simulated damaged published WAV')
+                    good = inspect_final(path)
+                    if failure == 'hash_mismatch':
+                        good['sha256'] = 'f' * 64
+                    else:
+                        good['bytes'] += 1
+                    return good
+                with mock.patch.object(prep.shutil, 'which', return_value='ffmpeg'), \
+                     mock.patch.object(prep.subprocess, 'Popen',
+                                       side_effect=lambda *a, **k: FakeProcess(self.pcm)), \
+                     mock.patch.object(prep, 'verify_local_wav',
+                                       side_effect=bad_readback):
+                    with self.assertRaises(ValueError):
+                        prep._convert(self.source, self.destination)
+                self.assertFalse(self.destination.exists())
+                self.assertEqual(self.source.read_bytes(), original)
+
     def test_refuse_unsafe_paths_before_any_ffmpeg(self):
         for input_path, output in [
             (self.source, self.source),
