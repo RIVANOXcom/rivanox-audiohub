@@ -250,8 +250,12 @@ def verify_local_wav_folder(path):
         raise ValueError("No direct WAV tracks found in selected folder")
     digest = hashlib.sha256(b"AudioHub private WAV collection v1\n")
     total = 0
+    content_items = []
     for index, target in enumerate(sorted(targets, key=lambda p: p.name.casefold()), 1):
         details = verify_local_wav(target)
+        # Separate canonical copy identity from the historic ordered
+        # collection digest; preserve old folder-check output unchanged.
+        content_items.append((details["bytes"], bytes.fromhex(details["sha256"])))
         total += details["bytes"]
         # Include ordered audio hashes and byte counts without leaking names.
         digest.update(index.to_bytes(2, "big"))
@@ -261,15 +265,24 @@ def verify_local_wav_folder(path):
     if (after.st_dev, after.st_ino, after.st_mtime_ns) != (
             before.st_dev, before.st_ino, before.st_mtime_ns):
         raise ValueError("WAV folder changed during inspection")
+    # Include multiplicity (duplicate tracks count) but NOT local filenames or
+    # path ordering. This gives reliable checks after manually renaming files.
+    copy_digest = hashlib.sha256(b"AudioHub private WAV copy multiset v1\n")
+    copy_digest.update(len(content_items).to_bytes(2, "big"))
+    for size, file_sha in sorted(content_items):
+        copy_digest.update(size.to_bytes(8, "big"))
+        copy_digest.update(file_sha)
     return {"files": len(targets), "bytes": total,
-            "collection_sha256": digest.hexdigest()}
+            "collection_sha256": digest.hexdigest(),
+            "copy_content_sha256": copy_digest.hexdigest()}
 
 
 
 def compare_local_wav_folders(source_folder, copied_folder):
     """Verify two existing local WAV folders without reading private filenames aloud.
 
-    Match means equal ordered PCM16 audio content only, NOT equal names, rights,
+    Match means identical complete PCM16 WAV file contents, including duplicate
+    counts, independent of filenames and order; NOT ownership, timestamps, rights,
     or proof of SD/Pi hardware playback. Both sides are fully and independently
     validated using the same bounded no-write folder verifier.
     """
@@ -280,7 +293,7 @@ def compare_local_wav_folders(source_folder, copied_folder):
     return {
         "matched": (left["files"] == right["files"]
                     and left["bytes"] == right["bytes"]
-                    and left["collection_sha256"] == right["collection_sha256"]),
+                    and left["copy_content_sha256"] == right["copy_content_sha256"]),
         "source": left, "copy": right,
     }
 
@@ -449,20 +462,23 @@ def launch_gui():
                 left, right = value["source"], value["copy"]
                 if value["matched"]:
                     status.set("READ-ONLY WAV COPY MATCH: " + str(left["files"])
-                               + " ordered tracks. SHA256: " + left["collection_sha256"])
+                               + " files, order-independent. SHA256: "
+                               + left["copy_content_sha256"])
                     messagebox.showinfo(
                         "WAV copy contents match",
-                        str(left["files"]) + " WAVs match in content order.\n"
-                        + "Collection SHA256:\n" + left["collection_sha256"]
+                        str(left["files"]) + " WAVs match regardless of file names/order.\n"
+                        + "Copy-content SHA256:\n" + left["copy_content_sha256"]
                         + "\nNo writes. Names and Pi sound NOT verified.", parent=root)
                 else:
-                    status.set("WAV COPY DIFFERS: ordered audio contents do NOT match. "
-                               "No files changed.")
+                    status.set("WAV COPY DIFFERS: source " + str(left["files"])
+                               + ", copy " + str(right["files"])
+                               + " WAVs; content or duplicates differ. No writes.")
                     messagebox.showwarning(
                         "WAV copy differs",
-                        "The two valid WAV folders differ by count, bytes or "
-                        "ordered content SHA256. No files changed. "
-                        "Check your copy manually; filenames are private.", parent=root)
+                        "Original WAV count: " + str(left["files"])
+                        + "; copy WAV count: " + str(right["files"])
+                        + ". File contents/multiplicity differ. No writes. "
+                        "Check your copy manually; filenames stay private.", parent=root)
             else:
                 status.set("WAV COPY CHECK REFUSED: select two different safe local "
                            "folders with 1-40 PCM16 stereo 48 kHz WAVs. No writes.")
@@ -676,16 +692,19 @@ def main(argv=None):
             return 2
         if report["matched"]:
             print("LOCAL WAV COPY MATCH: " + str(report["source"]["files"])
-                  + " ordered PCM16 stereo 48 kHz tracks; no writes.")
-            print("Collection content SHA256: "
-                  + report["source"]["collection_sha256"])
+                  + " PCM16 stereo 48 kHz WAVs regardless of names/order; no writes.")
+            print("Copy-content SHA256: "
+                  + report["source"]["copy_content_sha256"])
             print("Names, rights, later transfers and Pi audio NOT verified.")
             return 0
-        print("LOCAL WAV COPY DIFFERS: count, bytes or ordered contents differ. "
+        print("LOCAL WAV COPY DIFFERS: contents or duplicate counts differ. "
               "No files changed.")
-        print("Original collection SHA256: "
-              + report["source"]["collection_sha256"])
-        print("Copy collection SHA256: " + report["copy"]["collection_sha256"])
+        print("Original WAV count: " + str(report["source"]["files"]))
+        print("Copy WAV count: " + str(report["copy"]["files"]))
+        print("Original copy-content SHA256: "
+              + report["source"]["copy_content_sha256"])
+        print("Copy copy-content SHA256: "
+              + report["copy"]["copy_content_sha256"])
         print("No filename disclosure. Inspect and recopy manually.")
         return 1
     if args.verify_folder is not None:
