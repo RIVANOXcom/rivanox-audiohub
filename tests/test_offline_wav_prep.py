@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 from unittest import mock
 import wave
@@ -744,6 +745,121 @@ class OfflineWavPreparationTests(unittest.TestCase):
             converter.assert_not_called()
         self.assertEqual(self.source.read_bytes(), untouched)
         self.assertFalse(self.destination.exists())
+
+    def _create_owned_audition_wav(self, seconds=4):
+        target = self.root / "operator-owned.wav"
+        with wave.open(str(target), "wb") as writer:
+            writer.setnchannels(2)
+            writer.setsampwidth(2)
+            writer.setframerate(48000)
+            writer.writeframes(b"\x01\x02\x03\x04" * (seconds * 48000))
+        return target
+
+    def test_owned_wav_pc_audition_is_bounded_in_memory_and_read_only(self):
+        target = self._create_owned_audition_wav(seconds=4)
+        original = target.read_bytes()
+        digest = hashlib.sha256(original).hexdigest()
+        with mock.patch.object(prep.subprocess, "Popen") as decoder:
+            report = prep.prepare_local_wav_audition(target)
+            decoder.assert_not_called()
+        self.assertEqual(report["source_sha256"], digest)
+        self.assertEqual(report["seconds"], 3.0)
+        self.assertLessEqual(len(report["wav_bytes"]), 576100)
+        with wave.open(io.BytesIO(report["wav_bytes"]), "rb") as reader:
+            self.assertEqual((reader.getnchannels(), reader.getsampwidth(),
+                              reader.getframerate(), reader.getnframes()),
+                             (2, 2, 48000, 3 * 48000))
+            self.assertEqual(reader.readframes(2), b"\x01\x02\x03\x04" * 2)
+        self.assertEqual(target.read_bytes(), original)
+        self.assertEqual(self.source.read_bytes(), b"private-owned-audio-bytes")
+        self.assertFalse(self.destination.exists())
+
+    def test_owned_wav_audition_uses_windows_memory_playback_and_stop(self):
+        target = self._create_owned_audition_wav(seconds=1)
+        original = target.read_bytes()
+        class FakeWindowsSound:
+            SND_MEMORY = 4
+            SND_NODEFAULT = 2
+            def __init__(self):
+                self.calls = []
+            def PlaySound(self, data, flags):
+                self.calls.append((data, flags))
+        sound = FakeWindowsSound()
+        with mock.patch.object(prep.subprocess, "Popen") as decoder:
+            result = prep.play_local_wav_audition(
+                target, sound_module=sound)
+            prep.stop_local_wav_audition(sound_module=sound)
+            decoder.assert_not_called()
+        self.assertEqual(result["seconds"], 1.0)
+        self.assertEqual(result["source_sha256"],
+                         hashlib.sha256(original).hexdigest())
+        self.assertEqual(len(sound.calls), 2)
+        self.assertIsInstance(sound.calls[0][0], bytes)
+        self.assertEqual(sound.calls[0][1], 6)
+        self.assertEqual(sound.calls[1], (None, 0))
+        self.assertEqual(target.read_bytes(), original)
+
+    def test_pc_audition_refuses_cancelled_invalid_and_linked_wav_without_sound(self):
+        target = self._create_owned_audition_wav(seconds=1)
+        class FakeWindowsSound:
+            SND_MEMORY = 4
+            SND_NODEFAULT = 2
+            def PlaySound(self, *_):
+                raise AssertionError("No audio should be played")
+        stop = threading.Event()
+        stop.set()
+        with self.assertRaises(prep.ScanCancelled):
+            prep.play_local_wav_audition(target, cancelled=stop,
+                                        sound_module=FakeWindowsSound())
+        corrupted = self.root / "corrupted.wav"
+        corrupted.write_bytes(b"not a pcm WAV")
+        with self.assertRaises(ValueError):
+            prep.play_local_wav_audition(corrupted,
+                                        sound_module=FakeWindowsSound())
+        link = self.root / "unsafe-linked.wav"
+        try:
+            link.symlink_to(target)
+        except (OSError, NotImplementedError):
+            pass
+        else:
+            with self.assertRaises(ValueError):
+                prep.play_local_wav_audition(link,
+                                            sound_module=FakeWindowsSound())
+        self.assertEqual(self.source.read_bytes(), b"private-owned-audio-bytes")
+
+    def test_pc_audition_cli_is_standalone_and_never_logs_private_names(self):
+        target = self._create_owned_audition_wav(seconds=1)
+        verified = {"seconds": 1.0, "source_sha256": "b" * 64}
+        out = io.StringIO()
+        with mock.patch.object(prep, "play_local_wav_audition",
+                               return_value=verified) as player, \
+             contextlib.redirect_stdout(out):
+            self.assertEqual(prep.main(["--audition-wav", str(target)]), 0)
+            player.assert_called_once_with(str(target))
+        self.assertIn("PC AUDIO REQUESTED", out.getvalue())
+        self.assertIn("LOCAL PC WAV AUDITION FINISHED", out.getvalue())
+        self.assertNotIn(str(target), out.getvalue())
+        with mock.patch.object(prep, "play_local_wav_audition",
+                               side_effect=RuntimeError("private music path")) as player, \
+             contextlib.redirect_stderr(io.StringIO()) as errors, \
+             contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(prep.main(["--audition-wav", str(target)]), 2)
+            player.assert_called_once_with(str(target))
+        self.assertIn("LOCAL PC WAV AUDITION REFUSED", errors.getvalue())
+        self.assertNotIn("private music path", errors.getvalue())
+        for incompatible in (["--gui"], ["--convert"], ["--check-local"],
+                             ["--demo"], ["--package-check"],
+                             ["--verify-wav", str(target)],
+                             ["--verify-folder", str(self.root)],
+                             ["--source", str(self.source)],
+                             ["--output", str(self.destination)],
+                             ["--compare-folders", str(self.root), str(self.root)]):
+            with self.subTest(incompatible=incompatible), \
+                 mock.patch.object(prep, "play_local_wav_audition") as player, \
+                 contextlib.redirect_stderr(io.StringIO()), \
+                 self.assertRaises(SystemExit):
+                prep.main(["--audition-wav", str(target), *incompatible])
+                player.assert_not_called()
 
     @unittest.skipUnless(shutil.which('ffmpeg'), 'external FFmpeg not installed on test host')
     def test_real_local_ffmpeg_mp3_flac_to_wav_when_available(self):
