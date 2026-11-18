@@ -57,6 +57,24 @@ collection content SHA256 without private names or any write. Terminal:
 `py -3 START-OFFLINE-WAV-PREP.py --verify-folder "C:\\Private\\Prepared"`.
 See `docs/OFFLINE-WAV-PREP.md` for constraints.
 
+## Python launcher selection in Windows multi-version setups
+
+The existing `OPEN-AUDIOHUB-MUSIC-PREP.cmd` now validates a
+compatible Python 3.11+/Tk interpreter **before** choosing between
+`py.exe -3` and `python.exe`. If Windows has a stale `py.exe`
+but an independently installed compatible `python.exe` on PATH,
+the starter automatically uses the latter for the *entire* selected
+run, including the source integrity gate and GUI. The chosen runtime
+is printed without exposing an installation path.
+
+`--package-check` can also run on a supported Python installation
+that lacks Tk; it never tries to open a GUI. `--check` and
+`--smoke` still require Tk. If neither interpreter is suitable,
+the startup refuses; nothing installs or upgrades Python. CI has
+a separate native Windows case simulating an incompatible
+`py.exe` next to a valid `python.exe`, using only disposable
+test binaries.
+
 ## First-run: guarded double-click and one-command smoke
 
 After independently verifying the GitHub OUTER and INNER ZIP SHA256 and
