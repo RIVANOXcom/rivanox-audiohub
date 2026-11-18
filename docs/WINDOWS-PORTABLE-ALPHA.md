@@ -57,6 +57,27 @@ collection content SHA256 without private names or any write. Terminal:
 `py -3 START-OFFLINE-WAV-PREP.py --verify-folder "C:\\Private\\Prepared"`.
 See `docs/OFFLINE-WAV-PREP.md` for constraints.
 
+## Compare manually copied WAV folders (optional, read-only)
+
+The existing **OPEN-AUDIOHUB-MUSIC-PREP.cmd** GUI also provides
+**5. Compare WAV copy (read-only)**. Select the original prepared local
+folder and a different manually copied local folder. The new step checks
+up to 40 complete compatible WAVs in each folder without FFmpeg or
+network access. The equivalent offline terminal check is:
+
+```powershell
+py -3 START-OFFLINE-WAV-PREP.py --compare-folders "C:\Private\Prepared" "D:\MyCopiedWavs"
+```
+
+Result **MATCH** (exit 0) means identical ordered-content fingerprints
+and file counts; **DIFFERS** (exit 1) means valid folders with different
+fingerprints; unsafe/invalid/same folders are **REFUSED** (exit 2).
+This operation NEVER copies, replaces, deletes or uploads audio and prints
+no filenames or private paths. It is not proof of matching filenames,
+file order independent of naming, licenses, permissions, Pi/Edifier
+sound or an SD restore. Inspect mismatches manually; retain original WAVs
+and the old SD.
+
 ## Offline certificate cross-check (recommended before any audio test)
 
 The Windows GUI now has a **Choose public cert…** file picker. A copied

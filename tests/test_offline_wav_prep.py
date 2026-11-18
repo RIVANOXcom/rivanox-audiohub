@@ -305,6 +305,79 @@ class OfflineWavPreparationTests(unittest.TestCase):
         for name, before in originals.items():
             self.assertEqual((self.root / name).read_bytes(), before)
 
+    def test_compare_two_private_wav_folders_matches_and_detects_differences(self):
+        original = self.root / "first-private-copy"
+        copied = self.root / "second-private-copy"
+        original.mkdir()
+        copied.mkdir()
+        for folder, name, frames in (
+                (original, "do-not-disclose-source.wav", self.pcm),
+                (copied, "do-not-disclose-copy.wav", self.pcm)):
+            with wave.open(str(folder / name), "wb") as writer:
+                writer.setnchannels(2)
+                writer.setsampwidth(2)
+                writer.setframerate(48000)
+                writer.writeframes(frames)
+        original_path = next(original.glob("*.wav"))
+        copied_path = next(copied.glob("*.wav"))
+        original_bytes = original_path.read_bytes()
+        copied_bytes = copied_path.read_bytes()
+        with mock.patch.object(prep.subprocess, "Popen") as decoder:
+            report = prep.compare_local_wav_folders(original, copied)
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                self.assertEqual(prep.main(["--compare-folders", str(original),
+                                            str(copied)]), 0)
+            decoder.assert_not_called()
+        self.assertTrue(report["matched"])
+        self.assertEqual(report["source"]["files"], 1)
+        self.assertIn("LOCAL WAV COPY MATCH", out.getvalue())
+        self.assertNotIn(str(original), out.getvalue())
+        self.assertNotIn("do-not-disclose", out.getvalue())
+        self.assertEqual(original_path.read_bytes(), original_bytes)
+        self.assertEqual(copied_path.read_bytes(), copied_bytes)
+
+        # A valid different PCM payload is a clean nonmatching comparison,
+        # not a damaged-file exception or a write to either original.
+        with wave.open(str(copied_path), "wb") as writer:
+            writer.setnchannels(2)
+            writer.setsampwidth(2)
+            writer.setframerate(48000)
+            writer.writeframes(b"\x01\x02\x03\x04" * 480)
+        changed_bytes = copied_path.read_bytes()
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(prep.main(["--compare-folders", str(original),
+                                        str(copied)]), 1)
+        self.assertIn("LOCAL WAV COPY DIFFERS", out.getvalue())
+        self.assertNotIn("do-not-disclose", out.getvalue())
+        self.assertEqual(original_path.read_bytes(), original_bytes)
+        self.assertEqual(copied_path.read_bytes(), changed_bytes)
+
+    def test_compare_wav_folders_refuses_same_folder_and_unsafe_copy(self):
+        first = self.root / "original-folder"
+        second = self.root / "copy-folder"
+        first.mkdir()
+        second.mkdir()
+        with wave.open(str(first / "first.wav"), "wb") as writer:
+            writer.setnchannels(2)
+            writer.setsampwidth(2)
+            writer.setframerate(48000)
+            writer.writeframes(self.pcm)
+        with self.assertRaises(ValueError):
+            prep.compare_local_wav_folders(first, first)
+        (second / "bad.wav").write_bytes(b"not valid WAV data")
+        with self.assertRaises(ValueError):
+            prep.compare_local_wav_folders(first, second)
+        with contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(prep.main(["--compare-folders", str(first),
+                                        str(second)]), 2)
+            with self.assertRaises(SystemExit):
+                prep.main(["--compare-folders", str(first), str(second),
+                           "--convert"])
+        self.assertTrue((first / "first.wav").exists())
+        self.assertEqual((second / "bad.wav").read_bytes(), b"not valid WAV data")
+
     def test_local_wav_folder_rejects_corrupt_links_empty_and_excess(self):
         with self.assertRaises(ValueError):
             prep.verify_local_wav_folder(self.root)

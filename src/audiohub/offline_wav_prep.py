@@ -265,6 +265,26 @@ def verify_local_wav_folder(path):
             "collection_sha256": digest.hexdigest()}
 
 
+
+def compare_local_wav_folders(source_folder, copied_folder):
+    """Verify two existing local WAV folders without reading private filenames aloud.
+
+    Match means equal ordered PCM16 audio content only, NOT equal names, rights,
+    or proof of SD/Pi hardware playback. Both sides are fully and independently
+    validated using the same bounded no-write folder verifier.
+    """
+    if os.path.samefile(source_folder, copied_folder):
+        raise ValueError("Select two different local WAV folders")
+    left = verify_local_wav_folder(source_folder)
+    right = verify_local_wav_folder(copied_folder)
+    return {
+        "matched": (left["files"] == right["files"]
+                    and left["bytes"] == right["bytes"]
+                    and left["collection_sha256"] == right["collection_sha256"]),
+        "source": left, "copy": right,
+    }
+
+
 def check_local_prerequisites():
     """No-write offline PC readiness; NEVER runs or installs FFmpeg."""
     import importlib.util
@@ -295,7 +315,7 @@ def launch_gui():
     except tk.TclError as exc:
         raise RuntimeError("No trusted local desktop session") from exc
     root.title("AudioHub - Offline WAV preparation")
-    root.minsize(640, 430)
+    root.minsize(640, 470)
     root.columnconfigure(0, weight=1)
     body = ttk.Frame(root, padding=16)
     body.grid(sticky="nsew")
@@ -423,6 +443,34 @@ def launch_gui():
         convert_button.configure(state="disabled")
         verify_button.configure(state="normal")
         verify_folder_button.configure(state="normal")
+        compare_button.configure(state="normal")
+        if work_kind[0] == "compare":
+            if ok:
+                left, right = value["source"], value["copy"]
+                if value["matched"]:
+                    status.set("READ-ONLY WAV COPY MATCH: " + str(left["files"])
+                               + " ordered tracks. SHA256: " + left["collection_sha256"])
+                    messagebox.showinfo(
+                        "WAV copy contents match",
+                        str(left["files"]) + " WAVs match in content order.\n"
+                        + "Collection SHA256:\n" + left["collection_sha256"]
+                        + "\nNo writes. Names and Pi sound NOT verified.", parent=root)
+                else:
+                    status.set("WAV COPY DIFFERS: ordered audio contents do NOT match. "
+                               "No files changed.")
+                    messagebox.showwarning(
+                        "WAV copy differs",
+                        "The two valid WAV folders differ by count, bytes or "
+                        "ordered content SHA256. No files changed. "
+                        "Check your copy manually; filenames are private.", parent=root)
+            else:
+                status.set("WAV COPY CHECK REFUSED: select two different safe local "
+                           "folders with 1-40 PCM16 stereo 48 kHz WAVs. No writes.")
+                messagebox.showwarning(
+                    "WAV copy not verified",
+                    "One folder is empty, unsafe, modified or incompatible. "
+                    "No files changed.", parent=root)
+            return
         if work_kind[0] == "folder":
             if ok:
                 status.set("READ-ONLY FOLDER VERIFIED: "
@@ -488,6 +536,7 @@ def launch_gui():
         convert_button.configure(state="disabled")
         verify_button.configure(state="disabled")
         verify_folder_button.configure(state="disabled")
+        compare_button.configure(state="disabled")
         status.set("Converting locally. No WAV is published until complete.")
         def worker():
             try:
@@ -518,6 +567,7 @@ def launch_gui():
         convert_button.configure(state="disabled")
         verify_button.configure(state="disabled")
         verify_folder_button.configure(state="disabled")
+        compare_button.configure(state="disabled")
         status.set("Checking up to 40 WAV files without writing or playing audio.")
         def worker():
             try:
@@ -527,6 +577,41 @@ def launch_gui():
                 results.put((False, None))
         threading.Thread(target=worker, daemon=True,
                          name="audiohub-private-wav-folder-check").start()
+        root.after(150, finish)
+
+
+    def compare_folders():
+        if working[0]:
+            return
+        first = filedialog.askdirectory(
+            parent=root, title="Choose original local WAV folder")
+        if not first:
+            return
+        second = filedialog.askdirectory(
+            parent=root, title="Choose manually copied local WAV folder")
+        if not second:
+            status.set("WAV COPY CHECK CANCELLED: no files changed.")
+            return
+        working[0] = True
+        work_kind[0] = "compare"
+        source_button.configure(state="disabled")
+        destination_button.configure(state="disabled")
+        source_entry.configure(state="disabled")
+        output_entry.configure(state="disabled")
+        preview_button.configure(state="disabled")
+        convert_button.configure(state="disabled")
+        verify_button.configure(state="disabled")
+        verify_folder_button.configure(state="disabled")
+        compare_button.configure(state="disabled")
+        status.set("Comparing two existing WAV folders locally. No writes or transfers.")
+        def worker():
+            try:
+                result = compare_local_wav_folders(first, second)
+                results.put((True, result))
+            except (OSError, ValueError, RuntimeError):
+                results.put((False, None))
+        threading.Thread(target=worker, daemon=True,
+                         name="audiohub-local-wav-copy-compare").start()
         root.after(150, finish)
 
     controls = ttk.Frame(body)
@@ -545,6 +630,10 @@ def launch_gui():
                                       command=verify_folder)
     verify_folder_button.grid(row=2, column=0, columnspan=2, sticky="w",
                               pady=(10, 0))
+    compare_button = ttk.Button(controls, text="5. Compare WAV copy (read-only)",
+                                command=compare_folders)
+    compare_button.grid(row=3, column=0, columnspan=2, sticky="w",
+                        pady=(10, 0))
     ttk.Label(body, textvariable=status, wraplength=510, justify="left").grid(
         row=5, column=0, columnspan=3, sticky="w", pady=(4, 8))
     ttk.Label(body, text="External FFmpeg required for conversion; no network, "
@@ -571,11 +660,39 @@ def main(argv=None):
     parser.add_argument("--check-local", action="store_true", help="No-write Python/Tk/FFmpeg readiness check")
     parser.add_argument("--verify-wav", help="Read-only check existing local PCM16 stereo 48 kHz WAV")
     parser.add_argument("--verify-folder", help="Read-only check 1-40 local PCM16 stereo WAVs in a folder")
+    parser.add_argument("--compare-folders", nargs=2, metavar=("ORIGINAL", "COPY"),
+                        help="Read-only compare two local WAV folders by ordered content")
     args = parser.parse_args(argv)
+    if args.compare_folders is not None:
+        if (args.gui or args.check_local or args.convert or args.source is not None
+                or args.output is not None or args.verify_wav is not None
+                or args.verify_folder is not None):
+            parser.error("--compare-folders is a standalone read-only check")
+        try:
+            report = compare_local_wav_folders(*args.compare_folders)
+        except (OSError, ValueError, RuntimeError):
+            print("LOCAL WAV COPY REFUSED: two different safe local folders with "
+                  "compatible WAVs required. No files changed.", file=sys.stderr)
+            return 2
+        if report["matched"]:
+            print("LOCAL WAV COPY MATCH: " + str(report["source"]["files"])
+                  + " ordered PCM16 stereo 48 kHz tracks; no writes.")
+            print("Collection content SHA256: "
+                  + report["source"]["collection_sha256"])
+            print("Names, rights, later transfers and Pi audio NOT verified.")
+            return 0
+        print("LOCAL WAV COPY DIFFERS: count, bytes or ordered contents differ. "
+              "No files changed.")
+        print("Original collection SHA256: "
+              + report["source"]["collection_sha256"])
+        print("Copy collection SHA256: " + report["copy"]["collection_sha256"])
+        print("No filename disclosure. Inspect and recopy manually.")
+        return 1
     if args.verify_folder is not None:
         if (args.gui or args.check_local or args.convert
                 or args.source is not None or args.output is not None
-                or args.verify_wav is not None):
+                or args.verify_wav is not None
+                or args.compare_folders is not None):
             parser.error("--verify-folder is a standalone read-only check")
         try:
             report = verify_local_wav_folder(args.verify_folder)
@@ -591,7 +708,8 @@ def main(argv=None):
         return 0
     if args.verify_wav is not None:
         if (args.gui or args.check_local or args.convert or
-                args.source is not None or args.output is not None):
+                args.source is not None or args.output is not None
+                or args.compare_folders is not None):
             parser.error("--verify-wav is a standalone read-only check")
         try:
             verified = verify_local_wav(args.verify_wav)
@@ -605,11 +723,13 @@ def main(argv=None):
         print("NOT a Pi/Edifier speaker or owner verification.")
         return 0
     if args.check_local:
-        if args.gui or args.source is not None or args.output is not None or args.convert:
+        if (args.gui or args.source is not None or args.output is not None
+                or args.convert or args.compare_folders is not None):
             parser.error("--check-local cannot be combined with music paths or conversion")
         return check_local_prerequisites()
     if args.gui:
-        if args.source is not None or args.output is not None or args.convert:
+        if (args.source is not None or args.output is not None or args.convert
+                or args.compare_folders is not None):
             parser.error("--gui cannot be combined with --source, --output or --convert")
         try:
             return launch_gui()

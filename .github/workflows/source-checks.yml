@@ -196,5 +196,31 @@ jobs:
               throw 'Private folder check modified synthetic WAV'
             }
             Write-Host 'Extracted portable 1-folder WAV verification PASS (synthetic, no writes)'
+            # Read-only two-folder comparison from actual extracted portable.
+            $copyDir = Join-Path $env:RUNNER_TEMP 'audiohub-private-synthetic-copy'
+            New-Item -ItemType Directory -Path $copyDir -ErrorAction Stop | Out-Null
+            $copiedWav = Join-Path $copyDir 'different-private-name.wav'
+            Copy-Item -LiteralPath $libraryWav -Destination $copiedWav -ErrorAction Stop
+            $compareOutput = & python START-OFFLINE-WAV-PREP.py --compare-folders $library $copyDir
+            if ($LASTEXITCODE -ne 0 -or -not (($compareOutput -join "`n").Contains('LOCAL WAV COPY MATCH'))) {
+              throw 'Extracted Windows WAV copy comparison match failed'
+            }
+            if ((Get-FileHash -Algorithm SHA256 -LiteralPath $copiedWav).Hash.ToLowerInvariant() -ne $originalHash) {
+              throw 'Read-only copy check changed original copy'
+            }
+            python -c "import sys,wave;f=wave.open(sys.argv[1],'wb');f.setnchannels(2);f.setsampwidth(2);f.setframerate(48000);f.writeframes(bytes([1,2,3,4])*480);f.close()" $copiedWav
+            if ($LASTEXITCODE -ne 0) { throw 'Synthetic changed WAV generation failed' }
+            $differentOutput = & python START-OFFLINE-WAV-PREP.py --compare-folders $library $copyDir
+            if ($LASTEXITCODE -ne 1 -or -not (($differentOutput -join "`n").Contains('LOCAL WAV COPY DIFFERS'))) {
+              throw 'Extracted Windows WAV copy mismatch detection failed'
+            }
+            # Return code 1 means the expected valid mismatch, not a failed
+            # test. Reset the shell's last native command exit status.
+            $global:LASTEXITCODE = 0
+            if ((Get-FileHash -Algorithm SHA256 -LiteralPath $libraryWav).Hash.ToLowerInvariant() -ne $originalHash) {
+              throw 'Copy comparison modified the original'
+            }
+            Write-Host 'Extracted WAV copy match/mismatch/no-write checks PASS (synthetic)'
+
           } finally { Pop-Location }
           Write-Host "Windows operator ALPHA source-only smoke PASS. No GUI launched or hardware claim."
