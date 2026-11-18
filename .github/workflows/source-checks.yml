@@ -169,5 +169,18 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw 'Extracted Windows WAV preview failed' }
             if (Test-Path -LiteralPath $newWav) { throw 'Read-only WAV preview created output' }
             Write-Host 'Extracted Windows WAV no-write preview and GUI option PASS'
+            # Exercise the NEW WAV verifier from the actual extracted ZIP,
+            # with synthetic audio and no external FFmpeg or device.
+            $verifyWav = Join-Path $env:RUNNER_TEMP 'audiohub-verify-only.wav'
+            python -c "import sys,wave; f=wave.open(sys.argv[1],'wb'); f.setnchannels(2); f.setsampwidth(2); f.setframerate(48000); f.writeframes(bytes(4*480)); f.close()" $verifyWav
+            if ($LASTEXITCODE -ne 0) { throw 'Synthetic WAV setup failed' }
+            $wavHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $verifyWav).Hash.ToLowerInvariant()
+            $verified = & python START-OFFLINE-WAV-PREP.py --verify-wav $verifyWav
+            if ($LASTEXITCODE -ne 0) { throw 'Extracted portable WAV verification failed' }
+            if (-not (($verified -join "\n").Contains($wavHash))) { throw 'Portable WAV reported wrong SHA256' }
+            if ((Get-FileHash -Algorithm SHA256 -LiteralPath $verifyWav).Hash.ToLowerInvariant() -ne $wavHash) {
+              throw 'Read-only portable WAV verifier changed its input'
+            }
+            Write-Host 'Extracted portable WAV structure and SHA256 verification PASS (synthetic)'
           } finally { Pop-Location }
           Write-Host "Windows operator ALPHA source-only smoke PASS. No GUI launched or hardware claim."
