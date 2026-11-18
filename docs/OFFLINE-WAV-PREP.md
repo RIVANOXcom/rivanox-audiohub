@@ -160,6 +160,141 @@ but not proof of real music compatibility, FFmpeg conversion,
 Edifier sound, secure Pi login, SD transfers, licenses or production GO.
 Keep the previously checked portable ZIP for rollback.
 
+## Batch conversion: up to 10 owned MP3/FLAC files, one consent
+
+**11. Convert up to 10 owned files (batch)** offers a complete Windows GUI
+journey when preparing a small album rather than just one track. Choose an
+existing **local source folder** containing 1–10 directly contained MP3/FLAC
+files you own or are licensed to use; choose a **different existing local
+destination folder**. The preflight is read-only: it checks bounded file
+sizes, ordinary local paths, source count, unique proposed
+`*-AudioHub.wav` names and refuses every preexisting destination before
+anything starts. Nested subdirectories are not traversed; if the source
+folder has more than 256 direct entries or more than 10 audio tracks,
+the entire plan is refused. Two files with the same stem (e.g. MP3 and
+FLAC) collide and the batch is refused, rather than guessing a name.
+
+The operator must type exactly **BATCH** after seeing the anonymous file
+count and conditions. A separately installed local FFmpeg is required for
+**actual conversion**, not for read-only preflight. Each track uses the
+existing single-track bounded PCM16 stereo 48-kHz conversion, exclusive
+new-file creation and complete source and output SHA256 verification.
+The GUI reports anonymous completed counts and includes **Stop batch
+after current WAV**; cancellation never abandons an incomplete published
+WAV and doesn't delete finished output. No originals or existing files
+are overwritten, no network/Pi/SD operation, and no hidden background
+queue. In a partial failure, previously **completed new verified WAVs
+remain intentionally**; the operator sees completed/total counts and
+can inspect the destination, but must choose a fresh unused destination
+for a full retry. A single file remains at most 64 MiB output and each
+conversion has its existing time limit.
+
+Optional CLI read-only preview:
+```powershell
+py -3 START-OFFLINE-WAV-PREP.py --batch-plan "C:\Private\OwnedAlbum" "C:\Private\NewWavs"
+```
+Optional CLI actual export in an **interactive local terminal**:
+```powershell
+py -3 START-OFFLINE-WAV-PREP.py --batch-convert "C:\Private\OwnedAlbum" "C:\Private\NewWavs"
+```
+The CLI requires interactive confirmation **BATCH**, never prints
+private filenames, and refuses unattended/non-TTY conversion. Reported
+complete/partial statuses refer to verified local files, not heard Pi
+speaker audio. No batch overwrite, recursive scanning, auto-retrofit or
+automatic retry. Keep the old Windows portable folder for rollback.
+
+## New: hear a generated Windows PC test tone without music
+
+For an even simpler **real Windows audio-output test**, the GUI now
+offers **10. Hear 1s synthetic PC tone**, placed beside
+**Stop PC sound preview**. Unlike the synthetic verification demo
+(button 6, which is **silent**), button 10 requests a **brief audible**
+440 Hz stereo tone through the **default WINDOWS PC** speaker/headphone
+output. Before any sound the operator must explicitly confirm and should
+lower the PC volume. The tone's peak is limited to 1,000/32,767 PCM16
+(approximately **-30 dBFS**), has a short fade-in/fade-out and lasts
+**one second**. It is constructed fully in RAM from newly generated
+samples, never from music, and does not create a temporary audio file.
+
+The PC test tone requires only Windows and the already required
+Python 3.11+ with Tk for the GUI. **No MP3, FLAC, WAV, FFmpeg, Pi4,
+Scream driver, Edifier, internet, music rights or SD-card access**
+is needed. It never changes the system audio mixer or installs a codec.
+You can request Stop with the same button as a personal WAV preview.
+If no default Windows sound device is available, the playback refuses;
+a successful Windows API call alone does not prove sound was **heard**.
+
+Explicit terminal alternative in the verified extracted package:
+
+```powershell
+py -3 START-OFFLINE-WAV-PREP.py --test-pc-tone
+```
+
+This is an **audible** action, not an automatic startup or silent
+`--demo`. Exit 0 means only that the Windows audio API returned; the
+operator must personally report *heard / quiet / silent / error*
+for Windows S3. It does not validate Raspberry Pi or Edifier hardware.
+A native Windows CI sound stub verifies the generated 1s PCM16 bytes
+without actually playing sound on CI hardware.
+
+## Hear the WAV you JUST converted, without picking it again
+
+After an explicitly confirmed, successful conversion that has already
+passed final read-back verification, the Windows GUI now enables
+**9. Hear last verified export**. This button is disabled
+until a conversion actually succeeds; it never starts playback automatically.
+It uses only the filename and full SHA256 captured from that exact completed
+conversion, not an editable path in a later file-picker dialog. A change to
+the source/destination selection or a new conversion attempt clears this
+one-click shortcut.
+
+Clicking button 9 asks for audible **Windows PC** playback and volume consent
+exactly like button 8, and plays the first three seconds at **-12 dB**
+only after rechecking the current WAV against the original SHA256.
+If another process changes or replaces the WAV after conversion, the replay
+is **REFUSED before sound**. Original WAV and system volume remain unchanged.
+The existing button **8** still lets you explicitly pick *any* owned local
+compatible WAV. This is not a Pi4/Edifier audio test.
+
+## Hear a prepared WAV on the Windows PC (new, opt-in)
+
+The portable **Windows GUI** now has **8. Hear 3-second owned WAV on this
+Windows PC** and **Stop PC sound preview**. Select a previously prepared,
+**owned or licensed local PCM16 stereo 48-kHz WAV**. AudioHub asks
+explicitly for audible playback and reminds you to adjust your speaker
+or headphone volume. Only after you confirm does it perform a complete
+read-only WAV format and SHA256 check and play the **first 3 seconds at
+most** through the default **Windows PC sound device**, with a fixed
+**12 dB digital attenuation** in the temporary memory clip. Original WAV
+and system mixer volume are unchanged. Lower your PC volume before trying. The GUI remains
+responsive while the sample plays. Stop requests interrupt Windows
+PlaySound where supported; any already-running sample is limited to
+3 seconds.
+
+The sample is assembled as a bounded in-memory WAV (maximum 576,044
+bytes) and passed to Windows built-in `winsound.PlaySound`. Nothing is
+exported, converted, copied, uploaded or written to a temporary file:
+the original WAV remains unchanged. No FFmpeg, extra sound library,
+Pi4, Edifier, Scream driver, Bluetooth connection or network is
+required. It uses **the Windows PC's default speaker/headphone output**
+and neither selects nor controls a remote device. A WAV that does not
+meet the existing strict local verification requirements is refused
+**before audio playback**. No sound begins from opening the GUI.
+
+Explicit Windows terminal alternative:
+
+```powershell
+py -3 START-OFFLINE-WAV-PREP.py --audition-wav "C:\Private\Prepared\owned-song.wav"
+```
+
+This is an explicitly audible action. Exit 0 means the Windows sound
+API completed its call, **not** that the operator heard audio or Pi/
+Edifier speakers worked. Exit 2 means missing, unsafe, changed, wrong
+format or unavailable Windows sound output. No private filename is
+written in the tool's report. A genuine audible Windows test requires
+the operator to listen and note whether it played, including any
+wrong-channel/silence issue. Keep the volume low for a first test.
+
 ## GUI: choose source and target, then explicitly confirm
 
 On Windows, open a PowerShell terminal in the **extracted inner portable ZIP**

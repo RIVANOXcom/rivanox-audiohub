@@ -165,6 +165,101 @@ Failure exits 2, without claiming success. This is an accessible GUI
 performed by CI or any Pi4/Edifier sound certification. Keep the older
 verified portable ZIP and Pi SD for rollback.
 
+## Album preparation without repetitive file picking
+
+GUI **11. Convert up to 10 owned files (batch)** takes the operator from
+one existing local MP3/FLAC folder to a **different existing local WAV
+folder** without repeating filename selection and the CONVERT dialog
+for every song. The read-only plan refuses links, network folders,
+existing/colliding `*-AudioHub.wav` names, duplicate stems and more
+than 10 supported tracks (or 256 direct entries). The operator explicitly
+types **BATCH** once, then locally installed external FFmpeg converts each
+file using the already verified single-track path with exclusive
+O_EXCL output, 64-MiB cap, source stability and final SHA256 readback.
+
+The progress display reveals **counts only**. The **Stop batch after
+current WAV** button requests an orderly stop between tracks. On any
+cancellation or later failure, already fully verified new WAVs remain;
+no existing WAVs or originals are deleted, modified or overwritten.
+To attempt a complete fresh batch after partial success, choose another
+**empty** destination folder or move confirmed outputs manually using
+your existing backup procedure; no implicit overwrite or resume.
+Do not run this with material you lack rights to use. The physical
+Pi/Edifier playback remains separately unverified.
+
+Terminal `--batch-plan SOURCE_FOLDER WAV_FOLDER` is strictly read-only;
+`--batch-convert SOURCE_FOLDER WAV_FOLDER` requires an interactive
+terminal and typed **BATCH**. Neither prints filenames in the status
+report, transfers data remotely or starts without explicit confirmation.
+The new option is included in the same portable Windows S2 ZIP and
+existing GitHub CI path – not an auto-updater or new installer.
+
+## Operator PC sound check without any files or FFmpeg
+
+**10. Hear 1s synthetic PC tone** in the existing Windows GUI gives
+the operator a true **opt-in sound-output check** without owning or
+selecting WAV/MP3/FLAC, installing FFmpeg or connecting a Pi. Unlike
+button 6's silent synthetic WAV-verification test, button 10 generates
+and requests an **audible**, quiet 440-Hz stereo tone for just **1 second**
+on the **default Windows PC audio output**; peak PCM16 level is
+approximately **-30 dBFS**, with short fades. The GUI asks before
+playing and provides **Stop PC sound preview**. Turn PC volume down
+before confirming. No personal data, music files, temporary WAV,
+remote audio, Pi/Edifier, network, system volume or mixer changes.
+
+Optional standalone command:
+`py -3 START-OFFLINE-WAV-PREP.py --test-pc-tone`.
+It exits 0 after Windows sound API completion (not proof that anyone
+heard it) or 2 on refusal. Existing `--demo` remains SILENT.
+A human listening and reporting **heard / silent / error** on real
+Windows is required for PC sound S3; Pi/Edifier remains untested.
+CI intentionally substitutes a Windows sound stub so no runner
+speakers are used. The feature remains an unsigned S2 portable ALPHA,
+not a license/hardware/public release GO.
+
+## One-click post-conversion audition
+
+After converting a legally usable local MP3/FLAC to a **new** WAV and
+passing the existing final read-back check, the GUI enables
+**9. Hear last verified export**. This removes another
+filename selection from the common **Choose source → Preview → Convert →
+Listen** path. The button is unavailable until a conversion succeeds;
+changing selected source/output or starting another conversion clears it.
+Playback is always separately confirmed, PC-only, max 3 seconds at reduced
+-12 dB digital amplitude and may be stopped. The last exported WAV's stored
+full SHA256 must still match immediately before any sound – a replaced or
+changed file fails closed. No original files are overwritten or re-encoded,
+no Pi/network used, and there is no implicit loud sound on successful export.
+The existing button 8 remains available for other owned WAVs.
+
+## Local PC audition before manually copying a WAV to Pi SD
+
+The Windows portable operator GUI now includes **8. Hear 3-second
+owned WAV on this Windows PC** and a separate **Stop PC sound preview**
+button. After selecting a local owned/licensed PCM16 stereo 48-kHz WAV,
+the operator is asked to confirm **audible sound on the default WINDOWS
+PC device** and to lower speaker/headphone volume if needed. The
+utility verifies the WAV in full, then plays a bounded maximum
+3-second in-memory clip with **12 dB lower digital sample level** using
+Windows `winsound` (Python standard library). The original WAV and PC
+mixer volume are unchanged. Its source is never converted, overwritten or copied; no
+temporary audio file, FFmpeg, network or Pi access is used. The GUI
+remains responsive while this short sample plays and offers Stop.
+
+Run the optional CLI `py -3 START-OFFLINE-WAV-PREP.py --audition-wav
+"C:\Private\Prepared\owned-song.wav"` for explicit PC sound
+playback without the GUI. Failed format or playback exits 2, success
+exits 0 but is **not a validated audible hardware test**. Automated
+CI uses a stubbed Windows audio API with a synthetic compatible WAV
+to test that the correct bounded bytes and format would be submitted;
+CI does not emit sound or represent that any listener heard it.
+
+**This does not test Raspberry Pi, Edifier, SD transfer, Scream driver,
+sound quality, level matching, media rights or actual PC speaker
+functionality.** Those require real human/hardware S3 acceptance.
+Always check output level manually and keep the prior portable ZIP for
+rollback. No auto-update or install.
+
 ## Long WAV checks: anonymous progress and safe Stop
 
 On the portable Windows GUI, **4. Check WAV folder** and **5. Compare WAV

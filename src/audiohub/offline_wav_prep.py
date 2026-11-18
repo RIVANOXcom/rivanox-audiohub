@@ -7,13 +7,17 @@ FFmpeg must be independently installed on the trusted operator computer.
 from __future__ import annotations
 
 import argparse
+from array import array
 import hashlib
+import io
 import json
+import math
 import os
 from pathlib import Path
 import shutil
 import stat
 import subprocess
+import struct
 import sys
 import tempfile
 import threading
@@ -44,6 +48,81 @@ def _plan(source, output):
             or info.st_nlink != 1 or not stat.S_ISDIR(parent.st_mode)):
         raise ValueError("Input must be an ordinary bounded private media file")
     return src, dst, info, FORMATS[src.suffix.lower()]
+
+
+BATCH_FILES_MAX = 10  # Deliberately bounded, no recursive scanning or uploads.
+
+
+def plan_local_wav_batch(source_folder, destination_folder):
+    """Read-only plan: up to ten owned MP3/FLAC -> NEW WAVs in another folder.
+
+    No recursive traversal, destination creation, overwrites or FFmpeg calls.
+    Output names are derived in memory; never print private filenames.
+    """
+    srcdir, dstdir = Path(source_folder), Path(destination_folder)
+    for folder in (srcdir, dstdir):
+        if (not folder.is_absolute() or ".." in folder.parts
+                or str(folder).startswith("\\\\") or folder.is_symlink()
+                or any(parent.is_symlink() for parent in folder.parents)
+                or not folder.is_dir()):
+            raise ValueError("Batch needs two ordinary existing local folders")
+    if srcdir.samefile(dstdir):
+        raise ValueError("Choose separate source and destination folders")
+    items, used_names, total_bytes = [], set(), 0
+    with os.scandir(srcdir) as entries:
+        for count, entry in enumerate(entries):
+            if count >= 256:
+                raise ValueError("Too many direct entries in source folder")
+            if Path(entry.name).suffix.lower() not in FORMATS:
+                continue
+            if entry.is_symlink() or not entry.is_file(follow_symlinks=False):
+                raise ValueError("Unsafe batch audio source")
+            output_name = Path(entry.name).stem + "-AudioHub.wav"
+            if len(output_name.encode("utf-8")) > 240:
+                raise ValueError("Batch output name too long")
+            folded = output_name.casefold()
+            if folded in used_names:
+                raise ValueError("Two sources would create the same WAV name")
+            used_names.add(folded)
+            output = dstdir / output_name
+            src, dst, info, _ = _plan(srcdir / entry.name, output)
+            items.append((src, dst))
+            total_bytes += info.st_size
+            if len(items) > BATCH_FILES_MAX:
+                raise ValueError("Batch limit is ten source tracks")
+    if not items:
+        raise ValueError("No directly contained MP3/FLAC files")
+    items.sort(key=lambda pair: pair[0].name.casefold())
+    return {"items": tuple(items), "files": len(items),
+            "source_bytes": total_bytes}
+
+
+def convert_local_wav_batch(source_folder, destination_folder, *,
+                            cancel=None, progress=None, ffmpeg="ffmpeg"):
+    """Run a confirmed batch, retaining only individually VERIFIED new WAVs.
+
+    Stop is honored between tracks. A failure stops the batch, and any
+    previously completed WAVs remain; the operator is told the count.
+    The existing exclusive O_EXCL / SHA-readback _convert handles each
+    file safely. No automatic cleanup of any user WAV.
+    """
+    plan = plan_local_wav_batch(source_folder, destination_folder)
+    completed, total_bytes = 0, 0
+    for src, dst in plan["items"]:
+        if cancel is not None and cancel.is_set():
+            return {"status": "stopped", "converted": completed,
+                    "planned": plan["files"], "bytes": total_bytes}
+        try:
+            result = _convert(src, dst, ffmpeg=ffmpeg)
+        except (OSError, ValueError, RuntimeError, subprocess.SubprocessError):
+            return {"status": "refused", "converted": completed,
+                    "planned": plan["files"], "bytes": total_bytes}
+        completed += 1
+        total_bytes += result["bytes"]
+        if progress is not None:
+            progress(completed, plan["files"])
+    return {"status": "complete", "converted": completed,
+            "planned": plan["files"], "bytes": total_bytes}
 
 
 def suggest_unused_wav(source):
@@ -528,6 +607,139 @@ def inspect_local_portable_package(package_root=None, *, verify_files=True):
     return {"source_sha": sha, "files": len(items), "checked": True}
 
 
+
+def prepare_local_wav_audition(path, *, expected_sha256=None):
+    """Prepare only the first <=3 seconds of a verified WAV in memory.
+
+    Never invokes audio hardware or writes user/temporary files. The output
+    is capped at 576 KiB of PCM16 WAV payload plus a small WAV header.
+    """
+    checked = verify_local_wav(path)
+    if expected_sha256 is not None and checked["sha256"] != expected_sha256:
+        raise ValueError("Previously verified WAV export changed")
+    target = Path(path)
+    before = target.stat(follow_symlinks=False)
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0)
+    with os.fdopen(os.open(target, flags), "rb") as stream:
+        opened = os.fstat(stream.fileno())
+        if (not stat.S_ISREG(opened.st_mode) or opened.st_nlink != 1
+                or opened.st_size != checked["bytes"]
+                or (opened.st_dev, opened.st_ino, opened.st_mtime_ns)
+                != (before.st_dev, before.st_ino, before.st_mtime_ns)):
+            raise ValueError("WAV changed before PC audition")
+        try:
+            with wave.open(stream, "rb") as reader:
+                if (reader.getnchannels(), reader.getsampwidth(),
+                        reader.getframerate(), reader.getcomptype()) != (
+                        2, 2, 48000, "NONE"):
+                    raise ValueError("Only PCM16 stereo 48 kHz WAV can be auditioned")
+                frames = min(reader.getnframes(), 3 * 48000)
+                pcm = reader.readframes(frames)
+                if len(pcm) != frames * 4:
+                    raise ValueError("Incomplete PC audition WAV sample")
+        except (wave.Error, EOFError) as exc:
+            raise ValueError("Unreadable WAV audition") from exc
+        after = os.fstat(stream.fileno())
+        if ((after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns) !=
+                (opened.st_dev, opened.st_ino, opened.st_size, opened.st_mtime_ns)):
+            raise ValueError("WAV changed while preparing audition")
+    if not pcm:
+        raise ValueError("Empty WAV audition")
+    # Preview-only conservative quarter amplitude (-12 dB). This cannot
+    # increase the signal, and does not alter the source WAV or system mixer.
+    # array('h') is native-endian: normalize LE PCM16 on big-endian hosts.
+    samples = array("h")
+    samples.frombytes(pcm)
+    if sys.byteorder != "little":
+        samples.byteswap()
+    for i, value in enumerate(samples):
+        samples[i] = value // 4
+    if sys.byteorder != "little":
+        samples.byteswap()
+    pcm = samples.tobytes()
+    memory = io.BytesIO()
+    with wave.open(memory, "wb") as writer:
+        writer.setnchannels(2)
+        writer.setsampwidth(2)
+        writer.setframerate(48000)
+        writer.writeframes(pcm)
+    return {"wav_bytes": memory.getvalue(),
+            "seconds": round(frames / 48000, 2),
+            "source_sha256": checked["sha256"]}
+
+
+def play_local_wav_audition(path, *, cancelled=None, sound_module=None,
+                            expected_sha256=None):
+    """Explicit, bounded PC-only audible preview via Windows winsound.
+
+    Blocking playback belongs in a GUI worker; SND_MEMORY is synchronous
+    because combining memory with SND_ASYNC is unsupported by Windows.
+    """
+    if cancelled is not None and cancelled.is_set():
+        raise ScanCancelled("PC audio audition already stopped")
+    if sys.platform != "win32" and sound_module is None:
+        raise RuntimeError("WAV audible audition requires a Windows PC")
+    report = prepare_local_wav_audition(path, expected_sha256=expected_sha256)
+    if cancelled is not None and cancelled.is_set():
+        raise ScanCancelled("PC audio audition stopped before playback")
+    if sound_module is None:
+        import winsound as sound_module
+    sound_module.PlaySound(report["wav_bytes"],
+                           sound_module.SND_MEMORY | sound_module.SND_NODEFAULT)
+    if cancelled is not None and cancelled.is_set():
+        raise ScanCancelled("PC audio audition stopped")
+    return {"seconds": report["seconds"],
+            "source_sha256": report["source_sha256"]}
+
+
+def generate_pc_test_tone():
+    """One second of original quiet 440-Hz stereo PCM16, memory only.
+
+    No user audio, filesystem, FFmpeg, Pi, network, device setting or write.
+    The 10-ms fades suppress clicks; amplitude <=1000/32767 (-30 dBFS).
+    """
+    frames = 48000
+    pcm = bytearray(frames * 4)
+    for index in range(frames):
+        fade = min(1.0, index / 480, (frames - 1 - index) / 480)
+        sample = round(1000 * fade * math.sin(2 * math.pi * 440 * index / 48000))
+        struct.pack_into("<hh", pcm, 4 * index, sample, sample)
+    memory = io.BytesIO()
+    with wave.open(memory, "wb") as writer:
+        writer.setnchannels(2)
+        writer.setsampwidth(2)
+        writer.setframerate(48000)
+        writer.writeframes(pcm)
+    return memory.getvalue()
+
+
+def play_pc_test_tone(*, cancelled=None, sound_module=None):
+    """Explicit Windows speaker test with no private media or WAV files."""
+    if cancelled is not None and cancelled.is_set():
+        raise ScanCancelled("PC test tone cancelled before sound")
+    if sys.platform != "win32" and sound_module is None:
+        raise RuntimeError("PC test tone requires Windows")
+    sample = generate_pc_test_tone()
+    if cancelled is not None and cancelled.is_set():
+        raise ScanCancelled("PC test tone stopped before sound")
+    if sound_module is None:
+        import winsound as sound_module
+    sound_module.PlaySound(sample,
+                           sound_module.SND_MEMORY | sound_module.SND_NODEFAULT)
+    if cancelled is not None and cancelled.is_set():
+        raise ScanCancelled("PC test tone stopped")
+    return {"seconds": 1.0, "synthetic": True}
+
+
+def stop_local_wav_audition(*, sound_module=None):
+    """Request Windows to stop a currently playing PlaySound sample."""
+    if sys.platform != "win32" and sound_module is None:
+        raise RuntimeError("PC audio stop requires Windows")
+    if sound_module is None:
+        import winsound as sound_module
+    sound_module.PlaySound(None, 0)
+
+
 def check_local_prerequisites():
     """No-write offline PC readiness; NEVER runs or installs FFmpeg."""
     import importlib.util
@@ -562,7 +774,7 @@ def launch_gui():
     except (OSError, ValueError, RuntimeError, UnicodeError):
         source_label = "UNPACKAGED SOURCE"
     root.title("AudioHub WAV - " + source_label + " (unverified)")
-    root.minsize(700, 660)
+    root.minsize(700, 745)
     root.columnconfigure(0, weight=1)
     body = ttk.Frame(root, padding=16)
     body.grid(sticky="nsew")
@@ -572,11 +784,15 @@ def launch_gui():
         "Offline only: select your owned music and an UNUSED WAV destination."))
     approved = [None]
     automatic_output = [None]
+    last_verified_export = [None]  # (immutable GUI path, verified SHA), never persisted
+    pending_export_path = [None]
     working = [False]
     work_kind = ["convert"]
     results = queue.Queue(maxsize=1)
     scan_updates = queue.Queue(maxsize=1)
     scan_cancel = threading.Event()
+    batch_cancel = threading.Event()
+    audition_cancel = threading.Event()
 
     def scan_progress(phase, done, total):
         """Worker thread can publish only anonymous counts; no Tk calls."""
@@ -593,6 +809,13 @@ def launch_gui():
             except queue.Full:
                 pass
 
+    def cancel_batch():
+        if working[0] and work_kind[0] == "batch":
+            batch_cancel.set()
+            batch_stop_button.configure(state="disabled")
+            status.set("BATCH STOP REQUESTED: finish only current WAV. "
+                       "Verified finished WAVs remain; originals untouched.")
+
     def cancel_scan():
         if working[0] and work_kind[0] in ("folder", "compare"):
             scan_cancel.set()
@@ -600,9 +823,22 @@ def launch_gui():
             status.set("STOP REQUESTED: finishing current read chunk. "
                        "No audio has been changed.")
 
+    def stop_audition():
+        if working[0] and work_kind[0] in ("audition", "testtone"):
+            audition_cancel.set()
+            audition_stop_button.configure(state="disabled")
+            status.set("PC sound STOP requested. At most 3 seconds; "
+                       "no private media changed.")
+            try:
+                stop_local_wav_audition()
+            except (OSError, RuntimeError):
+                pass  # The bounded <=3s worker will finish independently.
+
     def invalidate(*_):
         approved[0] = None
+        last_verified_export[0] = None
         convert_button.configure(state="disabled")
+        audition_last_button.configure(state="disabled")
         if not working[0]:
             status.set("Selection changed. Run read-only Preview again.")
     source.trace_add("write", invalidate)
@@ -702,16 +938,21 @@ def launch_gui():
         try:
             ok, value = results.get_nowait()
         except queue.Empty:
-            if working[0] and work_kind[0] in ("folder", "compare"):
+            if working[0] and work_kind[0] in ("folder", "compare", "batch"):
                 try:
                     phase, done, total = scan_updates.get_nowait()
                 except queue.Empty:
                     pass
                 else:
                     if not scan_cancel.is_set():
-                        status.set("READ-ONLY " + phase.upper() + " FOLDER: "
-                                   + str(done) + "/" + str(total)
-                                   + " WAVs inspected. No writes.")
+                        if work_kind[0] == "batch":
+                            status.set("BATCH WAV EXPORT: " + str(done) + "/"
+                                       + str(total) + " verified NEW WAVs; "
+                                       "no originals overwritten.")
+                        else:
+                            status.set("READ-ONLY " + phase.upper() + " FOLDER: "
+                                       + str(done) + "/" + str(total)
+                                       + " WAVs inspected. No writes.")
             root.after(150, finish)
             return
         if scan_cancel.is_set() and work_kind[0] in ("folder", "compare"):
@@ -730,6 +971,64 @@ def launch_gui():
         compare_button.configure(state="normal")
         demo_button.configure(state="normal")
         package_button.configure(state="normal")
+        audition_button.configure(state="normal")
+        tone_button.configure(state="normal")
+        audition_last_button.configure(state=("normal" if last_verified_export[0]
+                                              else "disabled"))
+        audition_stop_button.configure(state="disabled")
+        batch_button.configure(state="normal")
+        batch_stop_button.configure(state="disabled")
+        if work_kind[0] == "batch":
+            if not isinstance(value, dict):
+                status.set("BATCH REFUSED before completion. No existing WAV overwritten.")
+                messagebox.showwarning("Batch WAV export refused",
+                                       "Cannot use unsafe folders, collisions, "
+                                       "unsupported tracks or FFmpeg. "
+                                       "Previously verified WAVs, if any, stay.",
+                                       parent=root)
+            else:
+                label = value["status"].upper()
+                status.set("BATCH " + label + ": " + str(value["converted"])
+                           + "/" + str(value["planned"]) + " WAV files verified. "
+                           "All originals unchanged.")
+                messagebox.showinfo("Batch WAV export " + label,
+                                    str(value["converted"]) + " of "
+                                    + str(value["planned"]) + " WAV tracks "
+                                    "completed and hash-verified. No original "
+                                    "music modified. Any completed NEW WAVs "
+                                    "remain after Stop or failure. No Pi tested.",
+                                    parent=root)
+            return
+        if work_kind[0] in ("audition", "testtone"):
+            is_tone = work_kind[0] == "testtone"
+            if audition_cancel.is_set():
+                status.set("PC WAV PREVIEW STOPPED; no files changed.")
+                messagebox.showinfo("PC WAV preview stopped",
+                                    "Stop requested. No music file was changed. "
+                                    "This is not a Pi/Edifier sound test.",
+                                    parent=root)
+            elif ok:
+                status.set(("SYNTHETIC PC TEST TONE FINISHED: " if is_tone
+                            else "PC WAV SAMPLE FINISHED: ")
+                           + str(value["seconds"]) + " seconds; "
+                           "Windows device API returned. No files changed.")
+                messagebox.showinfo(
+                    "Windows PC sound request finished",
+                    str(value["seconds"]) + " seconds of "
+                    + ("generated quiet 440-Hz tone; no private music used. "
+                       if is_tone else "verified owned WAV sample. ")
+                    + "Windows sound API returned; YOU must confirm audible "
+                    "output. NOT Pi4/Edifier verified. No files changed.",
+                    parent=root)
+            else:
+                status.set("PC SOUND REFUSED or playback failed. "
+                           "No music file changed.")
+                messagebox.showwarning("PC WAV preview not completed",
+                                       "Choose a valid local PCM16 stereo 48 kHz "
+                                       "WAV on a Windows PC with an available "
+                                       "default sound device. Original untouched.",
+                                       parent=root)
+            return
         if work_kind[0] == "package":
             if ok:
                 status.set("PACKAGE CONTENTS MATCH MANIFEST: ALPHA " +
@@ -833,14 +1132,19 @@ def launch_gui():
                                        parent=root)
             return
         if ok:
+            last_verified_export[0] = (pending_export_path[0], value["sha256"])
+            pending_export_path[0] = None
+            audition_last_button.configure(state="normal")
             status.set("NEW WAV CREATED AND READ-BACK VERIFIED; original untouched. "
                        "SHA256: " + value["sha256"])
             messagebox.showinfo("New offline WAV verified",
                                 "Final WAV reopened; PCM16 format and complete hash checked.\n"
                                  "Output SHA256:\n" + value["sha256"] +
-                                "\nOriginal untouched. NOT Pi/Edifier verified.",
-                                parent=root)
+                                "\nOriginal untouched. Use button 9 to hear "
+                                "this exact export on the Windows PC. "
+                                "NOT Pi/Edifier verified.", parent=root)
         else:
+            pending_export_path[0] = None
             status.set("EXPORT INCOMPLETE or refused. Existing files untouched.")
             messagebox.showwarning("No completed WAV",
                                    "Check local FFmpeg, input and unused output. "
@@ -868,6 +1172,8 @@ def launch_gui():
             status.set("CANCELLED: no audio decoder started, no files created.")
             return
         chosen_source, chosen_output = approved[0]
+        last_verified_export[0] = None
+        pending_export_path[0] = chosen_output
         work_kind[0] = "convert"
         working[0] = True
         source_button.configure(state="disabled")
@@ -881,6 +1187,10 @@ def launch_gui():
         compare_button.configure(state="disabled")
         demo_button.configure(state="disabled")
         package_button.configure(state="disabled")
+        batch_button.configure(state="disabled")
+        audition_button.configure(state="disabled")
+        tone_button.configure(state="disabled")
+        audition_last_button.configure(state="disabled")
         status.set("Converting locally. No WAV is published until complete.")
         def worker():
             try:
@@ -916,6 +1226,9 @@ def launch_gui():
         compare_button.configure(state="disabled")
         demo_button.configure(state="disabled")
         package_button.configure(state="disabled")
+        batch_button.configure(state="disabled")
+        audition_button.configure(state="disabled")
+        tone_button.configure(state="disabled")
         status.set("Checking up to 40 WAV files without writing or playing audio.")
         def worker():
             try:
@@ -961,6 +1274,9 @@ def launch_gui():
         compare_button.configure(state="disabled")
         demo_button.configure(state="disabled")
         package_button.configure(state="disabled")
+        batch_button.configure(state="disabled")
+        audition_button.configure(state="disabled")
+        tone_button.configure(state="disabled")
         status.set("Comparing two existing WAV folders locally. No writes or transfers.")
         def worker():
             try:
@@ -994,6 +1310,9 @@ def launch_gui():
         compare_button.configure(state="disabled")
         demo_button.configure(state="disabled")
         package_button.configure(state="disabled")
+        batch_button.configure(state="disabled")
+        audition_button.configure(state="disabled")
+        tone_button.configure(state="disabled")
         status.set("Running a disposable local synthetic WAV demo. "
                    "No real music files, FFmpeg, network or Pi.")
         def worker():
@@ -1023,6 +1342,9 @@ def launch_gui():
         compare_button.configure(state="disabled")
         demo_button.configure(state="disabled")
         package_button.configure(state="disabled")
+        batch_button.configure(state="disabled")
+        audition_button.configure(state="disabled")
+        tone_button.configure(state="disabled")
         status.set("Checking source files in this extracted local ALPHA "
                    "folder against its own manifest. No user media read.")
         def worker():
@@ -1033,6 +1355,195 @@ def launch_gui():
                 results.put((False, None))
         threading.Thread(target=worker, daemon=True,
                          name="audiohub-offline-package-check").start()
+        root.after(150, finish)
+
+    def audition_wav(chosen=None, expected_sha256=None):
+        if working[0]:
+            return
+        if sys.platform != "win32":
+            status.set("Audible WAV preview requires a Windows PC. No sound played.")
+            return
+        if chosen is None:
+            chosen = filedialog.askopenfilename(
+                parent=root, title="Choose a local owned PCM16 stereo WAV to hear",
+                filetypes=[("PCM16 WAV", "*.wav")])
+        if not chosen:
+            return
+        consent = messagebox.askyesno(
+            "Play Windows WAV sample?",
+            "Audio will be audible through your DEFAULT WINDOWS PC sound "
+            "device for at most 3 seconds. The sample is reduced by 12 dB "
+            "and originals/system volume are untouched. Adjust volume "
+            "before continuing. Your chosen WAV is read-only and no media "
+            "is sent to Raspberry Pi, network or another device. "
+            "This is NOT an Edifier/Pi sound check. Play now?",
+            parent=root)
+        if not consent:
+            status.set("PC WAV sample cancelled before sound. No files changed.")
+            return
+        audition_cancel.clear()
+        working[0] = True
+        work_kind[0] = "audition"
+        approved[0] = None
+        source_button.configure(state="disabled")
+        destination_button.configure(state="disabled")
+        source_entry.configure(state="disabled")
+        output_entry.configure(state="disabled")
+        preview_button.configure(state="disabled")
+        convert_button.configure(state="disabled")
+        verify_button.configure(state="disabled")
+        verify_folder_button.configure(state="disabled")
+        compare_button.configure(state="disabled")
+        demo_button.configure(state="disabled")
+        package_button.configure(state="disabled")
+        batch_button.configure(state="disabled")
+        audition_button.configure(state="disabled")
+        tone_button.configure(state="disabled")
+        audition_last_button.configure(state="disabled")
+        audition_stop_button.configure(state="normal")
+        status.set("Verifying WAV before audible sample; up to 3 seconds "
+                   "via default Windows PC sound device. Stop available.")
+        def worker():
+            try:
+                if expected_sha256 is None:
+                    report = play_local_wav_audition(chosen,
+                                                     cancelled=audition_cancel)
+                else:
+                    report = play_local_wav_audition(
+                        chosen, cancelled=audition_cancel,
+                        expected_sha256=expected_sha256)
+                results.put((True, report))
+            except (OSError, ValueError, RuntimeError, ScanCancelled, wave.Error):
+                results.put((False, None))
+        threading.Thread(target=worker, daemon=True,
+                         name="audiohub-owned-wav-pc-audition").start()
+        root.after(150, finish)
+
+    def synthetic_pc_tone():
+        if working[0]:
+            return
+        if sys.platform != "win32":
+            status.set("A PC sound test requires Windows. No sound played.")
+            return
+        consent = messagebox.askyesno(
+            "Hear a short PC sound test?",
+            "Generate and play one quiet 440-Hz tone for 1 second "
+            "(peak below -30 dBFS) on the DEFAULT WINDOWS PC sound "
+            "device. Adjust your volume first. NO personal music, FFmpeg, "
+            "files, network or Pi access. NOT an Edifier/Pi sound test. "
+            "Listen now?", parent=root)
+        if not consent:
+            status.set("Synthetic PC tone cancelled before audio.")
+            return
+        audition_cancel.clear()
+        working[0] = True
+        work_kind[0] = "testtone"
+        approved[0] = None
+        for control in (source_button, destination_button, source_entry,
+                        output_entry, preview_button, convert_button,
+                        verify_button, verify_folder_button, compare_button,
+                        demo_button, package_button, audition_button,
+                        audition_last_button, tone_button):
+            control.configure(state="disabled")
+        audition_stop_button.configure(state="normal")
+        status.set("Playing one-second low-level synthetic tone on Windows PC. "
+                   "No personal music touched. Stop available.")
+        def worker():
+            try:
+                report = play_pc_test_tone(cancelled=audition_cancel)
+                results.put((True, report))
+            except (OSError, ValueError, RuntimeError, ScanCancelled,
+                    wave.Error):
+                results.put((False, None))
+        threading.Thread(target=worker, daemon=True,
+                         name="audiohub-synthetic-pc-test-tone").start()
+        root.after(150, finish)
+
+    def audition_last_export():
+        if working[0]:
+            return
+        recent = last_verified_export[0]
+        if recent is None:
+            status.set("No newly verified WAV export available to hear. "
+                       "Convert and verify one first.")
+            return
+        # No source or output picker: use only the last successfully verified
+        # conversion's captured absolute path and full SHA256. The audition
+        # helper must revalidate the original before ANY sound.
+        audition_wav(recent[0], expected_sha256=recent[1])
+
+    def batch_convert():
+        if working[0]:
+            return
+        chosen_source = filedialog.askdirectory(
+            parent=root, title="Choose local folder with owned MP3/FLAC files")
+        if not chosen_source:
+            return
+        chosen_dest = filedialog.askdirectory(
+            parent=root, title="Choose OTHER existing local folder for NEW WAVs")
+        if not chosen_dest:
+            return
+        try:
+            planned = plan_local_wav_batch(chosen_source, chosen_dest)
+            if hasattr(os, "geteuid") and os.geteuid() == 0:
+                raise PermissionError("No privileged conversions")
+        except (OSError, ValueError, PermissionError, UnicodeError):
+            status.set("BATCH PREVIEW REFUSED: choose separate safe local folders; "
+                       "max 10 MP3/FLAC files, no destination collisions.")
+            messagebox.showwarning(
+                "No safe batch plan",
+                "Choose two different ordinary local folders containing "
+                "1-10 owned/licensed MP3/FLAC tracks. All proposed NEW WAV "
+                "names must be unused and unique. Nothing was changed.",
+                parent=root)
+            return
+        answer = simpledialog.askstring(
+            "Confirm private batch WAV export",
+            "Read-only plan: " + str(planned["files"])
+            + " MP3/FLAC sources (max 10).\n"
+            "Output: only NEW *-AudioHub.wav files in the separate "
+            "folder, each hash-verified. Existing originals and WAVs "
+            "NEVER overwritten. FFmpeg must already be on this PC.\n"
+            "Stop acts after the current track. If a later track fails, "
+            "earlier verified NEW WAVs remain. No Pi/network changes.\n"
+            "Use only music you own or may legally use.\n"
+            "Type EXACT uppercase BATCH to proceed:", parent=root)
+        if answer != "BATCH":
+            status.set("BATCH CANCELLED before FFmpeg or new files.")
+            return
+        # Revalidate entire plan immediately before any conversion.
+        try:
+            plan_local_wav_batch(chosen_source, chosen_dest)
+        except (OSError, ValueError, UnicodeError):
+            status.set("BATCH PLAN EXPIRED: source or destination changed.")
+            return
+        batch_cancel.clear()
+        working[0] = True
+        work_kind[0] = "batch"
+        approved[0] = None
+        last_verified_export[0] = None
+        pending_export_path[0] = None
+        for control in (source_button, destination_button, source_entry,
+                        output_entry, preview_button, convert_button,
+                        verify_button, verify_folder_button, compare_button,
+                        demo_button, package_button, audition_button,
+                        audition_last_button, tone_button, batch_button):
+            control.configure(state="disabled")
+        batch_stop_button.configure(state="normal")
+        status.set("BATCH STARTED: only new verified WAVs will be published. "
+                   "Stop after current track available.")
+        def worker():
+            try:
+                report = convert_local_wav_batch(
+                    chosen_source, chosen_dest, cancel=batch_cancel,
+                    progress=lambda done, total:
+                        scan_progress("batch", done, total))
+                results.put((True, report))
+            except (OSError, ValueError, RuntimeError, UnicodeError,
+                    subprocess.SubprocessError):
+                results.put((False, None))
+        threading.Thread(target=worker, daemon=True,
+                         name="audiohub-private-bounded-batch-export").start()
         root.after(150, finish)
 
     controls = ttk.Frame(body)
@@ -1070,6 +1581,34 @@ def launch_gui():
         command=check_package_in_gui)
     package_button.grid(row=6, column=0, columnspan=2, sticky="w",
                         pady=(10, 0))
+    audition_button = ttk.Button(
+        controls, text="8. Hear selected WAV on Windows PC",
+        command=audition_wav)
+    audition_button.grid(row=7, column=0, sticky="w",
+                         padx=(0, 8), pady=(10, 0))
+    audition_stop_button = ttk.Button(
+        controls, text="Stop PC sound preview", state="disabled",
+        command=stop_audition)
+    audition_stop_button.grid(row=8, column=0, sticky="w",
+                              padx=(0, 8), pady=(10, 0))
+    tone_button = ttk.Button(
+        controls, text="10. Hear 1s synthetic PC tone",
+        command=synthetic_pc_tone)
+    tone_button.grid(row=8, column=1, sticky="w", pady=(10, 0))
+    audition_last_button = ttk.Button(
+        controls, text="9. Hear last verified export",
+        state="disabled", command=audition_last_export)
+    audition_last_button.grid(row=7, column=1, sticky="w",
+                              pady=(10, 0))
+    batch_button = ttk.Button(
+        controls, text="11. Convert up to 10 owned files (batch)",
+        command=batch_convert)
+    batch_button.grid(row=9, column=0, sticky="w",
+                      padx=(0, 8), pady=(10, 0))
+    batch_stop_button = ttk.Button(
+        controls, text="Stop batch after current WAV", state="disabled",
+        command=cancel_batch)
+    batch_stop_button.grid(row=9, column=1, sticky="w", pady=(10, 0))
     ttk.Label(body, textvariable=status, wraplength=510, justify="left").grid(
         row=5, column=0, columnspan=3, sticky="w", pady=(4, 8))
     ttk.Label(body, text="Source label: " + source_label +
@@ -1083,6 +1622,12 @@ def launch_gui():
         if working[0]:
             if work_kind[0] in ("folder", "compare"):
                 cancel_scan()
+            elif work_kind[0] == "batch":
+                cancel_batch()
+            elif work_kind[0] in ("audition", "testtone"):
+                stop_audition()
+                status.set("PC sound stop requested; the bounded preview "
+                           "will finish before closing.")
             elif work_kind[0] in ("demo", "package"):
                 messagebox.showinfo(
                     "Synthetic demo in progress",
@@ -1115,7 +1660,100 @@ def main(argv=None):
                         help="Local synthetic WAV check; temporary files only, no private music/FFmpeg/Pi")
     parser.add_argument("--package-check", action="store_true",
                         help="Read-only source SHA and portable file self-consistency check")
+    parser.add_argument("--audition-wav", metavar="OWNED_WAV",
+                        help="Explicit Windows-only 3-second audible WAV sample; no file writes")
+    parser.add_argument("--test-pc-tone", action="store_true",
+                        help="Explicit Windows-only one-second quiet synthetic PC audio test")
+    parser.add_argument("--batch-plan", nargs=2, metavar=("SOURCE_FOLDER", "WAV_FOLDER"),
+                        help="Read-only preview of up to 10 local MP3/FLAC exports")
+    parser.add_argument("--batch-convert", nargs=2, metavar=("SOURCE_FOLDER", "WAV_FOLDER"),
+                        help="Confirm exactly BATCH on local TTY; create only new verified WAVs")
     args = parser.parse_args(argv)
+    if args.batch_plan is not None or args.batch_convert is not None:
+        if (args.batch_plan is not None and args.batch_convert is not None
+                or args.test_pc_tone or args.audition_wav is not None
+                or args.gui or args.demo or args.convert or args.check_local
+                or args.package_check or args.source is not None
+                or args.output is not None or args.verify_wav is not None
+                or args.verify_folder is not None
+                or args.compare_folders is not None):
+            parser.error("Batch modes are exclusive; no other media actions")
+        folders = args.batch_plan or args.batch_convert
+        try:
+            plan = plan_local_wav_batch(*folders)
+        except (OSError, ValueError, UnicodeError):
+            print("BATCH PLAN REFUSED: unsafe sources, linked folders, "
+                  "colliding/existing outputs, empty folder or over 10 tracks. "
+                  "Nothing modified.", file=sys.stderr)
+            return 2
+        print("BATCH PLAN: " + str(plan["files"]) + " owned/licensed MP3/FLAC "
+              "files -> NEW verified WAVs in separate existing local folder. "
+              "No filename disclosure. No writes in plan.")
+        if args.batch_plan is not None:
+            return 0
+        if not sys.stdin.isatty():
+            print("BATCH REFUSED: interactive local terminal required. "
+                  "No files created.", file=sys.stderr)
+            return 2
+        print("Up to 10 exports, existing files never overwritten. "
+              "Earlier completed WAVs remain after a later failure. "
+              "Requires local FFmpeg. Type EXACT BATCH to proceed:")
+        if input().strip() != "BATCH":
+            print("BATCH CANCELLED before conversion.")
+            return 2
+        try:
+            report = convert_local_wav_batch(*folders)
+        except (OSError, ValueError, RuntimeError, UnicodeError):
+            print("BATCH REFUSED: unsafe source/destination changed. "
+                  "No existing files altered.", file=sys.stderr)
+            return 2
+        print("BATCH " + report["status"].upper() + ": "
+              + str(report["converted"]) + "/" + str(report["planned"])
+              + " individually verified NEW WAVs. No original files overwritten.")
+        print("Previously completed NEW WAVs remain on partial failure. "
+              "No Pi/Edifier sound verified.")
+        return 0 if report["status"] == "complete" else 2
+    if args.test_pc_tone:
+        if (args.audition_wav is not None or args.gui or args.demo
+                or args.convert or args.check_local or args.package_check
+                or args.source is not None or args.output is not None
+                or args.verify_wav is not None or args.verify_folder is not None
+                or args.compare_folders is not None):
+            parser.error("--test-pc-tone is a standalone audible Windows action")
+        print("WINDOWS PC TEST TONE REQUESTED: 1s quiet synthetic 440 Hz. "
+              "Adjust volume. No music, files, FFmpeg, network or Pi.")
+        try:
+            play_pc_test_tone()
+        except (OSError, ValueError, RuntimeError, ScanCancelled, wave.Error):
+            print("SYNTHETIC PC TONE REFUSED: Windows sound output unavailable "
+                  "or test cancelled. No personal files accessed.",
+                  file=sys.stderr)
+            return 2
+        print("SYNTHETIC PC TONE FINISHED: Windows sound API returned. "
+              "Operator must confirm audible sound; NOT Pi/Edifier accepted.")
+        return 0
+    if args.audition_wav is not None:
+        if (args.gui or args.demo or args.convert or args.check_local
+                or args.package_check or args.source is not None
+                or args.output is not None or args.verify_wav is not None
+                or args.verify_folder is not None
+                or args.compare_folders is not None):
+            parser.error("--audition-wav is an exclusive audible Windows action")
+        print("WINDOWS PC AUDIO REQUESTED: max 3 seconds through default "
+              "PC speakers at reduced -12 dB sample level. "
+              "Adjust volume. No files altered or sent to Pi.")
+        try:
+            report = play_local_wav_audition(args.audition_wav)
+        except (OSError, ValueError, RuntimeError, ScanCancelled, wave.Error):
+            print("LOCAL PC WAV AUDITION REFUSED: audio file unsupported, "
+                  "changed, or Windows device unavailable. "
+                  "No WAV file altered.", file=sys.stderr)
+            return 2
+        print("LOCAL PC WAV AUDITION FINISHED: " + str(report["seconds"])
+              + " seconds requested; user must confirm actual audible output.")
+        print("WAV SHA256: " + report["source_sha256"]
+              + "; NOT a Pi4/Edifier sound acceptance.")
+        return 0
     if args.package_check:
         if (args.gui or args.demo or args.convert or args.check_local
                 or args.source is not None or args.output is not None

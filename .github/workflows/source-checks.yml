@@ -182,6 +182,89 @@ jobs:
               throw 'Read-only portable WAV verifier changed its input'
             }
             Write-Host 'Extracted portable WAV structure and SHA256 verification PASS (synthetic)'
+            # Exercise the NEW audible audition CLI using a REAL extracted
+            # portable Python file, with in-memory winsound stub. NO Windows
+            # speaker, Pi, user music, mixer setting or hardware audio touched.
+            $auditionProbe = @'
+          import io
+          import sys
+          import types
+          import wave
+          
+          fake = types.ModuleType("winsound")
+          fake.SND_MEMORY = 4
+          fake.SND_NODEFAULT = 2
+          def check_memory_sound(data, flags):
+              if not isinstance(data, bytes) or flags != 6:
+                  raise RuntimeError("PC WAV audition must use synchronous memory audio")
+              with wave.open(io.BytesIO(data), "rb") as sample:
+                  if (sample.getnchannels(), sample.getsampwidth(), sample.getframerate()) != (2, 2, 48000):
+                      raise RuntimeError("Audition supplied unexpected WAV format")
+          fake.PlaySound = check_memory_sound
+          sys.modules["winsound"] = fake
+          from audiohub import offline_wav_prep as prep
+          # Audible S3 test without ANY music/FFmpeg: verify generated 1s
+          # PC tone with a substituted Windows audio module, no real sound.
+          generated = prep.generate_pc_test_tone()
+          if len(generated) != 192044:
+              raise RuntimeError("Synthetic PC tone must be bounded to 1s")
+          with wave.open(io.BytesIO(generated), "rb") as sample:
+              if sample.getnframes() != 48000:
+                  raise RuntimeError("Expected generated 48k-frame PC tone")
+          played = prep.play_pc_test_tone(sound_module=fake)
+          if played != {"seconds": 1.0, "synthetic": True}:
+              raise RuntimeError("PC tone did not submit expected sample")
+          if prep.main(["--test-pc-tone"]) != 0:
+              raise RuntimeError("Synthetic PC tone CLI did not finish")
+          # The one-click replay of an exported file must refuse if the
+          # previously confirmed SHA256 does not match BEFORE any sound.
+          current_sha = prep.verify_local_wav(sys.argv[1])["sha256"]
+          matched = prep.play_local_wav_audition(
+              sys.argv[1], expected_sha256=current_sha, sound_module=fake)
+          if matched["source_sha256"] != current_sha:
+              raise RuntimeError("Last export hash not returned intact")
+          try:
+              prep.play_local_wav_audition(
+                  sys.argv[1], expected_sha256="0" * 64, sound_module=fake)
+          except ValueError:
+              pass
+          else:
+              raise RuntimeError("Changed last export unexpectedly played")
+          raise SystemExit(prep.main(["--audition-wav", sys.argv[1]]))
+          '@
+            $auditionReport = & python -c $auditionProbe $verifyWav
+            if ($LASTEXITCODE -ne 0 -or -not (($auditionReport -join "`n").Contains('LOCAL PC WAV AUDITION FINISHED')) -or -not (($auditionReport -join "`n").Contains('SYNTHETIC PC TONE FINISHED'))) {
+              throw 'Extracted PC WAV audition did not exercise Windows memory audio path'
+            }
+            if ((Get-FileHash -Algorithm SHA256 -LiteralPath $verifyWav).Hash.ToLowerInvariant() -ne $wavHash) {
+              throw 'Read-only audible WAV preview altered original'
+            }
+            Write-Host 'Extracted Windows WAV audition and generated 1-second PC tone PASS (stubbed, no speaker or private music)'
+            # Batch preparation must work in the ACTUAL EXTRACTED Windows
+            # S2 package, without any personal audio or external FFmpeg.
+            $batchMusic = Join-Path $env:RUNNER_TEMP 'audiohub-batch-fixture-in'
+            $batchWavs = Join-Path $env:RUNNER_TEMP 'audiohub-batch-fixture-out'
+            New-Item -ItemType Directory -Path $batchMusic -Force | Out-Null
+            New-Item -ItemType Directory -Path $batchWavs -Force | Out-Null
+            [IO.File]::WriteAllBytes((Join-Path $batchMusic 'synthetic-one.flac'), [byte[]](1, 2, 3, 4))
+            [IO.File]::WriteAllBytes((Join-Path $batchMusic 'synthetic-two.mp3'), [byte[]](5, 6, 7, 8))
+            $planOutput = & python 'START-OFFLINE-WAV-PREP.py' --batch-plan $batchMusic $batchWavs 2>&1
+            if ($LASTEXITCODE -ne 0 -or -not (($planOutput -join "`n").Contains('BATCH PLAN: 2'))) {
+              throw 'Extracted private batch plan failed'
+            }
+            if ((Get-ChildItem -LiteralPath $batchWavs -Force | Measure-Object).Count -ne 0) {
+              throw 'Read-only batch plan created a destination unexpectedly'
+            }
+            [IO.File]::WriteAllBytes((Join-Path $batchWavs 'synthetic-one-AudioHub.wav'), [byte[]](22, 33))
+            $collisionOutput = & python 'START-OFFLINE-WAV-PREP.py' --batch-plan $batchMusic $batchWavs 2>&1
+            if ($LASTEXITCODE -ne 2 -or -not (($collisionOutput -join "`n").Contains('BATCH PLAN REFUSED'))) {
+              throw 'Batch plan failed to refuse a preexisting WAV'
+            }
+            if ((Get-Item -LiteralPath (Join-Path $batchWavs 'synthetic-one-AudioHub.wav')).Length -ne 2) {
+              throw 'Batch planning altered an existing WAV'
+            }
+            Write-Host 'Extracted Windows 2-file batch plan and existing WAV collision refusal PASS (no FFmpeg or music)'
+
             $library = Join-Path $env:RUNNER_TEMP 'audiohub-private-synthetic-library'
             New-Item -ItemType Directory -Path $library -ErrorAction Stop | Out-Null
             $libraryWav = Join-Path $library 'owned-synthetic.wav'
