@@ -146,7 +146,13 @@ trusted local terminal. Cancel with any other input. FFmpeg is invoked
 without a shell, with an exact MP3/FLAC demuxer and local-file/pipe-only
 protocols. Its output is decoded into a bounded temporary PCM16 WAV; only
 after a complete, valid conversion is the destination **exclusively** created
-with no replace. An existing target is always refused. Input audio is
+with no replace. **Before success**, AudioHub reopens the final destination,
+validates complete PCM16 stereo 48-kHz data, and compares its full SHA256
+and byte count to the streamed output. On a failed final read-back, the
+operation refuses success and removes only its own unchanged newly created
+file, never a replacement file from another process. This is local file
+integrity at completion, **not audible sound**. An existing target is
+always refused. Input audio is
 never edited, renamed or deleted. New-file permissions are private (0600)
 on POSIX; manage Windows NTFS ACLs yourself.
 
@@ -160,9 +166,9 @@ new target may be created; no Pi state, volume, mixer or network changes.
 
 ## Step 3 — verify and transfer manually
 
-The utility prints only the generated WAV byte count and SHA256, **not
-your filenames**. Independently inspect the output WAV and hash on the
-trusted PC. Keep all originals and the original Pi SD unchanged. Separately
+The utility reports the new WAV only after destination read-back and
+prints its byte count and SHA256, **not your filenames**. Independently
+inspect the output WAV and hash on the trusted PC. Keep all originals and the original Pi SD unchanged. Separately
 approve any local music transfer using the existing
 `audiohub-music-transfer` workflow only after AH-005 secure local owner
 access and safe Pi shutdown are authorized. Backup/verify all other
