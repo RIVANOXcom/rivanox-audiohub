@@ -10,25 +10,29 @@ pushd "%AUDIOHUB_DIR%" || goto error
 if not "%~2"=="" goto error_pushed
 if not "%~1"=="" if /I not "%~1"=="--check" if /I not "%~1"=="--package-check" if /I not "%~1"=="--smoke" goto error_pushed
 rem Windows py.exe can exist but target an incompatible Python 3.x.
-rem Validate py -3 first; if unsuitable, try an independently available
-rem python.exe (for example a supported 3.12 alongside py's old 3.10).
-rem Choose ONE checked interpreter for all later steps, never mix them.
+rem Validate py -3 first; if unsuitable, fall back to an independently
+rem available python.exe (e.g. 3.12 alongside py launcher on 3.10).
+rem The package-only diagnostic works without Tk or a desktop session.
+set "AUDIOHUB_PROBE=import sys,tkinter;sys.exit(0 if sys.version_info >= (3,11) else 2)"
+if /I "%~1"=="--package-check" set "AUDIOHUB_PROBE=import sys;sys.exit(0 if sys.version_info >= (3,11) else 2)"
 where py.exe >nul 2>&1
 if errorlevel 1 goto try_python
-py.exe -3 "START-OFFLINE-WAV-PREP.py" --check-local
+py.exe -3 -c "%AUDIOHUB_PROBE%" >nul 2>&1
 if errorlevel 1 goto try_python
 set "AUDIOHUB_PY=py.exe -3"
 goto dispatch
 :try_python
 where python.exe >nul 2>&1
 if errorlevel 1 goto python_missing
-python.exe "START-OFFLINE-WAV-PREP.py" --check-local
+python.exe -c "%AUDIOHUB_PROBE%" >nul 2>&1
 if errorlevel 1 goto dependency_failed
 set "AUDIOHUB_PY=python.exe"
 :dispatch
-if /I "%~1"=="--check" goto dependency_only
 if /I "%~1"=="--package-check" goto package_only
-rem Selected interpreter already passed the Python3.11+/Tk prerequisites.
+rem Normal double-click, --smoke and --check use selected Python/Tk.
+call :dependency_gate
+if errorlevel 1 goto dependency_failed
+if /I "%~1"=="--check" goto dependency_only
 rem Auto-check the actual current extracted folder BEFORE displaying the GUI.
 rem Prevents accidental partial/wrong unpacking, not deliberate tampering.
 call :package_gate
@@ -54,6 +58,9 @@ goto finish
 call :package_gate
 set "RC=%errorlevel%"
 goto finish
+:dependency_gate
+%AUDIOHUB_PY% "START-OFFLINE-WAV-PREP.py" --check-local
+exit /b %errorlevel%
 :package_gate
 %AUDIOHUB_PY% "START-OFFLINE-WAV-PREP.py" --package-check
 exit /b %errorlevel%
