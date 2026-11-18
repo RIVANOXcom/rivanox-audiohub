@@ -47,6 +47,38 @@ remains an equally supported alternative for operators preferring Python.
 If a corporate PC blocks local scripts, follow its security policy; there
 is no approved signed installer to override those restrictions.
 
+## First-run local WAV demonstration — no personal audio needed
+
+In the extracted Windows portable ALPHA, double-click
+`OPEN-AUDIOHUB-MUSIC-PREP.cmd` and choose **6. Run offline demo
+(synthetic; no music needed)**. It exercises the **real** bounded PCM16
+stereo 48-kHz WAV file and folder verification code with two short
+generated synthetic WAV samples. The report shows: renamed/reordered
+two-track copy MATCH, a missing track correctly DIFFERS, and the read-only
+Stop mechanism correctly refuses to report an incomplete scan as verified.
+
+No MP3/FLAC, personal WAV path, FFmpeg, Scream driver, network connection,
+Pi4, speaker sound or copyrighted music is needed for this demonstration.
+Only a freshly created, private OS temporary directory is written with
+**synthetic test files**; it is removed when the check finishes or fails.
+No operator music files are created, read, altered or removed. If the
+computer's temporary folder is unsafe (linked/network), the demo refuses.
+
+Terminal alternative from the **same extracted portable ZIP**:
+
+```powershell
+py -3 START-OFFLINE-WAV-PREP.py --demo
+```
+
+Expect `SYNTHETIC WAV DEMO PASS: 2` and exit code 0; a failed check
+reports `SYNTHETIC WAV DEMO FAILED` and exit 2. The desktop GUI has
+an equivalent clear PASS/FAIL message. The demonstration requires the
+same separately installed Python 3.11+/Tk desktop as the existing GUI.
+It is a useful **Windows operator S3 app-start demonstration**,
+but not proof of real music compatibility, FFmpeg conversion,
+Edifier sound, secure Pi login, SD transfers, licenses or production GO.
+Keep the previously checked portable ZIP for rollback.
+
 ## GUI: choose source and target, then explicitly confirm
 
 On Windows, open a PowerShell terminal in the **extracted inner portable ZIP**
