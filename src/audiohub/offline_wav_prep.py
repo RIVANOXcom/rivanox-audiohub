@@ -562,7 +562,7 @@ def launch_gui():
     except (OSError, ValueError, RuntimeError, UnicodeError):
         source_label = "UNPACKAGED SOURCE"
     root.title("AudioHub WAV - " + source_label + " (unverified)")
-    root.minsize(640, 545)
+    root.minsize(700, 660)
     root.columnconfigure(0, weight=1)
     body = ttk.Frame(root, padding=16)
     body.grid(sticky="nsew")
