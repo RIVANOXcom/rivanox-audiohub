@@ -133,6 +133,13 @@ def _convert(source, output, *, ffmpeg="ffmpeg", timeout=120):
                         digest.update(chunk)
                     result.flush()
                     os.fsync(result.fileno())
+                # Check the published destination, not only its temporary
+                # spool and write-time hash. No user filenames are logged.
+                expected_sha256 = digest.hexdigest()
+                verified = verify_local_wav(dst)
+                if (verified["sha256"] != expected_sha256
+                        or verified["bytes"] != total + 44):
+                    raise ValueError("Final WAV failed private read-back verification")
             except BaseException:
                 # Clean up ONLY the file exclusively created by this call.
                 # Never delete a file that someone else replaced after creation.
@@ -144,8 +151,8 @@ def _convert(source, output, *, ffmpeg="ffmpeg", timeout=120):
                     except OSError:
                         pass
                 raise
-            return {"sha256": digest.hexdigest(), "bytes": total + 44,
-                    "duration_seconds": round(total / (48000 * 2 * 2), 2)}
+            return {"sha256": expected_sha256, "bytes": verified["bytes"],
+                    "duration_seconds": verified["duration_seconds"]}
     finally:
         timer.cancel()
         if proc.poll() is None:
@@ -436,10 +443,11 @@ def launch_gui():
                                        parent=root)
             return
         if ok:
-            status.set("NEW WAV created; original untouched. "
+            status.set("NEW WAV CREATED AND READ-BACK VERIFIED; original untouched. "
                        "SHA256: " + value["sha256"])
-            messagebox.showinfo("New offline WAV created",
-                                "Output SHA256:\n" + value["sha256"] +
+            messagebox.showinfo("New offline WAV verified",
+                                "Final WAV reopened; PCM16 format and complete hash checked.\n"
+                                 "Output SHA256:\n" + value["sha256"] +
                                 "\nOriginal untouched. NOT Pi/Edifier verified.",
                                 parent=root)
         else:
@@ -625,7 +633,7 @@ def main(argv=None):
             print("CANCELLED: no files changed.")
             return 2
         result = _convert(args.source, args.output)
-        print("NEW PCM16 WAV CREATED; original unchanged; bytes: " + str(result["bytes"]))
+        print("NEW PCM16 WAV CREATED AND READ-BACK VERIFIED; original unchanged; bytes: " + str(result["bytes"]))
         print("Output SHA256: " + result["sha256"] + "; check the new WAV on the trusted PC.")
         print("Not a physical Pi/Edifier sound or ownership verification.")
         return 0
