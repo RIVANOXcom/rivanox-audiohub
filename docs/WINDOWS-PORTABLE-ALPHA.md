@@ -43,6 +43,13 @@ private filename. Use the included preparation README for exact commands,
 limitations and independent media backup requirements. This is a
 separate utility, not an authenticated audio sender or release.
 
+The same GUI also offers **3. Verify WAV (read-only)**: it checks the actual
+local PCM16 stereo 48-kHz WAV file and prints SHA256 without FFmpeg, writes,
+Pi access or sound playback. Terminal alternative: `py -3
+START-OFFLINE-WAV-PREP.py --verify-wav "C:\\Private\\Prepared\\song.wav"`.
+It is a local file-format/integrity check, not a Pi/Edifier sound approval.
+See `docs/OFFLINE-WAV-PREP.md` for constraints.
+
 ## Offline certificate cross-check (recommended before any audio test)
 
 The Windows GUI now has a **Choose public cert…** file picker. A copied

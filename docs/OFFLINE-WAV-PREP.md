@@ -79,6 +79,25 @@ GUI and terminal path use the SAME non-overwriting, memory-bounded local
 conversion. The GUI has no remote access and is not available on a
 headless PC. Installing FFmpeg separately on your own PC remains necessary.
 
+## Verify a prepared WAV without FFmpeg (no writes)
+
+After converting, leave the newly created file in the output field and click
+**3. Verify WAV (read-only)**. You can also paste an existing local WAV path
+in that field and use Verify directly. The tool checks the complete bounded
+PCM16 stereo 48-kHz data, detects truncated/linked/unsafe files and reports
+SHA256; it never calls FFmpeg, modifies files or contacts the Pi. For the
+same operation in the extracted Windows portable folder:
+
+```powershell
+py -3 START-OFFLINE-WAV-PREP.py --verify-wav "C:\\Private\\Prepared\\owned-song.wav"
+```
+
+The check prints no private filename. PCM24 and other formats are not
+supported by this particular PC-side verifier. A successful result proves
+local WAV structure only, **not audible Edifier playback** or permission
+to transfer copyrighted music. Use the independently checked SHA256 after
+any manual transfer; retain old SD and all original media.
+
 ## Step 1 — no-write preview (FFmpeg not required)
 
 From a trusted Windows terminal in the extracted portable alpha folder:

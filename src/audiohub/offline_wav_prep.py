@@ -156,6 +156,60 @@ def _convert(source, output, *, ffmpeg="ffmpeg", timeout=120):
 
 
 
+def verify_local_wav(path):
+    """Inspect a finished PCM16 stereo 48-kHz WAV without FFmpeg or writes."""
+    target = Path(path)
+    if (not target.is_absolute() or ".." in target.parts
+            or target.suffix.lower() != ".wav"
+            or str(target).startswith("\\\\") or target.is_symlink()
+            or any(part.is_symlink() for part in target.parents)):
+        raise ValueError("Expected an ordinary local WAV path")
+    before = target.stat(follow_symlinks=False)
+    if (not stat.S_ISREG(before.st_mode) or before.st_nlink != 1
+            or not 44 <= before.st_size <= OUTPUT_BYTES_MAX):
+        raise ValueError("Expected an ordinary bounded local WAV file")
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0)
+    with os.fdopen(os.open(target, flags), "rb") as stream:
+        opened = os.fstat(stream.fileno())
+        if ((opened.st_dev, opened.st_ino, opened.st_size) !=
+                (before.st_dev, before.st_ino, before.st_size)
+                or not stat.S_ISREG(opened.st_mode) or opened.st_nlink != 1):
+            raise ValueError("WAV changed before inspection")
+        try:
+            with wave.open(stream, "rb") as reader:
+                if (reader.getnchannels(), reader.getsampwidth(),
+                    reader.getframerate(), reader.getcomptype()) != (2, 2, 48000, "NONE"):
+                    raise ValueError("Expected PCM16 stereo 48 kHz WAV")
+                frames = reader.getnframes()
+                if not 0 < frames <= 30 * 60 * 48000 or frames * 4 > before.st_size - 44:
+                    raise ValueError("Invalid or truncated WAV")
+                count = 0
+                while count < frames * 4:
+                    data = reader.readframes(min(4096, frames - count // 4))
+                    if not data or len(data) % 4:
+                        raise ValueError("Truncated WAV data")
+                    count += len(data)
+                if count != frames * 4:
+                    raise ValueError("Incorrect WAV data length")
+        except (wave.Error, EOFError) as exc:
+            raise ValueError("Unreadable WAV format") from exc
+        stream.seek(0)
+        digest = hashlib.sha256()
+        total = 0
+        while data := stream.read(CHUNK):
+            total += len(data)
+            if total > OUTPUT_BYTES_MAX:
+                raise ValueError("Oversized WAV")
+            digest.update(data)
+        after = os.fstat(stream.fileno())
+        if total != before.st_size or (
+                after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns) != (
+                opened.st_dev, opened.st_ino, opened.st_size, opened.st_mtime_ns):
+            raise ValueError("WAV changed during inspection")
+    return {"sha256": digest.hexdigest(), "bytes": total,
+            "duration_seconds": round(frames / 48000, 2)}
+
+
 def check_local_prerequisites():
     """No-write offline PC readiness; NEVER runs or installs FFmpeg."""
     import importlib.util
@@ -186,7 +240,7 @@ def launch_gui():
     except tk.TclError as exc:
         raise RuntimeError("No trusted local desktop session") from exc
     root.title("AudioHub - Offline WAV preparation")
-    root.minsize(560, 340)
+    root.minsize(640, 400)
     root.columnconfigure(0, weight=1)
     body = ttk.Frame(root, padding=16)
     body.grid(sticky="nsew")
@@ -277,6 +331,26 @@ def launch_gui():
                    "External FFmpeg detected but NOT run. Review then CONVERT.")
         convert_button.configure(state="normal")
 
+    def verify_wav():
+        if working[0]:
+            return
+        try:
+            details = verify_local_wav(output.get())
+        except (OSError, ValueError, RuntimeError):
+            status.set("WAV CHECK REFUSED: select an existing local PCM16 "
+                       "stereo 48 kHz WAV. No files changed.")
+            messagebox.showwarning("WAV not verified",
+                                   "File missing, unsafe, incomplete or in "
+                                   "another format. No files changed.",
+                                   parent=root)
+            return
+        status.set("READ-ONLY WAV VERIFIED. SHA256: " + details["sha256"])
+        messagebox.showinfo("WAV format verified",
+                            "PCM16 stereo 48 kHz; duration "
+                            + str(details["duration_seconds"]) + " s.\n"
+                            + "SHA256:\n" + details["sha256"]
+                            + "\nNOT an audible Pi/Edifier test.", parent=root)
+
     def finish():
         try:
             ok, value = results.get_nowait()
@@ -291,6 +365,7 @@ def launch_gui():
         source_entry.configure(state="normal")
         output_entry.configure(state="normal")
         convert_button.configure(state="disabled")
+        verify_button.configure(state="normal")
         if ok:
             status.set("NEW WAV created; original untouched. "
                        "SHA256: " + value["sha256"])
@@ -333,6 +408,7 @@ def launch_gui():
         output_entry.configure(state="disabled")
         preview_button.configure(state="disabled")
         convert_button.configure(state="disabled")
+        verify_button.configure(state="disabled")
         status.set("Converting locally. No WAV is published until complete.")
         def worker():
             try:
@@ -353,6 +429,10 @@ def launch_gui():
     convert_button = ttk.Button(controls, text="2. Convert after confirmation",
                                 command=convert, state="disabled")
     convert_button.grid(row=0, column=1)
+    verify_button = ttk.Button(controls, text="3. Verify WAV (read-only)",
+                               command=verify_wav)
+    verify_button.grid(row=1, column=0, columnspan=2, sticky="w",
+                       pady=(10, 0))
     ttk.Label(body, textvariable=status, wraplength=510, justify="left").grid(
         row=5, column=0, columnspan=3, sticky="w", pady=(4, 8))
     ttk.Label(body, text="External FFmpeg required for conversion; no network, "
@@ -377,7 +457,23 @@ def main(argv=None):
     parser.add_argument("--convert", action="store_true", help="Require a local TTY and exact CONVERT")
     parser.add_argument("--gui", action="store_true", help="Local file picker, Preview and exact CONVERT dialog")
     parser.add_argument("--check-local", action="store_true", help="No-write Python/Tk/FFmpeg readiness check")
+    parser.add_argument("--verify-wav", help="Read-only check existing local PCM16 stereo 48 kHz WAV")
     args = parser.parse_args(argv)
+    if args.verify_wav is not None:
+        if (args.gui or args.check_local or args.convert or
+                args.source is not None or args.output is not None):
+            parser.error("--verify-wav is a standalone read-only check")
+        try:
+            verified = verify_local_wav(args.verify_wav)
+        except (OSError, ValueError, RuntimeError):
+            print("LOCAL WAV REFUSED: missing, unsafe, unsupported or truncated. "
+                  "No files changed.", file=sys.stderr)
+            return 2
+        print("LOCAL WAV VERIFIED: PCM16 stereo 48 kHz; no writes.")
+        print("Duration seconds: " + str(verified["duration_seconds"]))
+        print("WAV SHA256: " + verified["sha256"])
+        print("NOT a Pi/Edifier speaker or owner verification.")
+        return 0
     if args.check_local:
         if args.gui or args.source is not None or args.output is not None or args.convert:
             parser.error("--check-local cannot be combined with music paths or conversion")
