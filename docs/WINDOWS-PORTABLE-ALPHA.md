@@ -57,6 +57,18 @@ collection content SHA256 without private names or any write. Terminal:
 `py -3 START-OFFLINE-WAV-PREP.py --verify-folder "C:\\Private\\Prepared"`.
 See `docs/OFFLINE-WAV-PREP.md` for constraints.
 
+## Long WAV checks: anonymous progress and safe Stop
+
+On the portable Windows GUI, **4. Check WAV folder** and **5. Compare WAV
+copy** show the number of fully inspected WAV files (separately for
+original and copied folders). While either runs, **Stop read-only check**
+is available. It cooperatively stops at a bounded read chunk, reports
+STOPPED without claiming a valid comparison, and leaves all WAVs unchanged.
+The interface does not display private filenames or paths. Closing while
+scanning requests Stop; then close again after the worker finishes.
+The Stop control is deliberately **not** offered during an explicitly
+confirmed conversion. No background copy, network activity or Pi action.
+
 ## Compare manually copied WAV folders (optional, read-only)
 
 The **OPEN-AUDIOHUB-MUSIC-PREP.cmd** GUI provides **5. Compare WAV copy
