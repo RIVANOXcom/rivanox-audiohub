@@ -203,6 +203,20 @@ jobs:
           fake.PlaySound = check_memory_sound
           sys.modules["winsound"] = fake
           from audiohub import offline_wav_prep as prep
+          # The one-click replay of an exported file must refuse if the
+          # previously confirmed SHA256 does not match BEFORE any sound.
+          current_sha = prep.verify_local_wav(sys.argv[1])["sha256"]
+          matched = prep.play_local_wav_audition(
+              sys.argv[1], expected_sha256=current_sha, sound_module=fake)
+          if matched["source_sha256"] != current_sha:
+              raise RuntimeError("Last export hash not returned intact")
+          try:
+              prep.play_local_wav_audition(
+                  sys.argv[1], expected_sha256="0" * 64, sound_module=fake)
+          except ValueError:
+              pass
+          else:
+              raise RuntimeError("Changed last export unexpectedly played")
           raise SystemExit(prep.main(["--audition-wav", sys.argv[1]]))
           '@
             $auditionReport = & python -c $auditionProbe $verifyWav
