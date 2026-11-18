@@ -165,6 +165,29 @@ Failure exits 2, without claiming success. This is an accessible GUI
 performed by CI or any Pi4/Edifier sound certification. Keep the older
 verified portable ZIP and Pi SD for rollback.
 
+## Operator PC sound check without any files or FFmpeg
+
+**10. Hear 1s synthetic PC tone** in the existing Windows GUI gives
+the operator a true **opt-in sound-output check** without owning or
+selecting WAV/MP3/FLAC, installing FFmpeg or connecting a Pi. Unlike
+button 6's silent synthetic WAV-verification test, button 10 generates
+and requests an **audible**, quiet 440-Hz stereo tone for just **1 second**
+on the **default Windows PC audio output**; peak PCM16 level is
+approximately **-30 dBFS**, with short fades. The GUI asks before
+playing and provides **Stop PC sound preview**. Turn PC volume down
+before confirming. No personal data, music files, temporary WAV,
+remote audio, Pi/Edifier, network, system volume or mixer changes.
+
+Optional standalone command:
+`py -3 START-OFFLINE-WAV-PREP.py --test-pc-tone`.
+It exits 0 after Windows sound API completion (not proof that anyone
+heard it) or 2 on refusal. Existing `--demo` remains SILENT.
+A human listening and reporting **heard / silent / error** on real
+Windows is required for PC sound S3; Pi/Edifier remains untested.
+CI intentionally substitutes a Windows sound stub so no runner
+speakers are used. The feature remains an unsigned S2 portable ALPHA,
+not a license/hardware/public release GO.
+
 ## One-click post-conversion audition
 
 After converting a legally usable local MP3/FLAC to a **new** WAV and
