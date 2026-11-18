@@ -196,6 +196,56 @@ class OfflineWavPreparationTests(unittest.TestCase):
                 prep.main(["--check-local", "--convert"])
             proc.assert_not_called()
 
+    def test_read_only_wav_verify_cli_and_hash_without_decoder_or_edits(self):
+        with wave.open(str(self.destination), "wb") as writer:
+            writer.setnchannels(2)
+            writer.setsampwidth(2)
+            writer.setframerate(48000)
+            writer.writeframes(self.pcm)
+        before = self.destination.read_bytes()
+        with mock.patch.object(prep.subprocess, "Popen") as decoder:
+            verified = prep.verify_local_wav(self.destination)
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                self.assertEqual(prep.main(["--verify-wav", str(self.destination)]), 0)
+            decoder.assert_not_called()
+        self.assertEqual(verified["sha256"], hashlib.sha256(before).hexdigest())
+        self.assertEqual(verified["bytes"], len(before))
+        self.assertEqual(verified["duration_seconds"], 0.01)
+        self.assertNotIn(str(self.destination), stdout.getvalue())
+        self.assertEqual(self.destination.read_bytes(), before)
+
+    def test_read_only_wav_verify_rejects_truncation_and_links(self):
+        with wave.open(str(self.destination), "wb") as writer:
+            writer.setnchannels(2)
+            writer.setsampwidth(2)
+            writer.setframerate(48000)
+            writer.writeframes(self.pcm)
+        complete = self.destination.read_bytes()
+        for invalid in (complete[:50], complete[:43], b"this is not WAV"):
+            with self.subTest(size=len(invalid)):
+                self.destination.write_bytes(invalid)
+                with self.assertRaises(ValueError):
+                    prep.verify_local_wav(self.destination)
+                self.assertEqual(self.destination.read_bytes(), invalid)
+        self.destination.write_bytes(complete)
+        with self.assertRaises(ValueError):
+            prep.verify_local_wav(Path("relative.wav"))
+        alias = self.root / "linked.wav"
+        try:
+            alias.symlink_to(self.destination)
+        except (OSError, NotImplementedError):
+            pass
+        else:
+            with self.assertRaises(ValueError):
+                prep.verify_local_wav(alias)
+        with contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(prep.main(["--verify-wav",
+                                        str(self.root / "absent.wav")]), 2)
+            with self.assertRaises(SystemExit):
+                prep.main(["--verify-wav", str(self.destination), "--convert"])
+        self.assertEqual(self.destination.read_bytes(), complete)
+
     def test_gui_only_opt_in_and_never_autostarts_converter(self):
         with mock.patch.object(prep, "launch_gui", return_value=0) as gui, \
              mock.patch.object(prep, "_convert") as converter:
