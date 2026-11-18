@@ -755,6 +755,88 @@ class OfflineWavPreparationTests(unittest.TestCase):
             writer.writeframes(b"\x01\x02\x03\x04" * (seconds * 48000))
         return target
 
+    def test_synthetic_pc_tone_one_second_stereo_faded_and_never_reads_music(self):
+        before = self.source.read_bytes()
+        with mock.patch.object(prep, "verify_local_wav") as wav_reader, \
+             mock.patch.object(prep.subprocess, "Popen") as ffmpeg, \
+             mock.patch.object(prep.tempfile, "TemporaryDirectory") as temp:
+            sample = prep.generate_pc_test_tone()
+            wav_reader.assert_not_called()
+            ffmpeg.assert_not_called()
+            temp.assert_not_called()
+        self.assertEqual(len(sample), 192044)
+        with wave.open(io.BytesIO(sample), "rb") as reader:
+            self.assertEqual((reader.getnchannels(), reader.getsampwidth(),
+                              reader.getframerate(), reader.getnframes()),
+                             (2, 2, 48000, 48000))
+            pcm = reader.readframes(48000)
+        self.assertEqual(pcm[:4], b"\\x00\\x00\\x00\\x00")
+        self.assertEqual(pcm[-4:], b"\\x00\\x00\\x00\\x00")
+        peaks = [int.from_bytes(pcm[i:i + 2], "little", signed=True)
+                 for i in range(0, len(pcm), 2)]
+        self.assertGreater(max(peaks), 400)
+        self.assertLessEqual(max(abs(x) for x in peaks), 1000)
+        self.assertEqual(self.source.read_bytes(), before)
+        self.assertFalse(self.destination.exists())
+
+    def test_synthetic_pc_tone_explicit_playback_stop_and_pre_cancel(self):
+        class FakeSound:
+            SND_MEMORY = 4
+            SND_NODEFAULT = 2
+            def __init__(self):
+                self.calls = []
+            def PlaySound(self, data, flags):
+                self.calls.append((data, flags))
+        sound = FakeSound()
+        cancel = threading.Event()
+        cancel.set()
+        with self.assertRaises(prep.ScanCancelled):
+            prep.play_pc_test_tone(cancelled=cancel, sound_module=sound)
+        self.assertEqual(sound.calls, [])
+        cancel.clear()
+        with mock.patch.object(prep, "generate_pc_test_tone",
+                               wraps=prep.generate_pc_test_tone) as maker:
+            result = prep.play_pc_test_tone(cancelled=cancel, sound_module=sound)
+            maker.assert_called_once_with()
+        self.assertEqual(result, {"seconds": 1.0, "synthetic": True})
+        self.assertEqual(len(sound.calls), 1)
+        self.assertEqual(sound.calls[0][1], 6)
+        with wave.open(io.BytesIO(sound.calls[0][0]), "rb") as reader:
+            self.assertEqual(reader.getnframes(), 48000)
+        prep.stop_local_wav_audition(sound_module=sound)
+        self.assertEqual(sound.calls[-1], (None, 0))
+
+    def test_synthetic_pc_tone_cli_requires_explicit_standalone_action(self):
+        out = io.StringIO()
+        with mock.patch.object(prep, "play_pc_test_tone",
+                               return_value={"seconds": 1.0, "synthetic": True}) as player, \
+             contextlib.redirect_stdout(out):
+            self.assertEqual(prep.main(["--test-pc-tone"]), 0)
+            player.assert_called_once_with()
+        self.assertIn("SYNTHETIC PC TONE FINISHED", out.getvalue())
+        with mock.patch.object(prep, "play_pc_test_tone",
+                               side_effect=RuntimeError("private path")) as player, \
+             contextlib.redirect_stdout(io.StringIO()), \
+             contextlib.redirect_stderr(io.StringIO()) as error:
+            self.assertEqual(prep.main(["--test-pc-tone"]), 2)
+            player.assert_called_once_with()
+        self.assertIn("SYNTHETIC PC TONE REFUSED", error.getvalue())
+        self.assertNotIn("private path", error.getvalue())
+        for extra in (["--gui"], ["--demo"], ["--check-local"],
+                      ["--package-check"], ["--convert"],
+                      ["--audition-wav", str(self.destination)],
+                      ["--source", str(self.source)],
+                      ["--output", str(self.destination)],
+                      ["--verify-wav", str(self.destination)],
+                      ["--verify-folder", str(self.root)],
+                      ["--compare-folders", str(self.root), str(self.root)]):
+            with self.subTest(extra=extra), \
+                 mock.patch.object(prep, "play_pc_test_tone") as player, \
+                 contextlib.redirect_stderr(io.StringIO()), \
+                 self.assertRaises(SystemExit):
+                prep.main(["--test-pc-tone", *extra])
+            player.assert_not_called()
+
     def test_owned_wav_pc_audition_is_bounded_in_memory_and_read_only(self):
         target = self._create_owned_audition_wav(seconds=4)
         original = target.read_bytes()
