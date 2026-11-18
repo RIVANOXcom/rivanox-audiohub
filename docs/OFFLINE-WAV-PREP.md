@@ -160,6 +160,40 @@ but not proof of real music compatibility, FFmpeg conversion,
 Edifier sound, secure Pi login, SD transfers, licenses or production GO.
 Keep the previously checked portable ZIP for rollback.
 
+## New: hear a generated Windows PC test tone without music
+
+For an even simpler **real Windows audio-output test**, the GUI now
+offers **10. Hear 1s synthetic PC tone**, placed beside
+**Stop PC sound preview**. Unlike the synthetic verification demo
+(button 6, which is **silent**), button 10 requests a **brief audible**
+440 Hz stereo tone through the **default WINDOWS PC** speaker/headphone
+output. Before any sound the operator must explicitly confirm and should
+lower the PC volume. The tone's peak is limited to 1,000/32,767 PCM16
+(approximately **-30 dBFS**), has a short fade-in/fade-out and lasts
+**one second**. It is constructed fully in RAM from newly generated
+samples, never from music, and does not create a temporary audio file.
+
+The PC test tone requires only Windows and the already required
+Python 3.11+ with Tk for the GUI. **No MP3, FLAC, WAV, FFmpeg, Pi4,
+Scream driver, Edifier, internet, music rights or SD-card access**
+is needed. It never changes the system audio mixer or installs a codec.
+You can request Stop with the same button as a personal WAV preview.
+If no default Windows sound device is available, the playback refuses;
+a successful Windows API call alone does not prove sound was **heard**.
+
+Explicit terminal alternative in the verified extracted package:
+
+```powershell
+py -3 START-OFFLINE-WAV-PREP.py --test-pc-tone
+```
+
+This is an **audible** action, not an automatic startup or silent
+`--demo`. Exit 0 means only that the Windows audio API returned; the
+operator must personally report *heard / quiet / silent / error*
+for Windows S3. It does not validate Raspberry Pi or Edifier hardware.
+A native Windows CI sound stub verifies the generated 1s PCM16 bytes
+without actually playing sound on CI hardware.
+
 ## Hear the WAV you JUST converted, without picking it again
 
 After an explicitly confirmed, successful conversion that has already
