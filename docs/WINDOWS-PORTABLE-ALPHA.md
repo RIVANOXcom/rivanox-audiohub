@@ -173,8 +173,9 @@ button. After selecting a local owned/licensed PCM16 stereo 48-kHz WAV,
 the operator is asked to confirm **audible sound on the default WINDOWS
 PC device** and to lower speaker/headphone volume if needed. The
 utility verifies the WAV in full, then plays a bounded maximum
-3-second in-memory clip using Windows `winsound` (Python standard
-library). Its source is never converted, overwritten or copied; no
+3-second in-memory clip with **12 dB lower digital sample level** using
+Windows `winsound` (Python standard library). The original WAV and PC
+mixer volume are unchanged. Its source is never converted, overwritten or copied; no
 temporary audio file, FFmpeg, network or Pi access is used. The GUI
 remains responsive while this short sample plays and offers Stop.
 
