@@ -2,6 +2,7 @@
 import contextlib
 import hashlib
 import io
+import json
 from pathlib import Path
 import shutil
 import subprocess
@@ -566,6 +567,124 @@ class OfflineWavPreparationTests(unittest.TestCase):
                     prep.main(["--demo", *incompatible])
                 demo.assert_not_called()
         self.assertFalse(self.destination.exists())
+
+    def _make_synthetic_portable_for_check(self, root):
+        # Exercise the real manifest verifier without relying on GitHub
+        # network, operator music files, or the packaging workflow.
+        manifest = {
+            "schema": "rivanox-audiohub-windows-portable-alpha/1",
+            "classification": "UNVERIFIED_ALPHA_TEST_ONLY",
+            "source_sha": "a" * 40,
+            "hardware_verified": False,
+            "public_release_ready": False,
+            "source_files": {},
+        }
+        for name in sorted(prep.PORTABLE_CONTENT_FILES):
+            target = root.joinpath(*name.split("/"))
+            target.parent.mkdir(parents=True, exist_ok=True)
+            payload = ("synthetic package member:" + name).encode("ascii")
+            target.write_bytes(payload)
+            manifest["source_files"][name] = {
+                "bytes": len(payload),
+                "sha256": hashlib.sha256(payload).hexdigest(),
+                "source_path": "example/" + name,
+            }
+        (root / "SOURCE-MANIFEST.json").write_text(
+            json.dumps(manifest, sort_keys=True), encoding="utf-8")
+        return manifest
+
+    def test_portable_version_and_all_files_match_synthetic_manifest_readonly(self):
+        portable = self.root / "extracted-Windows-ALPHA"
+        portable.mkdir()
+        manifest = self._make_synthetic_portable_for_check(portable)
+        before = {
+            name: (portable.joinpath(*name.split("/"))).read_bytes()
+            for name in prep.PORTABLE_CONTENT_FILES
+        }
+        first = prep.inspect_local_portable_package(portable)
+        self.assertEqual(first, {
+            "source_sha": manifest["source_sha"],
+            "files": len(prep.PORTABLE_CONTENT_FILES), "checked": True,
+        })
+        label = prep.inspect_local_portable_package(
+            portable, verify_files=False)
+        self.assertEqual(label["source_sha"], "a" * 40)
+        self.assertIs(label["checked"], False)
+        self.assertEqual({
+            name: portable.joinpath(*name.split("/")).read_bytes()
+            for name in prep.PORTABLE_CONTENT_FILES
+        }, before)
+        self.assertEqual(self.source.read_bytes(), b"private-owned-audio-bytes")
+
+    def test_portable_integrity_rejects_changed_or_missing_member_and_manifest(self):
+        portable = self.root / "unpacked-package"
+        portable.mkdir()
+        self._make_synthetic_portable_for_check(portable)
+        member = portable / "audiohub" / "offline_wav_prep.py"
+        original = member.read_bytes()
+        member.write_bytes(original[:-1] + b"Z")
+        with self.assertRaises(ValueError):
+            prep.inspect_local_portable_package(portable)
+        member.write_bytes(original)
+        member.unlink()
+        with self.assertRaises((ValueError, OSError)):
+            prep.inspect_local_portable_package(portable)
+        (portable / "SOURCE-MANIFEST.json").unlink()
+        with self.assertRaises((ValueError, OSError)):
+            prep.inspect_local_portable_package(portable)
+        self.assertEqual(self.source.read_bytes(), b"private-owned-audio-bytes")
+
+    def test_portable_verifier_refuses_renamed_missing_inventory_and_symlinks(self):
+        portable = self.root / "incomplete-portable"
+        portable.mkdir()
+        manifest = self._make_synthetic_portable_for_check(portable)
+        manifest["source_files"].pop("LICENSE")
+        (portable / "SOURCE-MANIFEST.json").write_text(
+            json.dumps(manifest), encoding="utf-8")
+        with self.assertRaises(ValueError):
+            prep.inspect_local_portable_package(portable)
+        # A linked package directory must be refused, not followed.
+        link = self.root / "portable-link"
+        try:
+            link.symlink_to(portable, target_is_directory=True)
+        except (OSError, NotImplementedError):
+            pass
+        else:
+            with self.assertRaises(ValueError):
+                prep.inspect_local_portable_package(link)
+
+    def test_package_check_cli_reports_source_sha_and_refuses_mixed_actions(self):
+        report = {"source_sha": "b" * 40, "files": 18, "checked": True}
+        out = io.StringIO()
+        with mock.patch.object(prep, "inspect_local_portable_package",
+                               return_value=report) as inspector, \
+             contextlib.redirect_stdout(out):
+            self.assertEqual(prep.main(["--package-check"]), 0)
+            inspector.assert_called_once_with()
+        self.assertIn("LOCAL PORTABLE PACKAGE MATCH", out.getvalue())
+        self.assertIn("b" * 40, out.getvalue())
+        self.assertIn("SELF-CHECK ONLY", out.getvalue())
+        self.assertNotIn(str(self.root), out.getvalue())
+        with mock.patch.object(prep, "inspect_local_portable_package",
+                               side_effect=ValueError("private path")) as inspector, \
+             contextlib.redirect_stderr(io.StringIO()) as errors:
+            self.assertEqual(prep.main(["--package-check"]), 2)
+            inspector.assert_called_once_with()
+        self.assertIn("LOCAL PORTABLE PACKAGE REFUSED", errors.getvalue())
+        self.assertNotIn("private path", errors.getvalue())
+        for incompatible in (["--gui"], ["--demo"],
+                             ["--source", str(self.source)],
+                             ["--output", str(self.destination)],
+                             ["--check-local"], ["--convert"],
+                             ["--verify-folder", str(self.root)],
+                             ["--verify-wav", str(self.destination)],
+                             ["--compare-folders", str(self.root), str(self.root)]):
+            with self.subTest(incompatible=incompatible), \
+                 mock.patch.object(prep, "inspect_local_portable_package") as inspector, \
+                 contextlib.redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit):
+                    prep.main(["--package-check", *incompatible])
+                inspector.assert_not_called()
 
     def test_local_wav_folder_rejects_corrupt_links_empty_and_excess(self):
         with self.assertRaises(ValueError):
