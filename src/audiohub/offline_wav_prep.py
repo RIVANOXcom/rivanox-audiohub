@@ -531,13 +531,15 @@ def inspect_local_portable_package(package_root=None, *, verify_files=True):
 
 
 
-def prepare_local_wav_audition(path):
+def prepare_local_wav_audition(path, *, expected_sha256=None):
     """Prepare only the first <=3 seconds of a verified WAV in memory.
 
     Never invokes audio hardware or writes user/temporary files. The output
     is capped at 576 KiB of PCM16 WAV payload plus a small WAV header.
     """
     checked = verify_local_wav(path)
+    if expected_sha256 is not None and checked["sha256"] != expected_sha256:
+        raise ValueError("Previously verified WAV export changed")
     target = Path(path)
     before = target.stat(follow_symlinks=False)
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0)
@@ -589,7 +591,8 @@ def prepare_local_wav_audition(path):
             "source_sha256": checked["sha256"]}
 
 
-def play_local_wav_audition(path, *, cancelled=None, sound_module=None):
+def play_local_wav_audition(path, *, cancelled=None, sound_module=None,
+                            expected_sha256=None):
     """Explicit, bounded PC-only audible preview via Windows winsound.
 
     Blocking playback belongs in a GUI worker; SND_MEMORY is synchronous
@@ -599,7 +602,7 @@ def play_local_wav_audition(path, *, cancelled=None, sound_module=None):
         raise ScanCancelled("PC audio audition already stopped")
     if sys.platform != "win32" and sound_module is None:
         raise RuntimeError("WAV audible audition requires a Windows PC")
-    report = prepare_local_wav_audition(path)
+    report = prepare_local_wav_audition(path, expected_sha256=expected_sha256)
     if cancelled is not None and cancelled.is_set():
         raise ScanCancelled("PC audio audition stopped before playback")
     if sound_module is None:
@@ -655,7 +658,7 @@ def launch_gui():
     except (OSError, ValueError, RuntimeError, UnicodeError):
         source_label = "UNPACKAGED SOURCE"
     root.title("AudioHub WAV - " + source_label + " (unverified)")
-    root.minsize(700, 710)
+    root.minsize(700, 775)
     root.columnconfigure(0, weight=1)
     body = ttk.Frame(root, padding=16)
     body.grid(sticky="nsew")
@@ -665,6 +668,8 @@ def launch_gui():
         "Offline only: select your owned music and an UNUSED WAV destination."))
     approved = [None]
     automatic_output = [None]
+    last_verified_export = [None]  # (immutable GUI path, verified SHA), never persisted
+    pending_export_path = [None]
     working = [False]
     work_kind = ["convert"]
     results = queue.Queue(maxsize=1)
@@ -707,7 +712,9 @@ def launch_gui():
 
     def invalidate(*_):
         approved[0] = None
+        last_verified_export[0] = None
         convert_button.configure(state="disabled")
+        audition_last_button.configure(state="disabled")
         if not working[0]:
             status.set("Selection changed. Run read-only Preview again.")
     source.trace_add("write", invalidate)
@@ -836,6 +843,8 @@ def launch_gui():
         demo_button.configure(state="normal")
         package_button.configure(state="normal")
         audition_button.configure(state="normal")
+        audition_last_button.configure(state=("normal" if last_verified_export[0]
+                                              else "disabled"))
         audition_stop_button.configure(state="disabled")
         if work_kind[0] == "audition":
             if audition_cancel.is_set():
@@ -966,14 +975,19 @@ def launch_gui():
                                        parent=root)
             return
         if ok:
+            last_verified_export[0] = (pending_export_path[0], value["sha256"])
+            pending_export_path[0] = None
+            audition_last_button.configure(state="normal")
             status.set("NEW WAV CREATED AND READ-BACK VERIFIED; original untouched. "
                        "SHA256: " + value["sha256"])
             messagebox.showinfo("New offline WAV verified",
                                 "Final WAV reopened; PCM16 format and complete hash checked.\n"
                                  "Output SHA256:\n" + value["sha256"] +
-                                "\nOriginal untouched. NOT Pi/Edifier verified.",
-                                parent=root)
+                                "\nOriginal untouched. Use button 9 to hear "
+                                "this exact export on the Windows PC. "
+                                "NOT Pi/Edifier verified.", parent=root)
         else:
+            pending_export_path[0] = None
             status.set("EXPORT INCOMPLETE or refused. Existing files untouched.")
             messagebox.showwarning("No completed WAV",
                                    "Check local FFmpeg, input and unused output. "
@@ -1001,6 +1015,8 @@ def launch_gui():
             status.set("CANCELLED: no audio decoder started, no files created.")
             return
         chosen_source, chosen_output = approved[0]
+        last_verified_export[0] = None
+        pending_export_path[0] = chosen_output
         work_kind[0] = "convert"
         working[0] = True
         source_button.configure(state="disabled")
@@ -1015,6 +1031,7 @@ def launch_gui():
         demo_button.configure(state="disabled")
         package_button.configure(state="disabled")
         audition_button.configure(state="disabled")
+        audition_last_button.configure(state="disabled")
         status.set("Converting locally. No WAV is published until complete.")
         def worker():
             try:
@@ -1173,15 +1190,16 @@ def launch_gui():
                          name="audiohub-offline-package-check").start()
         root.after(150, finish)
 
-    def audition_wav():
+    def audition_wav(chosen=None, expected_sha256=None):
         if working[0]:
             return
         if sys.platform != "win32":
             status.set("Audible WAV preview requires a Windows PC. No sound played.")
             return
-        chosen = filedialog.askopenfilename(
-            parent=root, title="Choose a local owned PCM16 stereo WAV to hear",
-            filetypes=[("PCM16 WAV", "*.wav")])
+        if chosen is None:
+            chosen = filedialog.askopenfilename(
+                parent=root, title="Choose a local owned PCM16 stereo WAV to hear",
+                filetypes=[("PCM16 WAV", "*.wav")])
         if not chosen:
             return
         consent = messagebox.askyesno(
@@ -1212,18 +1230,38 @@ def launch_gui():
         demo_button.configure(state="disabled")
         package_button.configure(state="disabled")
         audition_button.configure(state="disabled")
+        audition_last_button.configure(state="disabled")
         audition_stop_button.configure(state="normal")
         status.set("Verifying WAV before audible sample; up to 3 seconds "
                    "via default Windows PC sound device. Stop available.")
         def worker():
             try:
-                report = play_local_wav_audition(chosen, cancelled=audition_cancel)
+                if expected_sha256 is None:
+                    report = play_local_wav_audition(chosen,
+                                                     cancelled=audition_cancel)
+                else:
+                    report = play_local_wav_audition(
+                        chosen, cancelled=audition_cancel,
+                        expected_sha256=expected_sha256)
                 results.put((True, report))
             except (OSError, ValueError, RuntimeError, ScanCancelled, wave.Error):
                 results.put((False, None))
         threading.Thread(target=worker, daemon=True,
                          name="audiohub-owned-wav-pc-audition").start()
         root.after(150, finish)
+
+    def audition_last_export():
+        if working[0]:
+            return
+        recent = last_verified_export[0]
+        if recent is None:
+            status.set("No newly verified WAV export available to hear. "
+                       "Convert and verify one first.")
+            return
+        # No source or output picker: use only the last successfully verified
+        # conversion's captured absolute path and full SHA256. The audition
+        # helper must revalidate the original before ANY sound.
+        audition_wav(recent[0], expected_sha256=recent[1])
 
     controls = ttk.Frame(body)
     controls.grid(row=4, column=0, columnspan=3, sticky="w", pady=(18, 12))
@@ -1269,6 +1307,11 @@ def launch_gui():
         controls, text="Stop PC sound preview", state="disabled",
         command=stop_audition)
     audition_stop_button.grid(row=8, column=0, columnspan=2, sticky="w",
+                              pady=(10, 0))
+    audition_last_button = ttk.Button(
+        controls, text="9. Hear last verified export (no file picker)",
+        state="disabled", command=audition_last_export)
+    audition_last_button.grid(row=9, column=0, columnspan=2, sticky="w",
                               pady=(10, 0))
     ttk.Label(body, textvariable=status, wraplength=510, justify="left").grid(
         row=5, column=0, columnspan=3, sticky="w", pady=(4, 8))
