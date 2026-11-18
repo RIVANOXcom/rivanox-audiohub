@@ -755,6 +755,154 @@ class OfflineWavPreparationTests(unittest.TestCase):
             writer.writeframes(b"\x01\x02\x03\x04" * (seconds * 48000))
         return target
 
+    def _batch_folders(self, count=2):
+        music = self.root / "batch-private-music"
+        wavs = self.root / "batch-new-wavs"
+        music.mkdir()
+        wavs.mkdir()
+        for index in range(count):
+            (music / ("owned-%02d.flac" % index)).write_bytes(b"privately-owned-flac-data")
+        (music / "notes.txt").write_text("no audio")
+        return music, wavs
+
+    def test_batch_preview_is_bounded_readonly_and_hides_names(self):
+        music, wavs = self._batch_folders()
+        before = {p.name: p.read_bytes() for p in music.iterdir()}
+        with mock.patch.object(prep.subprocess, "Popen") as decoder:
+            plan = prep.plan_local_wav_batch(music, wavs)
+            decoder.assert_not_called()
+        self.assertEqual(plan["files"], 2)
+        self.assertEqual([dst.name for _, dst in plan["items"]],
+                         ["owned-00-AudioHub.wav", "owned-01-AudioHub.wav"])
+        self.assertEqual({p.name: p.read_bytes() for p in music.iterdir()}, before)
+        self.assertEqual(list(wavs.iterdir()), [])
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(prep.main(["--batch-plan", str(music), str(wavs)]), 0)
+        self.assertIn("BATCH PLAN: 2", out.getvalue())
+        self.assertNotIn("owned-00", out.getvalue())
+        self.assertEqual(list(wavs.iterdir()), [])
+
+    def test_batch_preview_refuses_same_dir_symlinks_collisions_and_over_limit(self):
+        music, wavs = self._batch_folders()
+        with self.assertRaises(ValueError):
+            prep.plan_local_wav_batch(music, music)
+        (wavs / "owned-00-AudioHub.wav").write_bytes(b"existing")
+        with self.assertRaises(ValueError):
+            prep.plan_local_wav_batch(music, wavs)
+        (wavs / "owned-00-AudioHub.wav").unlink()
+        (music / "owned-00.mp3").write_bytes(b"same-stem")
+        with self.assertRaises(ValueError):
+            prep.plan_local_wav_batch(music, wavs)
+        (music / "owned-00.mp3").unlink()
+        for i in range(2, 11):
+            (music / ("owned-%02d.flac" % i)).write_bytes(b"test")
+        with self.assertRaises(ValueError):
+            prep.plan_local_wav_batch(music, wavs)
+        for i in range(2, 11):
+            (music / ("owned-%02d.flac" % i)).unlink()
+        alias = music / "linked-private.flac"
+        try:
+            alias.symlink_to(music / "owned-01.flac")
+        except (OSError, NotImplementedError):
+            pass
+        else:
+            with self.assertRaises(ValueError):
+                prep.plan_local_wav_batch(music, wavs)
+        self.assertFalse(list(wavs.iterdir()))
+
+    def test_batch_success_tracks_verified_new_files_without_moving_originals(self):
+        music, wavs = self._batch_folders()
+        old = {p.name: p.read_bytes() for p in music.iterdir()}
+        visits = []
+        def fake_convert(src, dst, *, ffmpeg="ffmpeg"):
+            self.assertEqual(ffmpeg, "ffmpeg")
+            self.assertFalse(dst.exists())
+            with wave.open(str(dst), "wb") as writer:
+                writer.setnchannels(2)
+                writer.setsampwidth(2)
+                writer.setframerate(48000)
+                writer.writeframes(self.pcm)
+            actual = prep.verify_local_wav(dst)
+            visits.append(src)
+            return actual
+        progress = []
+        with mock.patch.object(prep, "_convert", side_effect=fake_convert):
+            result = prep.convert_local_wav_batch(
+                music, wavs, progress=lambda done, total: progress.append((done, total)))
+        self.assertEqual(result["status"], "complete")
+        self.assertEqual(result["converted"], 2)
+        self.assertEqual(progress, [(1, 2), (2, 2)])
+        self.assertEqual(len(visits), 2)
+        self.assertEqual({p.name: p.read_bytes() for p in music.iterdir()}, old)
+        self.assertEqual(sorted(p.name for p in wavs.iterdir()),
+                         ["owned-00-AudioHub.wav", "owned-01-AudioHub.wav"])
+        self.assertTrue(all(prep.verify_local_wav(p)["sha256"] for p in wavs.iterdir()))
+
+    def test_batch_stop_after_current_and_partial_failure_keep_completed(self):
+        music, wavs = self._batch_folders(count=3)
+        stopped = threading.Event()
+        def fake_convert(src, dst, *, ffmpeg="ffmpeg"):
+            with wave.open(str(dst), "wb") as writer:
+                writer.setnchannels(2)
+                writer.setsampwidth(2)
+                writer.setframerate(48000)
+                writer.writeframes(self.pcm)
+            return prep.verify_local_wav(dst)
+        with mock.patch.object(prep, "_convert", side_effect=fake_convert) as conv:
+            stopped_report = prep.convert_local_wav_batch(
+                music, wavs, cancel=stopped,
+                progress=lambda done, total: stopped.set())
+            self.assertEqual(conv.call_count, 1)
+        self.assertEqual(stopped_report["status"], "stopped")
+        self.assertEqual(stopped_report["converted"], 1)
+        self.assertEqual(len(list(wavs.iterdir())), 1)
+        # Batch fails safely before writing another file, leaving the good WAV.
+        with mock.patch.object(prep, "_convert", side_effect=RuntimeError("invalid private media")) as conv:
+            with self.assertRaises(ValueError):
+                prep.convert_local_wav_batch(music, wavs)
+            conv.assert_not_called()  # preflight refuses existing target
+        self.assertTrue(prep.verify_local_wav(next(wavs.iterdir()))["sha256"])
+
+    def test_batch_partial_failure_reports_exactly_completed_files(self):
+        music, wavs = self._batch_folders(count=2)
+        attempts = []
+        def first_only(src, dst, *, ffmpeg="ffmpeg"):
+            attempts.append(src)
+            if len(attempts) > 1:
+                raise ValueError("private decoding failed")
+            with wave.open(str(dst), "wb") as writer:
+                writer.setnchannels(2)
+                writer.setsampwidth(2)
+                writer.setframerate(48000)
+                writer.writeframes(self.pcm)
+            return prep.verify_local_wav(dst)
+        with mock.patch.object(prep, "_convert", side_effect=first_only):
+            report = prep.convert_local_wav_batch(music, wavs)
+        self.assertEqual((report["status"], report["converted"], report["planned"]),
+                         ("refused", 1, 2))
+        self.assertEqual(len(list(wavs.iterdir())), 1)
+        self.assertEqual(len(list(music.iterdir())), 3)
+
+    def test_batch_cli_refuses_noninteractive_and_conflicting_actions(self):
+        music, wavs = self._batch_folders()
+        with mock.patch.object(prep.sys.stdin, "isatty", return_value=False), \
+             mock.patch.object(prep, "_convert") as convert, \
+             contextlib.redirect_stdout(io.StringIO()), \
+             contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(prep.main(["--batch-convert", str(music), str(wavs)]), 2)
+            convert.assert_not_called()
+        for conflict in (["--gui"], ["--demo"], ["--test-pc-tone"],
+                         ["--audition-wav", str(self.destination)],
+                         ["--batch-plan", str(music), str(wavs)],
+                         ["--source", str(self.source)]):
+            with self.subTest(conflict=conflict), \
+                 mock.patch.object(prep, "_convert") as convert, \
+                 contextlib.redirect_stderr(io.StringIO()), \
+                 self.assertRaises(SystemExit):
+                prep.main(["--batch-convert", str(music), str(wavs), *conflict])
+                convert.assert_not_called()
+
     def test_synthetic_pc_tone_one_second_stereo_faded_and_never_reads_music(self):
         before = self.source.read_bytes()
         with mock.patch.object(prep, "verify_local_wav") as wav_reader, \
