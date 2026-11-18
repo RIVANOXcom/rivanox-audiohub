@@ -422,6 +422,88 @@ class OfflineWavPreparationTests(unittest.TestCase):
         self.assertTrue((first / "first.wav").exists())
         self.assertEqual((second / "bad.wav").read_bytes(), b"not valid WAV data")
 
+    def test_read_only_folder_progress_and_operator_cancel_do_not_change_wavs(self):
+        import threading
+        paths = []
+        for name in ("private-one.wav", "private-two.wav"):
+            target = self.root / name
+            with wave.open(str(target), "wb") as writer:
+                writer.setnchannels(2)
+                writer.setsampwidth(2)
+                writer.setframerate(48000)
+                writer.writeframes(self.pcm)
+            paths.append(target)
+        old = [path.read_bytes() for path in paths]
+        event = threading.Event()
+        progress = []
+        def ask_stop(done, total):
+            progress.append((done, total))
+            event.set()
+        with self.assertRaises(prep.ScanCancelled):
+            prep.verify_local_wav_folder(self.root, cancel=event, progress=ask_stop)
+        self.assertEqual(progress, [(1, 2)])
+        self.assertEqual([path.read_bytes() for path in paths], old)
+        event.clear()
+        progress.clear()
+        result = prep.verify_local_wav_folder(
+            self.root, cancel=event,
+            progress=lambda done, total: progress.append((done, total)))
+        self.assertEqual(result["files"], 2)
+        self.assertEqual(progress, [(1, 2), (2, 2)])
+        self.assertEqual([path.read_bytes() for path in paths], old)
+
+    def test_wav_copy_scan_reports_only_anonymous_counts_and_cancel_phase(self):
+        import threading
+        original, copied = self.root / "original-only", self.root / "copy-only"
+        original.mkdir()
+        copied.mkdir()
+        for folder, name in ((original, "secret-source.wav"),
+                             (copied, "another-secret-name.wav")):
+            with wave.open(str(folder / name), "wb") as writer:
+                writer.setnchannels(2)
+                writer.setsampwidth(2)
+                writer.setframerate(48000)
+                writer.writeframes(self.pcm)
+        inputs = [next(folder.glob("*.wav")) for folder in (original, copied)]
+        initial = [path.read_bytes() for path in inputs]
+        phases = []
+        event = threading.Event()
+        report = prep.compare_local_wav_folders(
+            original, copied, cancel=event,
+            progress=lambda phase, done, total: phases.append(
+                (phase, done, total)))
+        self.assertTrue(report["matched"])
+        self.assertEqual(phases, [("original", 1, 1), ("copy", 1, 1)])
+        self.assertTrue(all("secret" not in repr(item) for item in phases))
+        self.assertEqual([path.read_bytes() for path in inputs], initial)
+
+        phases.clear()
+        def stop_before_copy(phase, done, total):
+            phases.append((phase, done, total))
+            if phase == "original":
+                event.set()
+        with self.assertRaises(prep.ScanCancelled):
+            prep.compare_local_wav_folders(
+                original, copied, cancel=event, progress=stop_before_copy)
+        self.assertEqual(phases, [("original", 1, 1)])
+        self.assertEqual([path.read_bytes() for path in inputs], initial)
+
+    def test_cancelled_wav_file_scan_rejects_before_any_hash_or_write(self):
+        import threading
+        with wave.open(str(self.destination), "wb") as writer:
+            writer.setnchannels(2)
+            writer.setsampwidth(2)
+            writer.setframerate(48000)
+            writer.writeframes(self.pcm)
+        original = self.destination.read_bytes()
+        event = threading.Event()
+        event.set()
+        with mock.patch.object(prep.hashlib, "sha256") as hash_func:
+            with self.assertRaises(prep.ScanCancelled):
+                prep.verify_local_wav(self.destination, cancel=event)
+            hash_func.assert_not_called()
+        self.assertEqual(self.destination.read_bytes(), original)
+
     def test_local_wav_folder_rejects_corrupt_links_empty_and_excess(self):
         with self.assertRaises(ValueError):
             prep.verify_local_wav_folder(self.root)

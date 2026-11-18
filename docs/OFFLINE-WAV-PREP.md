@@ -122,6 +122,24 @@ the Pi4 USB speaker, owner permissions, music copyright, free SD space, or
 the success of a later USB copy. Recheck the selected folder after any
 manual transfer and keep all original files and the previous SD card.
 
+## Progress and safe stop for long read-only scans
+
+The existing Windows GUI displays a private per-track counter while checking
+**4. Check WAV folder** or **5. Compare WAV copy** (for example:
+`READ-ONLY ORIGINAL FOLDER: 3/20 WAVs inspected`). The **Stop read-only
+check** button is enabled only for these scans. Click it at any time to
+request cancellation; the worker checks the request between bounded WAV
+read chunks and before reporting a successful verification. After a stop,
+the application reports **STOPPED** instead of a potentially misleading
+MATCH or VERIFIED result; it does not touch originals or copied WAVs.
+The scan remains on a background thread and all UI updates occur on the
+desktop thread. No filenames, directory paths or media metadata are
+displayed in progress messages. The Stop button is intentionally disabled
+for the separately confirmed WAV **conversion**; conversion still follows
+its own bounded completion, cleanup and no-overwrite safety rules.
+Closing the GUI during a read-only scan requests Stop first; close it
+once STOPPED is displayed.
+
 ## Check an existing WAV copy against the original (no writes)
 
 In the Windows GUI use **5. Compare WAV copy (read-only)**, then select the
