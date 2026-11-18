@@ -7,6 +7,7 @@ FFmpeg must be independently installed on the trusted operator computer.
 from __future__ import annotations
 
 import argparse
+from array import array
 import hashlib
 import io
 import json
@@ -565,6 +566,18 @@ def prepare_local_wav_audition(path):
             raise ValueError("WAV changed while preparing audition")
     if not pcm:
         raise ValueError("Empty WAV audition")
+    # Preview-only conservative quarter amplitude (-12 dB). This cannot
+    # increase the signal, and does not alter the source WAV or system mixer.
+    # array('h') is native-endian: normalize LE PCM16 on big-endian hosts.
+    samples = array("h")
+    samples.frombytes(pcm)
+    if sys.byteorder != "little":
+        samples.byteswap()
+    for i, value in enumerate(samples):
+        samples[i] = value // 4
+    if sys.byteorder != "little":
+        samples.byteswap()
+    pcm = samples.tobytes()
     memory = io.BytesIO()
     with wave.open(memory, "wb") as writer:
         writer.setnchannels(2)
@@ -1174,7 +1187,8 @@ def launch_gui():
         consent = messagebox.askyesno(
             "Play Windows WAV sample?",
             "Audio will be audible through your DEFAULT WINDOWS PC sound "
-            "device for at most 3 seconds. Adjust speaker/headphone volume "
+            "device for at most 3 seconds. The sample is reduced by 12 dB "
+            "and originals/system volume are untouched. Adjust volume "
             "before continuing. Your chosen WAV is read-only and no media "
             "is sent to Raspberry Pi, network or another device. "
             "This is NOT an Edifier/Pi sound check. Play now?",
@@ -1316,7 +1330,8 @@ def main(argv=None):
                 or args.compare_folders is not None):
             parser.error("--audition-wav is an exclusive audible Windows action")
         print("WINDOWS PC AUDIO REQUESTED: max 3 seconds through default "
-              "PC speakers. Adjust volume. No files altered or sent to Pi.")
+              "PC speakers at reduced -12 dB sample level. "
+              "Adjust volume. No files altered or sent to Pi.")
         try:
             report = play_local_wav_audition(args.audition_wav)
         except (OSError, ValueError, RuntimeError, ScanCancelled, wave.Error):
