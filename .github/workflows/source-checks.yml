@@ -186,25 +186,25 @@ jobs:
             # portable Python file, with in-memory winsound stub. NO Windows
             # speaker, Pi, user music, mixer setting or hardware audio touched.
             $auditionProbe = @'
-import io
-import sys
-import types
-import wave
-
-fake = types.ModuleType("winsound")
-fake.SND_MEMORY = 4
-fake.SND_NODEFAULT = 2
-def check_memory_sound(data, flags):
-    if not isinstance(data, bytes) or flags != 6:
-        raise RuntimeError("PC WAV audition must use synchronous memory audio")
-    with wave.open(io.BytesIO(data), "rb") as sample:
-        if (sample.getnchannels(), sample.getsampwidth(), sample.getframerate()) != (2, 2, 48000):
-            raise RuntimeError("Audition supplied unexpected WAV format")
-fake.PlaySound = check_memory_sound
-sys.modules["winsound"] = fake
-from audiohub import offline_wav_prep as prep
-raise SystemExit(prep.main(["--audition-wav", sys.argv[1]]))
-'@
+          import io
+          import sys
+          import types
+          import wave
+          
+          fake = types.ModuleType("winsound")
+          fake.SND_MEMORY = 4
+          fake.SND_NODEFAULT = 2
+          def check_memory_sound(data, flags):
+              if not isinstance(data, bytes) or flags != 6:
+                  raise RuntimeError("PC WAV audition must use synchronous memory audio")
+              with wave.open(io.BytesIO(data), "rb") as sample:
+                  if (sample.getnchannels(), sample.getsampwidth(), sample.getframerate()) != (2, 2, 48000):
+                      raise RuntimeError("Audition supplied unexpected WAV format")
+          fake.PlaySound = check_memory_sound
+          sys.modules["winsound"] = fake
+          from audiohub import offline_wav_prep as prep
+          raise SystemExit(prep.main(["--audition-wav", sys.argv[1]]))
+          '@
             $auditionReport = & python -c $auditionProbe $verifyWav
             if ($LASTEXITCODE -ne 0 -or -not (($auditionReport -join "`n").Contains('LOCAL PC WAV AUDITION FINISHED'))) {
               throw 'Extracted PC WAV audition did not exercise Windows memory audio path'
