@@ -799,6 +799,51 @@ class OfflineWavPreparationTests(unittest.TestCase):
         self.assertEqual(sound.calls[1], (None, 0))
         self.assertEqual(target.read_bytes(), original)
 
+    def test_last_export_replay_requires_original_success_sha_before_audio(self):
+        target = self._create_owned_audition_wav(seconds=1)
+        saved = target.read_bytes()
+        prior_sha = hashlib.sha256(saved).hexdigest()
+        class FakeSound:
+            SND_MEMORY = 4
+            SND_NODEFAULT = 2
+            def __init__(self):
+                self.calls = 0
+            def PlaySound(self, data, flags):
+                self.calls += 1
+                self.assert_audio = (len(data), flags)
+        sound = FakeSound()
+        report = prep.play_local_wav_audition(
+            target, expected_sha256=prior_sha, sound_module=sound)
+        self.assertEqual(report["source_sha256"], prior_sha)
+        self.assertEqual(sound.calls, 1)
+        self.assertEqual(target.read_bytes(), saved)
+        # A replaced or edited same-length output must NOT play as last export.
+        with target.open("r+b") as dest:
+            dest.seek(44)
+            dest.write(b"\\xff\\xfe\\xfd\\xfc")
+        sound.calls = 0
+        before_failure = target.read_bytes()
+        with self.assertRaisesRegex(ValueError, "Previously verified"):
+            prep.play_local_wav_audition(
+                target, expected_sha256=prior_sha, sound_module=sound)
+        self.assertEqual(sound.calls, 0)
+        self.assertEqual(target.read_bytes(), before_failure)
+        self.assertFalse(self.destination.exists())
+
+    def test_last_export_wrong_sha_refuses_before_any_sound(self):
+        target = self._create_owned_audition_wav(seconds=1)
+        original = target.read_bytes()
+        class NoSound:
+            SND_MEMORY = 4
+            SND_NODEFAULT = 2
+            def PlaySound(self, *_):
+                raise AssertionError("No sound on mismatched export SHA")
+        with self.assertRaises(ValueError):
+            prep.play_local_wav_audition(
+                target, expected_sha256="a" * 64, sound_module=NoSound())
+        self.assertEqual(target.read_bytes(), original)
+        self.assertEqual(self.source.read_bytes(), b"private-owned-audio-bytes")
+
     def test_pc_audition_refuses_cancelled_invalid_and_linked_wav_without_sound(self):
         target = self._create_owned_audition_wav(seconds=1)
         class FakeWindowsSound:
