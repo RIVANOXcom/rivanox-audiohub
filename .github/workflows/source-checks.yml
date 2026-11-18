@@ -248,6 +248,26 @@ jobs:
               throw 'Portable demo did not exercise deliberate content difference'
             }
             Write-Host 'Extracted zero-personal-media WAV demo PASS (synthetic)'
+            # Real extracted portable must report its full Git source identity
+            # and refuse modified files, not merely pass source-tree tests.
+            $packageResult = & cmd.exe /d /c '.\OPEN-AUDIOHUB-MUSIC-PREP.cmd --package-check'
+            if ($LASTEXITCODE -ne 0 -or -not (($packageResult -join "`n").Contains('LOCAL PORTABLE PACKAGE MATCH'))) {
+              throw 'Extracted portable package consistency check failed'
+            }
+            if (-not (($packageResult -join "`n").Contains($env:SOURCE_COMMIT))) {
+              throw 'Portable reports a source SHA differing from build commit'
+            }
+            Write-Host 'Extracted Windows package contents and exact source commit MATCH'
+            # Only alter a disposable extracted README after all positive tests.
+            # Never modify the build ZIP, real operator files, or repo checkout.
+            $tamperTestReadme = Join-Path (Get-Location) 'README-OFFLINE-WAV-PREP.md'
+            Add-Content -LiteralPath $tamperTestReadme -Value '# synthetic post-extraction tamper'
+            $tamperReport = & python START-OFFLINE-WAV-PREP.py --package-check 2>&1
+            if ($LASTEXITCODE -ne 2 -or -not (($tamperReport -join "`n").Contains('LOCAL PORTABLE PACKAGE REFUSED'))) {
+              throw 'Portable package check failed to detect altered member'
+            }
+            $global:LASTEXITCODE = 0
+            Write-Host 'Extracted Windows package tampering REFUSED (synthetic, no protected changes)'
 
           } finally { Pop-Location }
           Write-Host "Windows operator ALPHA source-only smoke PASS. No GUI launched or hardware claim."

@@ -57,6 +57,40 @@ collection content SHA256 without private names or any write. Terminal:
 `py -3 START-OFFLINE-WAV-PREP.py --verify-folder "C:\\Private\\Prepared"`.
 See `docs/OFFLINE-WAV-PREP.md` for constraints.
 
+## Know exactly which portable version is running (no writes)
+
+After verifying and extracting the **inner** ZIP into a new local folder,
+the offline WAV GUI title reports the first 12 characters of its claimed
+Git source commit and marks the identity **unverified**. Use the new
+**7. Show version and check package files (read-only)** button to check
+all **18** bundled source members against the embedded
+`SOURCE-MANIFEST.json`, with a clear full **40-character Git commit SHA**
+and MATCH/REFUSED result. None of these checks processes personal music,
+contacts a server, installs software or replaces files. The older
+portable package must be retained as a separate rollback folder.
+
+The existing Windows one-click CMD supports a terminal action in the
+same extracted folder:
+
+```powershell
+.\OPEN-AUDIOHUB-MUSIC-PREP.cmd --package-check
+```
+
+Or `py -3 START-OFFLINE-WAV-PREP.py --package-check`. Exit 0 means
+`LOCAL PORTABLE PACKAGE MATCH` (self-consistency); exit 2 means missing,
+modified or unidentified files. If the check refuses, stop using that
+unpacked folder; independently obtain and SHA256-verify the source-matched
+GitHub test ZIP and extract it to a **new empty local directory**. Never
+overwrite the previous known-good installation or Pi SD.
+
+**Important security boundary:** The source version and per-file SHA256
+values live in the **same** unpacked ZIP. An attacker could alter the code
+and re-create its manifest, so a PASS is **not a publisher signature,
+authenticity guarantee, hardware acceptance or production GO**. Always
+compare the GitHub OUTER and INNER ZIP SHA256 against independently trusted
+values **before running any code**, and use this in-app feature only to
+diagnose extraction, accidental file changes and version confusion.
+
 ## No-personal-music first-run demo (new)
 
 After verifying and extracting this exact-source Windows ZIP, double-click

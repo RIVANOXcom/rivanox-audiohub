@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import os
 from pathlib import Path
 import shutil
@@ -414,6 +415,119 @@ def run_offline_wav_demo():
             "cancel": True, "private_media_used": False}
 
 
+
+# Names are the existing deterministic Windows 19-member portable inventory:
+# 18 source files plus SOURCE-MANIFEST.json. Do not infer trust from this
+# self-described inventory; operators independently verify the downloaded ZIP.
+PORTABLE_CONTENT_FILES = frozenset((
+    "START-WINDOWS-BRIDGE.py",
+    "START-OFFLINE-WAV-PREP.py",
+    "OPEN-AUDIOHUB-MUSIC-PREP.cmd",
+    "audiohub/__init__.py",
+    "audiohub/offline_wav_prep.py",
+    "audiohub/secure_lan.py",
+    "audiohub/windows_bridge_setup.py",
+    "audiohub/windows_bridge_gui.py",
+    "audiohub/hardware_observation.py",
+    "audiohub/certificate_onboarding.py",
+    "audiohub/key_onboarding.py",
+    "audiohub/key_rotation.py",
+    "AUDIOHUB-BOOT-REPORT-VIEWER.html",
+    "README-WINDOWS-FIRST.md",
+    "README-OFFLINE-WAV-PREP.md",
+    "README-ISOLATED-LAB.md",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md",
+))
+
+
+def inspect_local_portable_package(package_root=None, *, verify_files=True):
+    """Report claimed source SHA and check packaged source bytes without writes.
+
+    This is a self-consistency check, NOT a signature or trusted publisher
+    verification: operators must independently verify the GitHub ZIP SHA256.
+    """
+    root = (Path(package_root) if package_root is not None
+            else Path(__file__).absolute().parent.parent)
+    if (not root.is_absolute() or ".." in root.parts
+            or str(root).startswith("\\\\")
+            or root.is_symlink()
+            or any(parent.is_symlink() for parent in root.parents)):
+        raise ValueError("Expected an ordinary extracted local package")
+    before_root = root.stat(follow_symlinks=False)
+    if not stat.S_ISDIR(before_root.st_mode):
+        raise ValueError("Expected an ordinary package folder")
+
+    manifest_path = root / "SOURCE-MANIFEST.json"
+    if manifest_path.is_symlink():
+        raise ValueError("Linked manifest is not a portable package")
+    manifest_stat = manifest_path.stat(follow_symlinks=False)
+    if (not stat.S_ISREG(manifest_stat.st_mode)
+            or not 0 < manifest_stat.st_size <= 65536):
+        raise ValueError("Missing or invalid portable source manifest")
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if not isinstance(manifest, dict):
+        raise ValueError("Invalid portable source manifest")
+    sha = manifest.get("source_sha")
+    if (not isinstance(sha, str) or len(sha) != 40
+            or any(c not in "0123456789abcdef" for c in sha)
+            or manifest.get("schema") != "rivanox-audiohub-windows-portable-alpha/1"
+            or manifest.get("classification") != "UNVERIFIED_ALPHA_TEST_ONLY"
+            or manifest.get("hardware_verified") is not False
+            or manifest.get("public_release_ready") is not False):
+        raise ValueError("Unsupported or unverified portable package")
+    items = manifest.get("source_files")
+    if not isinstance(items, dict) or set(items) != PORTABLE_CONTENT_FILES:
+        raise ValueError("Incomplete or changed portable package inventory")
+    if not verify_files:
+        return {"source_sha": sha, "files": len(items), "checked": False}
+
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0)
+    for rel in sorted(PORTABLE_CONTENT_FILES):
+        record = items[rel]
+        if not isinstance(record, dict):
+            raise ValueError("Invalid package member record")
+        expected_size, expected_hash = record.get("bytes"), record.get("sha256")
+        if (type(expected_size) is not int or not 0 < expected_size <= 4 * 1024 * 1024
+                or not isinstance(expected_hash, str) or len(expected_hash) != 64
+                or any(c not in "0123456789abcdef" for c in expected_hash)):
+            raise ValueError("Invalid package member hash or size")
+        target = root
+        for part in rel.split("/"):
+            target = target / part
+            if target.is_symlink():
+                raise ValueError("Linked package members are refused")
+        start = target.stat(follow_symlinks=False)
+        if (not stat.S_ISREG(start.st_mode)
+                or start.st_size != expected_size):
+            raise ValueError("Package member missing or size differs")
+        with os.fdopen(os.open(target, flags), "rb") as stream:
+            opened = os.fstat(stream.fileno())
+            if (not stat.S_ISREG(opened.st_mode)
+                    or (opened.st_dev, opened.st_ino, opened.st_size) !=
+                    (start.st_dev, start.st_ino, start.st_size)):
+                raise ValueError("Package member changed before check")
+            digest = hashlib.sha256()
+            total = 0
+            while chunk := stream.read(CHUNK):
+                total += len(chunk)
+                if total > expected_size:
+                    raise ValueError("Package member grew during check")
+                digest.update(chunk)
+            after = os.fstat(stream.fileno())
+            if (total != expected_size or digest.hexdigest() != expected_hash
+                    or (after.st_dev, after.st_ino, after.st_size,
+                        after.st_mtime_ns) !=
+                    (opened.st_dev, opened.st_ino, opened.st_size,
+                     opened.st_mtime_ns)):
+                raise ValueError("Package member hash or metadata changed")
+    after_root = root.stat(follow_symlinks=False)
+    if (after_root.st_dev, after_root.st_ino, after_root.st_mtime_ns) != (
+            before_root.st_dev, before_root.st_ino, before_root.st_mtime_ns):
+        raise ValueError("Portable package folder changed during check")
+    return {"source_sha": sha, "files": len(items), "checked": True}
+
+
 def check_local_prerequisites():
     """No-write offline PC readiness; NEVER runs or installs FFmpeg."""
     import importlib.util
@@ -443,8 +557,12 @@ def launch_gui():
         root = tk.Tk()
     except tk.TclError as exc:
         raise RuntimeError("No trusted local desktop session") from exc
-    root.title("AudioHub - Offline WAV preparation")
-    root.minsize(640, 545)
+    try:
+        source_label = inspect_local_portable_package(verify_files=False)["source_sha"][:12]
+    except (OSError, ValueError, RuntimeError, UnicodeError):
+        source_label = "UNPACKAGED SOURCE"
+    root.title("AudioHub WAV - " + source_label + " (unverified)")
+    root.minsize(700, 660)
     root.columnconfigure(0, weight=1)
     body = ttk.Frame(root, padding=16)
     body.grid(sticky="nsew")
@@ -611,6 +729,33 @@ def launch_gui():
         verify_folder_button.configure(state="normal")
         compare_button.configure(state="normal")
         demo_button.configure(state="normal")
+        package_button.configure(state="normal")
+        if work_kind[0] == "package":
+            if ok:
+                status.set("PACKAGE CONTENTS MATCH MANIFEST: ALPHA " +
+                           value["source_sha"][:12] + "; " +
+                           str(value["files"]) + " files checked. "
+                           "Not a publisher signature.")
+                messagebox.showinfo(
+                    "Portable package contents checked",
+                    "Reported source SHA256 identity (Git SHA1):\n"
+                    + value["source_sha"] + "\n"
+                    + str(value["files"]) + " source files match the included "
+                    "SOURCE-MANIFEST.json. This is a self-consistency check, "
+                    "NOT an authenticity proof. Compare the original ZIP "
+                    "SHA256 from GitHub independently before use.",
+                    parent=root)
+            else:
+                status.set("PACKAGE CHECK REFUSED: incomplete or changed "
+                           "source files. Do not use this folder.")
+                messagebox.showwarning(
+                    "Portable package check failed",
+                    "A missing, altered or unidentifiable package file was "
+                    "detected. Stop using this folder. Re-extract an "
+                    "independently SHA256-verified ZIP into a NEW empty "
+                    "directory; keep the previous known-good version.",
+                    parent=root)
+            return
         if work_kind[0] == "demo":
             if ok:
                 status.set("SYNTHETIC OFFLINE DEMO PASS: 2 WAV tracks; "
@@ -735,6 +880,7 @@ def launch_gui():
         verify_folder_button.configure(state="disabled")
         compare_button.configure(state="disabled")
         demo_button.configure(state="disabled")
+        package_button.configure(state="disabled")
         status.set("Converting locally. No WAV is published until complete.")
         def worker():
             try:
@@ -769,6 +915,7 @@ def launch_gui():
         verify_folder_button.configure(state="disabled")
         compare_button.configure(state="disabled")
         demo_button.configure(state="disabled")
+        package_button.configure(state="disabled")
         status.set("Checking up to 40 WAV files without writing or playing audio.")
         def worker():
             try:
@@ -813,6 +960,7 @@ def launch_gui():
         verify_folder_button.configure(state="disabled")
         compare_button.configure(state="disabled")
         demo_button.configure(state="disabled")
+        package_button.configure(state="disabled")
         status.set("Comparing two existing WAV folders locally. No writes or transfers.")
         def worker():
             try:
@@ -845,6 +993,7 @@ def launch_gui():
         verify_folder_button.configure(state="disabled")
         compare_button.configure(state="disabled")
         demo_button.configure(state="disabled")
+        package_button.configure(state="disabled")
         status.set("Running a disposable local synthetic WAV demo. "
                    "No real music files, FFmpeg, network or Pi.")
         def worker():
@@ -855,6 +1004,35 @@ def launch_gui():
                 results.put((False, None))
         threading.Thread(target=worker, daemon=True,
                          name="audiohub-synthetic-offline-demo").start()
+        root.after(150, finish)
+
+    def check_package_in_gui():
+        if working[0]:
+            return
+        working[0] = True
+        work_kind[0] = "package"
+        approved[0] = None
+        source_button.configure(state="disabled")
+        destination_button.configure(state="disabled")
+        source_entry.configure(state="disabled")
+        output_entry.configure(state="disabled")
+        preview_button.configure(state="disabled")
+        convert_button.configure(state="disabled")
+        verify_button.configure(state="disabled")
+        verify_folder_button.configure(state="disabled")
+        compare_button.configure(state="disabled")
+        demo_button.configure(state="disabled")
+        package_button.configure(state="disabled")
+        status.set("Checking source files in this extracted local ALPHA "
+                   "folder against its own manifest. No user media read.")
+        def worker():
+            try:
+                result = inspect_local_portable_package()
+                results.put((True, result))
+            except (OSError, ValueError, RuntimeError, UnicodeError):
+                results.put((False, None))
+        threading.Thread(target=worker, daemon=True,
+                         name="audiohub-offline-package-check").start()
         root.after(150, finish)
 
     controls = ttk.Frame(body)
@@ -887,8 +1065,17 @@ def launch_gui():
         command=demo_synthetic)
     demo_button.grid(row=5, column=0, columnspan=2, sticky="w",
                      pady=(10, 0))
+    package_button = ttk.Button(
+        controls, text="7. Show version and check package files (read-only)",
+        command=check_package_in_gui)
+    package_button.grid(row=6, column=0, columnspan=2, sticky="w",
+                        pady=(10, 0))
     ttk.Label(body, textvariable=status, wraplength=510, justify="left").grid(
         row=5, column=0, columnspan=3, sticky="w", pady=(4, 8))
+    ttk.Label(body, text="Source label: " + source_label +
+              " (SELF-REPORTED; verify package with button 7).",
+              wraplength=510, justify="left").grid(
+                  row=7, column=0, columnspan=3, sticky="w")
     ttk.Label(body, text="External FFmpeg required for conversion; no network, "
               "Bluetooth, Pi, SD or original file changes.", wraplength=510).grid(
         row=6, column=0, columnspan=3, sticky="w")
@@ -896,7 +1083,7 @@ def launch_gui():
         if working[0]:
             if work_kind[0] in ("folder", "compare"):
                 cancel_scan()
-            elif work_kind[0] == "demo":
+            elif work_kind[0] in ("demo", "package"):
                 messagebox.showinfo(
                     "Synthetic demo in progress",
                     "The short disposable synthetic demo is still running.",
@@ -926,7 +1113,28 @@ def main(argv=None):
                         help="Read-only compare WAV folder contents, independent of names/order")
     parser.add_argument("--demo", action="store_true",
                         help="Local synthetic WAV check; temporary files only, no private music/FFmpeg/Pi")
+    parser.add_argument("--package-check", action="store_true",
+                        help="Read-only source SHA and portable file self-consistency check")
     args = parser.parse_args(argv)
+    if args.package_check:
+        if (args.gui or args.demo or args.convert or args.check_local
+                or args.source is not None or args.output is not None
+                or args.verify_wav is not None or args.verify_folder is not None
+                or args.compare_folders is not None):
+            parser.error("--package-check is standalone; no user media paths")
+        try:
+            report = inspect_local_portable_package()
+        except (OSError, ValueError, RuntimeError, UnicodeError):
+            print("LOCAL PORTABLE PACKAGE REFUSED: source manifest or "
+                  "package contents missing, altered or unverifiable. "
+                  "No user media inspected.", file=sys.stderr)
+            return 2
+        print("LOCAL PORTABLE PACKAGE MATCH: ALPHA source commit "
+              + report["source_sha"] + "; " + str(report["files"])
+              + " source files match bundled manifest.")
+        print("SELF-CHECK ONLY: verify original ZIP SHA256 independently. "
+              "Not signed, not a Pi/Windows human acceptance.")
+        return 0
     if args.demo:
         if (args.gui or args.check_local or args.convert
                 or args.source is not None or args.output is not None
